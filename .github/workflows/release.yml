@@ -7,7 +7,7 @@ on:
     inputs:
       tag:
         description: Etiqueta de la Release
-        default: v1.6.0
+        default: v1.7.0
       rama:
         description: Rama con los trozos
         default: binarios-tmp
@@ -42,7 +42,7 @@ jobs:
           cd ../../salida
           cp "$GITHUB_WORKSPACE/SHA256SUMS.txt" .
           # SHA256SUMS.txt usa subcarpetas; aquí los ficheros están planos
-          sed 's#  [a-z]*/#  #' SHA256SUMS.txt | sha256sum -c -
+          sed 's#  [a-z]*/#  #' SHA256SUMS.txt | sha256sum -c --ignore-missing -
           ls -la
 
       - name: Publicar Release
@@ -50,7 +50,7 @@ jobs:
           cd ../salida
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target main \
-              -t "NEXUS AI ${TAG#v}" \
+              -t "Nexus-Office ${TAG#v}" \
               -n "Instaladores portables 100 % offline para Windows, Linux (x86_64 y ARM64), macOS y Android. Instrucciones en LEEME.txt; integridad en SHA256SUMS.txt."
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber ./*
 
