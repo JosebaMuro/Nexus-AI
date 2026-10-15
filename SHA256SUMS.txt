@@ -1,0 +1,6 @@
+80ee8787d1a138a5d3094a07f5531a6fe0ddc3de078841c94fc9c94cd37af25f  linux/Nexus-Office-1.7.0-linux-x86_64.run
+c48f041c078d32f62e535570fbc50bf7ec3476cd561bfc6a21364bff01b2ead0  linux/nexus-office_1.7.0_amd64.deb
+784f19dfaa846c51a70380b36b7e8ffda891966be136da3cba646035ffa6f8c6  linux/Nexus-Office-1.7.0-linux-x86_64.AppImage
+a5fb320279b96754caf8a10f1dcf5fc23536e5f0cee305bab5aba6ea76a31f00  linux/Nexus-Office-1.7.0-linux-x86_64.flatpak
+45620b63efcc768c5c4b2fafe4e635b4954c63e42d55220738da8df06a9f491c  windows/Nexus-Office-Setup-1.7.0-windows-x64.exe
+a344435f814727e14ebb50f4718d0efd2087ab9e5fd6c36987c8578456ce3e76  windows/Nexus-Office-Setup-1.7.0-windows-arm64.exe
