@@ -19,7 +19,8 @@ linux/    sh NexusAI-1.6.0-linux-x86_64.run [carpeta] [--oficina=herreria] [--se
           flatpak install --user NexusAI-1.6.0-linux-x86_64.flatpak  (o -aarch64; pide el runtime de Flathub)
 macos/    NexusAI-1.6.0-macos-arm64.tar.gz (Apple Silicon) / macos-x86_64 (Intel): descomprimir y abrir
           "NEXUS AI.command" (o ./install.sh --oficina=herreria --servicio && ./start.sh)
-android/  NexusAI-1.6.0-android-autonomo.apk  NEXUS completo dentro del movil (ARM64, Android 9+), sin PC
+android/  NexusAI-1.6.0-android-autonomo.apk  NEXUS completo dentro del movil (ARM64, Android 9+), sin PC;
+                                                  usa la GPU (Adreno por OpenCL, Mali/Xclipse por Vulkan) si acelera
           NexusAI-1.6.0-android-vpn.apk       app ligera que conecta con el NEXUS de la oficina (VPN o Wi-Fi)
 NexusAI-1.6.0-codigo-fuente.zip               proyecto limpio (codigo, tests, empaquetado y documentacion)
 Manual-de-usuario.pdf / Documentacion-tecnica.pdf
