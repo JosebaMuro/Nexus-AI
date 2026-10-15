@@ -1,0 +1,29 @@
+NEXUS AI 1.6.0 - instaladores (todos 100 % portables: se instalan sin internet)
+===================================================================================
+
+Todos llevan dentro Python, las dependencias y el motor de IA (llama-server y sd-cli: CPU, Vulkan y, segun la
+plataforma, CUDA o Metal). Al instalar, NEXUS evalua el hardware (memoria, grafica, procesador) y elige el modelo
+de IA adecuado; lo descarga si hay internet (sin internet lo recomienda y se descarga despues desde la app).
+Todos pueden dejar NEXUS como servicio que arranca solo con el equipo.
+
+windows/  NexusAI-Setup-1.6.0-windows-x64.exe    PC con Windows 10/11 de 64 bits (Intel/AMD; NVIDIA con CUDA)
+          NexusAI-Setup-1.6.0-windows-arm64.exe  Windows 11 en ARM (Snapdragon X)
+          Doble clic; si Windows avisa "protegio su PC": Mas informacion > Ejecutar de todas formas.
+          Silencioso: NexusAI-Setup-...exe /S /OFICINA=herreria /SERVICIO /RED
+linux/    sh NexusAI-1.6.0-linux-x86_64.run [carpeta] [--oficina=herreria] [--servicio] [--red]
+          sh NexusAI-1.6.0-linux-aarch64.run      ARM de 64 bits: Raspberry Pi 4/5 (Raspberry Pi OS 64 bits),
+                                                     Jetson, portatiles ARM
+          sudo apt install ./nexus-ai_1.6.0_amd64.deb   (o _arm64.deb en Raspberry Pi OS 64 bits / ARM)
+          luego: nexus-ai   |   servicio: sudo nexus-ai servicio instalar [--red]
+          NexusAI-1.6.0-linux-x86_64.AppImage / -aarch64.AppImage   sin instalar: chmod +x y abrir
+          flatpak install --user NexusAI-1.6.0-linux-x86_64.flatpak  (o -aarch64; pide el runtime de Flathub)
+macos/    NexusAI-1.6.0-macos-arm64.tar.gz (Apple Silicon) / macos-x86_64 (Intel): descomprimir y abrir
+          "NEXUS AI.command" (o ./install.sh --oficina=herreria --servicio && ./start.sh)
+android/  NexusAI-1.6.0-android-autonomo.apk  NEXUS completo dentro del movil (ARM64, Android 9+), sin PC
+          NexusAI-1.6.0-android-vpn.apk       app ligera que conecta con el NEXUS de la oficina (VPN o Wi-Fi)
+NexusAI-1.6.0-codigo-fuente.zip               proyecto limpio (codigo, tests, empaquetado y documentacion)
+Manual-de-usuario.pdf / Documentacion-tecnica.pdf
+
+Oficina: 58 perfiles de pyme por gremio; tras instalar, la vista Modelos sugiere modelos especificos del sector.
+Raspberry Pi: hace falta el sistema de 64 bits (Raspberry Pi OS 64-bit, Ubuntu); Pi 4 o Pi 5 con 4 GB o mas.
+Integridad: SHA256SUMS.txt
