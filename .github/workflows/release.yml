@@ -1,7 +1,8 @@
 name: Publicar Release
 
 # Une los trozos de la rama binarios-tmp, verifica SHA256SUMS.txt,
-# publica la Release con los ficheros enteros y borra la rama temporal.
+# publica la Release con los ficheros enteros (los que esten: sustituye a los de mismo nombre)
+# y borra la rama temporal.
 on:
   workflow_dispatch:
     inputs:
@@ -42,7 +43,9 @@ jobs:
           cd ../../salida
           cp "$GITHUB_WORKSPACE/SHA256SUMS.txt" .
           # SHA256SUMS.txt usa subcarpetas; aquí los ficheros están planos
-          sed 's#  [a-z]*/#  #' SHA256SUMS.txt | sha256sum -c -
+          # --ignore-missing: una actualizacion puede subir solo los ficheros que cambian (p. ej. una APK)
+          sed 's#  [a-z]*/#  #' SHA256SUMS.txt | sha256sum -c --ignore-missing -
+          [ -n "$(ls -A | grep -v SHA256SUMS.txt)" ] || { echo "No hay ficheros que publicar"; exit 1; }
           ls -la
 
       - name: Publicar Release
@@ -55,4 +58,5 @@ jobs:
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber ./*
 
       - name: Borrar rama temporal
+        if: startsWith(inputs.rama, 'binarios')   # una rama de trabajo (claude/...) la limpia quien la subio
         run: git push origin --delete "$RAMA"
