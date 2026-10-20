@@ -45,6 +45,7 @@ jobs:
               echo "NDK $ANDROID_NDK_HOME · Hexagon SDK $HEXAGON_SDK_ROOT · tools ${HEXAGON_TOOLS_ROOT:-?}"
               bash /repo/nexus-office/packaging/build_android_gpu.sh /src/llama_cpp_python-'$LLAMA_PY'/vendor/llama.cpp /out/lib /tmp/w
               chmod -R a+rX /out'
+          sudo chown -R "$(id -u):$(id -g)" /tmp/out   # el contenedor escribe como root
           ls -la /tmp/out/lib
 
       - name: Dejar las bibliotecas en la rama android-npu-libs
