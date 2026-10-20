@@ -164,3 +164,11 @@ descargados, ver [Plataformas](PLATAFORMAS.md)). Si quieres que un agente busque
 Los agentes de oficina son los de `OFFICE_ROLES` en `nexus/office/__init__.py`; el resto cuenta como gremio.
 `tests/test_office.py` comprueba que todo perfil es coherente, que cada agente tiene su grafo y que el enrutado
 lleva cada consulta al agente de su gremio.
+
+## Paquetes de conocimiento
+Un paquete (`nexus/office/conocimiento/<id>/`) lleva un manual en Markdown para la biblioteca RAG y un `grafo.yaml`
+con tripletas, y dice en `paquete.yaml` qué agentes lo reciben y qué herramientas les añade. Al arrancar (y al
+aplicar un perfil desde la app) se instala en la biblioteca y el subgrafo **propios** de cada agente activo de la
+lista, nunca en el grafo general. El primero es el manual de GIMP para los agentes de imagen y diseño: ver
+[GIMP.md](GIMP.md). Se desactivan con `office.knowledge_packs: false`.
+

@@ -1,0 +1,82 @@
+name: GIMP para Nexus-Office
+
+# Prepara el GIMP oficial (download.gimp.org) de cada sistema para meterlo en los instaladores offline de
+# Nexus-Office (bundled/runtimes/gimp), lo prueba con el motor de edicion de Nexus-Office y lo publica en la
+# Release «gimp-runtimes», de donde lo toma packaging/build.py.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Versión de GIMP (vacío = la estable más reciente)
+        default: ""
+      publicar:
+        description: Publicar en la Release gimp-runtimes
+        type: boolean
+        default: true
+  push:
+    paths:
+      - nexus-office/packaging/fetch_gimp.py
+      - nexus-office/nexus/media/gimp.py
+      - .github/workflows/gimp-runtimes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  gimp:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x86_64, os: ubuntu-24.04 }
+          - { target: linux-aarch64, os: ubuntu-24.04-arm }
+          - { target: windows-x64, os: windows-latest }
+          - { target: windows-arm64, os: windows-11-arm }
+          - { target: macos-arm64, os: macos-latest }
+          - { target: macos-x86_64, os: macos-15-intel }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: nexus-office
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependencias
+        run: python -m pip install --disable-pip-version-check pillow pyyaml numpy
+      - name: squashfs-tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q squashfs-tools
+      - name: Preparar y probar GIMP
+        run: python packaging/fetch_gimp.py --target ${{ matrix.target }} --out ../dist-gimp --smoke ${{ inputs.version && format('--version {0}', inputs.version) || '' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gimp-${{ matrix.target }}
+          path: dist-gimp/*
+          retention-days: 7
+          compression-level: 0
+
+  publicar:
+    needs: gimp
+    if: ${{ !cancelled() && (github.event_name == 'push' || inputs.publicar) }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist-gimp
+          merge-multiple: true
+      - name: Publicar Release gimp-runtimes
+        run: |
+          cd dist-gimp
+          ls -la
+          sha256sum * > SHA256SUMS-gimp.txt
+          gh release view gimp-runtimes -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create gimp-runtimes -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+              -t "GIMP para los instaladores de Nexus-Office" \
+              -n "GIMP oficial de download.gimp.org preparado para ir dentro de los instaladores offline de Nexus-Office (bundled/runtimes/gimp). GIMP es software libre (GPL v3); su código fuente está en https://download.gimp.org/gimp/. Lo genera .github/workflows/gimp-runtimes.yml."
+          gh release upload gimp-runtimes -R "$GITHUB_REPOSITORY" --clobber ./*
