@@ -729,6 +729,8 @@
   }
   function onLounge(m) {
     if (room) room.say(m);
+    if (m.meta && m.meta.event === "meeting_start") meetBusy(true);
+    if (m.meta && m.meta.event === "meeting_end") meetBusy(false);
     const log = $("#lounge-log");
     if (log && S.view === "lounge") { log.insertAdjacentHTML("beforeend", loungeLine(m)); log.scrollTop = log.scrollHeight; }
     else if (m.kind !== "task") { const b = $("#badge-lounge"); b.textContent = (+b.textContent || 0) + 1; b.classList.remove("hidden"); }
@@ -737,10 +739,10 @@
   loaders.lounge = async () => {
     $("#badge-lounge").classList.add("hidden"); $("#badge-lounge").textContent = "";
     const d = await api("/api/lounge");
-    if (!room) room = new LoungeRoom($("#lounge-canvas"));
+    if (!room) window.__lounge = room = new LoungeRoom($("#lounge-canvas"));
     room.setAgents(d.agents);
     $("#lounge-log").innerHTML = d.messages.map(loungeLine).join("") || `<div class="muted">El salón está tranquilo. Convoca una reunión.</div>`;
-    $("#lounge-log").scrollTop = 1e9; $("#lounge-count").textContent = `${d.messages.length} mensajes`;
+    $("#lounge-log").scrollTop = 1e9; $("#lounge-count").textContent = `${d.messages.length} mensajes`; meetBusy(!!d.busy);
     d.messages.filter((m) => m.kind !== "task").slice(-4).forEach((m) => room.say(m));
     // matriz de habilidades
     const topics = {}; Object.values(d.skills).flat().forEach((r) => (topics[r.topic] = (topics[r.topic] || 0) + r.ok + r.fail));
@@ -758,7 +760,12 @@
     $$("[data-ap]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/lounge/proposals/${b.dataset.ap}`, { body: { approve: true } }); toast("Agente creado"); await loadAgents(); loaders.lounge(); })));
     $$("[data-rj]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/lounge/proposals/${b.dataset.rj}`, { body: { approve: false, note: prompt("Motivo (opcional)") || "" } }); loaders.lounge(); })));
   };
-  $("#lounge-meet").onclick = guard(async () => { await api("/api/lounge/meet", { body: { topic: $("#lounge-topic").value } }); toast("Reunión convocada"); });
+  function meetBusy(on) { const b = $("#lounge-meet"); b.disabled = on; b.classList.toggle("busy", on); b.textContent = on ? "REUNIÓN EN CURSO…" : "CONVOCAR REUNIÓN"; }
+  $("#lounge-meet").onclick = guard(async () => {
+    const r = await api("/api/lounge/meet", { body: { topic: $("#lounge-topic").value } });
+    if (r.busy) { toast("Ya hay una reunión en curso"); meetBusy(true); return; }
+    toast("Reunión convocada"); meetBusy(true); $("#lounge-topic").value = "";
+  });
   const loungeSay = guard(async () => { const t = $("#lounge-say").value.trim(); if (!t) return; await api("/api/lounge/say", { body: { text: t } }); $("#lounge-say").value = ""; });
   $("#lounge-say-btn").onclick = loungeSay; $("#lounge-say").onkeydown = (e) => e.key === "Enter" && loungeSay();
 

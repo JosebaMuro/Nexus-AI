@@ -7,6 +7,15 @@
  * El usuario puede forzar el diseno en Ajustes; se guarda solo en este dispositivo. */
 (function () {
   "use strict";
+  // WebView de Android 7-9 sin actualizar y Safari < 16 no tienen roundRect: sin el, el salon y los avatares no se dibujan
+  const C2D = window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype;
+  if (C2D && !C2D.roundRect) {
+    C2D.roundRect = function (x, y, w, h, r) {
+      r = Math.max(0, Math.min(Array.isArray(r) ? r[0] || 0 : r || 0, Math.abs(w) / 2, Math.abs(h) / 2));
+      this.moveTo(x + r, y); this.arcTo(x + w, y, x + w, y + h, r); this.arcTo(x + w, y + h, x, y + h, r);
+      this.arcTo(x, y + h, x, y, r); this.arcTo(x, y, x + w, y, r); this.closePath(); return this;
+    };
+  }
   const root = document.documentElement, ua = navigator.userAgent, KEY = "nexus_layout";
   const mq = (q) => window.matchMedia && matchMedia(q).matches;
   const apk = /NexusAndroid\//.test(ua) || !!window.NexusApp;

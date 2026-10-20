@@ -190,10 +190,14 @@ class Lounge:
             text = self.s.llm.complete(
                 f"Eres {agent.name} ({agent.description}) en una reunion breve con otros agentes de IA de tu equipo. "
                 f"{prompt_ctx}\nResponde en espanol, en 1-2 frases, en primera persona, sin saludos largos.",
-                agent.model, max_tokens=120, temperature=0.8)
+                agent.model, max_tokens=120, temperature=0.8, reasoning="off")   # charla breve: sin razonar, contesta ya
             return re.sub(r"<tool>.*?</tool>", "", text, flags=re.S).strip() or fallback
         except Exception:  # noqa: BLE001
             return fallback
+
+    @property
+    def busy(self) -> bool:
+        return self._meeting.locked()
 
     def meet(self, quick: bool = False, topic: str = "") -> dict:
         """Celebra una reunion. Devuelve resumen con huecos detectados y propuestas."""
@@ -205,8 +209,13 @@ class Lounge:
             skills = self.skills()
             self.post("nexus", f"Abro la reunion del salon{': ' + topic if topic else ''}. "
                                f"Somos {len(agents)} agentes.", "system", {"event": "meeting_start"})
-            if not quick:  # ronda de presentaciones
-                for a in agents:
+            if not quick:  # ronda de presentaciones (con muchos agentes, solo los de mas actividad para no eternizarla)
+                cap = int(self.s.config.get("lounge.max_intros", 8))
+                speakers = agents
+                if len(agents) > cap:
+                    active = Counter(m["agent"] for m in self.history(300) if m["kind"] in ("task", "feedback"))
+                    speakers = sorted(agents, key=lambda a: (a.id != "nexus", -active.get(a.id, 0)))[:cap]
+                for a in speakers:
                     strong = [r["topic"] for r in skills.get(a.id, []) if r["score"] >= 0.6][:4]
                     tools = ", ".join(a.tools[:5]) if a.tools != ["*"] else "todas las herramientas"
                     fb = f"Soy {a.name}: {a.description}. Uso {tools}." + (f" Se me da bien: {', '.join(strong)}." if strong else "")
@@ -229,7 +238,7 @@ class Lounge:
                               "insight", {"topics": topics})
             # opinion libre si se dio un tema
             if topic:
-                for a in agents[:4]:
+                for a in sorted(agents, key=lambda a: -self.s.agents.keyword_score(a, topic))[:4]:
                     self.post(a.id, self._say(a, f"El tema de la reunion es: {topic}. Aporta tu punto de vista.",
                                               f"Sobre «{topic}», puedo ayudar desde mi especialidad: {a.description.lower()}."), "chat")
             # carencias -> propuestas de agente

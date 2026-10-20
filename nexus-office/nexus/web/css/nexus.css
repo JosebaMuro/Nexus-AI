@@ -438,6 +438,9 @@ dialog h2 { margin: 0 0 6px; font: 700 15px var(--font-hud); letter-spacing: .22
 [data-layout="phone"] .graph-stage { height: 52dvh; min-height: 300px; }
 [data-layout="phone"] .lounge-stage { height: 300px; }
 [data-layout="phone"] .lounge-log { height: 280px; }
+.lounge-meetbar { flex-wrap: wrap; } .lounge-meetbar .input { min-width: 180px; }
+[data-layout="phone"] .lounge-meetbar > * { flex: 1 1 100% !important; }
+#lounge-meet.busy { opacity: .7; cursor: progress; }
 [data-layout="phone"] .net-map { height: 210px; }
 [data-layout="phone"] .gallery { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
 [data-layout="phone"] .avatar-pick { grid-template-columns: repeat(3, minmax(0, 1fr)); }

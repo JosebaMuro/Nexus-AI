@@ -414,11 +414,13 @@ def create_app(services: Services | None = None) -> FastAPI:
         from dataclasses import asdict
         s = S()
         return {"messages": s.lounge.history(150), "skills": s.lounge.skills(), "proposals": s.lounge.proposals(),
-                "gaps": s.lounge.detect_gaps(), "agents": [asdict(a) for a in s.agents.list()]}
+                "gaps": s.lounge.detect_gaps(), "agents": [asdict(a) for a in s.agents.list()], "busy": s.lounge.busy}
 
     @app.post("/api/lounge/meet")
     def lounge_meet(topic: str = Body("", embed=True)):
         import threading
+        if S().lounge.busy:
+            return {"started": False, "busy": True}
         threading.Thread(target=S().lounge.meet, kwargs={"topic": topic}, daemon=True).start()
         return {"started": True}
 
