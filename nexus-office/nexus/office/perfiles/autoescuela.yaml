@@ -1,0 +1,10 @@
+id: autoescuela
+name: "Autoescuela"
+sector: "Educación vial · escuela particular de conductores"
+assistant_name: "Oficina Autoescuela"
+icon: "⛟"
+description: "Autoescuela: matrículas, clases teóricas y prácticas, exámenes DGT, seguimiento de alumnos, cobros y captación."
+agents: [profesor-autoescuela, recepcion, agenda, administracion, comercial, proteccion-datos]
+coordinator:
+  context: |
+    La empresa es una autoescuela autorizada por la DGT que prepara permisos AM, A1, A2, B y profesionales: matricula alumnos, imparte el teórico y las clases prácticas con vehículos de doble mando, organiza las presentaciones a examen en la Jefatura Provincial de Tráfico, lleva el seguimiento de cada alumno y cobra por paquetes de prácticas.

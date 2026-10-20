@@ -11,6 +11,9 @@ on:
       rama:
         description: Rama con los trozos
         default: binarios-tmp
+      titulo:
+        description: Nombre del producto en el título de la Release
+        default: NEXUS AI
 
 permissions:
   contents: write
@@ -22,6 +25,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ inputs.tag }}
       RAMA: ${{ inputs.rama }}
+      TITULO: ${{ inputs.titulo }}
     steps:
       - name: Liberar espacio
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
@@ -50,7 +54,7 @@ jobs:
           cd ../salida
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target main \
-              -t "NEXUS AI ${TAG#v}" \
+              -t "$TITULO ${TAG#v}" \
               -n "Instaladores portables 100 % offline para Windows, Linux (x86_64 y ARM64), macOS y Android. Instrucciones en LEEME.txt; integridad en SHA256SUMS.txt."
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber ./*
 

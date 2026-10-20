@@ -1,0 +1,10 @@
+id: telecomunicaciones
+name: "Instalaciones de telecomunicaciones"
+sector: "Instalaciones · telecomunicaciones, antenas, fibra y seguridad"
+assistant_name: "Oficina Telecom"
+icon: "📡"
+description: "Empresa instaladora de telecomunicaciones: ICT, antenas TDT y satélite, fibra óptica, redes de datos, porteros, CCTV y alarmas."
+agents: [instalador-telecom, electricista, recepcion, presupuestos, administracion, compras, prl]
+coordinator:
+  context: |
+    La empresa es una instaladora de telecomunicaciones inscrita en el registro del Ministerio: hace ICT en edificios, antenas TDT y satélite, adaptaciones al 5G, fibra óptica, cableado estructurado y wifi, porteros y videoporteros, CCTV y alarmas para comunidades, viviendas, comercios y empresas.

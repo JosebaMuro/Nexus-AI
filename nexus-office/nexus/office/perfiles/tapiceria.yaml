@@ -1,0 +1,10 @@
+id: tapiceria
+name: "Tapicería"
+sector: "Mueble · tapicería y decoración textil"
+assistant_name: "Oficina Tapicería"
+icon: "♜"
+description: "Taller de tapicería: retapizado y fabricación de sofás, sillas y cabeceros, tapicería náutica y de automóvil, hostelería y cortinas."
+agents: [tapicero, carpintero, confeccion, recepcion, presupuestos, administracion, compras, comercial]
+coordinator:
+  context: |
+    La empresa es un taller de tapicería: retapiza y fabrica sofás, sillones, sillas y cabeceros, hace tapicería náutica, de automóvil y para hostelería, cortinas, estores y cojines, y repara las estructuras de madera. Atiende a particulares, decoradores, hoteles y restaurantes.

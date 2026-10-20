@@ -1,0 +1,10 @@
+id: cerrajeria
+name: "Cerrajería y carpintería metálica"
+sector: "Metal · cerrajería urgente, puertas y automatismos"
+assistant_name: "Oficina Cerrajería"
+icon: "⚿"
+description: "Cerrajería 24 horas y carpintería metálica: aperturas, bombines, puertas, persianas y automatismos."
+agents: [cerrajero, herrero, soldador, recepcion, presupuestos, administracion, compras]
+coordinator:
+  context: |
+    La empresa es una cerrajería con servicio urgente 24 horas (aperturas, cambios de bombín, amaestramientos) y taller de carpintería metálica (puertas, cierres, persianas y automatismos de garaje).

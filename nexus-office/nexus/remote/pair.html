@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#04060c">
+<title>Nexus-Office · Emparejar dispositivo</title>
+<style>
+  :root { color-scheme: dark; --bg: #04060c; --panel: #0a1222; --text: #d8f6ff; --muted: #6f8aa3; --accent: #00f0ff; --bad: #ff4d6d; --ok: #7cff6b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100dvh; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 30%, #0b1a2e, var(--bg) 70%);
+         color: var(--text); font: 16px/1.5 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; padding: 16px; }
+  .card { width: min(440px, 100%); background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid rgba(0,240,255,.35);
+          border-radius: 18px; padding: 24px; box-shadow: 0 0 50px rgba(0,240,255,.12); }
+  h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: .3em; color: var(--accent); text-shadow: 0 0 18px rgba(0,240,255,.45); }
+  p { color: var(--muted); margin: 6px 0 16px; font-size: 14.5px; }
+  label { display: block; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 12px 0 6px; }
+  input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(0,240,255,.3); background: #000812; color: var(--text); font-size: 16px; outline: none; }
+  input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,240,255,.15); }
+  #code { font: 700 22px "Cascadia Code", Consolas, monospace; letter-spacing: .18em; text-align: center; text-transform: uppercase; }
+  button { width: 100%; margin-top: 18px; padding: 13px; border: 0; border-radius: 12px; background: var(--accent); color: #00121a;
+           font-weight: 700; font-size: 15px; letter-spacing: .12em; cursor: pointer; }
+  button:disabled { opacity: .5; }
+  .msg { min-height: 22px; margin-top: 12px; font-size: 14px; } .msg.err { color: var(--bad); } .msg.ok { color: var(--ok); }
+  details { margin-top: 18px; font-size: 13px; color: var(--muted); }
+  code { display: block; margin-top: 6px; word-break: break-all; font: 12px Consolas, monospace; color: var(--text); background: #000812; padding: 8px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<form class="card" id="f">
+  <h1>Nexus-Office</h1>
+  <p>Conexión cifrada (TLS 1.3). Para usar Nexus-Office desde aquí, empareja este dispositivo con el código que genera tu Nexus-Office en
+     <b>Red COOP → Acceso remoto → Emparejar dispositivo</b>.</p>
+  <label for="code">Código de emparejamiento</label>
+  <input id="code" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX" maxlength="16" required autofocus>
+  <label for="name">Nombre de este dispositivo</label>
+  <input id="name" maxlength="40" placeholder="Mi móvil">
+  <button id="go">EMPAREJAR</button>
+  <div class="msg" id="msg" role="status"></div>
+  <details><summary>Comprobar que hablas con tu Nexus-Office</summary>
+    Huella SHA-256 del certificado de este servidor. Debe coincidir con la que muestra tu Nexus-Office en el panel de acceso remoto
+    (en el navegador: candado o aviso de la barra de direcciones → certificado → huella SHA-256). Si no coincide, no continúes.
+    <code>{{FP}}</code></details>
+</form>
+<script>
+  const $ = (id) => document.getElementById(id), q = new URLSearchParams(location.search);
+  const ua = navigator.userAgent, guess = /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iPhone/iPad" : /Windows/.test(ua) ? "PC Windows" : /Mac/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "Dispositivo";
+  $("name").value = q.get("name") || guess;
+  async function pair(e) {
+    e && e.preventDefault();
+    const msg = $("msg"); msg.className = "msg"; msg.textContent = "Comprobando…"; $("go").disabled = true;
+    try {
+      const r = await fetch("/api/remote/pair", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
+                                                   body: JSON.stringify({ code: $("code").value, name: $("name").value }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || "No se pudo emparejar");
+      msg.className = "msg ok"; msg.textContent = "Emparejado. Entrando…";
+      setTimeout(() => location.replace("/"), 500);
+    } catch (err) { msg.className = "msg err"; msg.textContent = err.message; $("go").disabled = false; }
+  }
+  $("f").addEventListener("submit", pair);
+  if (q.get("pair")) { $("code").value = q.get("pair"); pair(); }   // enlace o app Android con el codigo incluido
+</script>
+</body>
+</html>
