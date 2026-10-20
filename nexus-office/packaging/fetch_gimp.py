@@ -201,10 +201,14 @@ def _linux_launcher(root: Path) -> Path:
 
 def prepare_linux(appimage: Path, dest: Path) -> None:
     shutil.rmtree(dest, ignore_errors=True)
-    if shutil.which("unsquashfs"):
+    ok = False
+    if shutil.which("unsquashfs"):   # sirve para extraer el AppImage de otra arquitectura
         off = _squashfs_offset(appimage)
-        subprocess.run(["unsquashfs", "-q", "-n", "-d", str(dest), "-o", str(off), str(appimage)], check=True)
-    else:
+        ok = subprocess.run(["unsquashfs", "-q", "-n", "-no-xattrs", "-d", str(dest), "-o", str(off),
+                             str(appimage)]).returncode == 0
+        if not ok:
+            shutil.rmtree(dest, ignore_errors=True)
+    if not ok:
         appimage.chmod(0o755)
         with tempfile.TemporaryDirectory() as t:
             subprocess.run([str(appimage), "--appimage-extract"], cwd=t, check=True, stdout=subprocess.DEVNULL)
@@ -222,8 +226,14 @@ def prepare_windows(setup: Path, dest: Path) -> None:
         if list(dest.glob("bin/gimp-console*.exe")):
             break
         time.sleep(1)
-    for f in dest.glob("unins*"):   # el desinstalador no sirve en una copia portable
-        f.unlink()
+    for f in dest.glob("unins*"):   # el desinstalador (unins000.exe, carpeta uninst) no sirve en una copia portable
+        if f.is_dir():
+            shutil.rmtree(f, ignore_errors=True)
+        else:
+            try:
+                f.unlink()
+            except OSError as e:
+                print(f"[gimp] no se pudo quitar {f.name}: {e}")
 
 
 def prepare_macos(dmg: Path, dest: Path) -> None:
