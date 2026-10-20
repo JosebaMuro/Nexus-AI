@@ -171,7 +171,7 @@ def test_upnp_parsers():
 def test_android_app_pins_certificate():
     from pathlib import Path
     root = Path(__file__).resolve().parent.parent
-    src = root / "android" / "src" / "ai" / "nexus" / "client" / "MainActivity.java"
+    src = root / "android" / "src" / "ai" / "nexus" / "office" / "client" / "MainActivity.java"
     if not src.exists():
         pytest.skip("el codigo de la app Android solo va en el proyecto completo y el paquete python")
     java = src.read_text(encoding="utf-8")

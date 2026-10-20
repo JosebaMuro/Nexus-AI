@@ -29,7 +29,7 @@ def test_layouts_defined_for_every_device():
 
 
 def test_android_app_reports_form_factor_and_handles_back():
-    src = ROOT / "android" / "src" / "ai" / "nexus" / "client" / "MainActivity.java"
+    src = ROOT / "android" / "src" / "ai" / "nexus" / "office" / "client" / "MainActivity.java"
     if not src.exists():
         pytest.skip("el codigo de la app Android solo va en el proyecto completo y el paquete python")
     java = src.read_text(encoding="utf-8")

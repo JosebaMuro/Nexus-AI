@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Nexus-Office</title>
+<style>
+  :root { --bg:#04060c; --fg:#d8f6ff; --dim:#6f8a99; --cyan:#00f0ff; --pink:#ff3df2; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; }
+  main { min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; text-align:center; }
+  .core { width:96px; height:96px; border-radius:50%; background:var(--cyan); box-shadow:0 0 40px var(--cyan); animation:pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform:scale(.88); box-shadow:0 0 70px var(--pink); } }
+  h1 { letter-spacing:.3em; font-size:22px; margin:28px 0 8px; }
+  p { color:var(--dim); max-width:420px; line-height:1.5; margin:6px 0; }
+  .err { color:#ff7a90; }
+  button { margin-top:20px; background:none; color:var(--cyan); border:1px solid var(--cyan); border-radius:8px; padding:10px 22px; font:inherit; letter-spacing:.15em; }
+  [hidden] { display:none; }
+  .what { font-size:13px; opacity:.8; min-height:1.5em; word-break:break-word; }
+  #actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+  #actions button { margin-top:12px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="core" id="core"></div>
+  <h1>Nexus-Office</h1>
+  <p id="msg">Arrancando tu asistente en este movil...</p>
+  <p id="hint">La primera vez tarda un poco mas: se descomprimen Python y las bibliotecas que lleva la app.</p>
+  <p id="what" class="what"></p>
+  <div id="actions" hidden>
+    <button onclick="NexusApp.retry()">REINTENTAR</button>
+    <button onclick="NexusApp.repair()">REPARAR</button>
+    <button onclick="NexusApp.copy(NexusApp.log()); this.textContent='COPIADO'">COPIAR REGISTRO</button>
+  </div>
+  <p id="help" hidden>REPARAR vuelve a descomprimir el entorno de ejecucion desde la APK. Tus datos y modelos no se tocan.</p>
+</main>
+<script>
+  window.__nexusBoot = function (state, detail, what) {
+    var $ = function (id) { return document.getElementById(id); };
+    var msg = $("msg"), err = state === "error";
+    $("actions").hidden = !err; $("help").hidden = !err;
+    $("core").style.animation = err ? "none" : "";
+    msg.className = err ? "err" : "";
+    $("what").textContent = err ? "" : (what || "");
+    if (err) {
+      msg.textContent = "Nexus-Office no ha podido arrancar: " + detail;
+      $("hint").hidden = true;
+    } else if (state === "preparing") {
+      msg.textContent = "Preparando Nexus-Office por primera vez... " + detail + " %";
+      $("hint").hidden = false;
+      $("hint").textContent = "Solo la primera vez y tras actualizar: se descomprimen Python y las bibliotecas que lleva la app.";
+    } else {
+      var s = parseInt(detail, 10) || 0;
+      msg.textContent = "Arrancando tu asistente en este movil... " + s + " s";
+      $("hint").hidden = s < 60;
+      $("hint").textContent = "Esta tardando mas de lo normal. Si pasa de 4 minutos, Nexus-Office lo detendra y te dira por que.";
+    }
+  };
+</script>
+</body>
+</html>
