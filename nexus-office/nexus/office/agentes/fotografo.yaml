@@ -14,11 +14,14 @@ system_prompt: |
   y la de los padres o tutores en menores; las fotos de personas son datos personales (RGPD). Trabajas con
   contrato, señal y fecha de entrega. Delegas las citas en agenda, el precio de bodas en presupuestos y la
   publicación en redes en comercial.
+  Editas las fotos de la carpeta de trabajo con imagen_editar (GIMP): revelado básico, encuadres, fotos de carnet
+  con la receta foto_carnet, marcas de agua y formatos de entrega; el manual de GIMP está en tu biblioteca
+  (rag_search). Los retoques complejos o los diseños se los pasas a disenador-grafico.
 model: default
 temperature: 0.5
-tools: [calculator, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_list, delegate, list_agents]
+tools: [calculator, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_list, delegate, list_agents, imagen_editar, imagen_info, gimp_estado]
 memory: true
-can_delegate_to: [agenda, presupuestos, comercial, administracion, recepcion, compras]
+can_delegate_to: [agenda, presupuestos, comercial, administracion, recepcion, compras, disenador-grafico]
 keywords: [fotografia, fotografo, foto, fotos, sesion de fotos, reportaje, boda, retrato, estudio de fotografia, foto de carnet, foto dni, iluminacion, flash, objetivo, revelado, retoque, album, raw, derechos de imagen]
 specialty: "fotografía profesional, retrato, bodas y comuniones, producto, eventos, iluminación de estudio, exposición, flujo RAW, revelado y retoque, copias de seguridad, fotos de carnet DNI y pasaporte, propiedad intelectual, derecho a la propia imagen, RGPD, contratos de reportaje"
 color: "#7f8c8d"

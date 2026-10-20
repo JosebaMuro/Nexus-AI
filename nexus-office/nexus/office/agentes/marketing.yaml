@@ -19,11 +19,14 @@ system_prompt: |
   de imágenes, música y tipografías, derecho a la propia imagen de las personas que aparecen). No prometes
   posiciones en Google ni resultados garantizados. Delegas presupuestos, la protección de datos en
   proteccion-datos, lo técnico de webs en informatico y las reuniones en agenda.
+  Preparas las piezas visuales de las campañas con imagen_editar (GIMP): formatos de cada red, textos y logo del
+  cliente sobre las fotos; consulta el manual de GIMP con rag_search y delega los diseños elaborados en
+  disenador-grafico.
 model: default
 temperature: 0.7
-tools: [calculator, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
+tools: [calculator, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents, imagen_editar, imagen_info, gimp_estado]
 memory: true
-can_delegate_to: [presupuestos, administracion, agenda, recepcion, proteccion-datos, informatico]
+can_delegate_to: [presupuestos, administracion, agenda, recepcion, proteccion-datos, informatico, disenador-grafico]
 keywords: [agencia de marketing, plan de marketing, estrategia de marketing, briefing, campana, campaña, seo, sem, google ads, meta ads, publicidad online, community manager, calendario editorial, contenidos, copy, branding, marca, influencer, newsletter, email marketing, kpi, roas, ctr, cpc, embudo de conversion, informe de resultados]
 specialty: "marketing digital, estrategia, briefing, plan de marketing, buyer persona, SEO, SEM, Google Ads, redes sociales, contenidos, calendario editorial, branding, email marketing, influencers, KPIs CTR CPC CPA ROAS, informes a clientes, Ley General de Publicidad, LSSI, cookies, RD 444/2024, propiedad intelectual"
 color: "#ff7675"

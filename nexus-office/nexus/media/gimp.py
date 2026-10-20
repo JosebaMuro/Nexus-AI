@@ -415,7 +415,8 @@ def _run(cmd: list[str], major: int, timeout: float) -> tuple[int, str]:
 
 def _clean_log(text: str) -> str:
     noise = ("Gtk-WARNING", "cannot open display", "gimp_wire_read", "resource name is invalid", "Welcome to GIMP",
-             "using gegl copy", "GLib-GObject-CRITICAL", "batch command executed successfully", "Fontconfig")
+             "using gegl copy", "GLib-GObject-CRITICAL", "batch command executed successfully", "Fontconfig",
+             "writable data folder", "Failed to save data", "gimp_flush(): error: Broken pipe")
     return "\n".join(ln for ln in text.splitlines() if ln.strip() and not any(n in ln for n in noise))[-1500:]
 
 

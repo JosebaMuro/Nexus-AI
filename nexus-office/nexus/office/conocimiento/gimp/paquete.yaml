@@ -1,0 +1,10 @@
+# Paquete de conocimiento: manual de GIMP (RAG) y grafo de su manejo.
+# Se instala solo al arrancar en cada agente de «agentes» que este activo (nexus/office/__init__.py, conocimiento):
+# los .md de esta carpeta van a la biblioteca RAG de ese agente y «grafo.yaml» a su subgrafo. Subir «version»
+# cuando cambie el contenido para que se reinstale.
+id: gimp
+nombre: Manual de GIMP
+version: 1
+agentes: [disenador-grafico, fotografo, marketing, impresor, comercial, artista]
+# herramientas que se añaden a esos agentes si ya estaban instalados de antes (sin tocar el resto de su configuracion)
+herramientas: [imagen_editar, imagen_info, gimp_estado]

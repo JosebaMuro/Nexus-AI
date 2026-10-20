@@ -959,7 +959,8 @@ def create_app(services: Services | None = None) -> FastAPI:
         for aid in s.agents.agents:
             s.graph.forget_view(aid)   # nombres nuevos: el ancla de cada subgrafo los sigue
         seeded = o.seed_graphs(s.graph, s.agents.ids())
-        return {"profile": prof, "seeded": seeded, "agents": s.agents.ids()}
+        packs = office.install_packs(s)   # manual de GIMP... en los agentes nuevos que lo usan
+        return {"profile": prof, "seeded": seeded, "packs": packs, "agents": s.agents.ids()}
 
     # ------------------------------------------------------------------ mesa de bolsa (oficina bolsa-inversiones)
     def _bolsa(fn, *a, **kw):

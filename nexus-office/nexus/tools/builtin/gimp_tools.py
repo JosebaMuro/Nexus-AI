@@ -83,8 +83,10 @@ def output_path(src: Path, salida: str, fmt: str) -> Path:
     if not _inside(p, root):
         raise gimp.EditError("la salida tiene que quedar en la carpeta de trabajo")
     ext = gimp.FORMATS.get(p.suffix.lower().lstrip("."))
-    if fmt or not ext:
-        p = p.with_suffix("." + (gimp.FORMATS.get(fmt, "") or ext or "png").replace("jpg", "jpg"))
+    if fmt in gimp.FORMATS:
+        p = p.with_suffix("." + gimp.FORMATS[fmt]) if ext else p.with_name(f"{p.name}.{gimp.FORMATS[fmt]}")
+    elif not ext:   # sin formato: el del original, si no PNG
+        p = p.with_name(f"{p.name}.{gimp.FORMATS.get(src.suffix.lower().lstrip('.'), 'png')}")
     base, n = p, 2
     while p.exists():   # nunca se pisa un fichero (tampoco el original)
         p = base.with_name(f"{base.stem}_{n}{base.suffix}")
