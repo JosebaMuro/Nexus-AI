@@ -59,6 +59,9 @@ def create_app(services: Services | None = None) -> FastAPI:
         s.kg_jobs.listeners.append(hub.broadcast)
         s.remote.server = getattr(app.state, "remote_server", None)
         s.start()
+        if services is None:     # servidor real (no en pruebas): siguen los rastreos de dominio que se cortaron
+            from ..rag import crawl_jobs
+            crawl_jobs.resume_interrupted(s, hub.broadcast)
         yield
         await asyncio.to_thread(s.shutdown)
 
@@ -794,7 +797,7 @@ def create_app(services: Services | None = None) -> FastAPI:
         if not re.match(r"^https?://", url or "", re.I):
             raise HTTPException(400, "la URL debe empezar por http:// o https://")
         target = rag_target(agent)
-        if background:
+        if background or scope == "domain":     # dominio completo: siempre por lotes, hasta agotar el dominio
             pages, chars = crawl_jobs.auto_batch(S().profile)
             job = crawl_jobs.create(url, max_pages, max_depth, scope, target, True,
                                     max(1, min(batch_pages or pages, 500)), chars)
@@ -823,6 +826,69 @@ def create_app(services: Services | None = None) -> FastAPI:
         if job["status"] != crawl_jobs.DONE and not crawl_jobs.is_running(job_id):
             crawl_jobs.run_background(S(), job_id, emit=hub.broadcast)
         return crawl_jobs.public(crawl_jobs.get(job_id))
+
+    def _job_or_404(job_id: str) -> dict:
+        from ..rag import crawl_jobs
+        job = crawl_jobs.get(job_id)
+        if not job:
+            raise HTTPException(404, "Rastreo no encontrado")
+        return job
+
+    @app.post("/api/rag/crawls/{job_id}/knowledge")
+    async def rag_crawl_knowledge_build(job_id: str):
+        """Razona ya el grafo multicapa del dominio con lo leido hasta ahora (al completarse se hace solo)."""
+        from ..rag import crawl_jobs
+        job = _job_or_404(job_id)
+        if not crawl_jobs.kg_path(job_id).exists():
+            raise HTTPException(400, "Este rastreo no tiene grafo de dominio (solo los de «todo el dominio»)")
+        try:
+            return await asyncio.to_thread(crawl_jobs.build_knowledge, S(), job, hub.broadcast)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/rag/crawls/{job_id}/knowledge")
+    def rag_crawl_knowledge_file(job_id: str):
+        from ..rag import crawl_jobs
+        job = _job_or_404(job_id)
+        f = crawl_jobs.knowledge_path(job_id)
+        if not f.exists():
+            raise HTTPException(404, "El grafo del dominio aun no esta construido")
+        name = re.sub(r"[^A-Za-z0-9._-]+", "-", (job.get("site") or job_id))[:60] + "-conocimiento.zip"
+        return FileResponse(f, media_type="application/zip", filename=name)
+
+    @app.post("/api/rag/crawls/{job_id}/knowledge/import")
+    async def rag_crawl_knowledge_import(job_id: str, agent: str = Body("", embed=True)):
+        """Da el conocimiento del dominio a un agente (su subgrafo y su biblioteca) o al general."""
+        from ..rag import crawl_jobs, domain_kg
+        _job_or_404(job_id)
+        f = crawl_jobs.knowledge_path(job_id)
+        if not f.exists():
+            raise HTTPException(404, "El grafo del dominio aun no esta construido")
+        target = rag_target(agent)
+        res = await asyncio.to_thread(domain_kg.import_package, S(), domain_kg.read_package(f), target)
+        hub.broadcast({"type": "graph_update"})
+        return res
+
+    @app.post("/api/rag/domain-knowledge/import")
+    async def rag_domain_knowledge_import(file: UploadFile = File(...), agent: str = Form("")):
+        """Importa un paquete de conocimiento de dominio (.zip) hecho en este u otro Nexus-Office."""
+        import tempfile
+        import zipfile
+        from ..rag import domain_kg
+        target = rag_target(agent)
+        fd, tmp = tempfile.mkstemp(suffix=".zip", dir=paths.sub("cache"))
+        with open(fd, "wb") as out:
+            while chunk := await file.read(1024 * 1024):
+                out.write(chunk)
+        try:
+            data = domain_kg.read_package(Path(tmp))
+        except (zipfile.BadZipFile, KeyError, ValueError) as e:
+            raise HTTPException(400, f"No es un paquete de conocimiento de dominio: {e}") from e
+        finally:
+            Path(tmp).unlink(missing_ok=True)
+        res = await asyncio.to_thread(domain_kg.import_package, S(), data, target)
+        hub.broadcast({"type": "graph_update"})
+        return res
 
     @app.post("/api/rag/crawls/{job_id}/pause")
     def rag_crawl_pause(job_id: str):

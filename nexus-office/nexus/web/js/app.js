@@ -809,13 +809,15 @@
       $("#rag-url").value = ""; toast("Documento creado, archivado y aprendido"); loaders.memory();
     } finally { S.ragBusy = false; $("#rag-url-go").disabled = false; setState("idle"); }
   });
+  $("#rag-crawl-scope").onchange = () => { const d = $("#rag-crawl-scope").value === "domain"; $("#rag-crawl-max").disabled = d; $("#rag-crawl-max").title = d ? "Todo el dominio: sin límite de páginas" : "Máximo de páginas en total. Si no cabe en un lote, se rastrea por lotes correlativos y reanudables"; };
   $("#rag-crawl-go").onclick = guard(async () => {
     const url = $("#rag-crawl").value.trim(); if (!/^https?:\/\//.test(url)) return toast("Introduce una URL http(s)", true);
     const max_pages = Math.max(1, Math.min(100000, +$("#rag-crawl-max").value || 40)), scope = $("#rag-crawl-scope").value;
     const max_depth = max_pages > 500 ? 50 : 3;   // sitio entero: hay que poder llegar a todas sus páginas
     const r = await api("/api/rag/crawl", { body: { url, max_pages, max_depth, scope, agent: ragTarget(), background: true } });
     $("#rag-crawl").value = "";
-    toast(r.job.max_pages > r.job.batch_pages ? `Rastreo en marcha por lotes de ${r.job.batch_pages} páginas` : "Rastreo en marcha");
+    toast(r.job.complete ? `Rastreando TODO el dominio por lotes de ${r.job.batch_pages}: al terminar se crea su grafo de conocimiento`
+          : r.job.max_pages > r.job.batch_pages ? `Rastreo en marcha por lotes de ${r.job.batch_pages} páginas` : "Rastreo en marcha");
     loadCrawls();
   });
   let crawlTimer = null, crawlStep = "";
@@ -827,14 +829,19 @@
       const pct = Math.min(100, Math.round(100 * j.pages_done / Math.max(1, j.pending ? j.pages_done + Math.min(j.pending, j.max_pages - j.pages_done) : j.pages_done)));
       const last = j.batches[j.batches.length - 1];
       return `<div class="item"><div class="row"><span class="tag ${crawlLabel[j.status] || ""}">${esc(j.status)}</span><div style="flex:1"><div class="t">${esc(j.title || j.url)}</div>
-        <div class="d mono">${j.pages_done} págs. en ${j.batches.length} lote${j.batches.length === 1 ? "" : "s"} de ${j.batch_pages}${j.pending ? ` · ${j.pending} pendientes` : ""} · máx. ${j.max_pages} · ${esc(j.scope === "domain" ? "todo el dominio" : "sección")}${j.reason ? ` · ${esc(j.reason)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
+        <div class="d mono">${j.pages_done} págs. en ${j.batches.length} lote${j.batches.length === 1 ? "" : "s"} de ${j.batch_pages}${j.pending ? ` · ${j.pending} pendientes` : ""} · ${j.complete ? "sin límite" : `máx. ${j.max_pages}`} · ${esc(j.scope === "domain" ? "todo el dominio y subdominios" : "sección")}${j.reason ? ` · ${esc(j.reason)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
+        ${j.knowledge ? `<div class="d">🧠 Grafo del dominio: ${j.knowledge.nodes} nodos · ${j.knowledge.concepts} conceptos · ${j.knowledge.facts} afirmaciones (${(j.knowledge.facts_by_status || {})["contrastada"] || 0} contrastadas) · ${j.knowledge.topics} temas${j.knowledge.reasoned_topics ? ` (${j.knowledge.reasoned_topics} razonados)` : ""}</div>` : j.knowledge_error ? `<div class="d bad">${esc(j.knowledge_error)}</div>` : ""}
         ${j.running && crawlStep ? `<div class="d"><span class="spin"></span> ${esc(crawlStep)}</div>` : last ? `<div class="d">Último: ${esc(last.title)}</div>` : ""}</div>
         ${j.running ? `<button class="btn sm" data-cjpause="${j.id}">PAUSAR</button>` : j.status !== "completado" ? `<button class="btn sm primary" data-cjresume="${j.id}">REANUDAR</button>` : ""}
+        ${j.complete && j.pages_done && !j.running ? `<button class="btn sm" data-cjkg="${j.id}" title="Razonar ya el grafo multicapa con lo leído">${j.knowledge ? "REHACER GRAFO" : "CREAR GRAFO"}</button>` : ""}
+        ${j.knowledge ? `<a class="btn sm" href="/api/rag/crawls/${j.id}/knowledge" title="Paquete importable: grafo + conocimiento + manifiesto">⬇ ZIP</a><select class="input sm" data-cjto="${j.id}" style="width:auto">${[["", "general"], ...S.agents.map((a) => [a.id, a.name])].map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join("")}</select><button class="btn sm primary" data-cjimp="${j.id}" title="Darle a ese agente el conocimiento del dominio">DAR A AGENTE</button>` : ""}
         <button class="btn danger sm" data-cjdel="${j.id}" title="Quitar el rastreo (los lotes ya indexados se pueden conservar)">✕</button></div>
         <div class="bar"><i style="width:${j.status === "completado" ? 100 : pct}%"></i></div></div>`;
     }).join("");
     $$("[data-cjpause]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/rag/crawls/${b.dataset.cjpause}/pause`, { body: {} }); toast("Se pausará al terminar la página en curso"); setTimeout(loadCrawls, 800); })));
     $$("[data-cjresume]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/rag/crawls/${b.dataset.cjresume}/resume`, { body: {} }); toast("Rastreo reanudado por el siguiente lote"); loadCrawls(); })));
+    $$("[data-cjkg]").forEach((b) => (b.onclick = guard(async () => { b.disabled = true; toast("Razonando el grafo del dominio…"); try { const k = await api(`/api/rag/crawls/${b.dataset.cjkg}/knowledge`, { body: {} }); toast(`Grafo listo: ${k.nodes} nodos, ${k.facts} afirmaciones`); } finally { loadCrawls(); } })));
+    $$("[data-cjimp]").forEach((b) => (b.onclick = guard(async () => { const agent = $(`[data-cjto="${b.dataset.cjimp}"]`).value; const r = await api(`/api/rag/crawls/${b.dataset.cjimp}/knowledge/import`, { body: { agent } }); toast(`Conocimiento dado a ${agent || "general"}: ${r.graph.nodes} nodos y ${r.rag_chunks} fragmentos`); loadRag(); })));
     $$("[data-cjdel]").forEach((b) => (b.onclick = guard(async () => { const docs = confirm("¿Borrar también de la biblioteca los lotes ya indexados?\n(Cancelar = conservarlos)"); await api(`/api/rag/crawls/${b.dataset.cjdel}?docs=${docs}`, { method: "DELETE" }); loadCrawls(); loadRag(); })));
     clearTimeout(crawlTimer);
     if (live && S.view === "memory") crawlTimer = setTimeout(() => loadCrawls().catch(() => {}), 2500);
