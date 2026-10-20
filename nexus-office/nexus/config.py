@@ -90,7 +90,7 @@ DEFAULTS: dict[str, Any] = {
     "media": {
         "tts_engine": "auto",           # auto | pyttsx3 | edge-tts | piper | browser
         "stt_engine": "auto",           # auto | faster-whisper | vosk | browser
-        "image_model": "",              # id del catalogo (diffusers) o vacio = procedural
+        "image_model": "",              # id del catalogo (sd.cpp) o vacio = el primero; sin modelo, compositor de escenas
         "music_engine": "auto",         # auto | musicgen | procedural
         "vision_model": "",             # modelo multimodal (ollama/openai) para analizar imagenes
         "auto_enhance_prompts": True,   # mejorar automaticamente los prompts de imagen (estilo, calidad, traduccion)

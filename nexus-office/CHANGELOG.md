@@ -11,6 +11,12 @@
 - Siete herramientas nuevas para los agentes (`bolsa_mercados`, `bolsa_cotizacion`, `bolsa_cartera`, `bolsa_costes`, `bolsa_orden`, `bolsa_cancelar`, `bolsa_informe_fiscal`), todas sin internet. Ver [docs/BOLSA.md](docs/BOLSA.md).
 - Aviso visible en la app y en cada respuesta de la mesa: los precios son ficticios y no es asesoramiento financiero.
 
+### La imagen sin modelo ya sigue el prompt
+- **Antes**: sin modelo de imagen descargado (y siempre en la app Android, que no lleva stable-diffusion.cpp) se dibujaba un campo de flujo abstracto. Solo cambiaban los colores si el prompt nombraba alguno, así que casi todo salía como el mismo «fractal». Con sd.cpp, el prompt en español llegaba sin traducir a un modelo que solo entiende inglés.
+- **Ahora** un compositor de escenas (`nexus/media/scene.py`) lee el prompt en español o inglés y dibuja lo que pide: la hora (día, noche, atardecer, amanecer), el clima (lluvia, nieve, niebla, tormenta), el lugar (mar, playa, montaña, bosque, ciudad, desierto, lago, jardín, espacio) y los sujetos con su color y cuántos hay (gato, perro, casa, castillo, árbol, flor, coche, barco, persona, robot, astronauta, faro, caballo…). El arte abstracto queda solo para cuando se pide («abstracto», «fractal»).
+- Antes de llamar a stable-diffusion.cpp, el prompt en español se traduce al inglés (con el LLM si lo hay; si no, con el diccionario del mejorador de prompts).
+- La app explica debajo de la imagen por qué no es neuronal (no hay modelo, no hay motor o sd.cpp falló, con el error) y cómo conseguirlo.
+
 ## Nexus-Office 1.7.0: la oficina para pymes cambia de nombre
 
 ### Antes NEXUS AI, ahora Nexus-Office

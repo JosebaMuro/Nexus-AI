@@ -29,8 +29,8 @@ def generate_image(args, ctx):
         prompt, negative = enh["prompt"], negative or enh["negative"]
     else:
         prompt = english_prompt(ctx.services, args["prompt"])
-    res = ctx.services.images.generate(prompt, negative, seed=args.get("seed"))
-    res["prompt"] = prompt
+    res = ctx.services.images.generate(prompt, negative, seed=args.get("seed"), idea=args["prompt"])
+    res.setdefault("prompt", prompt)
     if ctx.emit:
         ctx.emit({"type": "media", "kind": "image", "url": res["url"], "engine": res["engine"]})
     return {k: v for k, v in res.items() if k != "path"}  # el modelo no necesita rutas locales

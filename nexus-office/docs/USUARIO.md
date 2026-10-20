@@ -165,7 +165,7 @@ que funciona con fluidez en ese equipo:
 | Imagen | Generar imágenes (solo con la opción *todos*) | SDXS‑512 en CPU; SD‑Turbo o SDXL‑Turbo con más memoria o GPU |
 
 Si hay internet, los descarga al momento. **Sin internet**, el instalador solo muestra la recomendación y Nexus-Office
-funciona igualmente con su núcleo integrado (herramientas, memoria, imagen procedural, música y la voz del
+funciona igualmente con su núcleo integrado (herramientas, memoria, imagen compuesta a partir del prompt, música y la voz del
 navegador). Los modelos se descargan después, cuando haya red, desde **Modelos → Recomendados** (el marcado con ★) o
 desde la terminal:
 
