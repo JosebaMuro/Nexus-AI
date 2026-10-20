@@ -1,5 +1,19 @@
 # Cambios
 
+## Nexus-Office 1.8.1: GIMP para los agentes
+
+### Los agentes editan imágenes con GIMP
+- **Antes**: los agentes podían generar imágenes, pero no retocar las del cliente: ni recortar una foto para Instagram, ni corregir el color de una foto de producto, ni poner el logo o un texto encima, ni preparar una foto de carnet o un original para la imprenta.
+- **Ahora** tienen GIMP como herramienta. Los instaladores de escritorio (Windows x64 y ARM64, macOS, Linux x86_64 y ARM64, Raspberry Pi) traen el GIMP 3 oficial dentro, sin instalar nada y sin internet; si el equipo ya tiene GIMP 3 o 2.10 también vale. GIMP trabaja sin ventana, con un perfil propio que no toca el del usuario.
+- Herramientas nuevas: `imagen_editar` (25 operaciones encadenables y 9 recetas: foto de carnet, formatos de redes, banner, producto con fondo blanco, mejora rápida, web ligera, A4 para imprimir), `imagen_info`, `gimp_estado` y `gimp_script` (scripts propios en Python-Fu o Script-Fu, con aprobación de un administrador).
+- Trabajan sobre la carpeta de trabajo de los agentes. Las imágenes que adjuntas en el chat se guardan en `adjuntos/` para poder editarlas, los resultados van a `imagenes/`, se ven en el chat y nunca sobrescriben el original.
+- Sin GIMP (en Android, por ejemplo) las mismas operaciones se hacen con Pillow; solo el formato XCF y los scripts necesitan GIMP.
+
+### Diseñador gráfico y manual de GIMP
+- Agente nuevo **Diseñador gráfico** en las oficinas de agencia de marketing, imprenta y estudio de fotografía. El fotógrafo, el estratega de marketing, el impresor, el comercial y el artista también usan GIMP y le delegan lo complejo.
+- **Manual de GIMP** en nueve capítulos (interfaz y formatos, capas y máscaras, color, retoque, recorte y tamaño, texto y diseño con las medidas de redes e imprenta, automatización, atajos y recetas para pymes) en la biblioteca RAG de esos agentes, y un **grafo de conocimiento** de 119 relaciones sobre su manejo en el subgrafo de cada uno. Así pueden explicar a una persona cómo hacerlo ella misma en GIMP, con menús y atajos.
+- Los paquetes de conocimiento (`nexus/office/conocimiento/`) se instalan solos al arrancar en los agentes que los usan y se actualizan al cambiar de versión. Ver [docs/GIMP.md](docs/GIMP.md).
+
 ## Nexus-Office 1.8.0: oficina de bolsa e inversiones
 
 ### Nueva oficina «Bolsa e inversiones» con mesa simulada

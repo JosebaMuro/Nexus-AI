@@ -58,6 +58,28 @@ class AgentSpec:
         return AgentSpec(**known)
 
 
+def store_images(images: list[str]) -> list[str]:
+    """Guarda las imagenes adjuntas (base64) en data/sandbox/adjuntos para que los agentes las editen con sus
+    herramientas. Devuelve sus rutas dentro de la carpeta de trabajo."""
+    import base64
+    import io
+    import time
+    out = []
+    folder = paths.sub("sandbox", "adjuntos")
+    for i, b64 in enumerate(images or []):
+        try:
+            data = base64.b64decode(b64.split(",", 1)[-1])
+            from PIL import Image
+            with Image.open(io.BytesIO(data)) as im:
+                ext = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp", "GIF": "gif", "BMP": "bmp"}.get(im.format, "png")
+            name = f"{time.strftime('%Y%m%d-%H%M%S')}_{i + 1}.{ext}"
+            (folder / name).write_bytes(data)
+            out.append(f"adjuntos/{name}")
+        except Exception as e:  # noqa: BLE001
+            L.warning("No se pudo guardar la imagen adjunta %d: %s", i + 1, e)
+    return out
+
+
 class AgentManager:
     def __init__(self, services) -> None:
         self.s = services
@@ -228,7 +250,10 @@ class AgentManager:
                     msgs.append({"role": m["role"], "content": m["content"][:3000]})
             s.memory.add_message(session_id, "user", text + (f"\n[{len(images)} imagen(es) adjunta(s)]" if images else ""),
                                  spec.id)
-        msgs.append({"role": "user", "content": text, "images": images or []})
+        stored = store_images(images) if images else []
+        note = (f"\n\n[Imagenes adjuntas guardadas en tu carpeta de trabajo: {', '.join(stored)}. Para editarlas usa "
+                "imagen_editar con esa ruta.]" if stored else "")
+        msgs.append({"role": "user", "content": text + note, "images": images or []})
         ctx = ToolContext(services=s, agent=spec.id, session_id=session_id, emit=emit, remote=remote, depth=depth)
         max_steps = int(s.config.get("llm.max_tool_steps", 5))
         answer_parts, media, tool_log = [], [], []
@@ -266,7 +291,8 @@ class AgentManager:
             emit({"type": "tool_call", "name": name, "args": args})
             emit({"type": "state", "state": "tool"})
             result = s.supervisor.execute(name, args, ctx)
-            if isinstance(result, dict) and result.get("url") and name in ("generate_image", "compose_music"):
+            if isinstance(result, dict) and result.get("url") and name in ("generate_image", "compose_music",
+                                                                                    "imagen_editar", "gimp_script"):
                 media.append((name, result["url"]))
             tool_log.append({"tool": name, "ok": not (isinstance(result, dict) and result.get("error"))})
             emit({"type": "tool_result", "name": name, "result": json.dumps(result, ensure_ascii=False, default=str)[:1500]})
@@ -285,7 +311,7 @@ class AgentManager:
                         m.group(1).startswith("/outputs/") else "", answer).strip() or "(sin respuesta)"
         for name, url in media:
             if url not in answer:
-                answer += f"\n\n![imagen]({url})" if name == "generate_image" else f"\n\n[audio]({url})"
+                answer += f"\n\n![imagen]({url})" if name != "compose_music" else f"\n\n[audio]({url})"
         mid = None
         if save:
             meta = json.dumps({"memories": [m["id"] for m in info["memories"]], "tools": tool_log})

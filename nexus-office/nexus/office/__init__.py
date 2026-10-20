@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
+import os
 import re
 import shutil
 from pathlib import Path
@@ -37,6 +38,7 @@ L = log.get("office")
 HERE = Path(__file__).resolve().parent
 CATALOG_DIR = HERE / "agentes"
 PROFILES_DIR = HERE / "perfiles"
+KNOWLEDGE_DIR = HERE / "conocimiento"   # paquetes de conocimiento: manual para el RAG + grafo (p. ej. GIMP)
 OFFICE_ROLES = ("recepcion", "administracion", "presupuestos", "compras", "prl", "rrhh", "calidad", "comercial",
                 "agenda", "proteccion-datos", "medioambiente")
 # herramientas del coordinador: todas las que funcionan sin internet (las web quedan para quien las active a mano)
@@ -246,9 +248,83 @@ class Office:
             L.info("Grafos sembrados: %s", ", ".join(f"{a} ({n})" for a, n in out.items()))
         return out
 
+# ------------------------------------------------------------ paquetes de conocimiento
+def packs() -> dict[str, dict]:
+    """Paquetes de ``conocimiento/<id>/``: ``paquete.yaml`` (agentes, herramientas, version), los ``.md`` del manual
+    y ``grafo.yaml`` con las tripletas del manejo del programa."""
+    out = {}
+    if not KNOWLEDGE_DIR.is_dir():
+        return out
+    for d in sorted(p for p in KNOWLEDGE_DIR.iterdir() if (p / "paquete.yaml").exists()):
+        meta = _read(d / "paquete.yaml")
+        meta["dir"] = d
+        meta["grafo"] = (_read(d / "grafo.yaml").get("grafo") or []) if (d / "grafo.yaml").exists() else []
+        out[meta["id"]] = meta
+    return out
+
+
+def _sections(text: str) -> list[str]:
+    """Una pagina por apartado «## » (las citas del RAG dicen de que apartado sale)."""
+    parts = re.split(r"(?m)^(?=## )", text)
+    head = parts[0] if parts and not parts[0].startswith("## ") else ""
+    return [p.strip() for p in ([head] if head.strip() else []) + [p for p in parts if p.startswith("## ")]
+            if p.strip()]
+
+
+def install_pack(services, pack: dict, aid: str) -> int:
+    """Instala un paquete en un agente: manual en su biblioteca RAG, tripletas en su subgrafo y las herramientas del
+    paquete en su configuracion. Idempotente: si ya tiene esta version no hace nada. Devuelve los documentos."""
+    pid, version = pack["id"], int(pack.get("version", 1))
+    mine = [d for d in services.rag.list(agent=aid) if d["agent"] == aid and d["meta"].get("paquete") == pid]
+    if any(int(d["meta"].get("version", 0)) == version for d in mine):
+        return 0
+    for d in mine:   # version anterior del paquete
+        services.rag.delete(d["id"])
+    n = 0
+    for f in sorted(pack["dir"].glob("*.md")):
+        text = f.read_text(encoding="utf-8")
+        m = re.search(r"(?m)^# (.+)$", text)
+        services.rag.ingest_pages((m.group(1).strip() if m else f.stem), _sections(text), source=f"{pid}/{f.name}",
+                                  kind="md", meta={"paquete": pid, "version": version}, agent=aid)
+        n += 1
+    g = services.graph.for_agent(aid)
+    with services.graph.db.transaction():
+        for s, rel, o, category in seeds({"grafo": pack["grafo"]}):
+            g.relate(s, rel, o, category=category, src_category=category, weight=1.2)
+        # ancla propia («conoce», no «domina»: «domina» marca la siembra del catalogo en Office.seed_graphs)
+        g.relate(g.self_name, "conoce", pack.get("nombre", pid), src_type="agente", category=pid, weight=0.5)
+    spec = services.agents.get(aid)
+    missing = [t for t in pack.get("herramientas", []) if spec and "*" not in spec.tools and t not in spec.tools]
+    if missing:   # agentes instalados antes de este paquete: se le suman sus herramientas, el resto no se toca
+        from dataclasses import asdict
+        services.agents.save({**asdict(spec), "tools": [*spec.tools, *missing]})
+    L.info("Paquete de conocimiento %s v%d instalado en %s (%d documentos)", pid, version, aid, n)
+    return n
+
+
+def install_packs(services, agent_ids: list[str] | None = None) -> dict[str, int]:
+    """Instala cada paquete en los agentes activos que lo usan. {"<paquete>:<agente>": documentos}."""
+    out: dict[str, int] = {}
+    # office.knowledge_packs: false los desactiva (NEXUS_NO_KNOWLEDGE_PACKS=1 en las pruebas que cuentan documentos)
+    if os.environ.get("NEXUS_NO_KNOWLEDGE_PACKS") or not services.config.get("office.knowledge_packs", True):
+        return out
+    ids = set(agent_ids if agent_ids is not None else services.agents.ids())
+    for pid, pack in packs().items():
+        for aid in pack.get("agentes", []):
+            if aid in ids:
+                n = install_pack(services, pack, aid)
+                if n:
+                    out[f"{pid}:{aid}"] = n
+    return out
+
+
 def ensure(services) -> dict[str, int]:
-    """Al arrancar: siembra el grafo de los agentes de la oficina activa que aun no se hayan sembrado."""
+    """Al arrancar: siembra el grafo de los agentes de la oficina activa que aun no se hayan sembrado e instala los
+    paquetes de conocimiento (manual de GIMP...) en los agentes activos que los usan, haya oficina o no."""
     office = Office(services.config)
-    if not office.active():
-        return {}
-    return office.seed_graphs(services.graph, services.agents.ids())
+    out = office.seed_graphs(services.graph, services.agents.ids()) if office.active() else {}
+    try:
+        install_packs(services)
+    except Exception as e:  # noqa: BLE001
+        L.warning("No se pudieron instalar los paquetes de conocimiento: %s", e)
+    return out

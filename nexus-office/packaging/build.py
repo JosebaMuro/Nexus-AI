@@ -171,6 +171,15 @@ def offline(target: str, dest: Path) -> None:
             log(f"offline: {exe} {', '.join(sorted(p.name for p in src.iterdir()))}")
         else:
             log(f"offline: sin {exe} precompilado para {target} (se descargara desde Sistema > Runtimes)")
+    # GIMP portable (packaging/fetch_gimp.py): los agentes editan imagenes con GIMP sin instalar nada
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import fetch_gimp
+    g = None if os.environ.get("NEXUS_SIN_GIMP") else fetch_gimp.bundle_dir(target, DESKTOP_RT)
+    if g:
+        shutil.copytree(g, dest / "bundled" / "runtimes" / "gimp", symlinks=True)
+        log(f"offline: GIMP de {g}")
+    else:
+        log(f"offline: sin GIMP para {target} (los agentes editan las imagenes con Pillow)")
 
 
 # ------------------------------------------------------------------ archivos
@@ -193,7 +202,9 @@ def archive(target: str, dest: Path, suffix: str = "") -> Path:
     else:
         def mode(ti: tarfile.TarInfo) -> tarfile.TarInfo:
             name = ti.name
-            if ti.isdir() or name.endswith((".sh", ".command")) or "/MacOS/" in name or (
+            if "/bundled/runtimes/gimp/" in name:   # GIMP lleva sus propios ejecutables y plugins: permisos tal cual
+                ti.mode = (ti.mode & 0o755) | 0o644 if not ti.issym() else ti.mode
+            elif ti.isdir() or name.endswith((".sh", ".command")) or "/MacOS/" in name or (
                     "/bundled/runtimes/" in name and name.rsplit("/", 1)[-1] in ("llama-server", "sd-cli")):
                 ti.mode = 0o755
             else:
@@ -228,8 +239,11 @@ def deb(target: str, dest: Path) -> Path:
 
         def filt(ti):
             ti.uid = ti.gid = 0
-            ti.mode = 0o755 if ti.isdir() or ti.name.endswith(".sh") or ti.name.rsplit("/", 1)[-1] in ("llama-server", "sd-cli") \
-                else 0o644
+            if "/bundled/runtimes/gimp/" in ti.name:   # GIMP: permisos de sus ejecutables y plugins tal cual
+                ti.mode = (ti.mode & 0o755) | 0o644
+            else:
+                ti.mode = 0o755 if ti.isdir() or ti.name.endswith(".sh") or ti.name.rsplit("/", 1)[-1] in ("llama-server", "sd-cli") \
+                    else 0o644
             return ti
         tar.add(dest, arcname="./opt/nexus-office", filter=filt)
         add_bytes("./usr/bin/nexus-office", b"""#!/bin/sh

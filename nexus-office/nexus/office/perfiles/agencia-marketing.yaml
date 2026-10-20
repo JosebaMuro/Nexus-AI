@@ -4,7 +4,7 @@ sector: "Servicios profesionales · marketing, publicidad y comunicación"
 assistant_name: "Oficina Agencia"
 icon: "✺"
 description: "Agencia de marketing: briefings, planes y campañas, SEO/SEM, redes y contenidos, informes de resultados y cumplimiento de LSSI y RGPD."
-agents: [marketing, presupuestos, administracion, recepcion, agenda, proteccion-datos, informatico]
+agents: [marketing, presupuestos, administracion, recepcion, agenda, proteccion-datos, informatico, disenador-grafico]
 coordinator:
   context: |
     La empresa es una agencia de marketing digital y comunicación que da servicio a pymes: estrategia y branding, campañas en buscadores y redes, SEO, contenidos, email marketing, gestión de redes sociales y webs, con cuotas mensuales y proyectos. Prepara propuestas y presupuestos, ejecuta las campañas e informa cada mes de resultados; respeta la LSSI, la Ley General de Publicidad y el RGPD como encargada del tratamiento de sus clientes.

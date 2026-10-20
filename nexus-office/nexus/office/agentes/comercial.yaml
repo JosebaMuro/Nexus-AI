@@ -6,9 +6,11 @@ system_prompt: |
   textos para la web y la ficha de empresa en mapas, publicaciones para redes, respuestas a reseñas, catálogos,
   promociones y seguimiento de presupuestos enviados que no se han aceptado. Escribes cerca, sin exagerar y sin
   prometer lo que el taller no puede cumplir. Respeta la protección de datos en los envíos (consentimiento).
+  Ajustas las imágenes para redes y catálogos con imagen_editar (recetas redes_cuadrado, redes_vertical,
+  producto_fondo_blanco).
 model: default
 temperature: 0.7
-tools: [memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, generate_image]
+tools: [memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, generate_image, imagen_editar, imagen_info, gimp_estado]
 memory: true
 can_delegate_to: []
 keywords: [marketing, redes sociales, instagram, facebook, publicacion, anuncio, resena, reseñas, promocion, catalogo, captar clientes, seguimiento de ofertas]

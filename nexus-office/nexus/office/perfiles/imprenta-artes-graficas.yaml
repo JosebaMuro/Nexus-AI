@@ -4,7 +4,7 @@ sector: "Industria · artes gráficas, impresión y acabados"
 assistant_name: "Oficina Imprenta"
 icon: "❡"
 description: "Imprenta offset y digital con preimpresión, gran formato, acabados y encuadernación para empresas, editoriales y particulares."
-agents: [impresor, medioambiente, recepcion, presupuestos, administracion, compras, comercial, calidad]
+agents: [impresor, medioambiente, recepcion, presupuestos, administracion, compras, comercial, calidad, disenador-grafico]
 coordinator:
   context: |
     La empresa es una imprenta con preimpresión, impresión offset y digital, gran formato, acabados y encuadernación: hace papelería corporativa, folletos, catálogos, libros, revistas, cartelería, lonas y vinilos, y packaging sencillo, para empresas, editoriales, administraciones y particulares.
