@@ -120,4 +120,6 @@ versión y dónde está su código fuente (https://download.gimp.org/gimp/).
 `tests/test_gimp.py` prueba la validación y la geometría, todas las operaciones con Pillow y con cada GIMP que haya
 en el equipo (`NEXUS_GIMP_TEST=ruta1|ruta2` añade más), `gimp_script`, las herramientas sobre la carpeta de trabajo
 (rutas fuera de ella rechazadas, sin sobrescribir), las imágenes adjuntas en el chat y la instalación del paquete de
-conocimiento en el RAG y el grafo. Se ha probado con GIMP 3.0.4 y GIMP 2.10.36 en Linux.
+conocimiento en el RAG y el grafo. Se ha probado con GIMP 3.0.4 y GIMP 2.10.36 en Linux. El GIMP incluido (3.2.6)
+se ha preparado y probado editando con Nexus-Office (incluido XCF) en la Action en los seis sistemas: Windows x64 y
+ARM64, macOS Apple Silicon e Intel y Linux x86_64 y ARM64.
