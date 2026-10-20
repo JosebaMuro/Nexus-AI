@@ -93,8 +93,10 @@ class LlamaServerBackend(OpenAICompatBackend):
             ngl = 0
         extra_env = dict(self.profile_getter().get("llm", {}).get("device_env") or {})
         if extra_env:      # OpenVINO NPU (GGML_OPENVINO_DEVICE) y similares
-            import os as _os
-            env = {**(env or _os.environ), **extra_env}
+            env = {**(env or os.environ), **extra_env}
+        if variant not in ("embedded", "system"):
+            from ..runtimes import lib_env
+            env = lib_env(exe, env)
         single = bool(self.profile_getter().get("llm", {}).get("single_slot"))
         key = (str(exe), path, entry.get("mmproj"), opts.get("n_ctx"), opts.get("n_threads"), opts.get("n_batch"), ngl, device,
                tuple(sorted(extra_env.items())))

@@ -94,7 +94,7 @@ def is_trade(aid: str) -> bool:
 # nexus/models/recommended.py; la app los muestra en Modelos > Recomendados como «para tu oficina».
 _HEALTH = [("medgemma-4b", "Terminología y documentación sanitaria (apoyo al profesional, no diagnostica)"),
            ("qwen3-embedding-0.6b", "Buscar en protocolos, prospectos y fichas de tu biblioteca")]
-_DOCS = [("qwen3-vl-8b-thinking", "Razona mejor sobre normativa, contratos y expedientes largos"),
+_DOCS = [("qwen3.5-9b", "Razona mejor sobre normativa, contratos y expedientes largos"),
          ("qwen3-embedding-0.6b", "Buscar en tu archivo de documentos, leyes y plantillas")]
 _IMAGE = [("sdxl-turbo", "Bocetos, maquetas y propuestas visuales para clientes"),
           ("sd-turbo", "Bocetos y propuestas visuales (equipos sin GPU potente)")]

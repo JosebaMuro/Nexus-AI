@@ -3,7 +3,7 @@
     python -m nexus run [--host H] [--port P] [--no-browser]
     python -m nexus detect
     python -m nexus setup --auto [--all]
-    python -m nexus pull <id-recomendado|auto> (p.ej. qwen3-vl-2b-thinking, sdxs-512, piper-es-davefx)
+    python -m nexus pull <id-recomendado|auto> (p.ej. qwen3.5-2b, sdxs-512, piper-es-davefx)
     python -m nexus modelos [--descargar] [--todos]   (evalua el hardware y elige el modelo de IA de cada tipo)
     python -m nexus servicio instalar|quitar|estado [--red] [--puerto P]   (arranque automatico con el equipo)
     python -m nexus chat

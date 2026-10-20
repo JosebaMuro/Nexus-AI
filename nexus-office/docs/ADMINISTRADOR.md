@@ -17,7 +17,7 @@ Pulsa **ADMIN**. La primera vez se crea un PIN (mínimo 4 caracteres, guardado c
 ```yaml
 llm:
   backend_order: [llamaserver, llamacpp, ollama, openai, transformers, builtin]
-  default_model: qwen3-vl-2b-thinking      # id del catálogo o "ollama:modelo", "openai:modelo", "peer:nodo"
+  default_model: qwen3.5-2b                # id del catálogo o "ollama:modelo", "openai:modelo", "peer:nodo"
   openai_base_url: http://127.0.0.1:1234/v1   # LM Studio, vLLM, llama-server externo, OpenRouter...
   reasoning: auto           # auto | off (modelos Thinking: razonan antes de contestar)
   reasoning_budget: 2048    # tokens de razonamiento en el chat (se suman a max_tokens)

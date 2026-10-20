@@ -48,7 +48,7 @@ DEFAULTS: dict[str, Any] = {
         "openai_model": "",
         "temperature": 0.7,
         "max_tokens": 1024,
-        # modelos que razonan (Qwen3-VL Thinking...): auto = razonan antes de responder; off = responden directo
+        # modelos que razonan (Qwen3.5, Qwen3-VL Thinking...): auto = razonan antes de responder; off = responden directo
         "reasoning": "auto",
         "reasoning_budget": 2048,       # tokens extra reservados para razonar en el chat
         "reasoning_budget_tasks": 768,  # en tareas internas (resumenes, extraccion de conocimiento)

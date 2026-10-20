@@ -847,6 +847,14 @@
     if (live && S.view === "memory") crawlTimer = setTimeout(() => loadCrawls().catch(() => {}), 2500);
     if (!live) crawlStep = "";
   }
+  $("#rag-kg-import").onclick = () => $("#rag-kg-file").click();
+  $("#rag-kg-file").onchange = guard(async (e) => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    const fd = new FormData(); fd.append("file", f); fd.append("agent", ragTarget());
+    const r = await api("/api/rag/domain-knowledge/import", { body: fd });
+    toast(`Conocimiento importado en ${r.agent || "general"}: ${r.graph.nodes} nodos y ${r.rag_chunks} fragmentos`); loadRag();
+  });
   const ragDrop = $("#rag-drop");
   ragDrop.onclick = () => $("#rag-file").click();
   ragDrop.ondragover = (e) => { e.preventDefault(); ragDrop.classList.add("over"); }; ragDrop.ondragleave = () => ragDrop.classList.remove("over");

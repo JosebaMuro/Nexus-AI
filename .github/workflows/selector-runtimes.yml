@@ -109,11 +109,15 @@ jobs:
         shell: bash
         run: |
           set -e
-          gh release view -R ggml-org/llama.cpp --json tagName,assets -q '.tagName, (.assets[].name)' > assets.txt
-          head -1 assets.txt; grep -i openvino assets.txt || true
-          name=$(grep -E '${{ matrix.pattern }}' assets.txt | head -1)
-          [ -n "$name" ] || { echo "no hay asset OpenVINO"; exit 1; }
-          gh release download -R ggml-org/llama.cpp "$(head -1 assets.txt)" -p "$name"
+          # la Release marcada como «latest» no siempre trae los binarios: la mas reciente que tenga el de OpenVINO
+          gh api 'repos/ggml-org/llama.cpp/releases?per_page=30' \
+            -q '.[] | .tag_name as $t | .assets[] | "\($t) \(.name)"' > assets.txt
+          grep -i openvino assets.txt | head -20 || true
+          line=$(grep -E '${{ matrix.pattern }}' assets.txt | head -1)
+          [ -n "$line" ] || { echo "no hay asset OpenVINO"; head -40 assets.txt; exit 1; }
+          tag=${line%% *}; name=${line#* }
+          echo "llama.cpp $tag: $name"
+          gh release download -R ggml-org/llama.cpp "$tag" -p "$name"
           mkdir -p openvino
           case "$name" in *.zip) unzip -q "$name" -d openvino ;; *) tar xzf "$name" -C openvino ;; esac
           find openvino -maxdepth 3 | head -60

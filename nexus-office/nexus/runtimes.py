@@ -137,6 +137,16 @@ def install_llama_python() -> str:
 _USABLE: dict[Path, bool] = {}
 
 
+def lib_env(exe: Path, base: dict | None = None) -> dict | None:
+    """Linux: entorno con la carpeta del binario en LD_LIBRARY_PATH (binarios oficiales, como el de OpenVINO, que
+    traen sus .so al lado sin RPATH). En otros sistemas, ``base`` tal cual (Windows busca las DLL junto al .exe)."""
+    if not sys.platform.startswith("linux"):
+        return base
+    env = dict(base if base is not None else os.environ)
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(x for x in (str(exe.parent), env.get("LD_LIBRARY_PATH", "")) if x)
+    return env
+
+
 def bundled_exe(runtime: str, variant: str) -> Path | None:
     """Ejecutable de una variante incluida en el paquete. Las de GPU se prueban una vez (``--version``): sin el
     driver (libvulkan.so.1 / vulkan-1.dll) no arrancan y se pasa a la siguiente."""
@@ -153,7 +163,7 @@ def bundled_exe(runtime: str, variant: str) -> Path | None:
     if p not in _USABLE:
         import subprocess
         try:
-            r = subprocess.run([str(p), "--version"], capture_output=True, timeout=30, cwd=str(p.parent))
+            r = subprocess.run([str(p), "--version"], capture_output=True, timeout=30, cwd=str(p.parent), env=lib_env(p))
             _USABLE[p] = r.returncode == 0
         except (OSError, subprocess.SubprocessError):
             _USABLE[p] = False

@@ -73,12 +73,12 @@ Seguridad y límites:
 ## Rastreo (crawling) de un sitio de documentación
 Para que Nexus-Office aprenda una documentación entera (un manual, la API de una librería, la guía de un producto), dale la página inicial:
 
-- **Interfaz**: *Núcleo → Biblioteca RAG*, fila **RASTREAR**: URL, máximo de páginas (40 por defecto, hasta 100 000) y ámbito (*esta sección* o *todo el dominio*). Se ejecuta en segundo plano y aparece en el panel de rastreos.
+- **Interfaz**: *Núcleo → Biblioteca RAG*, fila **RASTREAR**: URL, máximo de páginas (40 por defecto, hasta 100 000) y ámbito (*esta sección* o *todo el dominio + grafo*). Con *todo el dominio* el máximo no se aplica. Se ejecuta en segundo plano y aparece en el panel de rastreos.
 - **Chat**: *«Rastrea la documentación de https://docs.python.org/3/tutorial/ y apréndela»*. Con *«todo el dominio»* recorre el sitio entero. Sin LLM, el núcleo integrado lo reconoce y lanza la herramienta.
 - **Herramienta** `crawl_docs` (`url`, `max_pages`, `max_depth`, `scope`, `background`, `job`, `continue`), del agente Investigador. **API**: `POST /api/rag/crawl` `{url, max_pages, max_depth, scope, background, batch_pages}`.
 
 Cómo recorre el sitio:
-1. **Ámbito**: por defecto, la carpeta de la URL inicial (`https://docs.x.org/3/tutorial/` → solo `/3/tutorial/…`); con `scope=domain`, todo el host (con o sin `www.`). Si la portada redirige (`/docs` → `/docs/es/latest/`), el ámbito se toma del destino.
+1. **Ámbito**: por defecto, la carpeta de la URL inicial (`https://docs.x.org/3/tutorial/` → solo `/3/tutorial/…`); con `scope=domain`, todo el dominio registrable con todos sus subdominios (ver *Todo el dominio, sin excepciones* más abajo). Si la portada redirige (`/docs` → `/docs/es/latest/`), el ámbito se toma del destino.
 2. **Recorrido en anchura** hasta `max_depth` saltos (3 por defecto). Sigue también los enlaces del menú lateral, aunque ese menú no se indexa.
 3. **robots.txt**: respeta `Disallow` y `Crawl-delay` (como máximo 5 s).
    - Si el sitio declara `Crawl-delay`, Nexus-Office va de una en una página.
@@ -94,6 +94,34 @@ Qué guarda:
 - Una **copia legible en Markdown** con índice (botón *ABRIR*), en `data/rag/files/`.
 - **Asimilación**: resumen y puntos clave a la memoria; el sitio al grafo de conocimiento (`ha_leido`, `trata_de`, `contiene` con los títulos de las páginas).
 - **Volver a rastrear** la misma URL y ámbito **actualiza** el documento: el anterior se borra al terminar el nuevo.
+
+### Todo el dominio, sin excepciones (2.0)
+Con el ámbito **todo el dominio** Nexus-Office lee el sitio entero, tenga las páginas que tenga:
+- **Sin límite** de páginas ni de profundidad. `max_pages` y `max_depth` se ignoran.
+- **Todos los subdominios** del dominio registrable (`www.`, `blog.`, `docs.`…; también `.co.uk`, `.com.es` y similares), cada uno con su propio `robots.txt`.
+- **Documentos enlazados**: PDF, Word, LibreOffice (odt, ods, odp), PowerPoint, Excel, EPUB, RTF, texto, CSV y Markdown, hasta 60 MB cada uno, con los mismos lectores de la biblioteca RAG. Las URL que aparecen dentro del texto de un documento también se siguen.
+- **Páginas cortas** (desde 5 palabras): glosarios, fichas y avisos también entran.
+- **Sitemaps**: hasta 2000 ficheros de sitemap (índices incluidos).
+- Siempre en **segundo plano y por lotes**; si se cierra Nexus-Office, el trabajo **se reanuda solo** al volver a arrancar.
+- Solo quedan fuera lo que el sitio prohíbe en `robots.txt`, otros dominios, imágenes, CSS/JS, binarios y el contenido duplicado.
+
+#### Grafo de conocimiento multicapa del dominio
+Al terminar, el rastreo construye un **grafo propio del dominio** en `data/rag/crawls/<id>.kg.sqlite`, por capas:
+1. **Fuentes**: dominio, secciones (subdominios y carpetas), páginas y documentos, con sus enlaces.
+2. **Conceptos**: términos clave de cada página y documento, relacionados por coaparición y por parecido semántico (modelo de embeddings).
+3. **Afirmaciones**: frases con datos (cifras, fechas, definiciones). Se **contrastan entre fuentes**: las que dicen lo mismo en páginas distintas quedan como *contrastada (N fuentes)*; las que dan cifras distintas sobre lo mismo, como *discrepante*, con cada versión y su fuente; el resto, como *fuente única*. También se cotejan con los otros documentos de la biblioteca. Los textos de plantilla que solo cambian un número (por ejemplo, «Capítulo 1…», «Capítulo 2…») no cuentan como discrepancia.
+4. **Temas**: grupos de conceptos muy relacionados.
+5. **Síntesis razonada**: con el modelo de IA activo, cada tema recibe un resumen y sus conclusiones, que razona solo a partir de las afirmaciones contrastadas y citando fuentes. Sin modelo, se queda en las capas anteriores.
+
+En el panel de rastreos, cada trabajo de dominio muestra páginas, afirmaciones contrastadas y nodos, y tiene:
+- **CREAR GRAFO / REHACER GRAFO**: lo construye o lo vuelve a construir (por ejemplo, tras activar un modelo con razonamiento).
+- **⬇ ZIP**: descarga el **paquete de conocimiento** (`graph.json` en formato nexus-kg, `conocimiento.md` legible y `manifest.json`).
+- **DAR A AGENTE**: importa el grafo en el subgrafo de un agente (o en el general) y añade el texto de conocimiento a su biblioteca, así que el agente **adquiere ese conocimiento** y lo cita.
+- El ZIP se puede importar en otro Nexus-Office con **IMPORTAR CONOCIMIENTO DE DOMINIO (.zip)** en la *Biblioteca RAG* (va al grafo elegido en *Importar en*) (o `POST /api/rag/domain-knowledge/import`, con el fichero y el campo `agent`).
+
+API: `POST /api/rag/crawls/{id}/knowledge` (construir), `GET /api/rag/crawls/{id}/knowledge` (ZIP), `POST /api/rag/crawls/{id}/knowledge/import` `{agent}`.
+
+Rendimiento medido: 5000 páginas se añaden al grafo en unos 13 s y el grafo se construye en unos 3 s, con unos 350 MB de memoria.
 
 ### Dominios enteros: rastreo por lotes
 Un dominio grande no cabe de una vez, así que se procesa en **lotes correlativos** que se guardan según terminan:

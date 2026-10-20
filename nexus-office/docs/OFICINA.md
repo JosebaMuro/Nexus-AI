@@ -32,16 +32,16 @@ comparten entre perfiles; los del sector traen el conocimiento y la normativa de
 
 | Perfil | Empresa | Agentes del sector | Agentes de oficina | Modelos sugeridos |
 |---|---|---|---|---|
-| `academia-formacion` | Academia y centro de formación | Coordinación académica | Recepción, Agenda y reservas, Administración, Comercial y marketing, Personal, Protección de datos | Qwen3-VL 8B Thinking, Qwen3-Embedding 0.6B |
+| `academia-formacion` | Academia y centro de formación | Coordinación académica | Recepción, Agenda y reservas, Administración, Comercial y marketing, Personal, Protección de datos | Qwen3.5 9B · alto rendimiento, Qwen3-Embedding 0.6B |
 | `agencia-marketing` | Agencia de marketing | Estratega de marketing, Técnico informático | Presupuestos, Administración, Recepción, Agenda y reservas, Protección de datos | SDXL-Turbo, SD-Turbo |
 | `agricultura` | Explotación agrícola | Técnico agrícola, Mecánico | Medio ambiente y residuos, Administración, Compras y almacén, Comercial y marketing, Prevención de riesgos | — |
-| `arquitectura-ingenieria` | Estudio de arquitectura e ingeniería | Arquitecto e ingeniero | Presupuestos, Prevención de riesgos, Calidad, Administración, Recepción, Agenda y reservas, Protección de datos | Qwen3-VL 8B Thinking, Qwen3-Embedding 0.6B |
-| `asesoria-gestoria` | Asesoría y gestoría | Asesor fiscal y contable, Asesor laboral | Protección de datos, Recepción, Agenda y reservas, Administración, Comercial y marketing | Qwen3-VL 8B Thinking, Qwen3-Embedding 0.6B |
-| `autoescuela` | Autoescuela | Profesor de autoescuela | Recepción, Agenda y reservas, Administración, Comercial y marketing, Protección de datos | Qwen3-VL 8B Thinking, Qwen3-Embedding 0.6B |
+| `arquitectura-ingenieria` | Estudio de arquitectura e ingeniería | Arquitecto e ingeniero | Presupuestos, Prevención de riesgos, Calidad, Administración, Recepción, Agenda y reservas, Protección de datos | Qwen3.5 9B · alto rendimiento, Qwen3-Embedding 0.6B |
+| `asesoria-gestoria` | Asesoría y gestoría | Asesor fiscal y contable, Asesor laboral | Protección de datos, Recepción, Agenda y reservas, Administración, Comercial y marketing | Qwen3.5 9B · alto rendimiento, Qwen3-Embedding 0.6B |
+| `autoescuela` | Autoescuela | Profesor de autoescuela | Recepción, Agenda y reservas, Administración, Comercial y marketing, Protección de datos | Qwen3.5 9B · alto rendimiento, Qwen3-Embedding 0.6B |
 | `ayuda-domicilio-residencia` | Ayuda a domicilio y residencia | Coordinación sociosanitaria | Personal, Prevención de riesgos, Calidad, Compras y almacén, Administración, Recepción, Protección de datos | MedGemma 4B, Qwen3-Embedding 0.6B |
 | `bar-cafeteria` | Bar y cafetería | Jefe de sala, Jefe de cocina | Calidad, Compras y almacén, Administración, Personal, Comercial y marketing | — |
 | `bodega-almazara` | Bodega y almazara | Enólogo y maestro de almazara, Técnico agrícola | Calidad, Medio ambiente y residuos, Comercial y marketing, Compras y almacén, Administración, Personal | — |
-| `bolsa-inversiones` | Bolsa e inversiones | Analista de mercados, Gestor de carteras, Operador de mesa, Riesgos y cumplimiento, Fiscalidad de inversiones | Recepción, Agenda y reservas, Administración, Comercial y marketing, Protección de datos | Qwen3-VL 8B Thinking, Qwen3-Embedding 0.6B |
+| `bolsa-inversiones` | Bolsa e inversiones | Analista de mercados, Gestor de carteras, Operador de mesa, Riesgos y cumplimiento, Fiscalidad de inversiones | Recepción, Agenda y reservas, Administración, Comercial y marketing, Protección de datos | Qwen3.5 9B · alto rendimiento, Qwen3-Embedding 0.6B |
 | `caldereria` | Calderería industrial | Calderero, Soldador | Calidad, Presupuestos, Administración, Compras y almacén, Prevención de riesgos, Personal | — |
 | `carniceria-charcuteria` | Carnicería y charcutería | Maestro carnicero, Encargado de tienda | Calidad, Compras y almacén, Administración, Comercial y marketing | — |
 | `carpinteria` | Carpintería y ebanistería | Carpintero, Pintor | Recepción, Presupuestos, Administración, Compras y almacén, Prevención de riesgos | SDXL-Turbo, SD-Turbo |
@@ -54,7 +54,7 @@ comparten entre perfiles; los del sector traen el conocimiento y la normativa de
 | `construccion` | Construcción y obra nueva | Albañil, Herrero, Electricista, Fontanero | Prevención de riesgos, Calidad, Presupuestos, Administración, Compras y almacén, Personal | — |
 | `control-plagas` | Control de plagas | Técnico de control de plagas, Responsable de limpieza | Medio ambiente y residuos, Recepción, Presupuestos, Administración, Calidad, Prevención de riesgos | — |
 | `cristaleria` | Cristalería | Cristalero, Técnico de carpintería de aluminio y PVC | Recepción, Presupuestos, Administración, Compras y almacén, Prevención de riesgos | — |
-| `despacho-abogados` | Despacho de abogados | Apoyo jurídico | Protección de datos, Recepción, Agenda y reservas, Administración, Presupuestos | Qwen3-VL 8B Thinking, Qwen3-Embedding 0.6B |
+| `despacho-abogados` | Despacho de abogados | Apoyo jurídico | Protección de datos, Recepción, Agenda y reservas, Administración, Presupuestos | Qwen3.5 9B · alto rendimiento, Qwen3-Embedding 0.6B |
 | `electricidad` | Instalaciones eléctricas | Electricista | Recepción, Presupuestos, Administración, Compras y almacén, Prevención de riesgos | — |
 | `escuela-infantil` | Escuela infantil | Coordinación pedagógica infantil | Recepción, Administración, Personal, Calidad, Compras y almacén, Protección de datos, Prevención de riesgos | — |
 | `estructuras-metalicas` | Estructuras metálicas y montajes | Herrero, Calderero, Soldador | Calidad, Presupuestos, Administración, Compras y almacén, Prevención de riesgos, Personal | — |
@@ -69,7 +69,7 @@ comparten entre perfiles; los del sector traen el conocimiento y la normativa de
 | `herreria` | Herrería y forja | Herrero, Soldador | Recepción, Presupuestos, Administración, Compras y almacén, Prevención de riesgos | — |
 | `hotel-alojamiento` | Hotel y alojamiento turístico | Jefe de alojamiento | Agenda y reservas, Recepción, Administración, Comercial y marketing, Personal, Compras y almacén, Calidad | — |
 | `imprenta-artes-graficas` | Imprenta y artes gráficas | Jefe de producción gráfica | Medio ambiente y residuos, Recepción, Presupuestos, Administración, Compras y almacén, Comercial y marketing, Calidad | SDXL-Turbo, SD-Turbo |
-| `inmobiliaria` | Agencia inmobiliaria | Agente inmobiliario | Comercial y marketing, Recepción, Agenda y reservas, Administración, Protección de datos | Qwen3-VL 8B Thinking, Qwen3-Embedding 0.6B |
+| `inmobiliaria` | Agencia inmobiliaria | Agente inmobiliario | Comercial y marketing, Recepción, Agenda y reservas, Administración, Protección de datos | Qwen3.5 9B · alto rendimiento, Qwen3-Embedding 0.6B |
 | `instalaciones-solares` | Instalaciones solares | Instalador solar, Electricista, Climatización | Recepción, Presupuestos, Administración, Compras y almacén, Prevención de riesgos | — |
 | `jardineria` | Jardinería y paisajismo | Jardinero, Fontanero | Recepción, Presupuestos, Administración, Compras y almacén, Prevención de riesgos | — |
 | `lavanderia-tintoreria` | Lavandería y tintorería | Tintorero | Recepción, Compras y almacén, Administración, Prevención de riesgos, Comercial y marketing | — |
@@ -103,7 +103,7 @@ y en `python -m nexus modelos`. No se descarga solo: lo decides tú, viendo si c
   con textos e imágenes médicas. Es apoyo para el profesional colegiado, nunca un diagnóstico.
 - **Servicios informáticos**: Qwen2.5-Coder 7B, especializado en programación, scripts y redes.
 - **Despachos y documentación** (asesoría, abogados, inmobiliaria, arquitectura, academia, autoescuela): el modelo de
-  razonamiento grande (Qwen3-VL 8B) y el de documentos, para normativa y contratos largos.
+  razonamiento grande (Qwen3.5 9B, con visión) y el de documentos, para normativa y contratos largos.
 - **Diseño e imagen** (marketing, imprenta, fotografía, floristería, pintura, carpintería, confección, eventos): el
   modelo de imagen de más calidad que permita el equipo.
 
