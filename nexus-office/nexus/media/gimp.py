@@ -985,7 +985,8 @@ class GimpEngine:
 
     def _gimp(self, g: dict, prim: list[dict], src: Path, out: Path, fmt: str, quality: int, timeout: float,
               alpha: bool = True) -> None:
-        work = paths.sub("gimp", "trabajo")
+        # rutas absolutas: el GIMP incluido en Linux se ejecuta desde su propia carpeta
+        src, out, work = src.resolve(), out.resolve(), paths.sub("gimp", "trabajo").resolve()
         stamp = f"{os.getpid()}_{int(time.time() * 1000)}"
         tmp_out = out.with_name(f".{stamp}{out.suffix}")
         needs_fonts = any(p["op"] == "texto" for p in prim)
@@ -1014,7 +1015,8 @@ class GimpEngine:
         g = self.info()
         if not g:
             raise EditError("GIMP no esta disponible en este equipo: usa imagen_editar (funciona sin GIMP)")
-        work = paths.sub("gimp", "trabajo")
+        work = paths.sub("gimp", "trabajo").resolve()
+        src, out = src and src.resolve(), out and out.resolve()
         stamp = f"{os.getpid()}_{int(time.time() * 1000)}"
         if g["major"] >= 3:
             script = work / f"script_{stamp}.py"

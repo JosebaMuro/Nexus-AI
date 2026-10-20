@@ -170,6 +170,7 @@ export GIMP3_SYSCONFDIR="$HERE/etc/gimp/3.0"
 export GIMP3_PLUGINDIR="$(ls -d "$HERE"/usr/lib/*/gimp/3.0 "$HERE"/usr/lib/gimp/3.0 2>/dev/null | head -n1)"
 export GIMP3_LOCALEDIR="$HERE/usr/share/locale"
 export XDG_DATA_DIRS="$HERE/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+cd "$HERE"   # los binarios del AppImage usan su propio ld-linux con ruta relativa a la carpeta
 exec "$HERE/usr/bin/@CONSOLE@" "$@"
 """
 
@@ -188,9 +189,13 @@ def _linux_launcher(root: Path) -> Path:
         if not raw.startswith(b"\x7fELF"):
             text = raw.decode("utf-8", "replace")
             log("AppRun del AppImage de GIMP:\n" + text)
-    if text and re.search(r"gimp-\d", text):
-        new = re.sub(r"\bgimp-(\d+(?:\.\d+)?)\b(?!-)", r"gimp-console-\1", text)
-        script = new.replace('"$APPDIR/usr/bin/gimp"', f'"$APPDIR/usr/bin/{console}"')
+    # La ultima linea de AppRun lanza el GIMP con interfaz (org.gimp.GIMP.Stable, gimp-3.x o gimp): se cambia por
+    # gimp-console conservando todo el entorno, incluido el «cd $APPDIR» que necesita su ld-linux.
+    pat = re.compile(r'^(\s*exec\s+"?\$\{?APPDIR\}?"?/usr/bin/)(?!gimptool)[^\s"]+"?', re.M)
+    if text and pat.search(text):
+        script = pat.sub(lambda m: f'{m.group(1)}{console}"' if m.group(1).count('"') % 2 else
+                         f"{m.group(1)}{console}", text)
+        script = re.sub(r'^(\s*)echo "Running without', r'\1echo >\&2 "Running without', script, flags=re.M)
     else:
         script = LAUNCHER_FALLBACK.replace("@CONSOLE@", console)
     out = root / "nexus-gimp-console"
