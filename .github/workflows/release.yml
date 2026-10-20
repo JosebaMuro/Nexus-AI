@@ -7,7 +7,7 @@ on:
     inputs:
       tag:
         description: Etiqueta de la Release
-        default: v1.7.0
+        default: v1.8.0
       rama:
         description: Rama con los trozos
         default: binarios-tmp
