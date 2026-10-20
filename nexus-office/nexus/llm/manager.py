@@ -150,6 +150,14 @@ class LLMManager:
             return is_reasoning_model(model or self.config.get("llm.openai_model", ""))
         return False
 
+    def thinking_only(self, backend_name: str, model: str) -> bool:
+        """Modelo que no sabe responder sin razonar (no tiene modo hibrido como Qwen3.5 o Qwen3)."""
+        ident = model or ""
+        if backend_name in ("llamaserver", "llamacpp", "transformers"):
+            r = self._resolve("transformers" if backend_name == "transformers" else "gguf")(model)
+            ident = f"{r[1].get('id', '')} {r[1].get('name', '')} {r[1].get('path', '')}" if r else ident
+        return bool(re.search(r"thinking|\br1\b|-r1|qwq|deepseek-r", ident, re.I))
+
     def stream(self, messages: list[dict], spec: str = "default", **opts) -> Iterator[str]:
         backend_name, model = self.select(spec)
         if backend_name == "peer":
@@ -162,7 +170,12 @@ class LLMManager:
         full = self.options(opts)
         budget = int(full.pop("reasoning_budget", 0) or self.config.get("llm.reasoning_budget", 2048) or 0)
         thinking = self.reasoning_model(backend_name, model)
-        if thinking and self.config.get("llm.reasoning", "auto") == "off":
+        off = self.config.get("llm.reasoning", "auto") == "off" or full.get("reasoning") == "off"
+        if thinking and off and self.thinking_only(backend_name, model):
+            # variantes «Thinking» (Qwen3-VL Thinking, R1...): siempre razonan; se acorta el presupuesto en vez de apagarlo
+            full.pop("reasoning", None)
+            budget, off = min(budget or 256, 256), False
+        if thinking and off:
             full["reasoning"] = "off"
         elif thinking:
             # el razonamiento gasta tokens antes de la respuesta: se le reserva un presupuesto aparte

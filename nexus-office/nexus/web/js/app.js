@@ -217,12 +217,13 @@
       case "session": S.session = e.session_id; local.set("nexus_session", e.session_id); break;
       case "agent": if (current && !e.sub) current.setAgent(e); break;
       case "state": setState(e.state); break;
-      case "token": current && current.append(e.text); break;
+      case "token": current && current.append(e.text); if (Live.on && !e.sub) Live.token(e.text); break;
       case "reasoning": current && current.reason(e.text); break;
       case "tool_call": current && current.tool(e); break;
       case "tool_result": current && current.toolDone(e); break;
       case "learned": addLearned(e.items); break;
       case "media": break;
+      case "assist": if (current && !e.sub) current.note(`🧭 ${e.tools.length}/${e.of} herramientas`, `IA de apoyo (embeddings): herramientas al caso para esta petición: ${e.tools.join(", ")}`); break;
       case "progress":
         if (current) current.progress(e.text);
         if ($("#rag-progress") && S.ragBusy) $("#rag-progress").innerHTML = `<div class="chip"><span class="spin"></span>${esc(e.text)}…</div>`;
@@ -230,8 +231,8 @@
         break;
       case "crawl_job": if (S.view === "memory") { loadCrawls().catch(() => {}); loadRag().catch(() => {}); } break;
       case "kg_job": if (window.NexusKG) NexusKG.onJob(e.job); break;
-      case "done": if (current) { current.finish(e); current = null; } S.busy = false; setBusy(false); loadSessions(); break;
-      case "error": if (current) { current.error(e.message); current = null; } S.busy = false; setBusy(false); setState("idle"); break;
+      case "done": if (current) { current.finish(e); current = null; } S.busy = false; setBusy(false); loadSessions(); if (Live.on) Live.done(e.text); break;
+      case "error": if (current) { current.error(e.message); current = null; } S.busy = false; setBusy(false); setState("idle"); if (Live.on) Live.listen(); break;
       case "graph_update": loadGraph().catch(() => {}); if (explorer) loadScopes().catch(() => {}); break;
       case "approval_required": showApproval(e.approval); break;
       case "approval_resolved": $(`#ap-${e.id}`)?.remove(); break;
@@ -295,12 +296,13 @@
       setAgent(e) { el.style.setProperty("--agent", e.color); $(".aname", el).textContent = `${e.icon || ""} ${e.name}`.toUpperCase(); },
       append(t) { raw += t; if (!pend) { pend = true; requestAnimationFrame(render); } if (thinkOn) { thinkOn = false; $(".think summary", el).textContent = "💭 Razonamiento"; } },
       reason(t) { const d = $(".think", el); d.classList.remove("hidden"); thinkOn = true; const tt = $(".think-text", el); tt.textContent += t; if (d.open) tt.scrollTop = tt.scrollHeight; scroll(); },
+      note(label, title) { const c = document.createElement("span"); c.className = "chip done assist"; c.textContent = label; c.title = title; chips.appendChild(c); },
       tool(e) { const c = document.createElement("span"); c.className = "chip"; c.dataset.tool = e.name;
         c.innerHTML = `<span class="spin"></span>${e.sub ? esc(e.sub) + " › " : ""}${esc(e.name)}`; c.title = JSON.stringify(e.args); chips.appendChild(c); scroll(); },
       progress(t) { const c = [...chips.querySelectorAll(".chip:not(.done)")].pop(); if (c) { c.innerHTML = `<span class="spin"></span>${esc(c.dataset.tool)} › ${esc(t)}`; } },
       toolDone(e) { const c = [...chips.querySelectorAll(".chip:not(.done)")].reverse().find((x) => x.dataset.tool === e.name);
         if (c) { const err = /"error"/.test(e.result); c.className = "chip " + (err ? "err" : "done"); c.querySelector(".spin")?.remove(); c.insertAdjacentText("afterbegin", err ? "✕ " : "✓ "); c.title = e.result; } },
-      finish(e) { raw = e.text; render(); text.classList.remove("cursor"); actions(e.message_id, e.text); if (S.speak) speak(e.text); },
+      finish(e) { raw = e.text; render(); text.classList.remove("cursor"); actions(e.message_id, e.text); if (S.speak && !Live.on) speak(e.text); },
       error(m) { raw += `\n\n**Error:** ${m}`; render(); text.classList.remove("cursor"); },
     };
     function actions(id, content) {
@@ -323,7 +325,7 @@
   }
   function setBusy(b) { $("#btn-send").disabled = b; }
 
-  async function send() {
+  async function send(opts = {}) {
     const text = $("#input").value.trim();
     const ready = S.projects.filter((p) => p.doc);
     if ((!text && !S.attachments.length && !ready.length) || S.busy) return;
@@ -338,7 +340,7 @@
     userMsg((text || (ready.length ? "" : "(imagen)")) + (ready.length ? `${text ? "\n\n" : ""}${ready.map((p) => `📦 ${p.name}`).join("  ")}` : ""), images);
     current = aiMsg($("#agent-select").value === "auto" ? "nexus" : $("#agent-select").value);
     S.busy = true; setBusy(true); setState("thinking");
-    ws.send(JSON.stringify({ type: "chat", text: note ? `${body}\n\n${note}` : body, agent: $("#agent-select").value, session_id: S.session, images }));
+    ws.send(JSON.stringify({ type: "chat", text: note ? `${body}\n\n${note}` : body, agent: $("#agent-select").value, session_id: S.session, images, live: !!opts.live }));
     $("#input").value = ""; autoGrow();
   }
   const autoGrow = () => { const t = $("#input"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 180) + "px"; };
@@ -430,6 +432,34 @@
   $("#btn-speak").classList.toggle("on", S.speak);
   $("#btn-speak").onclick = () => { S.speak = !S.speak; local.set("nexus_speak", S.speak); $("#btn-speak").classList.toggle("on", S.speak); toast(S.speak ? "Respuestas en voz alta" : "Voz desactivada"); };
 
+  /* ---- captura de micrófono en PCM -> WAV de 16 kHz: funciona igual en Chrome, Edge, Firefox, Safari (macOS/iOS) y
+     WebView, a diferencia de MediaRecorder (webm en unos, mp4 en otros). Incluye detector de voz (VAD) para el modo en vivo */
+  const micOK = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.isSecureContext !== false);
+  function wavBlob(chunks, rate) {
+    const len = chunks.reduce((a, c) => a + c.length, 0), ratio = rate / 16000, n = Math.floor(len / ratio);
+    const all = new Float32Array(len); let o = 0; for (const c of chunks) { all.set(c, o); o += c.length; }
+    const buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    const w = (p, str) => [...str].forEach((ch, i) => v.setUint8(p + i, ch.charCodeAt(0)));
+    w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) { const a = Math.floor(i * ratio), b = Math.min(len - 1, Math.floor((i + 1) * ratio)); let sum = 0, k = 0;   // media del tramo: antialias basico
+      for (let j = a; j <= b; j++) { sum += all[j]; k++; } const x = Math.max(-1, Math.min(1, sum / Math.max(1, k))); v.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7fff, true); }
+    return new Blob([buf], { type: "audio/wav" });
+  }
+  async function openMic(onFrame) {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") await actx.resume();
+    const src = actx.createMediaStreamSource(stream), proc = actx.createScriptProcessor(4096, 1, 1), mute = actx.createGain(); mute.gain.value = 0;
+    proc.onaudioprocess = (e) => { const d = new Float32Array(e.inputBuffer.getChannelData(0)); let s = 0; for (const x of d) s += x * x; onFrame(d, Math.sqrt(s / d.length)); };
+    src.connect(proc); proc.connect(mute); mute.connect(actx.destination);
+    return { rate: actx.sampleRate, close: () => { try { proc.disconnect(); src.disconnect(); } catch {} stream.getTracks().forEach((t) => t.stop()); } };
+  }
+  async function transcribe(blob) {
+    const fd = new FormData(); fd.append("file", blob, "voz.wav");
+    return api("/api/voice/stt", { body: fd });
+  }
+
   let rec = null;
   // app Android: voz nativa del sistema (el microfono web no esta disponible en http dentro de la app)
   window.__nexusVoice = (t) => { setState("idle"); $("#btn-mic").classList.remove("rec"); if (t) { $("#input").value = t; send(); } };
@@ -437,21 +467,20 @@
     if (window.NexusApp && NexusApp.listen) { setState("listening"); $("#btn-mic").classList.add("rec"); NexusApp.listen((S.cfg.language || "es") + "-ES"); return; }
     if (rec) { rec.stop(); return; }
     const engine = S.status?.voice?.stt_active;
-    if (engine === "faster-whisper" && navigator.mediaDevices) {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      actx = actx || new AudioContext(); const an = actx.createAnalyser(); actx.createMediaStreamSource(stream).connect(an);
-      const chunks = []; rec = new MediaRecorder(stream); rec.ondataavailable = (e) => chunks.push(e.data);
-      let done = false; levelLoop(an, () => done);
-      rec.onstop = guard(async () => {
-        done = true; rec = null; stream.getTracks().forEach((t) => t.stop()); $("#btn-mic").classList.remove("rec"); setState("thinking");
-        const fd = new FormData(); fd.append("file", new Blob(chunks, { type: "audio/webm" }), "voz.webm");
-        const r = await api("/api/voice/stt", { body: fd }); setState("idle");
+    if (engine === "faster-whisper" && micOK()) {
+      const chunks = []; let mic = null, quietFor = 0, heard = false;
+      const stop = guard(async () => {
+        if (!rec) return; rec = null; mic && mic.close(); $("#btn-mic").classList.remove("rec"); avatar.setLevel(0); setState("thinking");
+        const r = await transcribe(wavBlob(chunks, mic.rate)); setState("idle");
         if (r.text) { $("#input").value = r.text; send(); } else toast(r.error || "No se entendió el audio", true);
       });
-      rec.start(); $("#btn-mic").classList.add("rec"); setState("listening"); return;
+      rec = { stop };
+      mic = await openMic((d, rms) => { chunks.push(d); avatar.setLevel(rms * 6);
+        if (rms > 0.02) { heard = true; quietFor = 0; } else if (heard && (quietFor += d.length / mic.rate) > 1.6) stop(); });   // se para solo tras 1,6 s de silencio
+      $("#btn-mic").classList.add("rec"); setState("listening"); return;
     }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return toast("Este navegador no soporta reconocimiento de voz; instala faster-whisper (Sistema)", true);
+    if (!SR) return toast(micOK() ? "Este navegador no reconoce voz; instala la voz local (Sistema > faster-whisper)" : "El micrófono del navegador solo funciona en https o en este mismo equipo (localhost)", true);
     const r = new SR(); r.lang = (S.cfg.language || "es") === "en" ? "en-US" : (S.cfg.language || "es") + "-ES"; r.interimResults = true;
     rec = { stop: () => r.stop() }; $("#btn-mic").classList.add("rec"); setState("listening");
     const pulse = setInterval(() => avatar.setLevel(0.2 + Math.random() * 0.4), 120);
@@ -459,6 +488,166 @@
     r.onend = r.onerror = () => { clearInterval(pulse); avatar.setLevel(0); rec = null; $("#btn-mic").classList.remove("rec"); if (!S.busy) setState("idle"); };
     r.start();
   });
+
+  /* ================================================================ modo en vivo: conversación por voz manos libres
+     Escucha -> transcribe -> responde (corto y sin razonamiento largo) -> lo dice frase a frase mientras se genera ->
+     vuelve a escuchar. Motores, por este orden: app Android (reconocimiento continuo del sistema), Whisper local con
+     detector de voz (cualquier navegador con micrófono) y el reconocimiento del navegador (Chrome, Edge, Safari). */
+  const Live = {
+    on: false, paused: false, engine: "", mic: null, sr: null, phase: "idle", buf: "", said: "", queue: [], playing: null, gen: 0,
+    langTag() { const l = S.cfg.language || "es"; return l === "en" ? "en-US" : l + "-ES"; },
+    ui(st, label) { this.phase = st; const el = $("#live"); el.dataset.st = st; $("#live-state").textContent = label;
+      setState({ listening: "listening", thinking: "thinking", speaking: "speaking" }[st] || "idle"); },
+    level(v) { $("#live-orb").style.setProperty("--lv", Math.max(0, Math.min(1, v)).toFixed(3)); avatar.setLevel(v); },
+    pickEngine() {
+      if (window.NexusApp && NexusApp.listenLive && (!NexusApp.canListenLive || NexusApp.canListenLive())) return "android";
+      if (S.status?.voice?.stt_active === "faster-whisper" && micOK()) return "whisper";
+      if (window.SpeechRecognition || window.webkitSpeechRecognition) return "browser";
+      return "";
+    },
+    async start() {
+      if (this.on) return;
+      this.engine = this.pickEngine();
+      if (!this.engine) return toast(micOK() ? "Para el modo en vivo instala la voz local (Sistema > faster-whisper) o usa Chrome, Edge o Safari" : "El micrófono del navegador solo funciona en https o en este mismo equipo; usa la app o abre Nexus-Office en localhost", true);
+      this.on = true; this.paused = false; this.said = ""; $("#live").classList.remove("hidden"); $("#btn-live").classList.add("on");
+      $("#live-heard").textContent = ""; $("#live-said").textContent = "";
+      $("#live-engine").textContent = { android: "voz del sistema Android", whisper: "Whisper local · " + (S.status?.voice?.stt_model || ""), browser: "reconocimiento del navegador" }[this.engine] +
+        " · " + (S.status?.voice?.tts_active === "browser" ? "voz del navegador" : "voz " + (S.status?.voice?.tts_active || ""));
+      try { await this.listen(); } catch (e) { toast("No se pudo abrir el micrófono: " + (e.message || e), true); this.end(); }
+    },
+    end() {
+      this.on = false; this.gen++; this.stopSpeaking(); this.stopListening();
+      if (this.mic) { this.mic.close(); this.mic = null; }
+      $("#live").classList.add("hidden"); $("#btn-live").classList.remove("on"); this.level(0); setState("idle");
+    },
+    pause() { this.paused = !this.paused; $("#live-pause").textContent = this.paused ? "SEGUIR" : "PAUSAR";
+      if (this.paused) { this.stopListening(); this.stopSpeaking(); this.ui("paused", "EN PAUSA"); } else this.listen(); },
+    async listen() {
+      if (!this.on || this.paused) return;
+      this.ui("listening", "ESCUCHANDO"); $("#live-heard").textContent = "";
+      if (this.engine === "android") return NexusApp.listenLive(this.langTag());
+      if (this.engine === "browser") return this.listenBrowser();
+      if (!this.mic) await this.openVad();
+      this.vad.armed = true;
+    },
+    stopListening() {
+      if (this.engine === "android" && window.NexusApp && NexusApp.stopListening) NexusApp.stopListening();
+      if (this.sr) { const r = this.sr; this.sr = null; try { r.abort(); } catch {} }
+      if (this.vad) this.vad.armed = false;
+    },
+    listenBrowser() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition, r = new SR(); this.sr = r;
+      r.lang = this.langTag(); r.interimResults = true; r.continuous = false;
+      r.onresult = (e) => { const t = [...e.results].map((x) => x[0].transcript).join(""); $("#live-heard").textContent = t; this.level(0.4 + Math.random() * 0.3);
+        if (e.results[e.results.length - 1].isFinal) { this.sr = null; this.heard(t); } };
+      r.onerror = (e) => { if (e.error === "not-allowed") { toast("Permiso de micrófono denegado", true); this.end(); } };
+      r.onend = () => { if (this.sr === r) { this.sr = null; setTimeout(() => this.on && this.phase === "listening" && this.listen(), 250); } };
+      r.start();
+    },
+    async openVad() {
+      // detector de voz por energia con suelo de ruido adaptativo; 0,3 s de audio previo para no comerse el principio
+      const v = this.vad = { armed: true, noise: 0.01, speaking: false, loud: 0, quiet: 0, pre: [], chunks: [], len: 0 };
+      this.mic = await openMic((d, rms) => {
+        const rate = this.mic ? this.mic.rate : 48000, dur = d.length / rate;
+        if (!v.speaking) v.noise = v.noise * 0.95 + Math.min(rms, 0.05) * 0.05;
+        const thr = Math.max(0.012, v.noise * 2.8) * (this.phase === "speaking" ? 2.2 : 1);   // con el altavoz sonando, mas exigente (eco)
+        if (this.phase === "listening" || this.phase === "speaking") this.level(this.phase === "listening" ? rms * 7 : this.level.v || 0);
+        if (this.phase === "speaking" && $("#live-barge").checked && rms > thr) { if ((v.loud += dur) > 0.3) { v.loud = 0; this.bargeIn(); } return; }
+        if (!v.armed || this.phase !== "listening") { v.pre = []; return; }
+        if (!v.speaking) {
+          v.pre.push(d); while (v.pre.length > Math.ceil(0.3 / dur)) v.pre.shift();
+          if (rms > thr) { if ((v.loud += dur) > 0.15) { v.speaking = true; v.chunks = [...v.pre]; v.len = 0; v.quiet = 0; $("#live-heard").textContent = "…"; } } else v.loud = 0;
+          return;
+        }
+        v.chunks.push(d); v.len += dur;
+        if (rms < thr) v.quiet += dur; else v.quiet = 0;
+        if (v.quiet > 0.8 || v.len > 30) {   // fin de la frase: 0,8 s de silencio (o 30 s seguidos)
+          v.speaking = false; v.loud = 0; v.armed = false; const chunks = v.chunks; v.chunks = [];
+          if (v.len - v.quiet < 0.35) { v.armed = true; return; }   // un golpe o un ruido corto
+          this.ui("thinking", "TRANSCRIBIENDO");
+          transcribe(wavBlob(chunks, rate)).then((r) => { if (r.text && r.text.trim()) this.heard(r.text.trim()); else this.listen(); })
+            .catch(() => this.listen());
+        }
+      });
+    },
+    heard(text) {
+      if (!this.on) return;
+      text = text.trim(); if (!text) return this.listen();
+      if (/^(termina|terminar|adiós|adios|fin del modo en vivo|stop|para el modo en vivo)\.?$/i.test(text)) return this.end();
+      $("#live-heard").textContent = "«" + text + "»"; $("#live-said").textContent = "";
+      if (S.busy) { toast("Espera a que termine la respuesta anterior", true); return this.listen(); }
+      this.buf = ""; this.queue = []; this.gen++; this.ui("thinking", "PENSANDO");
+      $("#input").value = text; send({ live: true });
+    },
+    token(t) {   // frase a frase mientras se genera: empieza a hablar antes de que acabe la respuesta
+      if (!this.on) return;
+      this.buf += t; $("#live-said").textContent = plain(md2text(this.buf)).slice(-600);
+      if (this.engine === "android") return;   // la voz del sistema Android se lanza al final, de una vez
+      let m;
+      while ((m = this.buf.match(/^([\s\S]{20,}?[.!?…:;])(\s|$)|^([\s\S]*?\n\s*\n)/))) { const part = m[1] || m[3]; this.buf = this.buf.slice(part.length); this.say(part); }
+    },
+    done(text) {
+      if (!this.on) return;
+      $("#live-said").textContent = plain(md2text(text)).slice(-900);
+      if (this.engine === "android") { const t = plain(text); if (t && NexusApp.speak(t, S.cfg.speech_rate || 1)) { this.ui("speaking", "HABLANDO"); this.fake(); } else this.listen(); return; }
+      if (this.buf.trim()) this.say(this.buf); this.buf = "";
+      if (!this.queue.length && !this.playing) this.listen();
+    },
+    fake() { clearInterval(this.fakeIv); this.fakeIv = setInterval(() => this.phase === "speaking" ? this.level(0.3 + Math.random() * 0.5) : clearInterval(this.fakeIv), 110); },
+    say(part) { const t = plain(md2text(part)); if (!t) return; this.queue.push({ text: t, gen: this.gen, audio: null }); this.prefetch(); if (!this.playing) this.next(); },
+    prefetch() {   // la siguiente frase se sintetiza mientras suena la actual
+      if (S.status?.voice?.tts_active === "browser") return;
+      for (const q of this.queue.slice(0, 2)) if (!q.audio) q.audio = api("/api/voice/tts", { body: { text: q.text, rate: S.cfg.speech_rate || 1 }, raw: true })
+        .then((r) => (r.status === 200 ? r.blob() : null)).catch(() => null);
+    },
+    async next() {
+      const q = this.queue.shift();
+      if (!q) { this.playing = null; if (this.on && this.phase !== "thinking") this.listen(); else if (this.on && !S.busy) this.listen(); return; }
+      if (q.gen !== this.gen || !this.on || this.paused) return this.next();
+      this.ui("speaking", "HABLANDO"); this.playing = q; this.prefetch();
+      const blob = q.audio ? await q.audio : null;
+      if (q.gen !== this.gen || !this.on) return;
+      if (blob) {
+        const a = new Audio(URL.createObjectURL(blob)); this.audio = a;
+        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+        try { const src = actx.createMediaElementSource(a), an = actx.createAnalyser(); an.fftSize = 512; src.connect(an); an.connect(actx.destination);
+          const data = new Uint8Array(an.fftSize); const f = () => { if (this.audio !== a) return; an.getByteTimeDomainData(data); let s = 0; for (const v of data) s += ((v - 128) / 128) ** 2; this.level(Math.sqrt(s / data.length) * 5); requestAnimationFrame(f); }; f();
+        } catch {}
+        a.onended = a.onerror = () => { if (this.audio === a) { this.audio = null; this.next(); } };
+        try { await a.play(); } catch { this.audio = null; this.next(); }
+        return;
+      }
+      if (!("speechSynthesis" in window)) return this.next();
+      const u = new SpeechSynthesisUtterance(q.text); u.lang = this.langTag(); u.rate = S.cfg.speech_rate || 1;
+      const v = speechSynthesis.getVoices().find((v) => v.lang.startsWith(S.cfg.language || "es") && (!S.cfg.voice_name || v.name.includes(S.cfg.voice_name))); if (v) u.voice = v;
+      u.onboundary = () => this.level(0.5 + Math.random() * 0.5);
+      u.onend = u.onerror = () => { if (this.utt === u) { this.utt = null; this.level(0); this.next(); } };
+      this.utt = u; speechSynthesis.speak(u);
+    },
+    stopSpeaking() {
+      this.queue = []; this.playing = null; clearInterval(this.fakeIv);
+      if (this.audio) { const a = this.audio; this.audio = null; a.pause(); }
+      if (this.utt) { this.utt = null; try { speechSynthesis.cancel(); } catch {} }
+      if (window.NexusApp && NexusApp.stopSpeaking) NexusApp.stopSpeaking();
+    },
+    bargeIn() { if (this.phase !== "speaking") return; this.gen++; this.stopSpeaking(); this.listen(); },
+  };
+  const md2text = (t) => String(t || "").replace(/<think>[\s\S]*?<\/think>/g, "").replace(/^\s*[-*•]\s+/gm, "").replace(/^\s*\d+\.\s+/gm, "").replace(/\|/g, " ");
+  // puente con la app Android (SpeechRecognizer sin dialogo y aviso de fin de voz)
+  window.__nexusLiveResult = (t) => Live.on && (t ? Live.heard(t) : Live.listen());
+  window.__nexusLivePartial = (t) => Live.on && ($("#live-heard").textContent = t);
+  window.__nexusLiveLevel = (v) => Live.on && Live.phase === "listening" && Live.level(+v);
+  window.__nexusLiveState = () => {};
+  window.__nexusLiveError = (code) => { if (!Live.on) return;
+    if (typeof code === "string") { toast(code, true); return Live.end(); }
+    if (code === 9) { toast("Permiso de micrófono denegado", true); return Live.end(); }   // ERROR_INSUFFICIENT_PERMISSIONS
+    setTimeout(() => Live.on && Live.phase === "listening" && Live.listen(), code === 7 || code === 6 ? 150 : 600); };   // sin coincidencias / silencio: se sigue escuchando
+  window.__nexusSpoken = () => { if (Live.on && Live.phase === "speaking") { clearInterval(Live.fakeIv); Live.level(0); Live.listen(); } };
+  $("#btn-live").onclick = () => (Live.on ? Live.end() : Live.start());
+  $("#live-end").onclick = () => Live.end();
+  $("#live-pause").onclick = () => Live.pause();
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && Live.on) Live.end(); });
+  window.NexusLive = Live;
 
   /* ================================================================ aprobaciones */
   function showApproval(a) {

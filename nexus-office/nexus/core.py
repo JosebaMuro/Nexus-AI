@@ -61,6 +61,10 @@ class Services:
         self.voice = VoiceEngine(cfg, self.models.catalog, lambda: self.profile)
         self.tools = ToolRegistry(cfg.get("tools.sandbox_community_tools", True))
         self.supervisor = Supervisor(self.tools, self.db, cfg)
+        # IA de apoyo: el embed multilingue ayuda a todas las herramientas (nexus/memory/assist.py)
+        from .memory.assist import SemanticAssist
+        self.assist = SemanticAssist(lambda: self.embedder, cfg)
+        self.supervisor.assist = self.assist
         self.proposals = ProposalManager(self.tools, self.supervisor, self.learner)
         self.agents = AgentManager(self)
         self.graph.namer = lambda aid: getattr(self.agents.get(aid), "name", "") or aid   # ancla de cada subgrafo
@@ -112,6 +116,7 @@ class Services:
     def start(self) -> None:
         self.monitor.start()
         self.embed_worker.start()
+        self.assist.prewarm(self.tools.for_agent(["*"]), self.agents.list())
         if hardware.profiles.android() and self.config.get("hardware.adaptive_tuning", True):
             from .android_tune import LiveTuner
             self.android_tuner = LiveTuner(self)

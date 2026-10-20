@@ -71,8 +71,12 @@ def test_consejo_de_modelo():
     assert at.model_advice("qwen3-vl-2b-thinking", 8, 12, cat) is None
     # modelos sin razonamiento de versiones anteriores: se propone su equivalente con razonamiento
     legacy = at.model_advice("qwen3-vl-2b", 8, 12, cat)
-    assert legacy["id"] == "qwen3-vl-2b-thinking" and "razona" in legacy["reason"]
-    assert at.model_advice("smolvlm-500m", 20, 12, cat)["id"] == "qwen3-vl-2b-thinking"
+    assert legacy["id"] == "qwen3.5-2b" and "razona" in legacy["reason"]
+    assert at.model_advice("smolvlm-500m", 20, 12, cat)["id"] == "qwen3.5-0.8b"
+    # la escalera nueva (Qwen3.5)
+    cat5 = [{"id": "qwen3.5-0.8b", "min_ram_gb": 2}, {"id": "qwen3.5-2b", "min_ram_gb": 3}, {"id": "qwen3.5-4b", "min_ram_gb": 8}]
+    assert at.model_advice("qwen3.5-2b", 2.5, 12, cat5)["id"] == "qwen3.5-0.8b"
+    assert at.model_advice("qwen3.5-2b", 20, 12, cat5)["id"] == "qwen3.5-4b"
 
 
 class _Monitor:

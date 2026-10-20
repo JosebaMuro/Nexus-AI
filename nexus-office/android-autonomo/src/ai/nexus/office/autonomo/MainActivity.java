@@ -19,6 +19,9 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.RecognizerIntent;
+import android.speech.tts.UtteranceProgressListener;
+import android.speech.SpeechRecognizer;
+import android.speech.RecognitionListener;
 import android.speech.tts.TextToSpeech;
 import android.util.Base64;
 import android.util.DisplayMetrics;
@@ -64,6 +67,11 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private TextToSpeech tts;
     private boolean ttsReady;
+    // modo en vivo del chat: reconocimiento continuo sin dialogo (SpeechRecognizer) y aviso al acabar de hablar
+    private SpeechRecognizer recognizer;
+    private String liveLang = "";
+    private long lastLevel;
+    private static final int REQ_MIC = 7;
     private byte[] pendingSave;
     private String pendingSaveName = "";
     private long bootStarted;
@@ -134,6 +142,21 @@ public class MainActivity extends Activity {
             public void onInit(int status) {
                 ttsReady = status == TextToSpeech.SUCCESS;
                 if (ttsReady) tts.setLanguage(Locale.getDefault());
+                if (ttsReady) tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                    @Override
+                    public void onStart(String id) {
+                    }
+
+                    @Override
+                    public void onDone(String id) {
+                        js("window.__nexusSpoken && window.__nexusSpoken()");
+                    }
+
+                    @Override
+                    public void onError(String id) {
+                        js("window.__nexusSpoken && window.__nexusSpoken()");
+                    }
+                });
             }
         });
         CookieManager.getInstance().setAcceptCookie(true);
@@ -489,6 +512,82 @@ public class MainActivity extends Activity {
         }
     }
 
+    @Override
+    public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
+        super.onRequestPermissionsResult(req, perms, res);
+        if (req == REQ_MIC) {
+            if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) startLive();
+            else js("window.__nexusLiveError && window.__nexusLiveError('permiso de micrófono denegado')");
+        }
+    }
+
+    private void startLive() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            js("window.__nexusLiveError && window.__nexusLiveError('este móvil no tiene reconocimiento de voz')");
+            return;
+        }
+        if (recognizer == null) {
+            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            recognizer.setRecognitionListener(new RecognitionListener() {
+                @Override
+                public void onReadyForSpeech(Bundle b) {
+                    js("window.__nexusLiveState && window.__nexusLiveState('ready')");
+                }
+
+                @Override
+                public void onBeginningOfSpeech() {
+                    js("window.__nexusLiveState && window.__nexusLiveState('speech')");
+                }
+
+                @Override
+                public void onRmsChanged(float db) {
+                    long now = System.currentTimeMillis();
+                    if (now - lastLevel < 90) return;
+                    lastLevel = now;
+                    js("window.__nexusLiveLevel && window.__nexusLiveLevel(" + Math.max(0f, Math.min(1f, (db + 2f) / 12f)) + ")");
+                }
+
+                @Override
+                public void onBufferReceived(byte[] buf) {
+                }
+
+                @Override
+                public void onEndOfSpeech() {
+                    js("window.__nexusLiveState && window.__nexusLiveState('end')");
+                }
+
+                @Override
+                public void onError(int code) {
+                    js("window.__nexusLiveError && window.__nexusLiveError(" + code + ")");
+                }
+
+                @Override
+                public void onResults(Bundle b) {
+                    ArrayList<String> r = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    String text = r != null && !r.isEmpty() ? r.get(0) : "";
+                    js("window.__nexusLiveResult && window.__nexusLiveResult(" + JSONObject.quote(text) + ")");
+                }
+
+                @Override
+                public void onPartialResults(Bundle b) {
+                    ArrayList<String> r = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (r != null && !r.isEmpty())
+                        js("window.__nexusLivePartial && window.__nexusLivePartial(" + JSONObject.quote(r.get(0)) + ")");
+                }
+
+                @Override
+                public void onEvent(int type, Bundle b) {
+                }
+            });
+        }
+        Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        if (!liveLang.isEmpty()) i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, liveLang);
+        i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        i.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true);   // sin internet si el movil tiene el paquete de voz
+        recognizer.startListening(i);
+    }
+
     private void js(final String code) {
         runOnUiThread(new Runnable() {
             @Override
@@ -518,6 +617,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (recognizer != null) recognizer.destroy();
         if (tts != null) tts.shutdown();
         super.onDestroy();
     }
@@ -582,6 +682,36 @@ public class MainActivity extends Activity {
             } catch (ActivityNotFoundException e) {
                 js("window.__nexusVoice && window.__nexusVoice('')");
             }
+        }
+
+        @JavascriptInterface
+        public boolean canListenLive() {
+            return SpeechRecognizer.isRecognitionAvailable(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void listenLive(String lang) {
+            liveLang = lang == null ? "" : lang;
+            if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC);
+                return;
+            }
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    startLive();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void stopListening() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (recognizer != null) recognizer.cancel();
+                }
+            });
         }
 
         @JavascriptInterface

@@ -61,9 +61,9 @@ def test_android_profile_recommends_only_mobile_llms(monkeypatch):
         assert {r["kind"] for r in recs} == {"llm", "embed"}   # sin imagen ni Piper: no van en la APK
         return [r["id"] for r in recs if r.get("best") and r["kind"] == "llm"]
 
-    assert best(3.6) == ["qwen3-vl-2b-thinking"]
-    assert best(7.4) == ["qwen3-vl-2b-thinking"]
-    assert best(11.3) == ["qwen3-vl-4b-thinking"]
+    assert best(3.6) == ["qwen3.5-0.8b"]
+    assert best(7.4) == ["qwen3.5-2b"]
+    assert best(11.3) == ["qwen3.5-4b"]
 
 
 def test_python_cmd_con_manejador_de_sigsys(monkeypatch):

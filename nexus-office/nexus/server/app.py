@@ -179,6 +179,7 @@ def create_app(services: Services | None = None) -> FastAPI:
                 "has_pin": s.config.has_pin(), "profile": {k: s.profile[k] for k in ("id", "tier", "accelerator", "device_name", "ram_gb", "vram_gb")},
                 "npu": s.profile["npu"], "llm": s.llm.status(), "image": s.images.status(), "voice": s.voice.info(),
                 "memory": mem, "graph": s.graph.stats(), "rag": s.rag.stats(), "tuning": s.tuning_reasons,
+                "assist": s.assist.info(),
                 "coop": {"running": s.coop.running, "peers": len(s.coop.peers), "vip": s.coop.vip},
                 "pending_approvals": len(s.supervisor.list_pending()),
                 "pending_proposals": len(s.proposals.list("pendiente")),
@@ -1498,7 +1499,8 @@ def create_app(services: Services | None = None) -> FastAPI:
             emit({"type": "session", "session_id": sid})
             images = [i.split(",", 1)[-1] for i in data.get("images", [])][:4]
             try:
-                await asyncio.to_thread(s.agents.run, data.get("agent", "auto"), data.get("text", ""), sid, images, emit)
+                await asyncio.to_thread(s.agents.run, data.get("agent", "auto"), data.get("text", ""), sid, images, emit,
+                                        live=bool(data.get("live")))
             except Exception as e:  # noqa: BLE001
                 L.exception("Error en el chat")
                 emit({"type": "error", "message": str(e)})

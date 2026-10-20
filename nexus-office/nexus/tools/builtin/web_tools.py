@@ -76,9 +76,13 @@ def web_search(args, ctx):
         if "uddg=" in href:
             href = unquote(parse_qs(urlparse(href).query).get("uddg", [href])[0])
         results.append({"title": html_to_text(m.group(2)), "url": href, "snippet": html_to_text(m.group(3))})
-        if len(results) >= int(args.get("max_results", 6)):
+        if len(results) >= 2 * int(args.get("max_results", 6)):
             break
-    return {"query": args["query"], "results": results}
+    # IA de apoyo: se piden el doble y se quedan los mas relevantes por significado (en cualquier idioma)
+    assist = getattr(getattr(ctx, "services", None), "assist", None)
+    if assist is not None:
+        results = assist.rerank(args["query"], results, key=lambda x: f"{x['title']}. {x['snippet']}")
+    return {"query": args["query"], "results": results[:int(args.get("max_results", 6))]}
 
 
 TOOLS = [

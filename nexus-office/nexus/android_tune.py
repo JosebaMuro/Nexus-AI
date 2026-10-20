@@ -34,7 +34,9 @@ MIN_SAMPLES = 3          # respuestas por numero de hilos antes de decidir
 MIN_TOKENS = 16          # respuestas mas cortas no dan una velocidad fiable
 REEXPLORE_AFTER = 80     # respuestas con el mejor numero de hilos antes de volver a medir los demas
 SLOW_TPS, FAST_TPS = 4.0, 14.0
-ANDROID_MODELS = ("qwen3-vl-2b-thinking", "qwen3-vl-4b-thinking")   # de menor a mayor (vision + razonamiento)
+ANDROID_MODELS = ("qwen3.5-0.8b", "qwen3.5-2b", "qwen3.5-4b")   # de menor a mayor (vision + razonamiento)
+# escalera de la version anterior (Qwen3-VL Thinking): quien ya lo tiene descargado sube o baja dentro de ella
+PREVIOUS_MODELS = ("qwen3-vl-2b-thinking", "qwen3-vl-4b-thinking")
 STATE_MAX_AGE = 300      # segundos: un estado del movil mas viejo no se tiene en cuenta
 
 
@@ -122,14 +124,15 @@ def model_advice(model: str, best_tps: float, ram_gb: float, catalog: list[dict]
         return {"from": model, "id": target, "name": r.get("name", target), "size_mb": r.get("size_mb", 0),
                 "installed": bool(r.get("installed")),
                 "reason": "tu modelo actual no razona: este ve imagenes y razona paso a paso antes de responder"}
-    if model not in ANDROID_MODELS or best_tps <= 0:
+    ladder = ANDROID_MODELS if model in ANDROID_MODELS else PREVIOUS_MODELS if model in PREVIOUS_MODELS else ()
+    if not ladder or best_tps <= 0:
         return None
-    i = ANDROID_MODELS.index(model)
+    i = ladder.index(model)
     if best_tps < SLOW_TPS and i > 0:
-        target, why = ANDROID_MODELS[i - 1], f"va a {best_tps:.1f} tokens/s: uno mas pequeno respondera mas rapido"
-    elif best_tps > FAST_TPS and i + 1 < len(ANDROID_MODELS) and \
-            ram_gb >= by_id.get(ANDROID_MODELS[i + 1], {}).get("min_ram_gb", 99):
-        target, why = ANDROID_MODELS[i + 1], f"va a {best_tps:.1f} tokens/s y hay RAM: uno mayor dara mejores respuestas"
+        target, why = ladder[i - 1], f"va a {best_tps:.1f} tokens/s: uno mas pequeno respondera mas rapido"
+    elif best_tps > FAST_TPS and i + 1 < len(ladder) and \
+            ram_gb >= by_id.get(ladder[i + 1], {}).get("min_ram_gb", 99):
+        target, why = ladder[i + 1], f"va a {best_tps:.1f} tokens/s y hay RAM: uno mayor dara mejores respuestas"
     else:
         return None
     r = by_id.get(target, {"id": target})
@@ -331,7 +334,7 @@ class LiveTuner:
 
     def switch_model(self, mid: str) -> dict:
         """Acepta el consejo: activa el modelo si ya esta, o lo descarga y lo activa al terminar."""
-        if mid not in ANDROID_MODELS:
+        if mid not in ANDROID_MODELS + PREVIOUS_MODELS:
             raise ValueError(f"Modelo no previsto para Android: {mid}")
         if self.s.models.catalog.get(mid):
             self._activate(mid)

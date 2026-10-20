@@ -31,6 +31,7 @@ class Supervisor:
         self.pending: dict[str, dict] = {}
         self._lock = threading.Lock()
         self.listeners: list = []      # callbacks(event) para notificar a todas las UIs
+        self.assist = None             # IA de apoyo (nexus.memory.assist): corrige nombres y valores mal escritos
 
     def decision_for(self, risk: str, remote: bool) -> str:
         policy = self.config.get("tools.policy", {}).get(risk, "admin")
@@ -86,8 +87,19 @@ class Supervisor:
     def execute(self, name: str, args: dict, ctx: ToolContext) -> dict:
         spec = self.registry.get(name)
         t0 = time.time()
+        fixed_note = []
+        if (not spec or not spec.enabled) and self.assist is not None:
+            # el modelo pidio una herramienta que no existe ("search_web"): la equivalente si esta clara
+            enabled = [t for t in self.registry.tools.values() if t.enabled]
+            alt = self.assist.fix_tool_name(name, enabled)
+            if alt:
+                fixed_note.append(f"herramienta {name} -> {alt}")
+                name, spec = alt, self.registry.get(alt)
         if not spec or not spec.enabled:
             return {"error": f"herramienta desconocida o desactivada: {name}"}
+        if self.assist is not None:
+            args, changes = self.assist.repair_args(spec.parameters, args or {})
+            fixed_note += changes
         clean, errors = validate_args(spec.parameters, args or {})
         if errors:
             return {"error": "; ".join(errors)}
@@ -117,7 +129,10 @@ class Supervisor:
         if isinstance(result, dict) and result.get("error") and status == "ok":
             status = "error"
         self._audit(ctx, call, decision, approver, status, result, time.time() - t0)
-        return result if isinstance(result, dict) else {"result": result}
+        result = result if isinstance(result, dict) else {"result": result}
+        if fixed_note:
+            result = {**result, "_corregido": "; ".join(fixed_note)}
+        return result
 
     def _run_sandboxed(self, path: Path, args: dict, timeout: float):
         runner = Path(__file__).with_name("runner.py")

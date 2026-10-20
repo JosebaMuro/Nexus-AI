@@ -531,3 +531,24 @@ body.flat .panel::before, body.flat .panel::after { display: none; }
 #kg-admin label.row { gap: 6px; font-size: 13px; }
 @media (max-width: 760px) { .kg-split { grid-template-columns: minmax(0, 1fr); } }
 [data-layout="phone"] .kg-split { grid-template-columns: minmax(0, 1fr); }
+
+/* ---------- modo en vivo (conversación por voz) ---------- */
+.chat-col { position: relative; }
+.live { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px;
+  background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--accent) 12%, var(--panel-solid)), var(--panel-solid) 70%); backdrop-filter: blur(6px); text-align: center; }
+.live.hidden { display: none; }
+.live-orb { --lv: 0; position: relative; width: 150px; height: 150px; border-radius: 50%; display: grid; place-items: center; }
+.live-orb span { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--accent); opacity: .5; transform: scale(calc(.62 + var(--lv) * .5)); transition: transform .08s linear; box-shadow: var(--glow); }
+.live-orb span:nth-child(2) { inset: 18px; opacity: .75; transform: scale(calc(.8 + var(--lv) * .35)); }
+.live-orb span:nth-child(3) { inset: 42px; opacity: 1; background: color-mix(in srgb, var(--accent) 35%, transparent); transform: scale(calc(.85 + var(--lv) * .3)); }
+.live[data-st="thinking"] .live-orb span { border-color: #a66bff; animation: live-spin 1.4s linear infinite; border-style: dashed; }
+.live[data-st="speaking"] .live-orb span { border-color: #ff3df2; }
+.live[data-st="paused"] .live-orb span { opacity: .2; }
+@keyframes live-spin { to { transform: rotate(360deg) scale(.9); } }
+.live-state { font: 700 14px var(--font-hud); letter-spacing: .35em; color: var(--accent); text-shadow: var(--glow); }
+.live-heard { min-height: 1.4em; max-width: 640px; font-size: 18px; color: var(--text); }
+.live-said { max-width: 640px; max-height: 30vh; overflow-y: auto; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.live-ctl { gap: 14px; flex-wrap: wrap; justify-content: center; }
+.icon-btn.live-btn.on { color: var(--accent); border-color: var(--accent); box-shadow: var(--glow); }
+[data-layout="phone"] .live-orb { width: 110px; height: 110px; }
+[data-layout="phone"] .live-heard { font-size: 16px; }

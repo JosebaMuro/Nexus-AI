@@ -64,6 +64,18 @@
             <span class="muted mono" id="chat-model" style="margin-left:auto"></span>
           </div>
           <div class="messages" id="messages"></div>
+          <div class="live hidden" id="live" role="dialog" aria-label="Modo en vivo">
+            <div class="live-orb" id="live-orb"><span></span><span></span><span></span></div>
+            <div class="live-state" id="live-state">PREPARANDO…</div>
+            <div class="live-heard" id="live-heard"></div>
+            <div class="live-said" id="live-said"></div>
+            <div class="live-engine muted mono" id="live-engine"></div>
+            <div class="row live-ctl">
+              <button class="btn sm" id="live-pause">PAUSAR</button>
+              <label class="muted" title="Si hablas mientras responde, se calla y te escucha"><input type="checkbox" id="live-barge" checked> interrumpir hablando</label>
+              <button class="btn sm danger" id="live-end">TERMINAR</button>
+            </div>
+          </div>
           <div class="composer">
             <div class="attachments" id="attachments"></div>
             <div class="composer-box">
@@ -72,7 +84,8 @@
               <textarea id="input" rows="1" placeholder="Escribe a Nexus-Office… (Shift+Enter: nueva línea)"></textarea>
               <button class="icon-btn" id="btn-enhance" title="Mejorar el prompt"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8zM19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9zM5 15l.7 1.6L7.3 17l-1.6.7L5 19.3l-.7-1.6L2.7 17l1.6-.4z"/></svg></button>
               <button class="icon-btn" id="btn-speak" title="Leer respuestas en voz alta"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg></button>
-              <button class="icon-btn" id="btn-mic" title="Hablar"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+              <button class="icon-btn" id="btn-mic" title="Dictar un mensaje"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+              <button class="icon-btn live-btn" id="btn-live" title="Modo en vivo: conversación por voz, manos libres"><svg viewBox="0 0 24 24"><path d="M3 12h2M7 8v8M11 5v14M15 8v8M19 10v4M21 12h0"/></svg></button>
               <button class="send" id="btn-send" title="Enviar"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-6.5z"/></svg></button>
             </div>
           </div>
