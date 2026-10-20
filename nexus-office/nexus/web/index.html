@@ -351,7 +351,7 @@
       <div class="panel" style="margin-top:16px"><h3>Descargas <span class="sub">instaladores para los equipos y móviles de la oficina</span></h3><div id="downloads-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel" style="margin-top:16px"><h3>Drivers de la tarjeta gráfica <span class="sub">actualización oficial, siempre confirmada por ti</span></h3><div id="drivers-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel admin-only" style="margin-top:16px"><h3>Historial de sesiones</h3><div id="history-table"></div></div>
-      <div class="panel admin-only" style="margin-top:16px"><h3>Registro <span class="sub"><button class="btn sm" id="redetect">RE-DETECTAR HARDWARE</button> <button class="btn danger sm" id="shutdown">APAGAR NEXUS-OFFICE</button></span></h3><pre class="code" id="logs"></pre></div>
+      <div class="panel admin-only" style="margin-top:16px"><h3>Registro <span class="sub"><button class="btn sm" id="accel-open">MOTOR Y CPU/GPU/NPU</button> <button class="btn sm" id="redetect">RE-DETECTAR HARDWARE</button> <button class="btn danger sm" id="shutdown">APAGAR NEXUS-OFFICE</button></span></h3><pre class="code" id="logs"></pre></div>
     </section>
 
     <!-- ================= AJUSTES ================= -->
@@ -385,6 +385,17 @@
 <div class="sheet hidden" id="more-sheet"><div class="sheet-card"><div class="sheet-grip"></div><div class="sheet-grid" id="more-grid"></div><div class="sheet-extra" id="more-extra"></div></div></div>
 <div id="approvals"></div>
 <div id="toasts"></div>
+
+<dialog id="accel-dialog" class="accel-dialog">
+  <h2>MOTOR Y ACELERADOR</h2>
+  <p class="muted" id="accel-hw">Detectando…</p>
+  <div class="accel-group"><div class="lbl">Motor llama</div><div class="accel-opts" id="accel-engines"></div></div>
+  <div class="accel-group"><div class="lbl">Acelerar la IA con</div><div class="accel-opts" id="accel-accels"></div></div>
+  <div class="accel-note" id="accel-note"></div>
+  <div class="accel-result" id="accel-result"></div>
+  <label class="row muted" style="gap:8px"><input type="checkbox" id="accel-remember" checked> Recordar y no volver a preguntar al abrir (se cambia en Sistema)</label>
+  <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" id="accel-test">PROBAR</button><button class="btn primary" id="accel-go">ARRANCAR</button></div>
+</dialog>
 
 <dialog id="pin-dialog">
   <h2 id="pin-title">ACCESO ADMINISTRADOR</h2>

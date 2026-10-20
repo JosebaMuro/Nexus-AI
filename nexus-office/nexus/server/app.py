@@ -308,6 +308,38 @@ def create_app(services: Services | None = None) -> FastAPI:
         s.llm.rebuild()
         return {"hardware": s.hw.to_dict(), "profile": s.profile}
 
+    @app.get("/api/accel")
+    def accel_options():
+        """Selector de inicio: motor llama y acelerador (CPU/GPU/NPU) con su disponibilidad y lo que se usa de verdad."""
+        from ..hardware.accel_choice import options
+        return options(S())
+
+    @app.post("/api/accel")
+    async def accel_apply(engine: str = Body("auto"), accel: str = Body("auto"), remember: bool = Body(True)):
+        from ..hardware.accel_choice import apply
+        try:
+            res = await asyncio.to_thread(apply, S(), engine, accel, remember)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        hub.broadcast({"type": "status_changed"})
+        return res
+
+    @app.post("/api/accel/test")
+    async def accel_test():
+        """Carga el modelo con la eleccion actual, genera unas palabras y dice donde se ha ejecutado y a que velocidad."""
+        from ..hardware.accel_choice import options
+        s = S()
+        backend = s.llm.select()[0]
+        t0 = time.time()
+        try:
+            text = await asyncio.to_thread(lambda: s.llm.complete("Responde solo: hola", max_tokens=16, temperature=0,
+                                                                  reasoning="off"))
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "backend": backend, "error": str(e)[:400], **options(s)}
+        st = getattr(s.llm.backends.get(backend), "last_stats", None) or {}
+        return {"ok": True, "backend": backend, "text": text.strip()[:80], "seconds": round(time.time() - t0, 2),
+                "tokens_s": round(st["tokens"] / st["seconds"], 1) if st.get("seconds") else None, **options(s)}
+
     @app.get("/api/service")
     async def service_status():
         from .. import service

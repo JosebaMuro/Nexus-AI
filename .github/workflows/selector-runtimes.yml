@@ -1,0 +1,185 @@
+name: Runtimes del selector de inicio
+
+# Runtimes que necesita el selector de motor y acelerador de Nexus-Office 2.0 y que no salen de
+# packaging/build_desktop_runtimes.sh:
+#   * llama-cpp-python (motor «llama.cpp integrado») compilado para CPython 3.11 en cada plataforma: CPU con AVX2 en
+#     x86_64, NEON en ARM y Metal en macOS. Linux en las imagenes manylinux_2_28 (glibc 2.28, como el resto).
+#   * llama-server con OpenVINO (NPU Intel «AI Boost» y GPU Intel) de las Releases oficiales de llama.cpp, para
+#     Windows x64 y Linux x86_64.
+# Se prueban (importar y cargar un modelo pequeno; llama-server --version y --list-devices) y se publican en la
+# Release «selector-runtimes», de donde los toma la construccion de los instaladores.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/selector-runtimes.yml
+
+permissions:
+  contents: write
+
+env:
+  LLAMA_PY: 0.3.36
+  TINY_GGUF: https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf
+
+jobs:
+  llama-python:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x86_64, os: ubuntu-24.04, image: quay.io/pypa/manylinux_2_28_x86_64 }
+          - { target: linux-aarch64, os: ubuntu-24.04-arm, image: quay.io/pypa/manylinux_2_28_aarch64 }
+          - { target: windows-x64, os: windows-latest }
+          - { target: macos-arm64, os: macos-latest }
+          - { target: macos-x86_64, os: macos-15-intel }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Fuente de llama-cpp-python
+        shell: bash
+        run: |
+          python -m pip download -q --no-deps --no-binary :all: llama-cpp-python==$LLAMA_PY -d src
+          python -m pip download -q --no-deps --only-binary :all: diskcache -d out
+          ls -la src out
+      - name: Compilar (Linux, manylinux_2_28)
+        if: runner.os == 'Linux'
+        run: |
+          arch=$(uname -m)
+          extra="-DGGML_NATIVE=OFF"
+          [ "$arch" = x86_64 ] && extra="$extra -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF"
+          docker run --rm -v "$PWD":/w -w /w -e CMAKE_ARGS="$extra" ${{ matrix.image }} bash -c '
+            set -e
+            /opt/python/cp311-cp311/bin/pip wheel --no-deps -w raw src/llama_cpp_python-*.tar.gz
+            auditwheel repair -w out raw/llama_cpp_python-*.whl'
+          sudo chown -R $(id -u) out
+      - name: Compilar (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          CMAKE_ARGS: -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF
+        run: python -m pip wheel --no-deps -w out src/llama_cpp_python-*.tar.gz
+      - name: Compilar (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          CMAKE_ARGS: -DGGML_NATIVE=OFF
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+        run: python -m pip wheel --no-deps -w out src/llama_cpp_python-*.tar.gz
+      - name: Probar con un modelo pequeno (Qwen3.5 0.8B)
+        shell: bash
+        run: |
+          python -m venv t
+          if [ -x t/Scripts/python.exe ]; then P=t/Scripts/python.exe; else P=t/bin/python; fi
+          $P -m pip install -q out/*.whl numpy jinja2 typing-extensions
+          curl -fsSL -o tiny.gguf "$TINY_GGUF"
+          $P - <<'PY'
+          import llama_cpp, time
+          print("llama-cpp-python", llama_cpp.__version__, "gpu offload:", llama_cpp.llama_supports_gpu_offload())
+          m = llama_cpp.Llama("tiny.gguf", n_ctx=1024, verbose=False)
+          t = time.time()
+          r = m.create_completion("La capital de Francia es", max_tokens=8)
+          print("salida:", r["choices"][0]["text"].strip(), "| %.1fs" % (time.time() - t))
+          assert r["choices"][0]["text"].strip()
+          PY
+      - name: Empaquetar
+        shell: bash
+        run: |
+          cd out && ls -la && python -c "import zipfile,glob; z=zipfile.ZipFile('../llama-python-${{ matrix.target }}.zip','w'); [z.write(f) for f in glob.glob('*.whl')]"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-python-${{ matrix.target }}
+          path: llama-python-${{ matrix.target }}.zip
+          retention-days: 7
+          compression-level: 0
+
+  openvino:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x86_64, os: ubuntu-24.04, pattern: 'bin-ubuntu-openvino.*x64\.(tar\.gz|zip)$' }
+          - { target: windows-x64, os: windows-latest, pattern: 'bin-win-openvino.*x64\.zip$' }
+    runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: llama-server con OpenVINO (Release oficial de llama.cpp)
+        shell: bash
+        run: |
+          set -e
+          gh release view -R ggml-org/llama.cpp --json tagName,assets -q '.tagName, (.assets[].name)' > assets.txt
+          head -1 assets.txt; grep -i openvino assets.txt || true
+          name=$(grep -E '${{ matrix.pattern }}' assets.txt | head -1)
+          [ -n "$name" ] || { echo "no hay asset OpenVINO"; exit 1; }
+          gh release download -R ggml-org/llama.cpp "$(head -1 assets.txt)" -p "$name"
+          mkdir -p openvino
+          case "$name" in *.zip) unzip -q "$name" -d openvino ;; *) tar xzf "$name" -C openvino ;; esac
+          find openvino -maxdepth 3 | head -60
+          du -sh openvino
+      - name: Bibliotecas de OpenVINO (si el paquete no las trae)
+        shell: bash
+        run: |
+          exe=$(find openvino -name 'llama-server*' -type f | head -1); dir=$(dirname "$exe")
+          if ! ls "$dir" | grep -qi 'openvino'; then
+            python3 -m pip download -q --no-deps --only-binary :all: openvino -d ov
+            python3 - "$dir" <<'PY'
+          import glob, sys, zipfile, os
+          dest = sys.argv[1]
+          w = zipfile.ZipFile(glob.glob("ov/openvino-*.whl")[0])
+          for n in w.namelist():
+              if "/libs/" in n and not n.endswith("/"):
+                  open(os.path.join(dest, os.path.basename(n)), "wb").write(w.read(n))
+          PY
+          fi
+          ls "$dir" | head -80
+      - name: Probar
+        shell: bash
+        run: |
+          exe=$(find openvino -name 'llama-server*' -type f | head -1); dir=$(dirname "$exe")
+          chmod +x "$exe" || true
+          export LD_LIBRARY_PATH="$PWD/$dir:${LD_LIBRARY_PATH:-}"
+          "$exe" --version
+          "$exe" --list-devices || true
+          curl -fsSL -o tiny.gguf "$TINY_GGUF"
+          GGML_OPENVINO_DEVICE=CPU "$exe" -m tiny.gguf -c 1024 -np 1 --port 8199 > srv.log 2>&1 &
+          for i in $(seq 1 120); do curl -fs localhost:8199/health && break; sleep 1; done
+          curl -fs localhost:8199/v1/completions -d '{"prompt":"La capital de Francia es","max_tokens":8}' | tee out.json
+          grep -q '"text"' out.json
+          grep -iE 'openvino|device|offload' srv.log | head -20 || true
+          kill %1 || true
+          mkdir -p pack/openvino && cp -r "$dir"/. pack/openvino/
+          cd pack && python3 -c "import shutil; shutil.make_archive('../llama-openvino-${{ matrix.target }}', 'zip', '.')"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: llama-openvino-${{ matrix.target }}
+          path: |
+            llama-openvino-${{ matrix.target }}.zip
+            srv.log
+          retention-days: 7
+          compression-level: 0
+
+  publicar:
+    needs: [llama-python, openvino]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publicar Release selector-runtimes
+        run: |
+          cd dist
+          rm -f srv.log
+          ls -la
+          sha256sum *.zip > SHA256SUMS-selector.txt
+          gh release view selector-runtimes -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create selector-runtimes -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+              -t "Runtimes del selector de inicio de Nexus-Office" \
+              -n "llama-cpp-python (motor integrado) por plataforma y llama-server con OpenVINO (NPU Intel). Los genera .github/workflows/selector-runtimes.yml; los toma la construccion de los instaladores."
+          gh release upload selector-runtimes -R "$GITHUB_REPOSITORY" --clobber ./*

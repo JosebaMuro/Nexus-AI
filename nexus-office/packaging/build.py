@@ -171,6 +171,14 @@ def offline(target: str, dest: Path) -> None:
             log(f"offline: {exe} {', '.join(sorted(p.name for p in src.iterdir()))}")
         else:
             log(f"offline: sin {exe} precompilado para {target} (se descargara desde Sistema > Runtimes)")
+    # motor «llama.cpp integrado» del selector de inicio: wheel de llama-cpp-python de la plataforma del Python
+    # (Windows ARM usa el Python x64) mas sus dependencias puras; se instala sin red al elegirlo
+    lp = DESKTOP_RT / py_target / "llama-python"
+    if lp.is_dir() and any(lp.glob("llama_cpp_python-*.whl")):
+        shutil.copytree(lp, dest / "bundled" / "runtimes" / "llama-python")
+        log(f"offline: llama-cpp-python {', '.join(p.name for p in lp.glob('*.whl'))}")
+    else:
+        log(f"offline: sin llama-cpp-python para {py_target} (el selector solo ofrecera llama-server)")
     # GIMP portable (packaging/fetch_gimp.py): los agentes editan imagenes con GIMP sin instalar nada
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import fetch_gimp

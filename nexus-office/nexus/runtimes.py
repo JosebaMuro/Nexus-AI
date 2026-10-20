@@ -105,6 +105,35 @@ def bundled_variants(runtime: str) -> list[str]:
     return [v for v in order if v in have] + [v for v in have if v not in order and not v.startswith("cpu")]
 
 
+def bundled_llama_python() -> list[Path]:
+    """Wheels de llama-cpp-python incluidas en el paquete (motor «llama.cpp integrado») y sus dependencias puras."""
+    d = BUNDLED / "llama-python"
+    return sorted(d.glob("*.whl")) if d.is_dir() else []
+
+
+def llama_python_ready() -> bool:
+    import importlib.util
+    return importlib.util.find_spec("llama_cpp") is not None
+
+
+def install_llama_python() -> str:
+    """Instala sin internet el motor integrado incluido en el paquete. Devuelve '' o el error."""
+    import importlib
+    import subprocess
+    if llama_python_ready():
+        return ""
+    wheels = bundled_llama_python()
+    if not any(w.name.startswith("llama_cpp_python") for w in wheels):
+        return "este paquete no incluye el motor integrado (llama-cpp-python)"
+    r = subprocess.run([sys.executable, "-m", "pip", "install", "--no-index", "--no-deps", "--disable-pip-version-check",
+                        *map(str, wheels)], capture_output=True, text=True, timeout=600)
+    importlib.invalidate_caches()
+    if r.returncode != 0 or not llama_python_ready():
+        return ("no se pudo instalar llama-cpp-python: " + (r.stderr or r.stdout)[-300:]).strip()
+    L.info("Motor llama.cpp integrado instalado desde el paquete: %s", ", ".join(w.name for w in wheels))
+    return ""
+
+
 _USABLE: dict[Path, bool] = {}
 
 

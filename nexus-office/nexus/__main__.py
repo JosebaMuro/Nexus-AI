@@ -27,6 +27,15 @@ def cmd_run(args) -> None:
     from .config import get_config
     from .server import create_app
     cfg = get_config()
+    if getattr(args, "motor", None) or getattr(args, "acelerador", None):   # eleccion por linea de comandos: no preguntar
+        if args.motor:
+            cfg.set("llm.engine", args.motor)
+        if args.acelerador:
+            cfg.set("hardware.accel", args.acelerador)
+            from .hardware.accel_choice import plan
+            from .hardware import load_cached, detect
+            cfg.set("hardware.llama_variant", plan(load_cached() or detect(probe_runtimes=False), args.acelerador)["variant"])
+        cfg.set("startup.ask_accel", False)
     host = args.host or cfg.get("server.host", "127.0.0.1")
     port = args.port or cfg.get("server.port", 8775)
     url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}"
@@ -392,6 +401,9 @@ def main(argv=None) -> None:
     r.add_argument("--host")
     r.add_argument("--port", type=int)
     r.add_argument("--no-browser", action="store_true")
+    r.add_argument("--motor", choices=["auto", "llamaserver", "llamacpp"],
+                   help="motor llama a usar (se recuerda; sin el, el elegido en el selector de inicio)")
+    r.add_argument("--acelerador", choices=["auto", "cpu", "gpu", "npu"], help="CPU, GPU o NPU (se recuerda)")
     sub.add_parser("detect", help="detecta el hardware y muestra el perfil")
     st = sub.add_parser("setup", help="instala extras segun el hardware")
     st.add_argument("--auto", action="store_true")

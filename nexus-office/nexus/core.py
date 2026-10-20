@@ -38,6 +38,11 @@ class Services:
         else:  # modo rapido para tests
             self.hw = hardware.load_cached() or hardware.detect(probe_runtimes=False)
             self.profile, self.tuning_reasons = hardware.build_profile(self.hw), []
+        if detect_hardware and cfg.get("hardware.accel", "auto") != "auto":   # CPU/GPU/NPU elegido a mano al arrancar
+            from .hardware.accel_choice import build_for
+            self.profile, _plan = build_for(self.hw, cfg.get("hardware.accel"))
+            if _plan["note"]:
+                L.warning("Acelerador %s: %s", cfg.get("hardware.accel"), _plan["note"])
         self.monitor.settings = {k: self.profile["llm"][k] for k in ("n_ctx", "n_threads", "n_batch", "gpu_layers")}
         self.runtimes = RuntimeManager()
         self.db = DB()

@@ -1621,6 +1621,43 @@
   window.NexusUI = { api, toast, esc, guard, ago, fmtB, saveFile, agents: () => S.agents, admin: () => !!S.token,
                      agentName: (id) => agentName(id), refreshGraph: () => { loadGraph().catch(() => {}); } };
 
+  /* ================================================================ selector de inicio: motor llama y CPU/GPU/NPU */
+  const Accel = {
+    d: null, engine: "auto", accel: "auto",
+    async open(force) {
+      const d = this.d = await api("/api/accel");
+      if (!force && !d.ask) return;
+      this.engine = d.engine; this.accel = d.accel;
+      const h = d.hardware;
+      $("#accel-hw").textContent = `${h.cpu} · ${h.cores} núcleos · ${h.ram_gb} GB` + (h.gpus.length ? ` · GPU: ${h.gpus.join(", ")}` : " · sin GPU") + (h.npus.length ? ` · NPU: ${h.npus.join(", ")}` : "");
+      this.render(); this.result(d);
+      const dlg = $("#accel-dialog"); if (!dlg.open) dlg.showModal();
+    },
+    render() {
+      const opt = (list, cur, key) => list.map((o) => `<button type="button" data-${key}="${o.id}" class="${o.id === cur ? "on" : ""} ${o.available ? "" : "na"}">${esc(o.label)}${o.note ? `<small>${esc(o.note)}</small>` : ""}</button>`).join("");
+      $("#accel-engines").innerHTML = opt(this.d.engines, this.engine, "eng");
+      $("#accel-accels").innerHTML = opt(this.d.accels, this.accel, "acc");
+      $$("[data-eng]").forEach((b) => (b.onclick = () => { this.engine = b.dataset.eng; this.render(); }));
+      $$("[data-acc]").forEach((b) => (b.onclick = () => { this.accel = b.dataset.acc; this.render(); }));
+      const a = this.d.accels.find((x) => x.id === this.accel), e = this.d.engines.find((x) => x.id === this.engine);
+      $("#accel-note").textContent = [e && !e.available ? `${e.label}: ${e.note}; se usará el siguiente disponible` : "", a && !a.available ? a.note : ""].filter(Boolean).join(" · ");
+    },
+    result(r) {
+      const eff = r.effective || {};
+      $("#accel-result").innerHTML = `Ahora: <b>${esc(r.selected)}</b> · perfil ${esc(r.profile.accelerator)}${r.profile.gpu_layers ? " (capas en GPU)" : ""}` +
+        (eff.device ? ` · el modelo está en <b>${esc(eff.device)}</b>${eff.offloaded ? ` (${esc(eff.offloaded)} capas)` : ""}${eff.detail ? ` · ${esc(eff.detail)}` : ""}${eff.ok === false ? ` <span class="tag warn">se pidió ${esc(eff.requested)}</span>` : ""}` : "") +
+        (r.tokens_s ? ` · ${r.tokens_s} tok/s` : "") + (r.error ? `<div class="bad">${esc(r.error)}</div>` : "");
+    },
+    async apply() { await api("/api/accel", { body: { engine: this.engine, accel: this.accel, remember: $("#accel-remember").checked } }); },
+  };
+  $("#accel-go").onclick = guard(async () => { await Accel.apply(); $("#accel-dialog").close(); toast("Motor y acelerador aplicados"); loadStatus(); });
+  $("#accel-test").onclick = guard(async () => {
+    const b = $("#accel-test"); b.disabled = true; $("#accel-result").innerHTML = `<span class="spin"></span> Cargando el modelo y probando…`;
+    try { await Accel.apply(); const r = await api("/api/accel/test", { body: {} }); Accel.d = { ...Accel.d, ...r }; Accel.result(r); toast(r.ok ? "Prueba correcta" : "La prueba ha fallado", !r.ok); }
+    finally { b.disabled = false; }
+  });
+  $("#accel-open").onclick = guard(() => Accel.open(true));
+
   /* ================================================================ arranque */
   (async function boot() {
     connect();
@@ -1629,6 +1666,7 @@
     S.speak = S.speak || !!S.cfg.auto_speak; $("#btn-speak").classList.toggle("on", S.speak);
     await guard(openSession)(S.session); await guard(loadSessions)(); await guard(loadGraph)();
     if (location.hash.length > 1) go(location.hash.slice(1));
+    guard(() => Accel.open(false))();
     addEventListener("hashchange", () => go(location.hash.slice(1)));
     setInterval(guard(loadStatus), 6000); setInterval(guard(sideStats), 2500); sideStats();
     setInterval(() => S.view === "memory" || guard(loadGraph)(), 30000);

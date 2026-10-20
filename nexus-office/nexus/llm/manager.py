@@ -106,9 +106,14 @@ class LLMManager:
         entry = self.catalog.get(default) if default else None
         if entry:
             b = "llamacpp" if entry.get("format") == "gguf" else "transformers"
+            if entry.get("format") == "gguf" and self.config.get("llm.engine", "auto") in ("llamaserver", "llamacpp"):
+                b = self.config.get("llm.engine")
             if self.is_available(b):
                 return b, entry["id"]
         order = list(self.config.get("llm.backend_order", []))
+        engine = self.config.get("llm.engine", "auto")
+        if engine in self.backends and engine != "auto":   # motor elegido al arrancar: primero (si no esta, el siguiente)
+            order = [engine] + [n for n in order if n != engine]
         for name in self.backends:  # backends nuevos tras actualizar el proyecto
             if name not in order:
                 order.insert(0 if name == "llamaserver" else len(order) - 1, name)
