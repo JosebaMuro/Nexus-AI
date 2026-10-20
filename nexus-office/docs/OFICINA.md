@@ -23,7 +23,9 @@ importar para un agente*). Puedes ver cada grafo en el selector del grafo (*gene
 
 ## Perfiles incluidos
 
-58 perfiles: oficios y construcción, industria, comercio, hostelería, salud, servicios profesionales,
+La oficina de bolsa e inversiones trae además una mesa de bolsa simulada para practicar sin dinero: ver [BOLSA.md](BOLSA.md).
+
+59 perfiles: oficios y construcción, industria, comercio, hostelería, salud, servicios profesionales, bolsa e inversiones,
 educación y cuidados, agro, transporte y servicios técnicos. Los agentes de oficina (recepción, administración,
 presupuestos, compras, prevención, personal, calidad, comercial, agenda, protección de datos y medio ambiente) se
 comparten entre perfiles; los del sector traen el conocimiento y la normativa de cada actividad.
@@ -39,6 +41,7 @@ comparten entre perfiles; los del sector traen el conocimiento y la normativa de
 | `ayuda-domicilio-residencia` | Ayuda a domicilio y residencia | Coordinación sociosanitaria | Personal, Prevención de riesgos, Calidad, Compras y almacén, Administración, Recepción, Protección de datos | MedGemma 4B, Qwen3-Embedding 0.6B |
 | `bar-cafeteria` | Bar y cafetería | Jefe de sala, Jefe de cocina | Calidad, Compras y almacén, Administración, Personal, Comercial y marketing | — |
 | `bodega-almazara` | Bodega y almazara | Enólogo y maestro de almazara, Técnico agrícola | Calidad, Medio ambiente y residuos, Comercial y marketing, Compras y almacén, Administración, Personal | — |
+| `bolsa-inversiones` | Bolsa e inversiones | Analista de mercados, Gestor de carteras, Operador de mesa, Riesgos y cumplimiento, Fiscalidad de inversiones | Recepción, Agenda y reservas, Administración, Comercial y marketing, Protección de datos | Qwen3-VL 8B Thinking, Qwen3-Embedding 0.6B |
 | `caldereria` | Calderería industrial | Calderero, Soldador | Calidad, Presupuestos, Administración, Compras y almacén, Prevención de riesgos, Personal | — |
 | `carniceria-charcuteria` | Carnicería y charcutería | Maestro carnicero, Encargado de tienda | Calidad, Compras y almacén, Administración, Comercial y marketing | — |
 | `carpinteria` | Carpintería y ebanistería | Carpintero, Pintor | Recepción, Presupuestos, Administración, Compras y almacén, Prevención de riesgos | SDXL-Turbo, SD-Turbo |
@@ -120,7 +123,7 @@ python -m nexus oficina --quitar            # vuelve a los agentes por defecto d
 ```
 
 **Al instalar**: en el instalador de Windows, el desplegable *Perfil de oficina* de la página *Opciones* (o
-`/OFICINA=herreria` en modo silencioso); `sh Nexus-Office-1.7.0-linux-x86_64.run --oficina=herreria` (Linux y Raspberry
+`/OFICINA=herreria` en modo silencioso); `sh Nexus-Office-1.8.0-linux-x86_64.run --oficina=herreria` (Linux y Raspberry
 Pi); `./install.sh --oficina=herreria` (macOS y código fuente); `install.bat -Oficina herreria` (Windows desde el
 código fuente); `bash install-termux.sh --oficina=herreria` (Android con Termux), o la variable de entorno
 `NEXUS_OFICINA=herreria` con los scripts. Con el `.deb`: `nexus-office oficina herreria`. Ver

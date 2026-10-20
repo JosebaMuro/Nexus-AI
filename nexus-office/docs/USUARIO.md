@@ -9,18 +9,18 @@ Todos los instaladores son **100 % portables**: llevan dentro Python, todo lo qu
 (llama-server y sd-cli, para CPU y para la tarjeta gráfica). **Se instalan sin internet.** Lo único que se descarga
 es el modelo de IA, elegido según tu equipo, y solo si hay conexión (ver [más abajo](#modelo-de-ia-elegido-según-tu-equipo)).
 
-Elige el fichero de tu equipo (versión 1.7.0):
+Elige el fichero de tu equipo (versión 1.8.0):
 
 | Equipo | Fichero |
 |---|---|
-| PC con Windows 10/11 de 64 bits (Intel o AMD) | `windows/Nexus-Office-Setup-1.7.0-windows-x64.exe` |
-| PC con Windows 11 en ARM (Snapdragon X) | `windows/Nexus-Office-Setup-1.7.0-windows-arm64.exe` |
-| PC con Linux (Ubuntu, Debian, Fedora, Steam Deck…) | `linux/Nexus-Office-1.7.0-linux-x86_64.run`, `.AppImage` o `.flatpak`; en Debian y Ubuntu también `linux/nexus-office_1.7.0_amd64.deb` |
-| Raspberry Pi 4/5 y otros Linux ARM de 64 bits | `linux/Nexus-Office-1.7.0-linux-aarch64.run`, `.AppImage`, `.flatpak` o `linux/nexus-office_1.7.0_arm64.deb` |
-| Mac con Apple Silicon (M1, M2, M3…) | `macos/Nexus-Office-1.7.0-macos-arm64.tar.gz` |
-| Mac con Intel | `macos/Nexus-Office-1.7.0-macos-x86_64.tar.gz` |
-| Móvil Android: Nexus-Office dentro del móvil | `android/Nexus-Office-1.7.0-android-autonomo.apk` |
-| Móvil Android: usar el Nexus-Office del PC de la oficina | `android/Nexus-Office-1.7.0-android-vpn.apk` |
+| PC con Windows 10/11 de 64 bits (Intel o AMD) | `windows/Nexus-Office-Setup-1.8.0-windows-x64.exe` |
+| PC con Windows 11 en ARM (Snapdragon X) | `windows/Nexus-Office-Setup-1.8.0-windows-arm64.exe` |
+| PC con Linux (Ubuntu, Debian, Fedora, Steam Deck…) | `linux/Nexus-Office-1.8.0-linux-x86_64.run`, `.AppImage` o `.flatpak`; en Debian y Ubuntu también `linux/nexus-office_1.8.0_amd64.deb` |
+| Raspberry Pi 4/5 y otros Linux ARM de 64 bits | `linux/Nexus-Office-1.8.0-linux-aarch64.run`, `.AppImage`, `.flatpak` o `linux/nexus-office_1.8.0_arm64.deb` |
+| Mac con Apple Silicon (M1, M2, M3…) | `macos/Nexus-Office-1.8.0-macos-arm64.tar.gz` |
+| Mac con Intel | `macos/Nexus-Office-1.8.0-macos-x86_64.tar.gz` |
+| Móvil Android: Nexus-Office dentro del móvil | `android/Nexus-Office-1.8.0-android-autonomo.apk` |
+| Móvil Android: usar el Nexus-Office del PC de la oficina | `android/Nexus-Office-1.8.0-android-vpn.apk` |
 
 `SHA256SUMS.txt` trae la huella de cada fichero, para comprobar que se ha copiado bien. Si Nexus-Office ya está instalado
 en un PC de la oficina, los demás equipos y móviles pueden descargar su instalador desde él (ver
@@ -28,7 +28,7 @@ en un PC de la oficina, los demás equipos y móviles pueden descargar su instal
 
 ### Windows
 
-1. Haz doble clic en `Nexus-Office-Setup-1.7.0-windows-x64.exe` (o `-arm64.exe` en un PC con Snapdragon X).
+1. Haz doble clic en `Nexus-Office-Setup-1.8.0-windows-x64.exe` (o `-arm64.exe` en un PC con Snapdragon X).
 2. El instalador no está firmado. Si Windows muestra «Windows protegió su PC», pulsa **Más información →
    Ejecutar de todas formas**.
 3. Acepta la licencia y elige la carpeta. Por defecto es `%LOCALAPPDATA%\Nexus-Office` y no hace falta ser administrador.
@@ -51,7 +51,7 @@ configuración); si dices que no, quedan en la carpeta `data`.
 **Instalación desatendida** (por ejemplo, en varios PC):
 
 ```bat
-Nexus-Office-Setup-1.7.0-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED /MODELOS=auto /D=C:\Nexus-Office
+Nexus-Office-Setup-1.8.0-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED /MODELOS=auto /D=C:\Nexus-Office
 ```
 
 | Opción | Qué hace |
@@ -68,8 +68,8 @@ Nexus-Office-Setup-1.7.0-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED /MO
 **Con el instalador `.run`** (cualquier distribución):
 
 ```bash
-sh Nexus-Office-1.7.0-linux-x86_64.run                   # en Raspberry Pi y ARM: Nexus-Office-1.7.0-linux-aarch64.run
-sh Nexus-Office-1.7.0-linux-x86_64.run ~/Nexus-Office --oficina=herreria --servicio --red
+sh Nexus-Office-1.8.0-linux-x86_64.run                   # en Raspberry Pi y ARM: Nexus-Office-1.8.0-linux-aarch64.run
+sh Nexus-Office-1.8.0-linux-x86_64.run ~/Nexus-Office --oficina=herreria --servicio --red
 ```
 
 Se instala en `~/.local/share/nexus-office` si no indicas otra carpeta. Opciones:
@@ -79,7 +79,7 @@ Se instala en `~/.local/share/nexus-office` si no indicas otra carpeta. Opciones
 - `--servicio`: arranque automático, como servicio de tu usuario que arranca al encender el equipo (si el sistema
   permite `loginctl enable-linger`; si no, al iniciar sesión). Con `sudo` se instala
   para todo el equipo en `/opt/nexus-office` (a nombre de tu usuario) y el servicio es del sistema:
-  `sudo sh Nexus-Office-1.7.0-linux-x86_64.run --servicio --red`.
+  `sudo sh Nexus-Office-1.8.0-linux-x86_64.run --servicio --red`.
 - `--red` (junto con `--servicio`): el servicio escucha en la red local.
 
 Después, abre *Nexus-Office* desde el menú de aplicaciones o ejecuta `start.sh` en la carpeta de instalación. En Steam
@@ -89,10 +89,10 @@ Deck, instálalo en modo escritorio y añade `start.sh` como *juego no‑Steam*.
 va instalado dentro; tus datos quedan en `~/.local/share/nexus-office`.
 
 ```bash
-chmod +x Nexus-Office-1.7.0-linux-x86_64.AppImage      # en Raspberry Pi y ARM: Nexus-Office-1.7.0-linux-aarch64.AppImage
-./Nexus-Office-1.7.0-linux-x86_64.AppImage              # arranca Nexus-Office y abre el navegador
-./Nexus-Office-1.7.0-linux-x86_64.AppImage oficina herreria
-./Nexus-Office-1.7.0-linux-x86_64.AppImage servicio instalar --red   # arranque automático (usa la ruta del AppImage: no lo muevas después)
+chmod +x Nexus-Office-1.8.0-linux-x86_64.AppImage      # en Raspberry Pi y ARM: Nexus-Office-1.8.0-linux-aarch64.AppImage
+./Nexus-Office-1.8.0-linux-x86_64.AppImage              # arranca Nexus-Office y abre el navegador
+./Nexus-Office-1.8.0-linux-x86_64.AppImage oficina herreria
+./Nexus-Office-1.8.0-linux-x86_64.AppImage servicio instalar --red   # arranque automático (usa la ruta del AppImage: no lo muevas después)
 ```
 
 Si tu sistema no tiene FUSE (aparece «libfuse.so.2 not found»), ejecútalo con `--appimage-extract-and-run` delante
@@ -102,7 +102,7 @@ de los argumentos, o instala `libfuse2`.
 `org.freedesktop.Platform 24.08` (si no lo tienes ya).
 
 ```bash
-flatpak install --user Nexus-Office-1.7.0-linux-x86_64.flatpak     # o -aarch64.flatpak
+flatpak install --user Nexus-Office-1.8.0-linux-x86_64.flatpak     # o -aarch64.flatpak
 flatpak run ai.nexus.NexusOffice                                   # o desde el menú de aplicaciones
 flatpak run ai.nexus.NexusOffice servicio instalar                 # deja lista la unidad; actívala con:
 systemctl --user enable --now nexus-office
@@ -113,7 +113,7 @@ Los datos quedan en `~/.var/app/ai.nexus.NexusOffice/data/nexus-office`.
 **Con el paquete `.deb`** (Debian, Ubuntu, Linux Mint, Raspberry Pi OS de 64 bits):
 
 ```bash
-sudo apt install ./nexus-office_1.7.0_amd64.deb         # en Raspberry Pi y ARM: nexus-office_1.7.0_arm64.deb
+sudo apt install ./nexus-office_1.8.0_amd64.deb         # en Raspberry Pi y ARM: nexus-office_1.8.0_arm64.deb
 nexus-office                                            # arranca Nexus-Office y abre el navegador
 sudo nexus-office servicio instalar --red               # opcional: arranque automático accesible desde la red
 ```
@@ -128,7 +128,7 @@ si puedes: cargan mucho más rápido que desde la tarjeta SD.
 
 ### macOS
 
-1. Descomprime `Nexus-Office-1.7.0-macos-arm64.tar.gz` (o `-macos-x86_64` en un Mac con Intel) donde quieras.
+1. Descomprime `Nexus-Office-1.8.0-macos-arm64.tar.gz` (o `-macos-x86_64` en un Mac con Intel) donde quieras.
 2. Abre **Nexus-Office.command**. Como no está firmado por Apple, la primera vez haz **clic derecho → Abrir** y confirma.
 3. La primera vez se prepara Nexus-Office (sin internet salvo para el modelo de IA) y después se abre el navegador.
 
@@ -144,8 +144,8 @@ Hay dos apps, independientes; puedes instalar las dos:
 
 | App | Fichero | Para qué |
 |---|---|---|
-| **Nexus-Office autónomo** | `Nexus-Office-1.7.0-android-autonomo.apk` | Nexus-Office completo dentro del móvil, sin PC (Android 9 o superior, ARM64). La APK lo lleva todo y solo descarga el modelo de IA adecuado a la RAM del móvil: Qwen3‑VL 2B o 4B Thinking. Detecta la CPU, la GPU y la NPU del móvil; si la GPU acelera el modelo (Adreno, Mali, Immortalis, Xclipse…) lo pone en ella, y si no, en la CPU. Lo ves en *Sistema → Hardware*. Ver [su guía](../android-autonomo/README.md). |
-| **Nexus-Office VPN** | `Nexus-Office-1.7.0-android-vpn.apk` | App ligera para usar el Nexus-Office del PC de la oficina (Android 7 o superior), en la Wi‑Fi o desde fuera por VPN cifrada. En el PC, *Red COOP → VPN cifrada* → **GENERAR CÓDIGO VPN**; en la app, *Conectar por VPN* y pega el código. Ver [VPN](VPN.md). |
+| **Nexus-Office autónomo** | `Nexus-Office-1.8.0-android-autonomo.apk` | Nexus-Office completo dentro del móvil, sin PC (Android 9 o superior, ARM64). La APK lo lleva todo y solo descarga el modelo de IA adecuado a la RAM del móvil: Qwen3‑VL 2B o 4B Thinking. Detecta la CPU, la GPU y la NPU del móvil; si la GPU acelera el modelo (Adreno, Mali, Immortalis, Xclipse…) lo pone en ella, y si no, en la CPU. Lo ves en *Sistema → Hardware*. Ver [su guía](../android-autonomo/README.md). |
+| **Nexus-Office VPN** | `Nexus-Office-1.8.0-android-vpn.apk` | App ligera para usar el Nexus-Office del PC de la oficina (Android 7 o superior), en la Wi‑Fi o desde fuera por VPN cifrada. En el PC, *Red COOP → VPN cifrada* → **GENERAR CÓDIGO VPN**; en la app, *Conectar por VPN* y pega el código. Ver [VPN](VPN.md). |
 
 1. Copia la APK al móvil o descárgala desde el PC de la oficina (*Sistema → Descargas*).
 2. Ábrela. Android pedirá permiso para **instalar apps desconocidas** desde esa app (el navegador o el gestor de
@@ -233,6 +233,9 @@ Explora tu grafo de conocimiento en 3D (arrastra para girar, rueda para acercar)
 
 ### Estudio
 Genera imágenes y música, analiza imágenes y revisa la galería.
+
+### Bolsa
+Mesa de bolsa **simulada** para practicar sin dinero: cartera ficticia de 10.000 €, cotizaciones que se mueven solo con la bolsa abierta (en su hora local y con sus festivos), órdenes a mercado, limitadas y stop, comisiones, impuestos, cambio de divisa y deslizamiento. Los precios son ficticios y nada de esto es asesoramiento financiero. Con el perfil *Bolsa e inversiones* los agentes de la oficina también usan la mesa. Una cartera **real** solo sirve de seguimiento: ninguna orden se ejecuta sin que escribas `CONFIRMO`, y Nexus-Office no se conecta a ningún bróker. Ver [BOLSA.md](BOLSA.md).
 
 ### Modelos
 En modo usuario verás los **recomendados para tu equipo** con una etiqueta: *ideal*, *compatible*, *pesado* o *no cabe*. Si el instalador no pudo descargar el modelo elegido (por ejemplo, sin internet), pulsa **Descargar** en el marcado con ★ y después **Activar**. Descarga también el modelo de **embeddings** (Qwen3-Embedding, 639 MB): mejora la búsqueda en tu biblioteca y en la memoria y se activa solo.

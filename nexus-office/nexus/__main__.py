@@ -254,6 +254,82 @@ def cmd_office(args) -> None:
             print(f"  - {names.get(mid, mid)}: {why}")
 
 
+def cmd_bolsa(args) -> None:
+    """Mesa de bolsa simulada en la terminal (ver nexus/office/bolsa.py)."""
+    from pathlib import Path
+
+    from .office import bolsa
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
+    b = bolsa.get()
+    a, rest, cid = args.accion or "cartera", args.args, args.cartera or None
+
+    def show(x):
+        print(json.dumps(x, ensure_ascii=False, indent=2, default=str))
+
+    def need(n, uso):
+        if len(rest) < n:
+            raise SystemExit(f"Uso: python -m nexus bolsa {uso}")
+
+    try:
+        if a == "cartera":
+            r = b.resumen(cid)
+            print(f"{r['nombre']} ({r['modo']}, tarifa {r['tarifa']}) · total {r['total_eur']:.2f} € · efectivo "
+                  f"{r['efectivo_eur']:.2f} € · rentabilidad {r['rentabilidad_pct']:+.2f} % · gastos {r['gastos_eur']:.2f} €")
+            for p in r["posiciones"]:
+                print(f"  {p['simbolo']:10s} {p['cantidad']:>12g}  coste {p['coste_medio_eur']:>10.4f} €  precio "
+                      f"{p['precio']:>10} {p['divisa']}  valor {p['valor_eur']:>10.2f} €  {p['plusvalia_pct']:+.2f} %")
+            print("\n" + bolsa.AVISO)
+        elif a == "mercados":
+            for m in b.mercados():
+                nxt = f"cierra {m['cierra']}" if m["abierto"] else f"abre {m['abre']}"
+                print(f"  {m['nombre']:32s} {'ABIERTA' if m['abierto'] else 'cerrada':8s} {m['hora_local']}  {nxt}")
+        elif a == "valores":
+            for i in b.instrumentos(" ".join(rest)):
+                print(f"  {i['simbolo']:10s} {i['mercado']:9s} {i['divisa']}  {i['nombre']}")
+        elif a == "cotizar":
+            need(1, "cotizar SIMBOLO")
+            show(b.precio(rest[0]))
+        elif a in ("comprar", "vender"):
+            need(2, f"{a} SIMBOLO CANTIDAD [--tipo limitada --limite P] [--stop P] [--validez hasta_cancelar]")
+            show(b.ordenar(rest[0], a, rest[1], args.tipo, args.limite, args.stop, args.validez, cid, origen="terminal"))
+        elif a == "ordenes":
+            for o in b.ordenes(cid):
+                print(f"  #{o['id']:<5} {o['estado']:13s} {o['lado']:6s} {o['cantidad']:>10g} {o['simbolo']:10s} "
+                      f"{o['tipo']} {o.get('motivo') or ''}")
+        elif a == "operaciones":
+            for o in b.operaciones(cid):
+                g = "" if o["ganancia_eur"] is None else f" resultado {o['ganancia_eur']:+.2f} €"
+                print(f"  {o['fecha']} {o['lado']:6s} {o['cantidad']:>10g} {o['simbolo']:10s} a {o['precio']:.4f}  total "
+                      f"{o['total_eur']:.2f} € (comisión {o['comision_eur']:.2f}, impuestos {o['impuestos_eur']:.2f}, "
+                      f"cambio {o['cambio_eur']:.2f}){g}")
+        elif a == "cancelar":
+            need(1, "cancelar ID")
+            show(b.cancelar(int(rest[0])))
+        elif a == "confirmar":   # solo una persona, en la terminal, confirma una orden de cartera real
+            need(1, "confirmar ID")
+            o = b.orden(int(rest[0]))
+            print(f"Orden REAL #{o['id']}: {o['lado']} {o['cantidad']:g} {o['simbolo']} ({o['tipo']}). Nexus-Office no la "
+                  "envía a ningún bróker: después la ejecutas tú.")
+            show(b.confirmar(o["id"], input(f"Escribe {bolsa.CONFIRMACION} para confirmarla: ")))
+        elif a == "ejecucion":
+            need(2, "ejecucion ID PRECIO [--comision EUROS]")
+            show(b.registrar_ejecucion(int(rest[0]), rest[1], args.comision or 0))
+        elif a == "nueva":
+            show(b.crear_cartera(" ".join(rest) or "Cartera simulada", args.capital, args.tarifa, args.modo))
+        elif a == "reiniciar":
+            show(b.reiniciar(cid, args.capital if args.capital != 10000 else None))
+        elif a == "importar":
+            need(2, "importar SIMBOLO fichero.csv")
+            show(b.importar_csv(rest[0], Path(rest[1]).read_text(encoding="utf-8", errors="replace")))
+        elif a == "fiscal":
+            show(b.informe_fiscal(cid, int(rest[0]) if rest else None))
+        else:
+            raise SystemExit(f"acción desconocida: {a}")
+    except (ValueError, PermissionError) as e:
+        raise SystemExit(str(e)) from e
+
+
 def main(argv=None) -> None:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["wheels"]:                # CLI propia (nexus/wheelhouse.py): no importa nada pesado
@@ -283,6 +359,19 @@ def main(argv=None) -> None:
     of.add_argument("perfil", nargs="?", help="id del perfil (sin nada: lista los perfiles)")
     of.add_argument("--quitar", action="store_true", help="vuelve a los agentes por defecto de Nexus-Office")
     of.add_argument("--reset-agentes", action="store_true", help="reescribe tambien los agentes ya personalizados")
+    bo = sub.add_parser("bolsa", help="mesa de bolsa simulada: cartera | mercados | valores | cotizar | comprar | vender | "
+                        "ordenes | operaciones | cancelar | confirmar | ejecucion | nueva | reiniciar | importar | fiscal")
+    bo.add_argument("accion", nargs="?")
+    bo.add_argument("args", nargs="*")
+    bo.add_argument("--cartera", type=int)
+    bo.add_argument("--tipo", default="mercado", choices=["mercado", "limitada", "stop", "stop_limitada"])
+    bo.add_argument("--limite", type=float)
+    bo.add_argument("--stop", type=float)
+    bo.add_argument("--validez", default="dia", choices=["dia", "hasta_cancelar"])
+    bo.add_argument("--capital", type=float, default=10000)
+    bo.add_argument("--tarifa", default="broker-online", choices=["broker-online", "banco", "neobroker"])
+    bo.add_argument("--modo", default="simulado", choices=["simulado", "real"])
+    bo.add_argument("--comision", type=float)
     md = sub.add_parser("modelos", help="evalua el hardware y elige (y descarga) el modelo de IA adecuado")
     md.add_argument("--descargar", action="store_true", help="descarga los elegidos si hay internet")
     md.add_argument("--todos", action="store_true", help="incluye tambien el modelo de imagen")
@@ -292,7 +381,7 @@ def main(argv=None) -> None:
     sub.add_parser("cleanup", help="quita del paquete offline lo que este equipo no usa (ver --help)")
     args = p.parse_args(argv)
     {"run": cmd_run, "detect": cmd_detect, "setup": cmd_setup, "pull": cmd_pull, "chat": cmd_chat,
-     "oficina": cmd_office, "modelos": cmd_models, "servicio": cmd_service}.get(
+     "oficina": cmd_office, "bolsa": cmd_bolsa, "modelos": cmd_models, "servicio": cmd_service}.get(
         args.cmd or "run", cmd_run)(args if args.cmd else p.parse_args(["run"]))
 
 

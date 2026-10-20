@@ -729,6 +729,93 @@
     } finally { setState("idle"); }
   });
 
+  /* ================================================================ vista: BOLSA (mesa simulada) */
+  const eur = (x) => (x ?? 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+  const num = (x, d = 2) => (x ?? 0).toLocaleString("es-ES", { maximumFractionDigits: d });
+  const pct = (x) => `<span style="color:var(${x > 0 ? "--ok" : x < 0 ? "--bad" : "--muted"})">${x > 0 ? "+" : ""}${num(x)} %</span>`;
+  const EST = { pendiente: "warn", por_confirmar: "warn", confirmada: "accent", ejecutada: "ok", cancelada: "", caducada: "", rechazada: "bad" };
+  const bolsaState = { cartera: local.get("nexus_bolsa_cartera", 0), data: null };
+  function priceSpark(canvas, ticks) {
+    const ctx = canvas.getContext("2d"), w = (canvas.width = canvas.clientWidth * devicePixelRatio), h = (canvas.height = 60 * devicePixelRatio);
+    ctx.clearRect(0, 0, w, h); if (ticks.length < 2) return;
+    const ps = ticks.map((t) => t.precio), lo = Math.min(...ps), hi = Math.max(...ps), span = hi - lo || 1;
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--accent") || "#0ff"; ctx.lineWidth = 2 * devicePixelRatio; ctx.beginPath();
+    ps.forEach((p, i) => { const x = (i / (ps.length - 1)) * w, y = h - ((p - lo) / span) * (h - 6) - 3; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
+  }
+  async function bolsaQuote() {
+    const sym = $("#bo-sym").value.trim(); if (!sym) return;
+    const q = await api("/api/bolsa/cotizacion/" + encodeURIComponent(sym));
+    $("#bo-q").innerHTML = `<div class="row"><b>${esc(q.simbolo)}</b><span class="muted">${esc(q.nombre)} · ${esc(q.mercado)}</span><span class="tag ${q.abierto ? "ok" : ""}">${q.abierto ? "abierto" : "cerrado"}</span></div>
+      <div class="row mono"><span>${num(q.precio, 4)} ${esc(q.divisa)}</span>${pct(q.variacion_pct)}<span class="muted">compra ${num(q.compra, 4)} · venta ${num(q.venta, 4)}</span></div><canvas style="width:100%;height:60px"></canvas>`;
+    priceSpark($("#bo-q canvas"), q.ticks);
+  }
+  const orderBody = () => ({ cartera: bolsaState.cartera || null, simbolo: $("#bo-sym").value.trim(), lado: $("#bo-lado").value, cantidad: Number($("#bo-qty").value),
+    tipo: $("#bo-tipo").value, limite: $("#bo-lim").value ? Number($("#bo-lim").value) : null, stop: $("#bo-stop").value ? Number($("#bo-stop").value) : null, validez: $("#bo-val").value });
+  loaders.bolsa = async () => {
+    const d = await api("/api/bolsa" + (bolsaState.cartera ? `?cartera=${bolsaState.cartera}` : "")), r = d.resumen; bolsaState.data = d;
+    if (!d.carteras.some((c) => c.id === bolsaState.cartera)) bolsaState.cartera = r.cartera;
+    $("#bolsa-aviso").textContent = d.aviso;
+    $("#bolsa-modo").innerHTML = r.modo === "real" ? '<span class="tag bad">CARTERA REAL · solo seguimiento</span>' : '<span class="tag ok">SIMULADA · sin dinero</span>';
+    $("#bolsa-stats").innerHTML = [["Valor total", eur(r.total_eur)], ["Efectivo", eur(r.efectivo_eur)], ["Rentabilidad", pct(r.rentabilidad_pct)], ["Gastos pagados", eur(r.gastos_eur)]]
+      .map(([k, v]) => `<div class="panel stat"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("");
+    $("#bo-cartera").innerHTML = d.carteras.map((c) => `<option value="${c.id}" ${c.id === r.cartera ? "selected" : ""}>${esc(c.nombre)} · ${c.modo === "real" ? "REAL" : "simulada"} · ${esc(d.tarifas[c.tarifa] || c.tarifa)}</option>`).join("");
+    $("#bc-tarifa").innerHTML = Object.entries(d.tarifas).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+    $("#bn-mkt").innerHTML = d.mercados.map((m) => `<option value="${m.id}">${esc(m.id)}</option>`).join("");
+    $("#bolsa-mercados").innerHTML = `<table class="tbl"><tr><th>Bolsa</th><th>Estado</th><th>Hora local</th><th>Próximo</th></tr>${d.mercados.map((m) =>
+      `<tr><td>${esc(m.nombre)}</td><td><span class="tag ${m.abierto ? "ok" : ""}">${m.abierto ? "abierta" : "cerrada"}</span></td><td class="mono">${esc(m.hora_local)}</td><td class="mono muted">${m.abierto ? "cierra " + esc(m.cierra) : "abre " + esc(m.abre)}</td></tr>`).join("")}</table>`;
+    $("#bolsa-pos").innerHTML = r.posiciones.length ? `<table class="tbl"><tr><th>Valor</th><th>Cantidad</th><th>Coste medio</th><th>Precio</th><th>Valor €</th><th>Plusvalía</th><th>Día</th><th>Peso</th><th></th></tr>${r.posiciones.map((p) =>
+      `<tr><td><b>${esc(p.simbolo)}</b><div class="muted">${esc(p.nombre)}</div></td><td class="mono">${num(p.cantidad, 6)}</td><td class="mono">${eur(p.coste_medio_eur)}</td><td class="mono">${num(p.precio, 4)} ${esc(p.divisa)}</td><td class="mono">${eur(p.valor_eur)}</td><td class="mono">${eur(p.plusvalia_eur)} ${pct(p.plusvalia_pct)}</td><td>${pct(p.variacion_dia_pct)}</td><td class="mono">${num(p.peso_pct)} %</td>
+       <td><button class="btn sm" data-sell="${esc(p.simbolo)}" data-q="${p.cantidad}">VENDER</button></td></tr>`).join("")}</table>` : '<p class="muted">Sin posiciones. Busca un valor y da tu primera orden.</p>';
+    $("#bolsa-ord").innerHTML = d.ordenes.length ? `<table class="tbl"><tr><th>#</th><th>Orden</th><th>Estado</th><th>Creada</th><th></th></tr>${d.ordenes.map((o) => {
+      const open = ["pendiente", "por_confirmar", "confirmada"].includes(o.estado);
+      return `<tr><td class="mono">${o.id}</td><td>${o.lado === "compra" ? "Compra" : "Venta"} ${num(o.cantidad, 6)} <b>${esc(o.simbolo)}</b> · ${esc(o.tipo.replace("_", " "))}${o.limite ? " lím. " + num(o.limite, 4) : ""}${o.stop ? " stop " + num(o.stop, 4) : ""}${o.precio_ejec ? `<div class="muted">a ${num(o.precio_ejec, 4)}</div>` : ""}${o.motivo ? `<div class="muted">${esc(o.motivo)}</div>` : ""}</td>
+        <td><span class="tag ${EST[o.estado] || ""}">${esc(o.estado.replace("_", " "))}</span></td><td class="mono muted">${esc((o.creada || "").replace("T", " ").slice(0, 16))}</td>
+        <td>${o.estado === "por_confirmar" ? `<button class="btn sm primary admin-only" data-confirm="${o.id}">CONFIRMAR</button>` : ""}${o.estado === "confirmada" ? `<button class="btn sm admin-only" data-fill="${o.id}">REGISTRAR EJECUCIÓN</button>` : ""}${open ? `<button class="btn sm" data-cancel="${o.id}">CANCELAR</button>` : ""}</td></tr>`; }).join("")}</table>` : '<p class="muted">Sin órdenes.</p>';
+    $("#bolsa-ops").innerHTML = d.operaciones.length ? `<table class="tbl"><tr><th>Fecha</th><th>Operación</th><th>Efectivo</th><th>Comisión</th><th>Impuestos</th><th>Cambio</th><th>Deslizam.</th><th>Total</th><th>Resultado</th></tr>${d.operaciones.map((o) =>
+      `<tr><td class="mono muted">${esc(o.fecha.replace("T", " ").slice(0, 16))}</td><td>${o.lado === "compra" ? "Compra" : "Venta"} ${num(o.cantidad, 6)} <b>${esc(o.simbolo)}</b> a ${num(o.precio, 4)}${o.aviso ? `<div class="tag warn" title="${esc(o.aviso)}">regla 2 meses</div>` : ""}</td><td class="mono">${eur(o.efectivo_eur)}</td><td class="mono">${eur(o.comision_eur)}</td><td class="mono">${eur(o.impuestos_eur)}</td><td class="mono">${eur(o.cambio_eur)}</td><td class="mono">${eur(o.deslizamiento_eur)}</td><td class="mono">${eur(o.total_eur)}</td><td class="mono">${o.ganancia_eur == null ? "" : eur(o.ganancia_eur)}</td></tr>`).join("")}</table>` : '<p class="muted">Aún no hay operaciones.</p>';
+    if (!$("#bo-syms").childElementCount) $("#bo-syms").innerHTML = (await api("/api/bolsa/instrumentos")).map((i) => `<option value="${esc(i.simbolo)}">${esc(i.nombre)} · ${esc(i.mercado)}</option>`).join("");
+    $$("[data-sell]").forEach((b) => (b.onclick = () => { $("#bo-sym").value = b.dataset.sell; $("#bo-lado").value = "venta"; $("#bo-qty").value = b.dataset.q; bolsaQuote().catch(() => {}); $("#bo-sym").scrollIntoView({ behavior: "smooth", block: "center" }); }));
+    $$("[data-cancel]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/bolsa/orden/${b.dataset.cancel}/cancelar`, { body: {} }); loaders.bolsa(); })));
+    $$("[data-confirm]").forEach((b) => (b.onclick = guard(async () => {
+      const o = d.ordenes.find((x) => String(x.id) === b.dataset.confirm);
+      const t = prompt(`Orden REAL: ${o.lado} ${o.cantidad} ${o.simbolo} (${o.tipo}). Nexus-Office no la envía a ningún bróker: la ejecutas tú después.\nEscribe ${d.confirmacion} para confirmarla.`);
+      if (t == null) return; await api(`/api/bolsa/orden/${o.id}/confirmar`, { body: { confirmacion: t } }); toast("Orden confirmada: ejecútala en tu bróker"); loaders.bolsa(); })));
+    $$("[data-fill]").forEach((b) => (b.onclick = guard(async () => {
+      const px = prompt("Precio de ejecución en tu bróker (divisa del valor):"); if (!px) return;
+      const com = prompt("Comisiones y gastos en € (0 si no hubo):", "0") ?? "0";
+      await api(`/api/bolsa/orden/${b.dataset.fill}/ejecucion`, { body: { precio: Number(px.replace(",", ".")), comision_eur: Number(com.replace(",", ".")) } }); loaders.bolsa(); })));
+  };
+  $("#bo-cartera").onchange = () => { bolsaState.cartera = Number($("#bo-cartera").value); local.set("nexus_bolsa_cartera", bolsaState.cartera); refreshView(); };
+  $("#bo-quote").onclick = guard(bolsaQuote);
+  $("#bo-sym").onchange = () => guard(bolsaQuote)();
+  $("#bo-fees").onclick = guard(async () => {
+    const b = orderBody(), g = await api("/api/bolsa/costes", { body: { ...b, precio: b.limite } });
+    $("#bo-fees-box").innerHTML = `Efectivo ${eur(g.efectivo_eur)} · comisión ${eur(g.comision_eur)} · impuestos ${eur(g.impuestos_eur)} · cambio de divisa ${eur(g.cambio_eur)} <span class="muted">(${esc(g.tramo)}; sin contar el deslizamiento)</span>`;
+  });
+  $("#bo-send").onclick = guard(async () => {
+    const b = orderBody(), real = bolsaState.data?.resumen.modo === "real";
+    if (!confirm(`${real ? "CARTERA REAL: la orden quedará por confirmar, no se envía a ningún bróker.\n" : "Cartera simulada (sin dinero).\n"}${b.lado === "compra" ? "Comprar" : "Vender"} ${b.cantidad} ${b.simbolo} · ${b.tipo}?`)) return;
+    const o = await api("/api/bolsa/orden", { body: b });
+    toast(o.estado === "ejecutada" ? `Ejecutada a ${num(o.precio_ejec, 4)}` : o.estado === "rechazada" ? `Rechazada: ${o.motivo}` : o.nota || o.estado, o.estado === "rechazada");
+    loaders.bolsa();
+  });
+  $("#bc-new").onclick = guard(async () => {
+    const c = await api("/api/bolsa/cartera", { body: { nombre: $("#bc-nombre").value.trim(), capital: Number($("#bc-cap").value), tarifa: $("#bc-tarifa").value, modo: $("#bc-modo").value } });
+    bolsaState.cartera = c.id; local.set("nexus_bolsa_cartera", c.id); toast("Cartera creada"); loaders.bolsa();
+  });
+  $("#bc-reset").onclick = guard(async () => {
+    if (!confirm("¿Reiniciar la cartera simulada? Se borran sus órdenes, operaciones y posiciones.")) return;
+    await api(`/api/bolsa/cartera/${bolsaState.cartera}/reiniciar`, { body: {} }); loaders.bolsa();
+  });
+  $("#bi-import").onclick = guard(async () => {
+    const r = await api("/api/bolsa/importar", { body: { simbolo: $("#bi-sym").value.trim(), csv: $("#bi-csv").value } });
+    toast(`${r.simbolo}: ${r.filas} cierres (${r.desde} a ${r.hasta})`); loaders.bolsa();
+  });
+  $("#bn-add").onclick = guard(async () => {
+    await api("/api/bolsa/instrumento", { body: { simbolo: $("#bn-sym").value.trim(), nombre: $("#bn-name").value.trim(), mercado: $("#bn-mkt").value, precio: Number($("#bn-px").value) } });
+    $("#bo-syms").innerHTML = ""; toast("Valor añadido"); loaders.bolsa();
+  });
+
   /* ================================================================ vista: AGENTES */
   async function officePanel() {
     const profs = await api("/api/office/profiles"), act = profs.find((p) => p.active), box = $("#office-panel");

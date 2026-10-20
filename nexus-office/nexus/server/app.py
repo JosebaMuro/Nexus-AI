@@ -961,6 +961,101 @@ def create_app(services: Services | None = None) -> FastAPI:
         seeded = o.seed_graphs(s.graph, s.agents.ids())
         return {"profile": prof, "seeded": seeded, "agents": s.agents.ids()}
 
+    # ------------------------------------------------------------------ mesa de bolsa (oficina bolsa-inversiones)
+    def _bolsa(fn, *a, **kw):
+        try:
+            return fn(*a, **kw)
+        except PermissionError as e:
+            raise HTTPException(403, str(e)) from e
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/bolsa")
+    def bolsa_state(cartera: int = 0):
+        from ..office import bolsa
+        b = bolsa.get()
+        res = _bolsa(b.resumen, cartera or None)
+        return {"aviso": bolsa.AVISO, "confirmacion": bolsa.CONFIRMACION, "mercados": b.mercados(),
+                "carteras": b.carteras(), "tarifas": {k: v["nombre"] for k, v in bolsa.TARIFAS.items()},
+                "tipos": list(bolsa.ORDER_TYPES), "resumen": res,
+                "ordenes": b.ordenes(res["cartera"]), "operaciones": b.operaciones(res["cartera"], 50)}
+
+    @app.get("/api/bolsa/instrumentos")
+    def bolsa_instruments(q: str = ""):
+        from ..office import bolsa
+        return bolsa.get().instrumentos(q)
+
+    @app.get("/api/bolsa/cotizacion/{simbolo}")
+    def bolsa_quote(simbolo: str):
+        from ..office import bolsa
+        b = bolsa.get()
+        return {**_bolsa(b.precio, simbolo), "ticks": b.ticks(simbolo)}
+
+    @app.post("/api/bolsa/costes")
+    def bolsa_fees(data: dict = Body(...)):
+        from ..office import bolsa
+        b = bolsa.get()
+        q = _bolsa(b.precio, str(data.get("simbolo", "")))
+        lado = data.get("lado", "compra")
+        px = float(data.get("precio") or (q["venta"] if lado == "compra" else q["compra"]))
+        return _bolsa(b.costes, data.get("cartera") or None, q["simbolo"], lado, float(data.get("cantidad") or 0), px)
+
+    @app.post("/api/bolsa/orden")
+    def bolsa_order(data: dict = Body(...)):
+        from ..office import bolsa
+        return _bolsa(bolsa.get().ordenar, str(data.get("simbolo", "")), str(data.get("lado", "")),
+                      data.get("cantidad", 0), data.get("tipo", "mercado"), data.get("limite"), data.get("stop"),
+                      data.get("validez", "dia"), data.get("cartera") or None, origen="usuario")
+
+    @app.post("/api/bolsa/orden/{oid}/cancelar")
+    def bolsa_cancel(oid: int):
+        from ..office import bolsa
+        return _bolsa(bolsa.get().cancelar, oid)
+
+    @app.post("/api/bolsa/orden/{oid}/confirmar", dependencies=[Depends(require_admin)])
+    def bolsa_confirm(oid: int, confirmacion: str = Body("", embed=True)):
+        """Solo una persona confirma una orden de cartera real; no se envia a ningun broker."""
+        from ..office import bolsa
+        return _bolsa(bolsa.get().confirmar, oid, confirmacion)
+
+    @app.post("/api/bolsa/orden/{oid}/ejecucion", dependencies=[Depends(require_admin)])
+    def bolsa_fill(oid: int, data: dict = Body(...)):
+        from ..office import bolsa
+        return _bolsa(bolsa.get().registrar_ejecucion, oid, data.get("precio", 0), data.get("comision_eur") or 0,
+                      data.get("impuestos_eur"), data.get("fx") or None)
+
+    @app.post("/api/bolsa/cartera")
+    def bolsa_portfolio(data: dict = Body(...), admin: bool = Depends(admin_flag)):
+        from ..office import bolsa
+        if data.get("modo") == "real" and not admin:
+            raise HTTPException(403, "Una cartera real requiere modo administrador")
+        return _bolsa(bolsa.get().crear_cartera, str(data.get("nombre") or "Cartera simulada"),
+                      data.get("capital", 10000), str(data.get("tarifa") or "broker-online"),
+                      str(data.get("modo") or "simulado"))
+
+    @app.post("/api/bolsa/cartera/{cid}/reiniciar")
+    def bolsa_reset(cid: int, data: dict = Body(default={})):
+        from ..office import bolsa
+        return _bolsa(bolsa.get().reiniciar, cid, data.get("capital"))
+
+    @app.post("/api/bolsa/instrumento")
+    def bolsa_instrument(data: dict = Body(...)):
+        from ..office import bolsa
+        return _bolsa(bolsa.get().anadir_instrumento, str(data.get("simbolo", "")), str(data.get("nombre", "")),
+                      str(data.get("mercado", "")), data.get("precio", 0), str(data.get("divisa", "")),
+                      str(data.get("tipo") or "acción"), data.get("vol") or 0.25, data.get("spread_bps") or 5,
+                      data.get("adv") or 1e6, data.get("impuesto_pct") or 0)
+
+    @app.post("/api/bolsa/importar")
+    def bolsa_import(data: dict = Body(...)):
+        from ..office import bolsa
+        return _bolsa(bolsa.get().importar_csv, str(data.get("simbolo", "")), str(data.get("csv", "")))
+
+    @app.get("/api/bolsa/fiscal")
+    def bolsa_tax(cartera: int = 0, anio: int = 0):
+        from ..office import bolsa
+        return _bolsa(bolsa.get().informe_fiscal, cartera or None, anio or None)
+
     # ------------------------------------------------------------------ herramientas
     @app.get("/api/tools")
     def tools():

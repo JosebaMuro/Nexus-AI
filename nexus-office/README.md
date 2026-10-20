@@ -20,7 +20,7 @@
 | **Mejorador de prompts** | Botón ✨ en chat, imagen y música: reescribe con el LLM (o por reglas) añadiendo estilo, iluminación, composición, calidad, negativo y traducción al inglés; los prompts de imagen de los agentes se mejoran solos. |
 | **Editor de temas** | Cambia por completo la estética: 7 plantillas (Neón, Geisha carmesí, Sakura claro, Matrix, Ámbar retro, Minimal, Claro profesional), colores, tipografías, redondeo, brillo, desenfoque y efectos de fondo; exportar/importar JSON. |
 | **Drivers** | Detecta versión y antigüedad del driver de la GPU frente a lo que necesitan los runtimes y abre el actualizador **oficial** del fabricante (siempre confirmado por el usuario). |
-| **Oficina para pymes** | **58 perfiles** (oficios, comercio, hostelería, salud, despachos, agro, transporte, industria…) con agentes de oficina y de sector, cada uno con su grafo, y modelos de IA sugeridos para el sector. Ver [docs/OFICINA.md](docs/OFICINA.md). |
+| **Oficina para pymes** | **59 perfiles** (oficios, comercio, hostelería, salud, despachos, bolsa e inversiones, agro, transporte, industria…) con agentes de oficina y de sector, cada uno con su grafo, y modelos de IA sugeridos para el sector. Ver [docs/OFICINA.md](docs/OFICINA.md). |
 | **Móvil y red local** | Dos apps Android. **Nexus-Office VPN** se conecta con tu PC (Windows, Linux o macOS) por **VPN WireGuard cifrada**, HTTPS anclado o Wi‑Fi. **Nexus-Office autónomo** lleva Nexus-Office completo dentro del móvil, sin PC. Acceso desde móvil, tablet o consola protegido con **clave de red**. El PC de la oficina reparte los instaladores a la red (*Sistema → Descargas*). |
 | **Agentes** | Agentes en YAML totalmente configurables (prompt, modelo, herramientas, memoria, delegación). Enrutado automático y delegación entre agentes. |
 | **Salón virtual** | Sala gráfica donde los agentes se reúnen, aprenden qué se le da bien a cada uno, deciden en quién delegar y **proponen nuevos agentes** cuando detectan carencias. |
@@ -41,19 +41,19 @@ modelo de IA adecuado; lo descarga si hay conexión y, si no, lo deja recomendad
 
 | Equipo | Fichero |
 |---|---|
-| Windows 10/11 x64 | `Nexus-Office-Setup-1.7.0-windows-x64.exe` |
-| Windows 11 ARM (Snapdragon X) | `Nexus-Office-Setup-1.7.0-windows-arm64.exe` |
-| Linux x86_64 | `Nexus-Office-1.7.0-linux-x86_64.run` o `nexus-office_1.7.0_amd64.deb` |
-| Linux ARM64, Raspberry Pi 4/5 (sistema de 64 bits) | `Nexus-Office-1.7.0-linux-aarch64.run` o `nexus-office_1.7.0_arm64.deb` |
-| macOS Apple Silicon / Intel | `Nexus-Office-1.7.0-macos-arm64.tar.gz` / `Nexus-Office-1.7.0-macos-x86_64.tar.gz` (abre `Nexus-Office.command`) |
-| Android, Nexus-Office dentro del móvil | `Nexus-Office-1.7.0-android-autonomo.apk` |
-| Android, cliente del PC de la oficina | `Nexus-Office-1.7.0-android-vpn.apk` |
-| Código fuente | `Nexus-Office-1.7.0-codigo-fuente.zip` |
+| Windows 10/11 x64 | `Nexus-Office-Setup-1.8.0-windows-x64.exe` |
+| Windows 11 ARM (Snapdragon X) | `Nexus-Office-Setup-1.8.0-windows-arm64.exe` |
+| Linux x86_64 | `Nexus-Office-1.8.0-linux-x86_64.run` o `nexus-office_1.8.0_amd64.deb` |
+| Linux ARM64, Raspberry Pi 4/5 (sistema de 64 bits) | `Nexus-Office-1.8.0-linux-aarch64.run` o `nexus-office_1.8.0_arm64.deb` |
+| macOS Apple Silicon / Intel | `Nexus-Office-1.8.0-macos-arm64.tar.gz` / `Nexus-Office-1.8.0-macos-x86_64.tar.gz` (abre `Nexus-Office.command`) |
+| Android, Nexus-Office dentro del móvil | `Nexus-Office-1.8.0-android-autonomo.apk` |
+| Android, cliente del PC de la oficina | `Nexus-Office-1.8.0-android-vpn.apk` |
+| Código fuente | `Nexus-Office-1.8.0-codigo-fuente.zip` |
 
 ```bash
-Nexus-Office-Setup-1.7.0-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED       # Windows, desatendido
-sh Nexus-Office-1.7.0-linux-x86_64.run --oficina=herreria --servicio --red          # Linux y Raspberry Pi
-sudo apt install ./nexus-office_1.7.0_amd64.deb && nexus-office                         # Debian, Ubuntu, Raspberry Pi OS
+Nexus-Office-Setup-1.8.0-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED       # Windows, desatendido
+sh Nexus-Office-1.8.0-linux-x86_64.run --oficina=herreria --servicio --red          # Linux y Raspberry Pi
+sudo apt install ./nexus-office_1.8.0_amd64.deb && nexus-office                         # Debian, Ubuntu, Raspberry Pi OS
 ```
 
 El instalador de Windows es gráfico (perfil de oficina, modelo de IA, servicio al encender, acceso desde la red y
@@ -99,6 +99,7 @@ El fichero se genera desde el propio catálogo y la lógica de perfiles. Regené
 ## Documentación
 
 - [Oficina para pymes](docs/OFICINA.md) — perfiles por tipo de empresa (herrería, calderería, reformas…) con agentes de oficina y de gremio, cada uno con su propio grafo.
+- [Bolsa e inversiones](docs/BOLSA.md) — oficina de bolsa con mesa simulada: cartera ficticia, órdenes, comisiones, deslizamiento y horarios reales; la cartera real nunca ejecuta nada sin tu confirmación.
 - [Guía de usuario](docs/USUARIO.md) — instalación en cada sistema, modelo de IA según tu equipo, arranque automático, descargas para el móvil y uso diario.
 - [Servicio](docs/SERVICIO.md) — arranque automático al encender el equipo en cada sistema, comandos, registro y problemas frecuentes.
 - [Guía de administrador](docs/ADMINISTRADOR.md) — PIN, configuración avanzada, agentes, herramientas, modelos, autoajuste.

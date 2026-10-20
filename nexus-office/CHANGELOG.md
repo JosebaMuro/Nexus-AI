@@ -1,5 +1,16 @@
 # Cambios
 
+## Nexus-Office 1.8.0: oficina de bolsa e inversiones
+
+### Nueva oficina «Bolsa e inversiones» con mesa simulada
+- **Antes**: ninguna oficina trabajaba con bolsa ni inversiones, y no había forma de practicar sin arriesgar dinero.
+- **Ahora** hay un perfil más, `bolsa-inversiones` (59 en total), con cinco agentes propios: Analista de mercados, Gestor de carteras, Operador de mesa, Riesgos y cumplimiento, y Fiscalidad de inversiones, más los de oficina comunes. Cada uno con su grafo sembrado.
+- Sección nueva **BOLSA** en la app y orden `python -m nexus bolsa`: una mesa simulada que imita un mercado real, sin dinero y sin internet. Cartera ficticia de 10.000 €, valores de BME, Xetra, Euronext, Londres, NYSE, Nasdaq y cripto; precios que solo se mueven con la bolsa abierta, en su hora local, con horario de verano y festivos; órdenes a mercado, limitadas, stop y stop limitadas; horquilla y deslizamiento; tres tarifas de comisión, canon, impuesto sobre transacciones financieras y coste del cambio de divisa; lotes FIFO, ganancia realizada, informe fiscal anual y aviso de la regla de los dos meses.
+- Se pueden importar cierres reales de un valor (CSV) para anclar su precio y su volatilidad, y añadir valores propios.
+- **Cartera real** solo para seguimiento: las órdenes quedan por confirmar, solo una persona las confirma escribiendo `CONFIRMO` (en la app con ADMIN o en la terminal) y Nexus-Office no se conecta a ningún bróker. Ningún agente puede confirmar.
+- Siete herramientas nuevas para los agentes (`bolsa_mercados`, `bolsa_cotizacion`, `bolsa_cartera`, `bolsa_costes`, `bolsa_orden`, `bolsa_cancelar`, `bolsa_informe_fiscal`), todas sin internet. Ver [docs/BOLSA.md](docs/BOLSA.md).
+- Aviso visible en la app y en cada respuesta de la mesa: los precios son ficticios y no es asesoramiento financiero.
+
 ## Nexus-Office 1.7.0: la oficina para pymes cambia de nombre
 
 ### Antes NEXUS AI, ahora Nexus-Office
