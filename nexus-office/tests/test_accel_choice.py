@@ -31,6 +31,7 @@ def test_build_for_ajusta_el_perfil(monkeypatch):
     assert prof["llm"]["gpu_layers"] == 0
     prof, _ = ac.build_for(h, "npu")
     assert prof["llm"]["device_env"] == {"GGML_OPENVINO_DEVICE": "NPU"} and prof["llm"]["single_slot"]
+    assert prof["llm"]["gpu_layers"] == -1
     assert prof["llm"]["n_ctx"] <= 4096 and "llm" in prof["npu"]["offload"]
 
 
@@ -56,7 +57,12 @@ def test_registro_de_llama_server():
     assert ac.effective_from_log("load_tensors: offloaded 0/37 layers to GPU\n")["device"] == "CPU"
     assert ac.effective_from_log("using device HTP0 (Hexagon) - 2048 MiB free\noffloaded 29/29 layers to GPU")["device"] \
         == "NPU (Hexagon)"
-    assert ac.effective_from_log("OpenVINO backend: device NPU\n", {"GGML_OPENVINO_DEVICE": "NPU"})["device"] == "NPU (OpenVINO)"
+    ov = ("llama_model_load_from_file_impl: using device OPENVINO0 (Intel(R) AI Boost) - 15983 MiB free\n"
+          "load_tensors: offloaded 25/25 layers to GPU\n")
+    e = ac.effective_from_log(ov, {"GGML_OPENVINO_DEVICE": "NPU"})
+    assert e["device"] == "NPU (OpenVINO)" and "OPENVINO0" in e["detail"]
+    # NPU pedida pero el modelo se quedo en la CPU: no se da por buena
+    assert ac.effective_from_log("load_tensors: offloaded 0/25 layers to GPU\n", {"GGML_OPENVINO_DEVICE": "NPU"})["device"] == "CPU"
 
 
 def test_motor_integrado_desde_el_paquete(services, monkeypatch, tmp_path):

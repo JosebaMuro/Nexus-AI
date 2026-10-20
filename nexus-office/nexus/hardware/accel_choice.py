@@ -140,7 +140,8 @@ def build_for(hw, accel: str, legacy_override: str = "") -> tuple[dict, dict]:
         llm["device"] = p["device"]
         llm["gpu_layers"] = -1 if p["device"] else 0
     if p.get("npu"):   # OpenVINO NPU: grafo estatico, un slot y contexto moderado
-        llm["gpu_layers"], llm["device_env"], llm["single_slot"] = 0, dict(p["env"]), True
+        # OpenVINO es un dispositivo de llama.cpp como una GPU: las capas se le pasan con -ngl
+        llm["gpu_layers"], llm["device_env"], llm["single_slot"] = -1, dict(p["env"]), True
         llm["n_ctx"] = min(llm["n_ctx"], 4096)
         profile["npu"]["offload"] = sorted(set(profile["npu"].get("offload", [])) | {"llm"})
     if accel == "cpu":
@@ -181,6 +182,7 @@ def apply(services, engine: str = "auto", accel: str = "auto", remember: bool = 
 # ------------------------------------------------------------------ comprobacion en el registro de llama-server
 OFFLOAD = re.compile(r"offloaded (\d+)/(\d+) layers to GPU")
 DEVICE_PATTERNS = [   # del mas concreto al mas general: se usa el primero que aparezca
+    (re.compile(r"using device (OPENVINO\d+)\s*\(([^)]*)\)"), None),
     (re.compile(r"using device (CUDA\d+)\s*\(([^)]*)\)"), None),
     (re.compile(r"using device (Vulkan\d+)\s*\(([^)]*)\)"), None),
     (re.compile(r"using device (Metal|MTL\d*)\s*\(([^)]*)\)"), None),
@@ -214,8 +216,9 @@ def effective_from_log(text: str, env: dict | None = None) -> dict:
             out["detail"] = f"{last[0]} · {last[1].strip()}"
         break      # los patrones van del mas concreto («using device X») al mas general
     gpu_layers = m and int(m[-1][0]) > 0
-    if (env or {}).get("GGML_OPENVINO_DEVICE") == "NPU" and "openvino" in text.lower():
-        out["device"] = "NPU (OpenVINO)"
+    ov = (env or {}).get("GGML_OPENVINO_DEVICE", "")
+    if ov and (out["detail"].startswith("OPENVINO") or (gpu_layers and "openvino" in text.lower())):
+        out["device"] = {"NPU": "NPU (OpenVINO)", "GPU": "GPU (OpenVINO)"}.get(ov, "CPU (OpenVINO)")
     elif out["detail"].startswith("HTP"):
         out["device"] = "NPU (Hexagon)"
     elif gpu_layers:

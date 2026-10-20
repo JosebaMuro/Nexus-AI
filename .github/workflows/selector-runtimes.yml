@@ -47,7 +47,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           arch=$(uname -m)
-          extra="-DGGML_NATIVE=OFF"
+          extra="-DGGML_NATIVE=OFF -DGGML_OPENMP=OFF"   # sin libgomp del toolset (simbolos demasiado nuevos)
           [ "$arch" = x86_64 ] && extra="$extra -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF"
           docker run --rm -v "$PWD":/w -w /w -e CMAKE_ARGS="$extra" ${{ matrix.image }} bash -c '
             set -e
@@ -147,11 +147,11 @@ jobs:
           "$exe" --version
           "$exe" --list-devices || true
           curl -fsSL -o tiny.gguf "$TINY_GGUF"
-          GGML_OPENVINO_DEVICE=CPU "$exe" -m tiny.gguf -c 1024 -np 1 --port 8199 > srv.log 2>&1 &
+          GGML_OPENVINO_DEVICE=CPU "$exe" -m tiny.gguf -c 1024 -np 1 -ngl 999 --port 8199 > srv.log 2>&1 &
           for i in $(seq 1 120); do curl -fs localhost:8199/health && break; sleep 1; done
           curl -fs localhost:8199/v1/completions -d '{"prompt":"La capital de Francia es","max_tokens":8}' | tee out.json
           grep -q '"text"' out.json
-          grep -iE 'openvino|device|offload' srv.log | head -20 || true
+          grep -E 'using device|offloaded' srv.log || true
           kill %1 || true
           mkdir -p pack/openvino && cp -r "$dir"/. pack/openvino/
           cd pack && python3 -c "import shutil; shutil.make_archive('../llama-openvino-${{ matrix.target }}', 'zip', '.')"
@@ -183,7 +183,7 @@ jobs:
           ls -la
           sha256sum *.zip > SHA256SUMS-selector.txt
           gh release view selector-runtimes -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create selector-runtimes -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            gh release create selector-runtimes -R "$GITHUB_REPOSITORY" --target main --prerelease \
               -t "Runtimes del selector de inicio de Nexus-Office" \
               -n "llama-cpp-python (motor integrado) por plataforma y llama-server con OpenVINO (NPU Intel). Los genera .github/workflows/selector-runtimes.yml; los toma la construccion de los instaladores."
           gh release upload selector-runtimes -R "$GITHUB_REPOSITORY" --clobber ./*
