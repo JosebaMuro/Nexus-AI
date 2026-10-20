@@ -76,8 +76,35 @@ def knowledge_graph(args, ctx):
     entity = args.get("entity", "")
     if entity:   # lo propio del agente y lo comun
         own = g.for_agent(ctx.agent).facts_about([entity], 12) if ctx.agent else []
-        return {"facts": list(dict.fromkeys(own + g.facts_about([entity], 20)))[:20]}
+        own_notes = g.for_agent(ctx.agent).notes_about([entity], 3) if ctx.agent else []
+        return {"facts": list(dict.fromkeys(own + g.facts_about([entity], 20)))[:20],
+                "attributes": own_notes + g.general().notes_about([entity], 3)}
     return g.stats()
+
+
+def graph_import(args, ctx):
+    """Incorpora al conocimiento un grafo de cualquier formato: un fichero del sandbox o un texto que trae el agente."""
+    from ...memory import kg_io
+    from .sandbox_tools import _safe
+    s = ctx.services
+    if args.get("path"):
+        p = _safe(args["path"])
+        if not p.is_file():
+            raise ValueError(f"no existe {args['path']} en el sandbox")
+        if p.stat().st_size > 300 * 1024 * 1024:
+            raise ValueError("el grafo supera 300 MB")
+        data, name = p.read_bytes(), p.name
+    elif args.get("content"):
+        data, name = args["content"].encode("utf-8"), args.get("name") or "grafo.txt"
+    else:
+        raise ValueError("indica path (fichero del sandbox) o content (el grafo en texto)")
+    target = args.get("target", "general")
+    target = (ctx.agent or "") if target == "agente" else "auto" if target == "auto" else ""
+    parsed = kg_io.parse_bytes(data, name)
+    res = kg_io.insert_graph(s.graph, parsed, target, s.organizer, s.agents.ids(), f"grafo:{name}")
+    if ctx.emit:
+        ctx.emit({"type": "graph_update"})
+    return res
 
 
 def system_info(args, ctx):
@@ -102,6 +129,17 @@ TOOLS = [
     ({"name": "knowledge_graph", "description": "Consulta el grafo de conocimiento (hechos sobre una entidad)",
       "parameters": {"type": "object", "properties": {"entity": {"type": "string"}}}, "risk": "low",
       "permissions": ["memory"]}, knowledge_graph),
+    ({"name": "graph_import",
+      "description": ("Importa como conocimiento un grafo de cualquier formato (JSON, CSV, GraphML, GEXF, GML, DOT, RDF, "
+                      "Cypher de Neo4j, Mermaid, Excel, SQLite, ZIP...): se detecta solo, se fusiona con lo que ya se "
+                      "sabe y queda disponible para todos los agentes o solo para ti"),
+      "parameters": {"type": "object", "properties": {
+          "path": {"type": "string", "description": "fichero dentro del sandbox"},
+          "content": {"type": "string", "description": "o el grafo en texto (p. ej. 'A -> B : relacion' por linea)"},
+          "name": {"type": "string", "description": "nombre con extension para orientar el formato del texto"},
+          "target": {"type": "string", "enum": ["general", "agente", "auto"], "default": "general",
+                     "description": "general: para todos; agente: solo tu grafo; auto: cada nodo a su especialista"}}},
+      "risk": "medium", "permissions": ["memory"], "timeout": 600}, graph_import),
     ({"name": "system_info", "description": "Perfil de hardware, rendimiento en vivo y backend de IA activo",
       "parameters": {"type": "object", "properties": {}}, "risk": "low", "permissions": ["system"]}, system_info),
 ]

@@ -290,6 +290,15 @@ class KnowledgeGraph:
             f"('menciona','relacionado_con','conversa_con','delega_en','pide') ORDER BY r.weight DESC LIMIT ?", (self.scope, *keys, self.scope, limit))
         return [f"{r['s']} {r['rel'].replace('_', ' ')} {r['o']}" for r in rows]
 
+    def notes_about(self, names: list[str], limit: int = 6) -> list[str]:
+        """Atributos de las entidades nombradas (lo que traen los grafos importados: propiedades, literales...)."""
+        keys = list(dict.fromkeys(k for k in (_key(n) for n in names) if k))
+        if not keys:
+            return []
+        rows = self.db.query(f"SELECT name, note FROM entities WHERE scope=? AND key IN ({','.join('?' * len(keys))}) "
+                             "AND note!='' ORDER BY weight DESC LIMIT ?", (self.scope, *keys, limit))
+        return [f"{r['name']}: {r['note'][:300]}" for r in rows]
+
     def user_facts(self, limit: int = 15) -> list[str]:
         return self.facts_about([USER], limit)
 

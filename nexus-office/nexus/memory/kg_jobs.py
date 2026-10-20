@@ -1,6 +1,6 @@
 """Trabajos del gestor de conocimiento (Ajustes > Conocimiento), en segundo plano y con progreso:
 
-* importar un grafo (JSON, CSV, GraphML, GEXF, DOT, RDF...) al general, a un agente o repartido automaticamente;
+* importar un grafo de cualquier formato (ver kg_formats) al general, a un agente o repartido automaticamente;
 * leer un ZIP (o RAR, 7z, tar), razonarlo y procesarlo: los grafos que traiga se insertan, los documentos van a
   la biblioteca RAG, se agrupan por temas con el modelo de embeddings y el LLM razona los mas importantes para
   extraer resumen, hechos y procedimientos, que se colocan en el grafo general o en el del especialista;
@@ -139,11 +139,19 @@ class KnowledgeJobs:
         parsed = kg_io.parse_bytes(data, name)   # el formato se valida ya: el error llega al usuario al momento
         return self._start("import", f"Importar grafo «{name}»", self._run_import, parsed, name, target)
 
+    def import_graphs(self, items: list[tuple[str, bytes]], target: str = "") -> dict:
+        """Varios ficheros que forman un grafo (nodos y aristas por separado, o grafos distintos que se fusionan)."""
+        target = self._target(target)
+        parsed = kg_io.parse_many(items)
+        name = ", ".join(n for n, _ in items[:3]) + ("…" if len(items) > 3 else "")
+        return self._start("import", f"Importar grafo «{name}»", self._run_import, parsed, name, target)
+
     def _run_import(self, job: dict, parsed: dict, name: str, target: str) -> dict:
-        self._step(job, f"{len(parsed['nodes'])} nodos y {len(parsed['edges'])} relaciones ({parsed['format']})")
+        self._step(job, f"Formato {parsed['format']}: {len(parsed['nodes'])} nodos y {len(parsed['edges'])} relaciones")
         res = kg_io.insert_graph(self.s.graph, parsed, target, self.s.organizer, self.s.agents.ids(), f"grafo:{name}",
                                  progress=lambda d, t: self._step(job, f"Clasificando nodos {d}/{t}", d, t))
-        self._step(job, f"Insertados {res['nodes']} nodos y {res['relations']} relaciones")
+        self._step(job, f"Insertados {res['nodes']} nodos ({res['new']} nuevos, {res['merged']} fusionados con los que "
+                        f"ya habia) y {res['relations']} relaciones")
         return res
 
     # ------------------------------------------------------------ ZIP: leer, razonar y procesar

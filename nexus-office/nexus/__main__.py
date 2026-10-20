@@ -254,6 +254,51 @@ def cmd_office(args) -> None:
             print(f"  - {names.get(mid, mid)}: {why}")
 
 
+def cmd_graph(args) -> None:
+    """Importar grafos de cualquier formato como conocimiento, o exportarlos, desde la terminal y sin red."""
+    from pathlib import Path
+    from .memory import kg_io
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
+    if args.accion in (None, "formatos"):
+        print("Formatos de grafo que se pueden importar (se reconocen por el contenido):\n")
+        for name, ext, desc in kg_io.FORMATS:
+            print(f"  {name:34s} {ext:34s} {desc}")
+        print("\nUso: python -m nexus grafo importar FICHERO [FICHERO...] [--en general|auto|<agente>]")
+        return
+    from .core import Services
+    s = Services()
+    try:
+        if args.accion == "importar":
+            if not args.ficheros:
+                raise SystemExit("Indica uno o varios ficheros")
+            items = [(Path(f).name, Path(f).read_bytes()) for f in args.ficheros]
+            try:
+                parsed = kg_io.parse_many(items)
+            except kg_io.GraphFormatError as e:
+                raise SystemExit(f"No se pudo leer el grafo: {e}") from e
+            target = "" if args.en in ("", "general") else args.en
+            if target not in ("", "auto") and not s.agents.get(target):
+                raise SystemExit(f"Agente desconocido: {target}. Agentes: {', '.join(s.agents.ids())}")
+            print(f"Formato {parsed['format']}: {len(parsed['nodes'])} nodos y {len(parsed['edges'])} relaciones")
+            res = kg_io.insert_graph(s.graph, parsed, target, s.organizer, s.agents.ids(),
+                                     "grafo:" + ", ".join(n for n, _ in items)[:100])
+            print(f"Importado: {res['nodes']} nodos ({res['new']} nuevos, {res['merged']} fusionados con los que ya "
+                  f"habia) y {res['relations']} relaciones.")
+            print("Por grafo: " + ", ".join(f"{s.agents.get(k).name if s.agents.get(k) else k}: {v}"
+                                          for k, v in res["by_scope"].items()))
+        elif args.accion == "exportar":
+            scope = None if args.en in ("", "todo") else "" if args.en == "general" else args.en
+            data, _, ext = kg_io.export_graph(s.graph, scope, args.formato)
+            out = Path(args.ficheros[0] if args.ficheros else f"nexus-conocimiento.{ext}")
+            out.write_bytes(data)
+            print(f"Exportado a {out} ({len(data)} bytes)")
+        else:
+            raise SystemExit("Acciones: formatos | importar | exportar")
+    finally:
+        s.db.close()
+
+
 def cmd_bolsa(args) -> None:
     """Mesa de bolsa simulada en la terminal (ver nexus/office/bolsa.py)."""
     from pathlib import Path
@@ -372,6 +417,13 @@ def main(argv=None) -> None:
     bo.add_argument("--tarifa", default="broker-online", choices=["broker-online", "banco", "neobroker"])
     bo.add_argument("--modo", default="simulado", choices=["simulado", "real"])
     bo.add_argument("--comision", type=float)
+    gr = sub.add_parser("grafo", help="importar como conocimiento un grafo de cualquier formato: formatos | importar | "
+                        "exportar")
+    gr.add_argument("accion", nargs="?")
+    gr.add_argument("ficheros", nargs="*")
+    gr.add_argument("--en", default="", help="general (por defecto), auto (cada nodo a su especialista) o id de agente; "
+                    "al exportar: todo, general o id de agente")
+    gr.add_argument("--formato", default="json", choices=["json", "graphml", "csv"], help="al exportar")
     md = sub.add_parser("modelos", help="evalua el hardware y elige (y descarga) el modelo de IA adecuado")
     md.add_argument("--descargar", action="store_true", help="descarga los elegidos si hay internet")
     md.add_argument("--todos", action="store_true", help="incluye tambien el modelo de imagen")
@@ -381,7 +433,7 @@ def main(argv=None) -> None:
     sub.add_parser("cleanup", help="quita del paquete offline lo que este equipo no usa (ver --help)")
     args = p.parse_args(argv)
     {"run": cmd_run, "detect": cmd_detect, "setup": cmd_setup, "pull": cmd_pull, "chat": cmd_chat,
-     "oficina": cmd_office, "bolsa": cmd_bolsa, "modelos": cmd_models, "servicio": cmd_service}.get(
+     "oficina": cmd_office, "bolsa": cmd_bolsa, "grafo": cmd_graph, "modelos": cmd_models, "servicio": cmd_service}.get(
         args.cmd or "run", cmd_run)(args if args.cmd else p.parse_args(["run"]))
 
 

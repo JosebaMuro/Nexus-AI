@@ -42,8 +42,8 @@ KNOWLEDGE_DIR = HERE / "conocimiento"   # paquetes de conocimiento: manual para 
 OFFICE_ROLES = ("recepcion", "administracion", "presupuestos", "compras", "prl", "rrhh", "calidad", "comercial",
                 "agenda", "proteccion-datos", "medioambiente")
 # herramientas del coordinador: todas las que funcionan sin internet (las web quedan para quien las active a mano)
-COORDINATOR_TOOLS = ["delegate", "list_agents", "memory_search", "memory_save", "knowledge_graph", "rag_search",
-                     "rag_list", "calculator", "datetime_now", "file_read", "file_write", "file_list", "system_info"]
+COORDINATOR_TOOLS = ["delegate", "list_agents", "memory_search", "memory_save", "knowledge_graph", "graph_import",
+                     "rag_search", "rag_list", "calculator", "datetime_now", "file_read", "file_write", "file_list", "system_info"]
 COORDINATOR_PROMPT = """Eres {{assistant_name}}, la oficina virtual de una pyme y coordinas a su equipo de agentes.
 {context}
 Atiendes al usuario (el dueño o el personal de la empresa) con trato cercano y profesional. Lo que es de un gremio

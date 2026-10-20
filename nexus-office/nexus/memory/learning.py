@@ -164,5 +164,8 @@ class Learner:
         if own is not None:   # primero lo que el agente ha aprendido por su cuenta, despues lo comun
             facts += own.facts_about(names + [own.self_name], 6)
         facts += general.facts_about(names, 6)
+        if own is not None:   # atributos de lo nombrado (p. ej. propiedades de un grafo importado)
+            facts += own.notes_about(names, 3)
+        facts += general.notes_about(names, 3)
         return {"memories": mems, "examples": examples, "lessons": lessons, "facts": list(dict.fromkeys(facts)),
                 "profile": prof, "query_terms": tokens(query)[:12], "behaviors": self.behaviors()}

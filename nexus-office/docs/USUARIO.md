@@ -245,6 +245,8 @@ Nombre del asistente, idioma, estilo de respuesta (breve/equilibrado/detallado),
 
 En modo administrador aparece el **Gestor de conocimiento**: lo que Nexus-Office sabe de ti y es común a todos los agentes, lo que sabe cada agente de su especialidad, importar grafos y leer un ZIP. Ver [MEMORIA.md](MEMORIA.md).
 
+Puedes **importar como conocimiento un grafo de cualquier formato** (Gephi, Cytoscape, Neo4j, RDF/OWL, Excel, Mermaid, mapas mentales, la base de otro Nexus-Office…): suéltalo en *Gestor de conocimiento > Importar / exportar*, pídeselo a un agente en el chat o usa `python -m nexus grafo importar fichero`. El formato se reconoce solo y lo importado se suma a lo que Nexus-Office ya sabe. Ver [GRAFOS.md](GRAFOS.md).
+
 Nexus-Office recuerda las pautas que le pidas («no uses emojis», «respóndeme siempre con ejemplos», «llámame Joseba») y todos los agentes las respetan.
 
 ### Usarlo desde el móvil, tablet o consola
