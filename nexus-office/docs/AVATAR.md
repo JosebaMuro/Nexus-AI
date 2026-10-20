@@ -8,6 +8,13 @@ Se eligen en **Ajustes → Avatar** (modo usuario). Todos reaccionan al estado (
 | **Grafo neuronal** | El avatar *es* la memoria: núcleo luminoso y entidades aprendidas en una esfera 3D en canvas 2D. | Mínimo |
 | **Modelo propio** | Sube un **GLB, GLTF (embebido) o VRM**. Se escala y encuadra solo, reproduce su animación (prefiere una llamada *idle*), mueve la cabeza hacia el puntero si tiene hueso `head` y abre la boca con morphs `aa`, `mouthOpen`, `jawOpen`, `viseme_aa`… | Depende del modelo |
 
+## Encuadre automático (2.0)
+Todos los avatares 3D se encuadran solos en el hueco libre del panel, entre los rótulos, al cambiar el tamaño de la ventana, al girar el móvil o al cargar un modelo:
+- **Busto** (cabeza y hombros) o **cuerpo entero**: doble clic alterna entre los dos.
+- Los modelos propios en cualquier unidad (cm, mm, m) se normalizan a 1,75 m de alto; los tumbados o no humanos, por su lado mayor. Los VRM 0.x se giran para mirar a la cámara.
+- Si el modelo no tiene hueso `head`, el busto toma el 18 % superior.
+- La respiración ya no saca del encuadre a los modelos cuyo origen no está en los pies, y el aro de estado y las partículas se ajustan a la medida del modelo.
+
 ## Crear un avatar de calidad a partir de imágenes
 La geisha actual se genera a partir de la hoja de personaje (proyección de fotos sobre un volumen de siluetas): de frente y en perfil es fiel a la referencia, y en ángulos intermedios mezcla vistas. Para un modelo con malla y rig completos:
 

@@ -102,6 +102,7 @@ Cada instalador lleva todo lo necesario para acelerar con la GPU o la NPU de su 
 - **Vulkan** acelera las GPU de cualquier fabricante con su driver normal. Lo compila `packaging/build_desktop_runtimes.sh` con zig desde las fuentes de PyPI; enlaza con el cargador de Vulkan del sistema (`libvulkan.so.1` en Linux, `vulkan-1.dll` en Windows), que instala cualquier driver de GPU.
 - **CUDA** y **Metal** salen de los paquetes de llama.cpp de conda-forge (`packaging/build_gpu_runtimes.py`), con sus bibliotecas (cuBLAS en CUDA). Con NVIDIA hace falta el driver 525 o posterior.
 - **No incluidos**: ROCm (AMD) y SYCL (Intel), que pesan varios GB; esas GPU van por Vulkan, y con internet se puede instalar la variante oficial desde *Sistema → Runtimes*. PyTorch con CUDA o ROCm (2-4 GB) tampoco: la música neuronal en esas GPU se instala con `nexus setup --all` y conexión. Sin PyTorch, Nexus-Office compone la música con el compositor procedural.
+- **Selector de inicio (2.0)**: cada opción del selector de motor y CPU/GPU/NPU lleva su runtime dentro del paquete: llama-server en sus variantes, el motor integrado (llama-cpp-python) y llama-server con OpenVINO para la NPU Intel en Windows x64 y Linux x86_64. Ver [ACELERADOR.md](ACELERADOR.md).
 - `nexus setup` instala solo los extras que usa tu hardware. PyTorch se instala sin preguntar si sus wheels vienen en el instalador y el equipo tiene la GPU adecuada.
 
 ### Limpieza al final de la instalación

@@ -21,9 +21,9 @@ from nexus import __version__ as VERSION  # noqa: E402
 BOOKS = {
     "Manual-de-usuario": ("Manual de usuario", "Oficina de IA local para pymes",
                           ["docs/USUARIO.md", "docs/OFICINA.md", "docs/BOLSA.md", "docs/SERVICIO.md", "docs/AVATAR.md", "docs/SALON.md",
-                           "docs/GRAFOS.md"]),
+                           "docs/ACELERADOR.md", "docs/GRAFOS.md", "docs/RAG.md"]),
     "Documentacion-tecnica": ("Documentación técnica", "Arquitectura, plataformas, administración y API",
-                              ["docs/ARQUITECTURA.md", "docs/PLATAFORMAS.md", "android-autonomo/README.md",
+                              ["docs/ARQUITECTURA.md", "docs/PLATAFORMAS.md", "docs/ACELERADOR.md", "android-autonomo/README.md",
                                "docs/ADMINISTRADOR.md", "docs/SERVICIO.md", "docs/API.md", "docs/HERRAMIENTAS.md",
                                "docs/MEMORIA.md", "docs/GRAFOS.md", "docs/RAG.md", "docs/RED_COOPERATIVA.md", "docs/VPN.md",
                                "docs/ACCESO_REMOTO.md"]),

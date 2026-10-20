@@ -75,13 +75,17 @@ def normalize(url: str) -> str:
 
 
 def _host(netloc: str) -> str:
-    h = netloc.lower().split("@")[-1].split(":")[0]
+    h = netloc.lower().split("@")[-1]
+    h = h[1:].split("]")[0] if h.startswith("[") else h.split(":")[0]   # [::1]:8080 -> ::1
     return h[4:] if h.startswith("www.") else h
 
 
 def site_root(netloc: str) -> str:
     """Dominio registrable aproximado: docs.python.org -> python.org, www.bbc.co.uk -> bbc.co.uk."""
-    parts = _host(netloc).split(".")
+    host = _host(netloc)
+    if ":" in host or host.replace(".", "").isdigit():   # IP: no tiene subdominios
+        return host
+    parts = host.split(".")
     if len(parts) >= 3 and parts[-2] in SLD and len(parts[-1]) == 2:
         return ".".join(parts[-3:])
     return ".".join(parts[-2:])
