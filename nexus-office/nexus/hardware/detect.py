@@ -367,20 +367,24 @@ def _detect_linux(info: HardwareInfo, sys_root: Path | None = None) -> None:
 
 
 def _detect_android(info: HardwareInfo) -> None:
-    """App Android autonoma: SoC, GPU (la que llama.cpp puede usar por Vulkan/OpenCL) y NPU. Ver android_accel."""
+    """App Android autonoma: SoC, GPU (la que llama.cpp puede usar por Vulkan/OpenCL) y NPU (Hexagon en llama.cpp en
+    los Snapdragon recientes). Ver android_accel."""
     from . import android_accel
     acc = android_accel.detect()
     s, g, n = acc["soc"], acc["gpu"], acc["npu"]
     if s.get("name"):
         info.cpu_name = s["name"]
     info.gpus = []   # en Android /sys/class/drm no es accesible: la GPU la da la sonda
+    use = g.get("use") or {}
+    on_npu = use.get("backend") == "hexagon"
     if g.get("name"):
-        use = g.get("use") or {}
-        info.gpus.append(GPU(vendor=g["vendor"], name=g["name"], vram_gb=round(use.get("mem_mb", 0) / 1024, 2),
+        dev = next((d for d in g.get("devices", []) if d.get("name") == g["name"]), {}) if on_npu else use
+        info.gpus.append(GPU(vendor=g["vendor"], name=g["name"], vram_gb=round(dev.get("mem_mb", 0) / 1024, 2),
                              integrated=True, driver=g.get("gl_vendor", ""),
-                             source=f"android-{use['backend']}" if use else "android-egl"))
+                             source=f"android-{dev['backend']}" if dev else "android-egl"))
     if n:
-        info.npus.append(NPU(vendor=n["vendor"], name=n["name"], runtime_hint=n["runtime_hint"], source=n["source"]))
+        info.npus.append(NPU(vendor=n["vendor"], name=n["name"], runtime_hint=n["runtime_hint"],
+                             source="android-hexagon" if n.get("usable") else n["source"]))
     info.runtimes["android_accel"] = {"gpu_backend": (g.get("use") or {}).get("backend", ""),
                                       "gpu_device": (g.get("use") or {}).get("dev", ""),
                                       "gpu_devices": g.get("devices", []), "gpu_broken": g.get("broken", ""),

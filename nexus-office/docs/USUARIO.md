@@ -144,7 +144,7 @@ Hay dos apps, independientes; puedes instalar las dos:
 
 | App | Fichero | Para qué |
 |---|---|---|
-| **Nexus-Office autónomo** | `Nexus-Office-1.8.0-android-autonomo.apk` | Nexus-Office completo dentro del móvil, sin PC (Android 9 o superior, ARM64). La APK lo lleva todo y solo descarga el modelo de IA adecuado a la RAM del móvil: Qwen3‑VL 2B o 4B Thinking. Detecta la CPU, la GPU y la NPU del móvil; si la GPU acelera el modelo (Adreno, Mali, Immortalis, Xclipse…) lo pone en ella, y si no, en la CPU. Lo ves en *Sistema → Hardware*. Ver [su guía](../android-autonomo/README.md). |
+| **Nexus-Office autónomo** | `Nexus-Office-1.8.0-android-autonomo.apk` | Nexus-Office completo dentro del móvil, sin PC (Android 9 o superior, ARM64). La APK lo lleva todo y solo descarga el modelo de IA adecuado a la RAM del móvil: Qwen3‑VL 2B o 4B Thinking. Detecta la CPU, la GPU y la NPU del móvil. En los Snapdragon 8 Gen 2 o posteriores pone el modelo en la NPU; si no hay NPU utilizable o falla, en la GPU (Adreno, Mali, Immortalis, Xclipse…), y si tampoco, en la CPU. Lo ves en *Sistema → Hardware*. Ver [su guía](../android-autonomo/README.md). |
 | **Nexus-Office VPN** | `Nexus-Office-1.8.0-android-vpn.apk` | App ligera para usar el Nexus-Office del PC de la oficina (Android 7 o superior), en la Wi‑Fi o desde fuera por VPN cifrada. En el PC, *Red COOP → VPN cifrada* → **GENERAR CÓDIGO VPN**; en la app, *Conectar por VPN* y pega el código. Ver [VPN](VPN.md). |
 
 1. Copia la APK al móvil o descárgala desde el PC de la oficina (*Sistema → Descargas*).

@@ -34,9 +34,11 @@ Al arrancar, Nexus-Office mira qué tiene el móvil (`nexus/hardware/android_acc
 |---|---|---|
 | **CPU** | El SoC (`Build.SOC_MODEL`, `ro.soc.model`, `ro.board.platform`) con su nombre comercial (p. ej. «Qualcomm SM8650 (Snapdragon 8 Gen 3)») y sus núcleos rápidos | La variante de llama.cpp y los hilos |
 | **GPU** | El nombre por EGL (lo escribe la app en `device_info.json`) y, sobre todo, `libllama-server-gpu.so --list-devices`, que dice qué GPU puede usar llama.cpp de verdad | El modelo entero en la GPU: **Adreno por OpenCL**, el resto **por Vulkan**. En Adreno no se usa Vulkan porque en llama.cpp va más lento que la CPU. |
-| **NPU** | Por el SoC y por las bibliotecas del fabricante: Hexagon (Qualcomm), APU (MediaTek), TPU (Google Tensor), NPU (Exynos) | Se informa de ella. llama.cpp no puede usarla en Android sin los SDK propietarios de cada fabricante, así que el modelo va en la GPU o en la CPU. |
+| **NPU** | Por el SoC y por las bibliotecas del fabricante: Hexagon (Qualcomm), APU (MediaTek), TPU (Google Tensor), NPU (Exynos). La Hexagon de los **Snapdragon 8 Gen 2 o posteriores** (8 Gen 3, 8 Elite, 8 Elite Gen 5, 8s Gen 3…) aparece además en `--list-devices` como `HTP0` | En esos Snapdragon, **el modelo entero en la NPU** con el backend Hexagon de llama.cpp, por delante de la GPU. Las demás NPU (MediaTek, Tensor, Exynos y Snapdragon anteriores) no tienen backend en llama.cpp: se informa de ellas y el modelo va en la GPU o en la CPU. |
 
-Si hay GPU utilizable, el perfil pone todas las capas en ella (`-ngl 999 --device GPUOpenCL` o `Vulkan0`). Después el autoajuste **mide** unas respuestas con la GPU y otras con la CPU y se queda con lo más rápido, porque hay GPU de gama baja que van peor que los núcleos grandes. Si el driver falla al arrancar llama-server o se cae en una respuesta, Nexus-Office lo apunta (`android_accel.json`), sigue en la CPU sin cortar la conversación y no vuelve a probar la GPU hasta que se actualiza la app o Android.
+El orden es **NPU → GPU → CPU**. Si hay NPU o GPU utilizable, el perfil pone todas las capas en ella (`-ngl 999 --device HTP0`, `GPUOpenCL` o `Vulkan0`). Después el autoajuste **mide** unas respuestas con ella y otras con la CPU y se queda con lo más rápido, porque hay GPU de gama baja que van peor que los núcleos grandes. Si la NPU falla al arrancar llama-server, Nexus-Office lo apunta (`android_accel.json`, campo `npu_broken`) y pasa a la GPU; si falla la GPU (`gpu_broken`), sigue en la CPU, sin cortar la conversación. No vuelve a probar lo que falló hasta que se actualiza la app o Android.
+
+**Cómo usa la NPU**: la APK lleva `libggml-hexagon.so` (la parte que corre en Android) y los programas del DSP `libggml-htp-v73/v75/v79/v81.so`, uno por generación de Hexagon. `libggml-hexagon.so` abre `libcdsprpc.so` (FastRPC, del fabricante, en `/vendor/lib64`) y carga en el DSP el programa de su generación, que busca en `ADSP_LIBRARY_PATH` (la carpeta de bibliotecas de la app). En un móvil sin `libcdsprpc.so` el backend no encuentra la NPU y no pasa nada. Se compila con el Hexagon SDK de Qualcomm (`.github/workflows/android-npu.yml`). El backend Hexagon de llama.cpp aún es experimental, y la NPU no se ha podido probar en un móvil real al construir esta versión: si en el tuyo falla, la app sigue sola en la GPU o en la CPU.
 
 La imagen (stable-diffusion.cpp) y la voz Piper no van en la APK: la voz es la del sistema.
 
@@ -46,7 +48,7 @@ Nexus-Office se ajusta al móvil al arrancar y mientras lo usas (`nexus/android_
 
 | Qué ajusta | Cómo |
 |---|---|
-| GPU o CPU | Con GPU utilizable, compara la velocidad real con GPU y con CPU (3 respuestas cada una) y se queda con lo más rápido. Lo recuerda por modelo y versión. |
+| NPU, GPU o CPU | Con NPU o GPU utilizable, compara la velocidad real con ella y con la CPU (3 respuestas cada una) y se queda con lo más rápido. Lo recuerda por modelo y versión. Si la NPU no arranca, compara la GPU. |
 | Variante de llama.cpp | La más rápida que admite la CPU: i8mm, dotprod o ARMv8 básica |
 | Hilos | Empieza con los núcleos rápidos. Después mide la velocidad real de tus respuestas con 2 o 3 valores y se queda con el mejor. Vuelve a medir al cambiar de modelo o de versión, y de vez en cuando. |
 | Temperatura y batería | Móvil caliente, batería baja sin cargar o ahorro de energía: la mitad de hilos hasta que se normaliza |

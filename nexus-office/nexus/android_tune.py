@@ -11,8 +11,9 @@ Al arrancar y mientras Nexus-Office esta en marcha, se adapta solo al movil:
 * **Temperatura y bateria**: la app escribe el estado termico, la bateria y el ahorro de energia en
   ``device_state.json``. Con el movil caliente o la bateria baja usa menos hilos, y los recupera despues.
 * **Memoria**: si Android se queda sin RAM libre, reduce el contexto para el siguiente arranque de llama-server.
-* **GPU o CPU**: si el movil tiene una GPU que llama.cpp puede usar (``nexus.hardware.android_accel``), mide unas
-  respuestas con ella y otras con la CPU y se queda con lo mas rapido; despues ajusta los hilos.
+* **NPU, GPU o CPU**: si el movil tiene una NPU (Hexagon) o una GPU que llama.cpp puede usar
+  (``nexus.hardware.android_accel``), mide unas respuestas con ella y otras con la CPU y se queda con lo mas rapido;
+  despues ajusta los hilos. Si la NPU no arranca, se mide con la GPU.
 * **Modelo**: si el modelo va muy lento propone uno mas pequeno; si sobra velocidad y RAM, uno mayor
   (``advice``, que la app ofrece al abrirse).
 
@@ -196,6 +197,9 @@ class LiveTuner:
         """Mide unas respuestas con la GPU y otras con la CPU y se queda con lo mas rapido (hay GPU que en
         llama.cpp van peor que los nucleos grandes). Devuelve True mientras esta midiendo."""
         from . import __version__
+        llm = self.s.profile["llm"]
+        if llm.get("gpu_layers") and llm.get("device") and llm["device"] != self.gpu_device:
+            self.gpu_device = llm["device"]   # la NPU fallo al arrancar y llamaserver paso a la GPU: se mide esta
         if not self.gpu_device:
             return False
         model = self.s.models.active().get("llm") or ""

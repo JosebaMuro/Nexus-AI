@@ -60,11 +60,12 @@ class LlamaServerBackend(OpenAICompatBackend):
         return bool(r and r[1].get("mmproj"))
 
     def ensure(self, model: str, opts: dict) -> None:
-        try:
-            self._ensure(model, opts)
-        except _GpuFailed as e:   # Android: la GPU no arranca con este driver; se apunta y se sigue en CPU
-            self._gpu_failed(str(e))
-            self._ensure(model, {**opts, "gpu_layers": 0, "device": ""})
+        # Android: si la NPU o la GPU no arrancan con este driver, se apunta y se pasa a la siguiente (NPU -> GPU -> CPU)
+        for _ in range(3):
+            try:
+                return self._ensure(model, opts)
+            except _GpuFailed as e:
+                opts = {**opts, **self._gpu_failed(str(e), opts.get("device") or "")}
 
     def _ensure(self, model: str, opts: dict) -> None:
         resolved = self.resolve(model)
@@ -126,7 +127,7 @@ class LlamaServerBackend(OpenAICompatBackend):
                         continue
                     self.proc = None
                     if device:
-                        raise _GpuFailed(f"llama-server con GPU ({device}) termino al arrancar: {tail[-300:]}")
+                        raise _GpuFailed(f"llama-server con {'NPU' if device.startswith('HTP') else 'GPU'} ({device}) termino al arrancar: {tail[-300:]}")
                     raise RuntimeError(f"llama-server termino al arrancar: {tail[-600:]}")
                 try:
                     if httpx.get(f"http://127.0.0.1:{self.port}/health", timeout=1).status_code == 200:
@@ -140,13 +141,20 @@ class LlamaServerBackend(OpenAICompatBackend):
                 raise _GpuFailed(f"llama-server con GPU ({device}) no respondio a tiempo")
             raise RuntimeError("llama-server no respondio a tiempo")
 
-    def _gpu_failed(self, reason: str) -> None:
-        """Android: la GPU no sirve para llama.cpp en este movil (driver). Se apunta y se sigue en CPU."""
+    def _gpu_failed(self, reason: str, device: str = "") -> dict:
+        """Android: la NPU o la GPU no sirve para llama.cpp en este movil (driver). Se apunta y se sigue con la GPU
+        (si fallo la NPU y hay GPU utilizable) o con la CPU. Devuelve las opciones nuevas del modelo."""
         from ..hardware import android_accel
-        L.warning("%s: se sigue en CPU", reason)
-        android_accel.mark_gpu_broken(reason)
+        android_accel.mark_gpu_broken(reason, device)
+        nxt = {"gpu_layers": 0, "device": ""}
+        if android_accel.is_npu_dev(device):
+            use = (android_accel.detect().get("gpu") or {}).get("use") or {}
+            if use.get("dev") and not android_accel.is_npu_dev(use["dev"]):
+                nxt = {"gpu_layers": -1, "device": use["dev"]}
+        L.warning("%s: se sigue en %s", reason, nxt["device"] or "CPU")
         llm = self.profile_getter().get("llm", {})
-        llm["gpu_layers"], llm["device"] = 0, ""
+        llm["gpu_layers"], llm["device"] = nxt["gpu_layers"], nxt["device"]
+        return nxt
 
     def stop(self) -> None:
         if self.proc and self.proc.poll() is None:

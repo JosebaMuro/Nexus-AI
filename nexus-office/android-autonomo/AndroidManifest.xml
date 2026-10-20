@@ -30,6 +30,9 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
+        <!-- NPU Hexagon de los Snapdragon (FastRPC del fabricante); en otros moviles no esta y no pasa nada -->
+        <uses-native-library android:name="libcdsprpc.so" android:required="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

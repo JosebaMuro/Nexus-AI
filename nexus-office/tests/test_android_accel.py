@@ -244,3 +244,97 @@ def test_detect_en_android_rellena_gpu_y_npu(tmp_path, monkeypatch):
     assert hw.npus[0].name == "Qualcomm Hexagon NPU"
     assert hw.runtimes["android_accel"]["gpu_device"] == "GPUOpenCL"
     assert os.environ["NEXUS_ANDROID"] == "1"
+
+
+# ------------------------------------------------------------------ NPU Hexagon (Snapdragon 8 Gen 2 o posterior)
+LIST_SNAPDRAGON = LIST_ADRENO + "  HTP0: Hexagon (0 MiB, 0 MiB free)\n"
+
+
+def test_prefiere_la_npu_hexagon_y_si_no_la_gpu():
+    devs = aa.parse_devices(LIST_SNAPDRAGON)
+    assert devs[-1]["dev"] == "HTP0" and devs[-1]["backend"] == "hexagon"
+    assert aa.parse_devices("  HTP0:1: Hexagon (0 MiB, 0 MiB free)\n")[0]["dev"] == "HTP0:1"
+    assert aa.pick(devs)["dev"] == "HTP0"
+    assert aa.pick(devs, npu=False)["dev"] == "GPUOpenCL"
+    assert aa.pick(devs, gpu=False)["dev"] == "HTP0" and aa.pick(devs, npu=False, gpu=False) is None
+    assert aa.is_npu_dev("HTP0") and not aa.is_npu_dev("GPUOpenCL") and not aa.is_npu_dev("")
+    env = aa.gpu_env("/data/app/lib/arm64")
+    assert env["ADSP_LIBRARY_PATH"].split(";")[0] == "/data/app/lib/arm64"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="script de shell")
+def test_sonda_con_npu_y_vuelta_a_la_gpu(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path / "nexus"))
+    (tmp_path / "nexus").mkdir()
+    monkeypatch.setenv("NEXUS_DEVICE_INFO", str(tmp_path / "device_info.json"))
+    (tmp_path / "device_info.json").write_text(json.dumps({"soc_manufacturer": "QTI", "soc_model": "SM8650"}))
+    monkeypatch.setattr(aa, "props", lambda: {"ro.build.fingerprint": "f1"})
+    monkeypatch.setattr(aa, "vendor_lib", lambda names, dirs=aa.VENDOR_LIBS: "/vendor/lib64/libcdsprpc.so")
+    libs = tmp_path / "lib"
+    libs.mkdir()
+    _fake_gpu_exe(libs, LIST_SNAPDRAGON)
+    r = aa.detect(str(libs))
+    assert r["gpu"]["use"]["dev"] == "HTP0" and r["gpu"]["name"] == "QUALCOMM Adreno(TM) 750"
+    assert r["npu"]["usable"] and r["npu"]["device"] == "HTP0" and "Hexagon" in r["npu"]["runtime_hint"]
+    aa.mark_gpu_broken("la NPU no arranca", "HTP0")
+    r = aa.detect(str(libs))
+    assert r["gpu"]["use"]["dev"] == "GPUOpenCL" and not r["npu"]["usable"] and r["gpu"]["broken"] == ""
+    aa.mark_gpu_broken("ni la GPU", "GPUOpenCL")
+    assert aa.detect(str(libs))["gpu"]["use"] is None
+
+
+def test_llama_server_npu_cae_a_gpu_y_despues_a_cpu(tmp_path, monkeypatch):
+    from nexus.llm import llamaserver as ls
+    libs = tmp_path / "lib"
+    libs.mkdir()
+    for n in ("libllama-server-i8mm.so", aa.GPU_EXE):
+        (libs / n).write_bytes(b"\x7fELF")
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path / "nexus"))
+    monkeypatch.setenv("NEXUS_RUNTIME_LLAMA", str(libs / "libllama-server-i8mm.so"))
+    monkeypatch.setenv("NEXUS_RUNTIME_LLAMA_CPU", str(libs / "libllama-server-i8mm.so"))
+    monkeypatch.setenv("NEXUS_RUNTIME_LLAMA_GPU", str(libs / aa.GPU_EXE))
+    (tmp_path / "nexus" / "logs").mkdir(parents=True)
+    (tmp_path / "nexus" / "logs" / "llama-server.log").write_bytes(b"htp error")
+    works = {"HTP0": False, "GPUOpenCL": True}
+    started = []
+
+    def popen(cmd, **kw):
+        dev = cmd[cmd.index("--device") + 1] if "--device" in cmd else ""
+        p = _Proc(cmd, kw.get("env"), alive=works.get(dev, True))
+        started.append(p)
+        return p
+
+    monkeypatch.setattr(ls, "popen", popen)
+    monkeypatch.setattr(ls.httpx, "get", lambda *a, **k: SimpleNamespace(status_code=200))
+    monkeypatch.setattr(aa, "detect", lambda *a, **k: {"gpu": {"use": {"dev": "GPUOpenCL", "backend": "opencl"}}})
+    profile = {"llm": {"gpu_layers": -1, "device": "HTP0"}}
+    rt = SimpleNamespace(exe=lambda *a: (libs / "libllama-server-i8mm.so", "embedded"))
+    b = ls.LlamaServerBackend(rt, lambda m: (str(tmp_path / "m.gguf"), {"id": "m"}), lambda: profile)
+    b.ensure("", {"n_ctx": 2048, "gpu_layers": -1, "device": "HTP0"})
+    assert started[0].cmd[started[0].cmd.index("--device") + 1] == "HTP0"
+    assert started[-1].cmd[started[-1].cmd.index("--device") + 1] == "GPUOpenCL"
+    assert str(libs) in started[-1].env["ADSP_LIBRARY_PATH"]
+    assert profile["llm"] == {"gpu_layers": -1, "device": "GPUOpenCL"}
+    assert "HTP0" in json.loads((tmp_path / "nexus" / "android_accel.json").read_text())["npu_broken"]
+    # y si la GPU tampoco arranca, a la CPU
+    works["GPUOpenCL"] = False
+    b.stop()
+    b.ensure("", {"n_ctx": 2048, "gpu_layers": -1, "device": "HTP0"})
+    assert started[-1].cmd[0].endswith("i8mm.so") and profile["llm"] == {"gpu_layers": 0, "device": ""}
+
+
+def test_perfil_android_con_npu(monkeypatch):
+    from nexus.hardware.profiles import build_profile
+    p = build_profile(_hw(monkeypatch, backend="hexagon", device="HTP0"))
+    assert p["accelerator"] == "hexagon" and p["llm"]["gpu_layers"] == -1 and p["llm"]["device"] == "HTP0"
+    assert p["npu"]["ready"] and p["npu"]["offload"] == ["llm"] and "NPU" in p["npu"]["hint"]
+    assert p["embeddings"]["device"] != "npu"
+
+
+def test_autoajuste_mide_la_gpu_si_la_npu_fallo(tmp_path, monkeypatch):
+    s, t = _tuner(tmp_path, monkeypatch)
+    s.profile["llm"]["device"] = "HTP0"
+    t = at.LiveTuner(s, layout={"fast": 4, "total": 8})
+    assert t.step()["gpu"] == "HTP0"
+    s.profile["llm"]["device"] = "GPUOpenCL"     # llamaserver paso a la GPU
+    assert t.step()["gpu"] == "GPUOpenCL" and s.profile["llm"]["device"] == "GPUOpenCL"

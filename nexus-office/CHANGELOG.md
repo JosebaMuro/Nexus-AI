@@ -11,6 +11,11 @@
 - Siete herramientas nuevas para los agentes (`bolsa_mercados`, `bolsa_cotizacion`, `bolsa_cartera`, `bolsa_costes`, `bolsa_orden`, `bolsa_cancelar`, `bolsa_informe_fiscal`), todas sin internet. Ver [docs/BOLSA.md](docs/BOLSA.md).
 - Aviso visible en la app y en cada respuesta de la mesa: los precios son ficticios y no es asesoramiento financiero.
 
+### NPU de Snapdragon en la app Android autónoma
+- **Antes**: la app detectaba la NPU del móvil pero no la usaba; el modelo iba en la GPU o en la CPU.
+- **Ahora**, en los Snapdragon 8 Gen 2 o posteriores, el modelo va en la NPU Hexagon con el backend Hexagon de llama.cpp (compilado con el Hexagon SDK de Qualcomm). El orden es NPU, GPU y CPU: si la NPU no arranca, la app pasa sola a la GPU, y si la GPU tampoco, a la CPU, sin cortar la conversación. El autoajuste mide si la NPU va más rápida que la CPU.
+- El backend Hexagon de llama.cpp es experimental y no se ha probado en un móvil real. En los demás móviles nada cambia.
+
 ## Nexus-Office 1.7.0: la oficina para pymes cambia de nombre
 
 ### Antes NEXUS AI, ahora Nexus-Office

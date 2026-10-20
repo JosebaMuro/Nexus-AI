@@ -6,11 +6,14 @@
   drivers. Ese binario, con ``--list-devices``, dice que GPU puede usar de verdad (Adreno por OpenCL, Mali,
   Immortalis, Xclipse, PowerVR... por Vulkan). El nombre de la GPU llega tambien de la app (EGL, ``device_info.json``).
 * **NPU**: se reconoce por el SoC y por las bibliotecas del fabricante (Hexagon de Qualcomm, APU de MediaTek, TPU de
-  Google Tensor, NPU de Exynos). llama.cpp no tiene backend para ellas en Android sin los SDK propietarios, asi que
-  se informa de ella pero el modelo va en la GPU o en la CPU.
+  Google Tensor, NPU de Exynos). La de los Snapdragon 8 Gen 2 o posteriores (HTP v73+) la usa llama.cpp con su
+  backend Hexagon (``libggml-hexagon.so``, que abre ``libcdsprpc.so`` del movil, y los programas del DSP
+  ``libggml-htp-v*.so``): aparece en ``--list-devices`` como ``HTP0`` y se prefiere a la GPU. Las demas NPU no
+  tienen backend en llama.cpp: se informa de ellas y el modelo va en la GPU o en la CPU.
 
 El resultado de la sonda se guarda (``android_accel.json``) por version de la app y huella del sistema: se repite al
-actualizar la app o Android. Si la GPU falla al arrancar llama-server, se marca y Nexus-Office sigue en CPU.
+actualizar la app o Android. Si la NPU falla al arrancar llama-server, se marca y se pasa a la GPU; si falla la GPU,
+a la CPU.
 """
 from __future__ import annotations
 
@@ -21,7 +24,7 @@ import subprocess
 from pathlib import Path
 
 GPU_EXE = "libllama-server-gpu.so"
-DEV_LINE = re.compile(r"^\s+([\w.\-]+): (.*?) \((\d+) MiB, (\d+) MiB free\)\s*$")
+DEV_LINE = re.compile(r"^\s+([\w.:\-]+): (.*?) \((\d+) MiB, (\d+) MiB free\)\s*$")
 VENDOR_LIBS = ("/vendor/lib64", "/system/vendor/lib64", "/system/lib64")
 PROPS = ("ro.soc.manufacturer", "ro.soc.model", "ro.board.platform", "ro.hardware", "ro.hardware.egl",
          "ro.hardware.vulkan", "ro.product.manufacturer", "ro.product.model", "ro.build.fingerprint",
@@ -127,13 +130,18 @@ def npu(s: dict, lib=vendor_lib) -> dict | None:
 
 
 # ------------------------------------------------------------------ GPU
+DSP_DIRS = ("/vendor/dsp/cdsp", "/vendor/lib/rfsa/adsp", "/system/lib/rfsa/adsp", "/dsp")
+
+
 def gpu_env(libs: str) -> dict:
     """Entorno de llama-server GPU: sus bibliotecas primero; despues las del sistema (Vulkan) y las del
-    fabricante (libOpenCL.so de Adreno vive en /vendor/lib64)."""
+    fabricante (libOpenCL.so de Adreno y libcdsprpc.so de Hexagon viven en /vendor/lib64). FastRPC busca los
+    programas de la NPU (libggml-htp-v*.so) en ADSP_LIBRARY_PATH, separado por ';'."""
     env = dict(os.environ)
     env.pop("LD_PRELOAD", None)
     paths = [libs] + [d for d in ("/system/lib64", "/vendor/lib64", "/system/vendor/lib64") if os.path.isdir(d)]
     env["LD_LIBRARY_PATH"] = ":".join(paths)
+    env["ADSP_LIBRARY_PATH"] = ";".join([libs, *DSP_DIRS])
     return env
 
 
@@ -144,7 +152,8 @@ def parse_devices(out: str) -> list[dict]:
         if not m:
             continue
         name = m.group(1)
-        backend = "opencl" if "opencl" in name.lower() else "vulkan" if name.lower().startswith("vulkan") else name.lower()
+        backend = ("opencl" if "opencl" in name.lower() else "vulkan" if name.lower().startswith("vulkan") else
+                   "hexagon" if is_npu_dev(name) else name.lower())
         devs.append({"dev": name, "backend": backend, "name": m.group(2).strip(),
                      "mem_mb": int(m.group(3)), "free_mb": int(m.group(4))})
     return devs
@@ -160,9 +169,19 @@ def gpu_vendor(name: str) -> str:
     return "unknown"
 
 
-def pick(devs: list[dict]) -> dict | None:
-    """El dispositivo con el que llama.cpp corre mejor en cada GPU movil.
-    Adreno: OpenCL (kernels de Qualcomm); su Vulkan suele ir peor que la CPU. Resto: Vulkan."""
+def is_npu_dev(dev: str) -> bool:
+    """Dispositivo de llama.cpp de la NPU Hexagon (HTP0, HTP0:1...)."""
+    return bool(re.match(r"HTP\d", dev or ""))
+
+
+def pick(devs: list[dict], npu: bool = True, gpu: bool = True) -> dict | None:
+    """El dispositivo con el que llama.cpp corre mejor en el movil. La NPU Hexagon si esta (y no ha fallado);
+    si no, la GPU: Adreno por OpenCL (kernels de Qualcomm; su Vulkan suele ir peor que la CPU), el resto por Vulkan."""
+    if npu:
+        htp = next((d for d in devs if d["backend"] == "hexagon"), None)
+        if htp:
+            return htp
+    devs = [d for d in devs if d["backend"] != "hexagon"] if gpu else []
     if not devs:
         return None
     adreno = [d for d in devs if "adreno" in d["name"].lower()]
@@ -218,19 +237,25 @@ def detect(libs: str | None = None, use_cache: bool = True) -> dict:
         cache = {"key": key}
     s = soc(p, info)
     devs = probe.get("devices", [])
-    use = pick(devs)
+    broken, npu_broken = cache.get("gpu_broken", ""), cache.get("npu_broken", "")
+    use = pick(devs, npu=not npu_broken, gpu=not broken)
+    gpus = [d for d in devs if d["backend"] != "hexagon"]
+    gpu_dev = pick(gpus)
     egl = (info.get("gl_renderer") or "").strip()
-    name = (use or (devs[0] if devs else {})).get("name") or egl or \
+    name = (gpu_dev or (gpus[0] if gpus else {})).get("name") or egl or \
         {"adreno": "Qualcomm Adreno", "mali": "ARM Mali"}.get((p.get("ro.hardware.egl") or "").lower(), "")
-    broken = cache.get("gpu_broken", "")
     gpu = {"name": name, "vendor": gpu_vendor(name or p.get("ro.hardware.egl", "")), "egl": egl,
            "gl_vendor": info.get("gl_vendor", ""), "vulkan": info.get("vulkan_version", "") or p.get("ro.hardware.vulkan", ""),
-           "devices": devs, "use": None if broken else use, "broken": broken, "probe": probe,
+           "devices": devs, "use": use, "broken": broken, "npu_broken": npu_broken, "probe": probe,
            "binary": probe.get("binary", False)}
-    if devs and not use and not broken:
+    if gpus and not gpu_dev and not broken:
         gpu["note"] = ("Adreno sin OpenCL: su Vulkan es mas lento que la CPU en llama.cpp"
-                       if any("adreno" in d["name"].lower() for d in devs) else "")
-    res = {"soc": s, "npu": npu(s), "gpu": gpu, "props": {k: v for k, v in p.items() if k != "ro.build.fingerprint"}}
+                       if any("adreno" in d["name"].lower() for d in gpus) else "")
+    n = npu(s)
+    htp = next((d for d in devs if d["backend"] == "hexagon"), None)
+    if n and htp:   # llama.cpp la ve: el modelo puede ir en ella
+        n.update(usable=not npu_broken, device=htp["dev"], runtime_hint="llama.cpp Hexagon", broken=npu_broken)
+    res = {"soc": s, "npu": n, "gpu": gpu, "props": {k: v for k, v in p.items() if k != "ro.build.fingerprint"}}
     cache.update({"key": key, "gpu": gpu, "soc": s, "npu": res["npu"]})
     try:
         _cache_file().write_text(json.dumps(cache, indent=1, ensure_ascii=False), encoding="utf-8")
@@ -239,14 +264,15 @@ def detect(libs: str | None = None, use_cache: bool = True) -> dict:
     return res
 
 
-def mark_gpu_broken(reason: str) -> None:
-    """La GPU fallo al arrancar llama-server: se usa la CPU hasta la proxima version de la app o de Android."""
+def mark_gpu_broken(reason: str, device: str = "") -> None:
+    """La NPU o la GPU (``device``) fallo al arrancar llama-server: no se vuelve a usar hasta la proxima version de
+    la app o de Android. Tras la NPU se prueba la GPU; tras la GPU, la CPU."""
     f = _cache_file()
     try:
         cache = json.loads(f.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         cache = {}
-    cache["gpu_broken"] = reason[:300] or "fallo al arrancar"
+    cache["npu_broken" if is_npu_dev(device) else "gpu_broken"] = reason[:300] or "fallo al arrancar"
     try:
         f.write_text(json.dumps(cache, indent=1, ensure_ascii=False), encoding="utf-8")
     except OSError:

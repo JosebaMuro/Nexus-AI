@@ -38,10 +38,19 @@ GPU_NATIVE = ("libllama-server-gpu.so", "libllama-server-impl.so", "libllama-com
               "libggml.so", "libggml-base.so", "libggml-vulkan.so", "libggml-opencl.so", "libc++_shared.so")
 
 
+# NPU de Snapdragon (con el Hexagon SDK): modulo del host y programas del DSP (HTP v73, v75, v79, v81). Opcional.
+NPU_NATIVE = ("libggml-hexagon.so",)
+
+
 def gpu_native() -> list[str]:
-    """Bibliotecas del llama-server con GPU presentes en el runtime (todas o ninguna)."""
+    """Bibliotecas del llama-server con GPU presentes en el runtime (todas o ninguna), y las de la NPU si estan."""
     lib = RUNTIME / "lib"
     names = list(GPU_NATIVE) + sorted(p.name for p in lib.glob("libggml-cpu-*.so"))
+    if (lib / NPU_NATIVE[0]).is_file():
+        htp = sorted(p.name for p in lib.glob("libggml-htp-v*.so"))
+        if not htp:
+            sys.exit("Runtime NPU incompleto (falta libggml-htp-v*.so): vuelve a ejecutar packaging/build_android_gpu.sh")
+        names += list(NPU_NATIVE) + htp
     if not (lib / GPU_NATIVE[0]).is_file():
         return []
     missing = [n for n in GPU_NATIVE if not (lib / n).is_file()]

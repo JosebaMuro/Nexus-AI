@@ -61,7 +61,7 @@ def _tier_at_most(b: float) -> float:
 
 def build_profile(hw: HardwareInfo, override: str = "") -> dict:
     acc, gpu = choose_accelerator(hw, override)
-    gpu_offload = acc in ("cuda", "rocm", "vulkan", "metal", "xpu", "opencl") and gpu is not None
+    gpu_offload = acc in ("cuda", "rocm", "vulkan", "metal", "xpu", "opencl", "hexagon") and gpu is not None
     ram = hw.ram_gb
     cpu_budget = max(0.5, min(ram * 0.5, ram - 3.0))
     if gpu_offload and gpu and not gpu.integrated and not android():
@@ -99,6 +99,7 @@ def build_profile(hw: HardwareInfo, override: str = "") -> dict:
 
     npu = hw.npus[0] if hw.npus else None
     npu_ready = False
+    llm_npu = android() and acc == "hexagon"   # Snapdragon: llama.cpp con el backend Hexagon
     if npu:
         rt = hw.runtimes or {}
         npu_ready = ("NPU" in rt.get("openvino_devices", []) or
@@ -122,7 +123,7 @@ def build_profile(hw: HardwareInfo, override: str = "") -> dict:
             "n_threads": layout["fast"] if android() else phys,   # movil: los nucleos rapidos; los pequenos frenan
             "n_batch": 512 if gpu_offload or ram >= 16 else 256,
             "gpu_layers": -1 if gpu_offload else 0,
-            # Android: dispositivo de llama.cpp (GPUOpenCL, Vulkan0) para no repartir el modelo entre dos backends
+            # Android: dispositivo de llama.cpp (HTP0, GPUOpenCL, Vulkan0) para no repartir el modelo entre dos backends
             **({"device": (hw.runtimes or {}).get("android_accel", {}).get("gpu_device", "") if gpu_offload else ""}
                if android() else {}),
             "llamacpp_wheel": {"cuda": "cu124", "metal": "metal", "vulkan": "vulkan", "rocm": "rocm",
@@ -150,9 +151,10 @@ def build_profile(hw: HardwareInfo, override: str = "") -> dict:
             "name": npu.name if npu else "",
             "vendor": npu.vendor if npu else "",
             "runtime": npu.runtime_hint if npu else "",
-            "ready": npu_ready,
-            "offload": ["embeddings", "stt"] if npu_ready else [],
-            "hint": "" if not npu or npu_ready else
+            "ready": npu_ready or llm_npu,
+            "offload": ["embeddings", "stt"] if npu_ready else ["llm"] if llm_npu else [],
+            "hint": "El modelo de texto va en la NPU (llama.cpp Hexagon); si falla, en la GPU o en la CPU" if llm_npu else
+                    "" if not npu or npu_ready else
                     ("llama.cpp no puede usar esta NPU en Android (su SDK es propietario): el modelo va en la "
                      + ("GPU" if gpu_offload else "CPU") if android() else
                      f"Instala el runtime '{npu.runtime_hint}' para usar la NPU"),
