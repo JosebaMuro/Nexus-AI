@@ -1,4 +1,4 @@
-"""Imagen: generacion (stable-diffusion.cpp > diffusers > arte procedural) y analisis
+"""Imagen: generacion (stable-diffusion.cpp > compositor de escenas sin modelo) y analisis
 (LLM multimodal > estadisticas con PIL)."""
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageStat
 
 from .. import log, paths
+from . import scene
 
 L = log.get("image")
 COLOR_WORDS = {
@@ -50,23 +51,54 @@ class ImageEngine:
         model = self._model()
         sd = self.runtimes.exe("sd", self.profile_getter())
         return {"model": model["id"] if model else None, "runtime": sd[1] if sd else None,
-                "engine": "sd.cpp" if model and sd else "procedural"}
+                "engine": "sd.cpp" if model and sd else "escena"}
 
     # ------------------------------------------------------------------ generacion
     def generate(self, prompt: str, negative: str = "", size: int | None = None, steps: int | None = None,
-                 seed: int | None = None) -> dict:
+                 seed: int | None = None, idea: str = "") -> dict:
+        """``idea`` es el texto original del usuario (si ``prompt`` ya viene mejorado): el compositor lo lee mejor."""
         seed = seed if seed is not None else int(time.time()) % 100000
-        out = paths.sub("outputs", "images") / f"{int(time.time())}_{_slug(prompt)}.png"
+        out = paths.sub("outputs", "images") / f"{int(time.time())}_{_slug(idea or prompt)}.png"
         model, sd = self._model(), self.runtimes.exe("sd", self.profile_getter())
+        why = ("No hay modelo de imagen descargado" if not model else
+               "No hay motor stable-diffusion.cpp para este equipo" if not sd else
+               f"El modelo {model['id']} no es compatible con sd.cpp ({model['format']})")
         if model and sd and model["format"] in ("gguf", "safetensors", "ckpt"):
             try:
-                return self._sdcpp(sd, model, prompt, negative, size, steps, seed, out)
+                return self._sdcpp(sd, model, self.english(prompt), negative, size, steps, seed, out)
             except Exception as e:  # noqa: BLE001
-                L.warning("sd.cpp fallo (%s); usando arte procedural", e)
-        img = self.procedural(prompt, seed, size or 512)
+                L.warning("sd.cpp fallo (%s); usando el compositor de escenas", e)
+                why = f"stable-diffusion.cpp fallo: {str(e).strip()[-200:]}"
+        text = idea or prompt
+        if scene.parse(text)["abstract"]:
+            img, engine = self.procedural(text, seed, size or 512), "procedural"
+        else:
+            img, engine = scene.compose(text, seed, size or 512), "escena"
         img.save(out)
-        return {"engine": "procedural", "url": f"/outputs/images/{out.name}", "path": str(out), "seed": seed,
-                "note": "Descarga un modelo de imagen en Modelos para generacion neuronal"}
+        note = (f"{why}: imagen compuesta sin IA a partir de las palabras del prompt. Para imagenes neuronales "
+                "descarga un modelo de imagen en Modelos (p. ej. SDXS-512 en CPU).")
+        if engine == "escena" and not scene.understood(text):
+            note = "No he reconocido ningun elemento del prompt (lugar, objeto, animal, hora o clima). " + note
+        return {"engine": engine, "url": f"/outputs/images/{out.name}", "path": str(out), "seed": seed, "note": note}
+
+    def english(self, prompt: str) -> str:
+        """Los modelos de difusion (CLIP) solo entienden ingles: un prompt en espanol se traduce (con el LLM si lo
+        hay y, si no, con el diccionario del mejorador de prompts)."""
+        from ..prompt_enhancer import looks_spanish, translate_rules
+        if not looks_spanish(prompt):
+            return prompt
+        if self.llm is not None:
+            try:
+                if self.llm.has_real_llm():
+                    t = self.llm.complete("Translate this image description into a concise English prompt for an image "
+                                          f"generator. Reply with the prompt only.\n\n{prompt}", max_tokens=120,
+                                          temperature=0.2)
+                    t = t.strip().strip('"').splitlines()[0].strip() if t.strip() else ""
+                    if 3 < len(t) < 600:
+                        return t
+            except Exception as e:  # noqa: BLE001
+                L.info("Traduccion con LLM no disponible (%s): se usa el diccionario", e)
+        return translate_rules(prompt)
 
     def _sdcpp(self, sd, model, prompt, negative, size, steps, seed, out: Path) -> dict:
         exe, variant = sd
@@ -86,11 +118,12 @@ class ImageEngine:
         if r.returncode != 0 or not out.exists():
             raise RuntimeError((r.stderr or r.stdout)[-400:])
         return {"engine": f"sd.cpp ({variant})", "model": model["id"], "url": f"/outputs/images/{out.name}",
-                "path": str(out), "seed": seed, "steps": steps, "size": size, "seconds": round(time.time() - t0, 1)}
+                "path": str(out), "seed": seed, "steps": steps, "size": size, "seconds": round(time.time() - t0, 1),
+                "prompt": prompt}
 
     @staticmethod
     def procedural(prompt: str, seed: int, size: int = 512) -> Image.Image:
-        """Arte generativo determinista: campo de flujo con paleta derivada del prompt."""
+        """Arte abstracto determinista (campo de flujo con la paleta del prompt): solo si se pide algo abstracto."""
         rng = np.random.default_rng(zlib.crc32(prompt.encode()) ^ seed)
         low = prompt.lower()
         palette = [c for w, c in COLOR_WORDS.items() if w in low] or [tuple(int(x) for x in rng.integers(40, 255, 3))

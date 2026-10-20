@@ -71,7 +71,7 @@ Para elegir o descargar el modelo más tarde:
 venv/python.exe -m nexus modelos --descargar       # Windows
 venv/bin/python3 -m nexus modelos --descargar      # Linux / macOS
 ```
-Sin modelos Nexus-Office ya funciona con su **núcleo integrado** (herramientas, memoria, imagen procedural, música, voz del navegador).
+Sin modelos Nexus-Office ya funciona con su **núcleo integrado** (herramientas, memoria, imagen compuesta a partir del prompt, música, voz del navegador).
 
 ## Rendimiento medido en el equipo de desarrollo
 

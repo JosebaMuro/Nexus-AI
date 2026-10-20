@@ -702,7 +702,7 @@
     const p = $("#img-prompt").value.trim(); if (!p) return;
     $("#img-go").disabled = true; $("#img-result").innerHTML = `<div class="chip"><span class="spin"></span>generando…</div>`; setState("tool");
     try { const r = await api("/api/image/generate", { body: { prompt: p, negative: $("#img-neg").value } });
-      $("#img-result").innerHTML = `<img class="preview-img" src="${r.url}"><div class="muted mono">${esc(r.engine)}${r.seconds ? " · " + r.seconds + " s" : ""} · semilla ${r.seed}</div>`;
+      $("#img-result").innerHTML = `<img class="preview-img" src="${r.url}"><div class="muted mono">${esc(r.engine)}${r.seconds ? " · " + r.seconds + " s" : ""} · semilla ${r.seed}</div>${r.note ? `<div class="muted">${esc(r.note)}</div>` : ""}`;
       $("#img-result img").onclick = (e) => lightbox(e.target.src); loaders.studio();
     } finally { $("#img-go").disabled = false; setState("idle"); }
   });
