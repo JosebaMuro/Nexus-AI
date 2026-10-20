@@ -1,5 +1,16 @@
 # Cambios
 
+## Nexus-Office 1.9.0: importar grafos de cualquier formato como conocimiento
+
+### Cualquier grafo se convierte en conocimiento de los agentes
+- **Antes**: el gestor de conocimiento leía diez formatos (JSON, CSV, GraphML, GEXF, DOT, Turtle básico…), un fichero cada vez, y había que dar la extensión correcta. Las propiedades de los nodos se perdían.
+- **Ahora** lee más de 50 formatos y los reconoce por el contenido: JSON node-link (D3, vis.js, NetworkX), Cytoscape (.cyjs, CX, SIF, XGMML), Neo4j (Browser, API HTTP, APOC, CSV de neo4j-admin y scripts Cypher), JSON-LD, GraphSON, Arrows.app, Obsidian Canvas, XMind, RDF completo (Turtle con nodos anónimos, N-Triples, N-Quads, TriG, N3, RDF/XML y OWL), GraphML de yEd, GEXF con atributos, GML, Pajek, GDF, UCINET DL, TGF, LGL, NCOL, listas de aristas y de adyacencia, matrices de adyacencia, hojas Excel y ODS, bases SQLite (también la de otro Nexus-Office, con sus ámbitos), Mermaid, PlantUML, texto con flechas, mapas mentales (FreeMind, Freeplane, OPML), esquemas con sangría, YAML, TOML y cualquiera de ellos comprimido (gz, bz2, xz) o varios dentro de un ZIP o TAR.
+- Se pueden importar **varios ficheros a la vez** y se unen en un solo grafo: `nodes.csv` + `edges.csv` de Gephi o Neo4j, o una hoja de nodos y otra de aristas.
+- Lo importado se **fusiona** con lo que ya se sabe y el aviso final dice cuántos nodos son nuevos y cuántos se han unido a los que ya había. Las relaciones repetidas se refuerzan.
+- Los **atributos** de cada nodo (propiedades, literales, columnas) se guardan en su nota y los agentes los usan al responder sobre esa entidad.
+- Tres formas de importar, todas sin internet: la app (*Gestor de conocimiento > Importar / exportar*), la orden `python -m nexus grafo importar …` y la herramienta `graph_import`, con la que un agente importa un grafo de su carpeta de trabajo o del texto que le das. Al leer un ZIP, los grafos que trae se importan en cualquiera de estos formatos.
+- Ver [docs/GRAFOS.md](docs/GRAFOS.md).
+
 ## Nexus-Office 1.8.1: GIMP para los agentes
 
 ### Los agentes editan imágenes con GIMP

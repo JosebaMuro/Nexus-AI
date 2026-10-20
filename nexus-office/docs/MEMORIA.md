@@ -39,11 +39,9 @@ El agente generalista `nexus` no tiene especialidad: lo que aprende en sus conve
 Los trabajos largos (importar, leer un ZIP, reorganizar, buscar duplicados) van en segundo plano y muestran su progreso abajo, sin bloquear el chat.
 
 ### Formatos de grafo que se pueden importar
-- **JSON**: el propio de Nexus-Office (`nexus-kg`), D3 / vis.js (`nodes` + `links`/`edges`), Cytoscape (`elements`), JSON Graph Format y listas de tripletas (`[["s","r","o"], …]` o `{s, r, o}`).
-- **JSONL** con tripletas, **CSV/TSV** (`source,target,relation` o `sujeto,relacion,objeto`), **GraphML**, **GEXF**, **DOT** (Graphviz), **N-Triples/Turtle** básicos.
-- **Notas Markdown** con `[[enlaces]]` (Obsidian, Logseq, Foam): cada nota es un nodo y cada enlace una relación.
+Cualquier tipo y formato, reconocido por el contenido: JSON en todas sus variantes (node-link de D3, vis.js o NetworkX, Cytoscape, JSON Graph Format, JSON-LD, GraphSON, Neo4j, Arrows.app, Obsidian Canvas, tripletas), CSV/TSV y hojas Excel/ODS (aristas, nodos, matriz de adyacencia), GraphML, GEXF, GML, DOT, Pajek, GDF, UCINET, TGF, RDF (Turtle, N-Triples, N-Quads, TriG, RDF/XML, OWL), Cypher de Neo4j, Mermaid, PlantUML, mapas mentales (FreeMind, XMind, OPML), notas con `[[enlaces]]`, YAML, TOML, bases SQLite y cualquiera de ellos comprimido o varios en un ZIP. Lista completa, cómo se importa desde la app, la terminal o el chat, y qué se guarda de cada grafo: [GRAFOS.md](GRAFOS.md).
 
-Si el fichero trae una categoría o un ámbito por nodo, se respetan. En modo automático, los nodos sin ámbito los reparte el organizador.
+Lo importado se fusiona con lo que ya hay: los nodos con el mismo nombre se unen y las relaciones repetidas se refuerzan. Los atributos de cada nodo van a su nota y los agentes los usan al responder. Si el fichero trae una categoría o un ámbito por nodo, se respetan. En modo automático, los nodos sin ámbito los reparte el organizador.
 
 ### Leer un ZIP (también RAR, 7z y TAR)
 1. Lo descomprime de forma segura (sin rutas fuera de la carpeta, con límites de tamaño y número de ficheros).

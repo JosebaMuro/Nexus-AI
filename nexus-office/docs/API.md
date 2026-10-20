@@ -55,7 +55,8 @@ Desde otro dispositivo de la red, estas rutas exigen la clave de red, como todas
 | `DELETE /api/kg/nodes/{id}` | Borrar un nodo y sus relaciones. |
 | `POST /api/kg/merge` `{src, dst}` | Fusionar `src` en `dst` (mismo grafo). |
 | `POST /api/kg/relations` `{src, dst, rel, weight}` (ids de nodo), `DELETE /api/kg/relations/{id}` | Relaciones. No se permiten entre dos agentes distintos. |
-| `POST /api/kg/import` (multipart `file`, `target`: vacío, id de agente o `auto`) | Insertar un grafo. Trabajo en segundo plano. |
+| `POST /api/kg/import` (multipart `file` o varios `files`, `target`: vacío, id de agente o `auto`) | Insertar un grafo de cualquier formato (se detecta por el contenido); varios ficheros se unen en uno, p. ej. `nodes.csv` + `edges.csv`. Trabajo en segundo plano; el informe trae `format`, `nodes`, `new`, `merged`, `relations` y `by_scope`. Ver [GRAFOS.md](GRAFOS.md). |
+| `GET /api/kg/formats` | Formatos de grafo admitidos y sus extensiones. |
 | `POST /api/kg/archive` (multipart `file`, `target`=`auto`, `reason`, `rag`, `max_reason`) | Leer, razonar y procesar un ZIP, RAR, 7z o TAR. Trabajo en segundo plano. |
 | `GET /api/kg/export?scope=&format=json\|graphml\|csv` | Exportar un grafo. |
 | `POST /api/kg/reorganize` `{apply}` | Propuesta de reorganización; con `apply: true`, la aplica. |

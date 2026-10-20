@@ -588,15 +588,32 @@ def create_app(services: Services | None = None) -> FastAPI:
         hub.broadcast({"type": "graph_update"})
         return {"ok": True}
 
+    @app.get("/api/kg/formats")
+    def kg_formats():
+        from ..memory.kg_io import FORMATS, IMPORT_EXT
+        return {"formats": [{"name": n, "extensions": e, "description": d} for n, e, d in FORMATS],
+                "extensions": IMPORT_EXT}
+
     @app.post("/api/kg/import", dependencies=[Depends(require_admin)])
-    async def kg_import(file: UploadFile = File(...), target: str = Form("")):
-        """Inserta otro grafo de conocimiento (JSON, CSV/TSV, GraphML, GEXF, DOT, N-Triples/Turtle)."""
+    async def kg_import(file: UploadFile | None = File(None), files: list[UploadFile] | None = File(None),
+                        target: str = Form("")):
+        """Inserta otro grafo de conocimiento en cualquier formato (se detecta por el contenido). Varios ficheros
+        (``files``) se unen en un solo grafo: p. ej. nodes.csv + edges.csv de Neo4j o Gephi."""
         from ..memory.kg_io import GraphFormatError
-        data = await file.read()
-        if len(data) > 300 * 1024 * 1024:
-            raise HTTPException(400, "El grafo supera 300 MB")
+        uploads = ([file] if file else []) + list(files or [])
+        if not uploads:
+            raise HTTPException(400, "Falta el fichero del grafo")
+        items, total = [], 0
+        for f in uploads[:50]:
+            data = await f.read()
+            total += len(data)
+            if total > 300 * 1024 * 1024:
+                raise HTTPException(400, "El grafo supera 300 MB")
+            items.append(((f.filename or "grafo.json").replace("\\", "/").rsplit("/", 1)[-1], data))
         try:
-            return S().kg_jobs.import_graph(data, file.filename or "grafo.json", target)
+            if len(items) == 1:
+                return S().kg_jobs.import_graph(items[0][1], items[0][0], target)
+            return S().kg_jobs.import_graphs(items, target)
         except (GraphFormatError, ValueError) as e:
             raise HTTPException(400, str(e)) from e
         except Exception as e:  # noqa: BLE001 (XML mal formado, etc.)

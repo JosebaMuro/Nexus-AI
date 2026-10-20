@@ -159,17 +159,21 @@
   /* ---------------------------------------------------------------- importar / exportar grafos */
   VIEWS.grafos = async () => {
     $("#kg-body").innerHTML = `<div class="grid g2">
-      <div class="item col" style="gap:8px"><b>Insertar otro grafo de conocimiento</b>
-        <div class="d">JSON (Nexus-Office, D3/vis.js, Cytoscape, JSON Graph Format, tripletas), JSON Lines, CSV/TSV (origen, destino, relación o sujeto, relación, objeto), GraphML, GEXF, Graphviz DOT y RDF (N-Triples, Turtle).</div>
+      <div class="item col" style="gap:8px"><b>Importar un grafo como conocimiento</b>
+        <div class="d">Cualquier tipo y formato: el formato se reconoce solo por el contenido y lo importado se <b>fusiona</b> con lo que ya sabe Nexus-Office (los nodos con el mismo nombre se unen y las relaciones repetidas se refuerzan). Puedes soltar varios ficheros a la vez, por ejemplo <span class="mono">nodes.csv</span> y <span class="mono">edges.csv</span>, o un ZIP.</div>
+        <details><summary class="d">Formatos admitidos</summary><div class="d" id="kgi-formats">Cargando…</div></details>
         <label class="field">Insertar en<select class="input" id="kgi-target">${scopeOpts("auto", { auto: true })}</select></label>
-        <div class="drop" id="kgi-drop">Suelta aquí el grafo (o haz clic)</div><input type="file" id="kgi-file" hidden accept=".json,.jsonl,.ndjson,.csv,.tsv,.graphml,.gexf,.dot,.gv,.nt,.ttl,.txt"></div>
+        <div class="drop" id="kgi-drop">Suelta aquí el grafo o los ficheros (o haz clic)</div><input type="file" id="kgi-file" hidden multiple></div>
       <div class="item col" style="gap:8px"><b>Exportar</b><div class="d">Para copias de seguridad, para otro Nexus-Office (respeta general y agentes) o para Gephi, yEd, Cytoscape, Neo4j…</div>
         <label class="field">Grafo<select class="input" id="kge-scope">${scopeOpts("*", { all: true })}</select></label>
         <label class="field">Formato<select class="input" id="kge-fmt"><option value="json">JSON de Nexus-Office</option><option value="graphml">GraphML</option><option value="csv">CSV (tripletas)</option></select></label>
         <div class="row"><button class="btn primary sm" id="kge-go">DESCARGAR</button></div></div></div>`;
-    const send = guard(async (f) => { if (!f) return; const fd = new FormData(); fd.append("file", f); fd.append("target", $("#kgi-target").value);
-      const j = await api("/api/kg/import", { body: fd }); onJob(j); toast(`Importando ${f.name}…`); });
-    dropZone($("#kgi-drop"), $("#kgi-file"), send);
+    const send = guard(async (files) => { files = [...(files || [])]; if (!files.length) return;
+      const fd = new FormData(); files.forEach((f) => fd.append("files", f)); fd.append("target", $("#kgi-target").value);
+      const j = await api("/api/kg/import", { body: fd }); onJob(j); toast(`Importando ${files.length > 1 ? files.length + " ficheros" : files[0].name}…`); });
+    dropZone($("#kgi-drop"), $("#kgi-file"), send, true);
+    api("/api/kg/formats").then((f) => { $("#kgi-formats").innerHTML = f.formats.map((x) => `<div><b>${esc(x.name)}</b> <span class="mono">${esc(x.extensions)}</span> · ${esc(x.description)}</div>`).join(""); })
+      .catch(() => { $("#kgi-formats").textContent = "JSON, CSV, Excel, GraphML, GEXF, GML, DOT, RDF, Cypher, Mermaid, SQLite, ZIP…"; });
     $("#kge-go").onclick = () => download($("#kge-scope").value, $("#kge-fmt").value);
   };
   async function download(scope, fmt) {
@@ -179,19 +183,20 @@
     const name = (res.headers.get("Content-Disposition") || "").split("filename=")[1] || `nexus-conocimiento.${fmt}`;
     UI().saveFile(name, await res.arrayBuffer(), res.headers.get("Content-Type") || "application/octet-stream");
   }
-  function dropZone(zone, input, onFile) {
+  function dropZone(zone, input, onFile, many = false) {
+    const pick = (fl) => onFile(many ? fl : fl[0]);
     zone.onclick = () => input.click();
-    input.onchange = () => { onFile(input.files[0]); input.value = ""; };
+    input.onchange = () => { pick(input.files); input.value = ""; };
     zone.ondragover = (e) => { e.preventDefault(); zone.classList.add("over"); };
     zone.ondragleave = () => zone.classList.remove("over");
-    zone.ondrop = (e) => { e.preventDefault(); zone.classList.remove("over"); onFile(e.dataTransfer.files[0]); };
+    zone.ondrop = (e) => { e.preventDefault(); zone.classList.remove("over"); pick(e.dataTransfer.files); };
   }
 
   /* ---------------------------------------------------------------- leer un ZIP */
   VIEWS.zip = async () => {
     const llm = ((await api("/api/status").catch(() => ({}))).llm || {}).backend;
     $("#kg-body").innerHTML = `<div class="item col" style="gap:8px">
-      <div class="d">Nexus-Office descomprime el archivo de forma segura, inserta los grafos que traiga (JSON, GraphML, CSV, RDF, notas con [[enlaces]]), lo añade a la biblioteca RAG,
+      <div class="d">Nexus-Office descomprime el archivo de forma segura, inserta los grafos que traiga (en cualquier formato: JSON, CSV, GraphML, GEXF, GML, DOT, RDF, Cypher, Mermaid… y notas con [[enlaces]]), lo añade a la biblioteca RAG,
         agrupa los documentos por temas con el modelo de embeddings y <b>razona</b> los más importantes con el LLM: resumen, hechos y procedimientos. Lo común va al grafo general y el saber hacer, al especialista.</div>
       <div class="grid g2" style="gap:8px">
         <label class="field">Destino<select class="input" id="kgz-target">${scopeOpts("auto", { auto: true })}</select></label>
@@ -286,12 +291,13 @@
   }
   function onJob(j) {
     if (!j || !j.id) return;
+    const seen = K.jobs[j.id] && K.jobs[j.id].status === "completado";
     K.jobs[j.id] = j; renderJobs();
-    if (j.status !== "completado") return;
+    if (j.status !== "completado" || seen) return;   // el aviso, una sola vez por trabajo
     if (j.kind === "zip" && K.tab === "zip") zipReport(j);
     if (j.kind === "reorganize" && K.tab === "mant") movesView(j);
     if (j.kind === "duplicates" && K.tab === "mant") dupView(j);
-    if (j.kind === "import") toast(`Grafo importado: ${j.result.nodes} nodos, ${j.result.relations} relaciones`);
+    if (j.kind === "import") { const r = j.result; toast(`Grafo ${r.format} importado: ${r.nodes} nodos (${r.new} nuevos, ${r.merged} fusionados), ${r.relations} relaciones`); }
     if (j.kind === "zip") toast(`ZIP procesado: ${j.result.reasoned} documentos razonados`);
     UI().refreshGraph();
   }
