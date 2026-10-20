@@ -1,0 +1,10 @@
+id: limpieza-profesional
+name: "Limpieza profesional"
+sector: "Servicios · limpieza de edificios y locales"
+assistant_name: "Oficina Limpieza"
+icon: "✧"
+description: "Empresa de limpieza de oficinas, comunidades, locales, industrias y fin de obra, con personal propio, maquinaria y planes de limpieza."
+agents: [limpieza, controlador-plagas, recepcion, presupuestos, administracion, compras, rrhh, calidad, prl]
+coordinator:
+  context: |
+    La empresa es de limpieza profesional: limpia oficinas, comunidades de vecinos, locales, naves, centros educativos y sanitarios, cristales y fines de obra con contratos periódicos; organiza cuadrantes de personal, subrogaciones, productos y maquinaria, y ofrece desinfecciones.

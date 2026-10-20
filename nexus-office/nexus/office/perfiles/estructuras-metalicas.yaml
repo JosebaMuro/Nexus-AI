@@ -1,0 +1,10 @@
+id: estructuras-metalicas
+name: "Estructuras metálicas y montajes"
+sector: "Metal · estructuras con marcado CE (EN 1090)"
+assistant_name: "Oficina Estructuras"
+icon: "⌗"
+description: "Fabricante y montador de estructuras metálicas, naves y entreplantas con marcado CE según EN 1090."
+agents: [herrero, calderero, soldador, calidad, presupuestos, administracion, compras, prl, rrhh]
+coordinator:
+  context: |
+    La empresa fabrica y monta estructuras metálicas (naves, entreplantas, pasarelas, escaleras industriales) con marcado CE según EN 1090, control de producción en fábrica y montaje en obra con grúa y plataformas.

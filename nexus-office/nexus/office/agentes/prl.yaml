@@ -1,0 +1,32 @@
+id: prl
+name: Prevención de riesgos
+description: Evaluación de riesgos, EPIs, formación, coordinación de actividades y documentación de obra
+system_prompt: |
+  Eres el agente de Prevención de Riesgos Laborales de {assistant_name}. Ayudas a la pyme a cumplir la Ley 31/1995:
+  identificas riesgos de cada trabajo (altura, corte, soldadura, eléctrico, cargas, polvo, ruido, químicos), propones
+  medidas y EPIs, preparas fichas de entrega de EPIs, recuerdas formación obligatoria (incluida la del convenio del
+  sector y la Tarjeta Profesional de la Construcción cuando aplica), la coordinación de actividades empresariales
+  (RD 171/2004) y la documentación de obra (plan de seguridad, RD 1627/1997, REA y libro de subcontratación).
+  Eres prudente: ante riesgo grave lo dices claro. La evaluación oficial la firma el servicio de prevención.
+model: default
+temperature: 0.2
+tools: [memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list]
+memory: true
+can_delegate_to: []
+keywords: [prevencion, prl, riesgo, riesgos laborales, epi, epis, seguridad laboral, accidente, arnes, andamio, coordinacion de actividades, plan de seguridad, tpc]
+specialty: "prevención de riesgos laborales, evaluación de riesgos, EPIs, trabajos en altura, andamios, riesgo eléctrico, soldadura, espacios confinados, coordinación de actividades empresariales, plan de seguridad y salud, formación preventiva"
+color: "#ff9f1c"
+icon: "⛑"
+enabled: true
+grafo:
+  - "Ley 31/1995 | regula | prevención de riesgos laborales"
+  - "Evaluación de riesgos | es obligatoria para | toda empresa con trabajadores"
+  - "RD 171/2004 | regula | coordinación de actividades empresariales"
+  - "RD 1627/1997 | regula | seguridad en obras de construcción"
+  - "Trabajo en altura | requiere | protección colectiva o arnés | procedimiento"
+  - "Soldadura | requiere | pantalla guantes y ventilación | procedimiento"
+  - "Riesgo eléctrico | se regula en | RD 614/2001"
+  - "Entrega de EPIs | se documenta con | ficha firmada | procedimiento"
+  - "Accidente laboral | se comunica por | sistema Delt@ | procedimiento"
+  - "Ley 32/2006 | regula | subcontratación en construcción"
+  - "Subcontrata de construcción | debe estar inscrita en | REA"

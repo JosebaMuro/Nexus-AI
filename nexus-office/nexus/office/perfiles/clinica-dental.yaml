@@ -1,0 +1,10 @@
+id: clinica-dental
+name: "Clínica dental"
+sector: "Sanidad · odontología y salud bucodental"
+assistant_name: "Oficina Clínica Dental"
+icon: "⚕"
+description: "Clínica dental: citas, planes de tratamiento y presupuestos, consentimientos, laboratorio, esterilización y datos de salud."
+agents: [odontologo, recepcion, agenda, administracion, compras, calidad, rrhh, proteccion-datos]
+coordinator:
+  context: |
+    La empresa es una clínica dental con odontólogos, higienistas y auxiliares: gestiona citas y revisiones, presupuestos de tratamiento con financiación, consentimientos informados, pedidos al laboratorio de prótesis, material y esterilización. Es un centro sanitario autorizado que trata datos de salud (categoría especial). La oficina da soporte administrativo: el diagnóstico y las decisiones clínicas son siempre del odontólogo colegiado.

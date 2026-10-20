@@ -1,0 +1,10 @@
+id: ayuda-domicilio-residencia
+name: "Ayuda a domicilio y residencia"
+sector: "Servicios sociales · atención a personas mayores y dependientes"
+assistant_name: "Oficina Sociosanitaria"
+icon: "♥"
+description: "Ayuda a domicilio, centro de día y residencia: planes de atención, dependencia, rutas y turnos de auxiliares, registros y protocolos."
+agents: [sociosanitario, rrhh, prl, calidad, compras, administracion, recepcion, proteccion-datos]
+coordinator:
+  context: |
+    La empresa presta servicio de ayuda a domicilio y gestiona una residencia y centro de día para personas mayores y dependientes, con plazas privadas y concertadas o con prestación vinculada de la Ley de dependencia: elabora planes de atención individualizados, organiza rutas y turnos de auxiliares y gerocultores, lleva registros asistenciales y protocolos (caídas, úlceras, sujeciones) y se coordina con familias y servicios sociales. Lo clínico corresponde a enfermería y medicina.

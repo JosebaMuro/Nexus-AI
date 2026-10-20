@@ -1,0 +1,10 @@
+id: estudio-fotografia
+name: "Estudio de fotografía"
+sector: "Servicios · fotografía profesional y estudio"
+assistant_name: "Oficina Estudio"
+icon: "◉"
+description: "Estudio de fotografía: sesiones con cita, bodas y eventos, fotos de carnet, presupuestos, contratos y entregas."
+agents: [fotografo, agenda, presupuestos, recepcion, administracion, comercial]
+coordinator:
+  context: |
+    La empresa es un estudio de fotografía: hace fotos de carnet, retratos, sesiones de familia y recién nacido, reportajes de boda y comunión, fotografía de producto y de empresa; trabaja con cita y contrato con señal, edita y entrega en galería o álbum y cuida los derechos de imagen y la protección de datos.

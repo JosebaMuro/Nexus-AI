@@ -1,0 +1,10 @@
+id: fisioterapia
+name: "Centro de fisioterapia"
+sector: "Sanidad · fisioterapia y rehabilitación"
+assistant_name: "Oficina Fisioterapia"
+icon: "✚"
+description: "Centro de fisioterapia: citas y bonos, valoraciones e informes, ejercicios pautados, mutuas y protección de datos de salud."
+agents: [fisioterapeuta, agenda, recepcion, administracion, comercial, proteccion-datos]
+coordinator:
+  context: |
+    La empresa es un centro de fisioterapia y rehabilitación que atiende pacientes privados, de mutuas de salud, de accidentes de trabajo y de tráfico: organiza citas y bonos de sesiones, valoraciones, informes y ejercicios domiciliarios, y algunas actividades como pilates terapéutico. Es un centro sanitario autorizado que trata datos de salud; la oficina da soporte y el juicio clínico es siempre del fisioterapeuta colegiado.

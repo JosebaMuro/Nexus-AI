@@ -1,0 +1,10 @@
+id: reformas
+name: "Albañilería y reformas"
+sector: "Construcción · reformas integrales de viviendas y locales"
+assistant_name: "Oficina Reformas"
+icon: "▤"
+description: "Empresa de reformas integrales: albañilería, fontanería, electricidad y pintura coordinadas desde una oficina."
+agents: [albanil, fontanero, electricista, pintor, recepcion, presupuestos, administracion, compras, prl]
+coordinator:
+  context: |
+    La empresa hace reformas integrales de viviendas, baños, cocinas y locales: coordina albañilería, fontanería, electricidad y pintura, gestiona licencias de obra menor y trata con particulares y comunidades.
