@@ -13,7 +13,7 @@ namespace nx::proc {
 
 struct Options {
   fs::path cwd;
-  std::map<std::string, std::string> env;   // variables anadidas o sustituidas
+  std::map<std::string, std::string> env;   // variables anadidas o sustituidas ("" = quitarla)
   fs::path output_file;                     // stdout y stderr al final de este fichero (si no, se descartan)
   bool capture = false;                     // capturar stdout/stderr (solo run)
   std::string input;                        // stdin (solo run)

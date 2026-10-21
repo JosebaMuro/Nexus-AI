@@ -47,6 +47,15 @@ add_library(nx_xz STATIC ${XZ_SRC})
 target_include_directories(nx_xz PUBLIC ${TP}/xz)
 target_compile_definitions(nx_xz PUBLIC XZ_USE_CRC64 XZ_DEC_ANY_CHECK)
 
+# libwebp (leer y guardar WebP en la edicion de imagenes sin GIMP)
+file(GLOB WEBP_SRC ${TP}/libwebp/src/dec/*.c ${TP}/libwebp/src/enc/*.c ${TP}/libwebp/src/dsp/*.c
+     ${TP}/libwebp/src/utils/*.c ${TP}/libwebp/sharpyuv/*.c)
+add_library(nx_webp STATIC ${WEBP_SRC})
+target_include_directories(nx_webp PUBLIC ${TP}/libwebp/src PRIVATE ${TP}/libwebp)
+if(NOT MSVC)
+  target_compile_options(nx_webp PRIVATE -w)
+endif()
+
 file(GLOB PCRE2_SRC ${TP}/pcre2/src/*.c)
 list(FILTER PCRE2_SRC EXCLUDE REGEX "pcre2_(jit_match|jit_misc|ucptables)\\.c$")
 add_library(nx_pcre2 STATIC ${PCRE2_SRC})
@@ -84,7 +93,7 @@ add_library(nexus_core STATIC ${NEXUS_SRC})
 target_include_directories(nexus_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${TP}/httplib ${TP}/json ${TP}/ryml ${TP}/stb)
 target_compile_definitions(nexus_core PUBLIC NEXUS_VERSION="${NEXUS_VERSION}" CPPHTTPLIB_THREAD_POOL_COUNT=16
                            ${NX_TLS_DEFS})
-target_link_libraries(nexus_core PUBLIC nx_sqlite3 nx_miniz nx_pcre2 nx_bz2 nx_xz ${NX_TLS_LIBS} Threads::Threads)
+target_link_libraries(nexus_core PUBLIC nx_sqlite3 nx_miniz nx_pcre2 nx_bz2 nx_xz nx_webp ${NX_TLS_LIBS} Threads::Threads)
 if(WIN32)
   target_compile_definitions(nexus_core PUBLIC _WIN32_WINNT=0x0A00 NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE
                              _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS)
@@ -108,7 +117,7 @@ target_link_libraries(nexus-office PRIVATE nexus_core)
 # funciona tambien con la traduccion de ARM64 de los emuladores y Chromebook x86 (ndk_translation no las tiene todas).
 option(NEXUS_ANDROID_NOSIMD "Android ARM64 sin AdvSIMD en el servidor" ON)
 if(ANDROID AND NEXUS_ANDROID_NOSIMD AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
-  foreach(t nx_sqlite3 nx_miniz nx_pcre2 nexus_core nexus-office)
+  foreach(t nx_sqlite3 nx_miniz nx_pcre2 nx_webp nexus_core nexus-office)
     target_compile_options(${t} PRIVATE -march=armv8-a+nosimd)
   endforeach()
 endif()

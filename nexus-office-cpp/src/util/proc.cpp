@@ -76,7 +76,7 @@ std::wstring env_block(const std::map<std::string, std::string>& extra) {
       if (_wcsicmp(it->first.c_str(), wk.c_str()) == 0) it = vars.erase(it);
       else ++it;
     }
-    vars[wk] = P(v).wstring();
+    if (!v.empty()) vars[wk] = P(v).wstring();   // vacio = quitar la variable
   }
   std::wstring b;
   for (auto& [k, v] : vars) b += k + L"=" + v + L'\0';
@@ -191,7 +191,8 @@ struct RunImpl {
       auto k = s.substr(0, s.find('='));
       if (!opt.env.count(k)) envs.push_back(s);
     }
-    for (auto& [k, v] : opt.env) envs.push_back(k + "=" + v);
+    for (auto& [k, v] : opt.env)
+      if (!v.empty()) envs.push_back(k + "=" + v);   // vacio = quitar la variable
     std::vector<char*> argv, envp;
     for (auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
     argv.push_back(nullptr);

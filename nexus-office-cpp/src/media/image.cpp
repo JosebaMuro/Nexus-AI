@@ -317,6 +317,12 @@ static std::vector<std::pair<long, std::array<int, 3>>> median_cut(const std::ve
     auto [s, e] = boxes[best];
     std::sort(pxs.begin() + s, pxs.begin() + e, [&](auto& a, auto& b) { return a[best_ch] < b[best_ch]; });
     size_t mid = s + (e - s) / 2;
+    // corte en un cambio de valor: dos cajas con el mismo color darian colores dominantes repetidos
+    auto same = [&](size_t i) { return pxs[i][best_ch] == pxs[i - 1][best_ch]; };
+    size_t up = mid, down = mid;
+    while (up < e && same(up)) ++up;
+    while (down > s + 1 && same(down)) --down;
+    mid = up < e && (up - mid <= mid - down || down <= s + 1 && same(down)) ? up : down;
     boxes[best] = {s, mid};
     boxes.push_back({mid, e});
   }
