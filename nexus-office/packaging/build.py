@@ -176,6 +176,7 @@ def offline(target: str, dest: Path) -> None:
     lp = DESKTOP_RT / py_target / "llama-python"
     if lp.is_dir() and any(lp.glob("llama_cpp_python-*.whl")):
         shutil.copytree(lp, dest / "bundled" / "runtimes" / "llama-python")
+        _llama_python_deps(dest / "bundled" / "runtimes" / "llama-python", py_target)
         log(f"offline: llama-cpp-python {', '.join(p.name for p in lp.glob('*.whl'))}")
     else:
         log(f"offline: sin llama-cpp-python para {py_target} (el selector solo ofrecera llama-server)")
@@ -382,6 +383,19 @@ def _profiles_nsh(path: Path) -> None:
         name = (yaml.safe_load(f.read_text(encoding="utf-8")) or {}).get("name", f.stem).replace('"', "'")
         lines.append(f'  ${{NSD_CB_AddString}} $hCombo "{f.stem}: {name}"')
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _llama_python_deps(d: Path, py_target: str) -> None:
+    """llama-cpp-python se instala con --no-deps: Jinja2 (plantillas de chat) y MarkupSafe van junto a su wheel
+    (numpy y typing-extensions ya estan en el wheelhouse base)."""
+    have = {p.name.split("-")[0].lower() for p in d.glob("*.whl")}
+    need = [n for n in ("jinja2", "markupsafe") if n not in have]
+    if not need:
+        return
+    plats = [a for p in TARGETS[py_target]["pip"] for a in ("--platform", p)]
+    subprocess.run([sys.executable, "-m", "pip", "download", "-q", "--disable-pip-version-check", "--no-deps",
+                    "--only-binary", ":all:", "--python-version", "3.11", "--implementation", "cp", *plats,
+                    "-d", str(d), *need], check=True)
 
 
 def windows_exe(target: str, dest: Path) -> Path | None:

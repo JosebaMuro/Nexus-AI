@@ -106,8 +106,12 @@ class LLMManager:
         entry = self.catalog.get(default) if default else None
         if entry:
             b = "llamacpp" if entry.get("format") == "gguf" else "transformers"
-            if entry.get("format") == "gguf" and self.config.get("llm.engine", "auto") in ("llamaserver", "llamacpp"):
-                b = self.config.get("llm.engine")
+            if entry.get("format") == "gguf":
+                engine = self.config.get("llm.engine", "auto")
+                if engine in ("llamaserver", "llamacpp"):
+                    b = engine
+                elif self.is_available("llamaserver"):   # automatico: llama-server (sus variantes usan GPU y NPU)
+                    b = "llamaserver"
             if self.is_available(b):
                 return b, entry["id"]
         order = list(self.config.get("llm.backend_order", []))

@@ -6,6 +6,7 @@ name: Instaladores de Nexus-Office (construir y probar)
 # llama-server con OpenVINO), de la Release «selector-runtimes»; GIMP, de «gimp-runtimes». Los instaladores quedan
 # como artefactos de esta ejecucion; publicar.yml los junta con las APK y publica la Release.
 # El .exe de x64 pasa de 3 GB sin comprimir: build.py usa entonces LZMA no solida (la solida de makensis no llega).
+# Junto a llama-cpp-python van Jinja2 y MarkupSafe (se instala con --no-deps).
 on:
   workflow_dispatch:
   push:

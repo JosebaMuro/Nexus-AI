@@ -97,7 +97,7 @@ def main() -> int:
         for acc in ("gpu", "npu"):     # sin GPU ni NPU en el equipo de pruebas: debe decirlo y seguir funcionando
             res = call("/api/accel", {"engine": "auto", "accel": acc, "remember": True})
             t = call("/api/accel/test", {})
-            check(t.get("ok"), f"{acc} pedida en un equipo sin {acc.upper()}: responde igual ({res.get('note')})")
+            check(t.get("ok"), f"{acc} pedida en un equipo sin {acc.upper()}: responde igual ({res.get('note')}; {t.get('backend')}: {t.get('error') or t.get('text')})")
         call("/api/accel", {"engine": "auto", "accel": "auto", "remember": False})
     finally:
         srv.terminate()
