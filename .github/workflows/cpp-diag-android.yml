@@ -1,0 +1,40 @@
+name: Nexus-Office C++ (diagnostico temporal de la APK)
+on:
+  push:
+    paths:
+      - .github/workflows/cpp-diag-android.yml
+permissions:
+  contents: read
+  actions: read
+env:
+  GH_TOKEN: ${{ github.token }}
+  RUN: "39593421958"
+jobs:
+  emulador:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - run: gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n apk-cpp -D apk && ls -la apk
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096
+          script: |
+            unzip -q -o -j apk/*.apk lib/arm64-v8a/libnexusoffice.so -d nx && adb push nx/libnexusoffice.so /data/local/tmp/nx && adb shell chmod 755 /data/local/tmp/nx
+            adb shell getprop ro.product.cpu.abilist; adb shell getprop ro.dalvik.vm.native.bridge; adb shell ls /proc/sys/fs/binfmt_misc || true
+            adb shell /data/local/tmp/nx --version || true
+            adb shell /data/local/tmp/nx detect | head -30 || true
+            adb install -r apk/*.apk
+            adb shell am start -n ai.nexus.office.cpp/ai.nexus.office.autonomo.MainActivity
+            sleep 90
+            adb logcat -d | grep -iE "nexus|translation|AndroidRuntime|FATAL|linker|bridge" | tail -150 || true
+            adb shell dumpsys notification --noredact | grep -iE -A6 "ai.nexus" | head -60 || true
+            adb shell dumpsys activity services ai.nexus.office.cpp | head -40 || true
+            adb shell ps -A | grep -iE "nexus|llama" || true
+            adb forward tcp:8775 tcp:8775; curl -s -m 10 http://127.0.0.1:8775/api/ping || true
