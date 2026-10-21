@@ -76,7 +76,8 @@ target_compile_definitions(nexus_core PUBLIC NEXUS_VERSION="${NEXUS_VERSION}" CP
                            ${NX_TLS_DEFS})
 target_link_libraries(nexus_core PUBLIC nx_sqlite3 nx_miniz nx_pcre2 ${NX_TLS_LIBS} Threads::Threads)
 if(WIN32)
-  target_compile_definitions(nexus_core PUBLIC _WIN32_WINNT=0x0A00 NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+  target_compile_definitions(nexus_core PUBLIC _WIN32_WINNT=0x0A00 NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE
+                             _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS)
   target_link_libraries(nexus_core PUBLIC ws2_32 crypt32 bcrypt iphlpapi shell32 advapi32)
   if(MSVC)
     target_compile_options(nexus_core PUBLIC /utf-8 /bigobj /Zc:__cplusplus)

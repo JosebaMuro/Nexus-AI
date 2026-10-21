@@ -32,7 +32,7 @@ std::optional<std::pair<std::string, json>> detect_intent(const std::string& tex
   static const Rx CRAWL(
       R"(\b(rastrea|rastrear|rastreo|crawl\w*|ara[ñn]a|spider|indexa (?:toda|todo|el sitio|el dominio|la documentaci[oó]n)|todo el (?:dominio|sitio)|toda la documentaci[oó]n|documentaci[oó]n (?:completa|entera)|aprende de (?:la|esta) documentaci[oó]n|lee (?:toda|la) documentaci[oó]n)\b)",
       Rx::I);
-  static const Rx DOMAIN(R"(\b(todo el (dominio|sitio|site)|dominio completo|whole (site|domain))\b)");
+  static const Rx DOMAIN_RX(R"(\b(todo el (dominio|sitio|site)|dominio completo|whole (site|domain))\b)");
   static const Rx WHOLE(R"((toda la documentaci[oó]n|documentaci[oó]n (completa|entera)|entera\b|completa\b))");
   static const Rx CONT(R"(\b(sigue|segu[ií]|contin[uú]a|continuar|reanuda|reanudar)\b)");
   static const Rx PREFIX(R"(^(cu[aá]nto es|cu[aá]nto da|calcula|calculate|what is|resuelve)\s*)");
@@ -41,7 +41,7 @@ std::optional<std::pair<std::string, json>> detect_intent(const std::string& tex
   std::string low = lower(trim(text));
   auto url = URL().search(text);
   if (tools.count("crawl_docs") && url && CRAWL.test(text)) {
-    json args = {{"url", rstrip_chars(url->str(), ".,;)")}, {"scope", DOMAIN.test(low) ? "domain" : "path"}};
+    json args = {{"url", rstrip_chars(url->str(), ".,;)")}, {"scope", DOMAIN_RX.test(low) ? "domain" : "path"}};
     if (args["scope"] == "domain" || WHOLE.test(low)) {
       args["max_pages"] = 100000;
       args["max_depth"] = 50;

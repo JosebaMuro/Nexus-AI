@@ -22,7 +22,7 @@ struct Ref {
   int num = 0, gen = 0;
 };
 struct Obj {
-  enum T { NUL, BOOL, NUM, STR, NAME, ARR, DICT, REF, STREAM, OP } t = NUL;
+  enum T { NUL, BOOLV, NUM, STR, NAME, ARR, DICT, REF, STREAM, OP } t = NUL;
   double n = 0;
   bool b = false;
   std::string s;                       // STR (bytes), NAME, OP
@@ -233,7 +233,7 @@ struct Lexer {
       return o;
     }
     if (tok == "true" || tok == "false") {
-      auto o = mk(Obj::BOOL);
+      auto o = mk(Obj::BOOLV);
       o->b = tok == "true";
       return o;
     }

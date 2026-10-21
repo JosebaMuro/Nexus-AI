@@ -48,7 +48,7 @@ jobs:
       - name: Instalar en una carpeta
         shell: bash
         run: |
-          cmake --install build --config Release --prefix out/Nexus-Office
+          cmake --install build --config Release --prefix out/Nexus-Office --strip
           ls -la out/Nexus-Office
           EXE=out/Nexus-Office/nexus-office; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
           "$EXE" --version

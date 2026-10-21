@@ -24,7 +24,7 @@ std::u32string u32(std::string_view s);          // decodifica (los bytes invali
 std::string u8(std::u32string_view s);
 std::string u8(char32_t c);
 size_t ulen(std::string_view s);                  // len() en caracteres
-std::string usub(std::string_view s, long start, long stop = (1L << 60));  // s[start:stop] en caracteres
+std::string usub(std::string_view s, long start, long stop = (1L << 30));  // s[start:stop] en caracteres
 std::string uleft(std::string_view s, size_t n);  // s[:n]
 std::string uright(std::string_view s, size_t n); // s[-n:]
 std::string valid_utf8(std::string_view s);       // decode(errors="replace")

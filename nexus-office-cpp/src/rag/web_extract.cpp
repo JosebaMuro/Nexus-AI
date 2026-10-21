@@ -15,7 +15,7 @@ static const std::set<std::string> BLOCK = {"p",  "div", "section", "article", "
                                             "ol", "table", "tr",    "td",      "th",   "pre",    "blockquote",
                                             "h1", "h2",  "h3",      "h4",      "h5",   "h6",     "br", "hr",
                                             "figure", "figcaption", "dd", "dt", "dl"};
-static const std::set<std::string> VOID = {"br",   "hr",    "img", "meta",  "link",  "input", "source",
+static const std::set<std::string> VOID_TAGS = {"br",   "hr",    "img", "meta",  "link",  "input", "source",
                                            "wbr",  "area",  "base", "col",  "embed", "param", "track"};
 
 static std::string clean(const std::string& t) {
@@ -157,13 +157,13 @@ struct Parser {
     }
     if (SKIP.count(tag) || ((tag == "div" || tag == "section" || tag == "ul" || tag == "header") &&
                             noise.test(attr(a, "class") + " " + attr(a, "id") + " " + attr(a, "role")))) {
-      if (!VOID.count(tag)) {
+      if (!VOID_TAGS.count(tag)) {
         skip = 1;
         skip_tag = tag;
       }
       return;
     }
-    if (!VOID.count(tag)) stack.push_back(tag);
+    if (!VOID_TAGS.count(tag)) stack.push_back(tag);
     if (tag == "article" || tag == "main" || attr(a, "role") == "main") ++main;
     if (BLOCK.count(tag) && tag != "li" && tag != "td" && tag != "th" && tag != "tr") flush();
     if (tag == "ul" || tag == "ol") {
@@ -204,7 +204,7 @@ struct Parser {
       if (tag == skip_tag) --skip;
       return;
     }
-    if (VOID.count(tag)) return;
+    if (VOID_TAGS.count(tag)) return;
     if (std::find(stack.begin(), stack.end(), tag) != stack.end())
       while (!stack.empty()) {
         std::string t = stack.back();

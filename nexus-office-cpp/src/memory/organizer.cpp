@@ -409,12 +409,12 @@ json Organizer::plan(const std::function<void(size_t, size_t)>& progress, int li
       std::vector<Row> block(topical.begin() + b, topical.begin() + std::min(topical.size(), b + 64));
       std::vector<std::string> texts;
       for (auto& r : block) {
-        auto near = db.query("SELECT e.name FROM relations x JOIN entities e ON e.id = CASE WHEN x.src=? THEN x.dst "
+        auto nearby = db.query("SELECT e.name FROM relations x JOIN entities e ON e.id = CASE WHEN x.src=? THEN x.dst "
                              "ELSE x.src END WHERE (x.src=? OR x.dst=?) AND e.type NOT IN ('self','agente') "
                              "ORDER BY x.weight DESC LIMIT 8",
                              {r["id"], r["id"], r["id"]});
         std::vector<std::string> names;
-        for (auto& n : near) names.push_back(jstr(n, "name"));
+        for (auto& n : nearby) names.push_back(jstr(n, "name"));
         texts.push_back(jstr(r, "name") + ". " + jstr(r, "note") + " " + join(names, ", "));
       }
       json aff = affinities(texts);

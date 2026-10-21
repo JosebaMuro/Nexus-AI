@@ -1,6 +1,8 @@
 // Herramientas basicas de bajo riesgo (tools/builtin/core_tools.py y agent_tools.py): calculadora segura,
 // fecha/hora, memoria, grafo, sistema y colaboracion entre agentes.
+#include <climits>
 #include <cmath>
+#include <cstdlib>
 #include <set>
 
 #include "agents/agents.h"
@@ -54,17 +56,39 @@ class Calc {
     }
     return false;
   }
+  // enteros de 64 bits mientras quepan (como Python); si se desbordan, coma flotante
+  static bool add_ok(long long a, long long b, long long* r) {
+    if ((b > 0 && a > LLONG_MAX - b) || (b < 0 && a < LLONG_MIN - b)) return false;
+    *r = a + b;
+    return true;
+  }
+  static bool mul_ok(long long a, long long b, long long* r) {
+    if (a == 0 || b == 0) {
+      *r = 0;
+      return true;
+    }
+    if (a == LLONG_MIN || b == LLONG_MIN) {
+      if (a == 1 || b == 1) {
+        *r = a == 1 ? b : a;
+        return true;
+      }
+      return false;
+    }
+    if (std::llabs(a) > LLONG_MAX / std::llabs(b)) return false;
+    *r = a * b;
+    return true;
+  }
   static Num add(Num a, Num b, int sign) {
-    if (a.is_int && b.is_int) {
+    if (a.is_int && b.is_int && !(sign < 0 && b.i == LLONG_MIN)) {
       long long r;
-      if (!__builtin_add_overflow(a.i, sign * b.i, &r)) return Num::I(r);
+      if (add_ok(a.i, sign * b.i, &r)) return Num::I(r);
     }
     return Num::F(a.d() + sign * b.d());
   }
   static Num mul(Num a, Num b) {
     if (a.is_int && b.is_int) {
       long long r;
-      if (!__builtin_mul_overflow(a.i, b.i, &r)) return Num::I(r);
+      if (mul_ok(a.i, b.i, &r)) return Num::I(r);
     }
     return Num::F(a.d() * b.d());
   }

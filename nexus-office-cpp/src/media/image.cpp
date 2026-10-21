@@ -334,10 +334,10 @@ static std::vector<std::pair<long, std::array<int, 3>>> median_cut(const std::ve
 }
 
 json ImageEngine::describe_stats(const std::vector<uint8_t>& rgb_in, int w0, int h0) {
-  std::vector<uint8_t> small = rgb_in;
+  std::vector<uint8_t> thumb = rgb_in;
   int w = w0, h = h0;
-  thumbnail(small, w, h, 128);
-  auto q = median_cut(small, 5);
+  thumbnail(thumb, w, h, 128);
+  auto q = median_cut(thumb, 5);
   std::vector<std::string> colors;
   for (size_t i = 0; i < q.size() && i < 5; ++i) {
     char buf[8];
@@ -347,7 +347,7 @@ json ImageEngine::describe_stats(const std::vector<uint8_t>& rgb_in, int w0, int
   std::vector<int> lum((size_t)w * h);
   double lsum = 0;
   for (size_t i = 0; i < lum.size(); ++i) {
-    lum[i] = (small[i * 3] * 299 + small[i * 3 + 1] * 587 + small[i * 3 + 2] * 114) / 1000;
+    lum[i] = (thumb[i * 3] * 299 + thumb[i * 3 + 1] * 587 + thumb[i * 3 + 2] * 114) / 1000;
     lsum += lum[i];
   }
   double brightness = lum.empty() ? 0 : lsum / lum.size() / 255;
