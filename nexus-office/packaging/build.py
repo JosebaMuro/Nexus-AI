@@ -399,7 +399,10 @@ def windows_exe(target: str, dest: Path) -> Path | None:
     defs = {"VERSION": VERSION, "ARCH": arch, "PAYLOAD": str(dest), "OUTFILE": str(out),
             "ICON": str(ROOT / "packaging" / "windows" / "nexus.ico"), "LICENSE": str(ROOT / "LICENSE"),
             "PROFILES": str(work / "profiles.nsh")}
-    log(f"makensis {out.name} (compresion LZMA, tarda)...")
+    size = sum(f.stat().st_size for f in dest.rglob("*") if f.is_file())
+    if size > 1_800_000_000:     # /SOLID no admite paquetes de mas de ~2 GB sin comprimir
+        defs["NOSOLID"] = "1"
+    log(f"makensis {out.name} ({size / 1e9:.2f} GB sin comprimir, LZMA{'' if 'NOSOLID' in defs else ' solida'}, tarda)...")
     subprocess.run([makensis, "-V2", "-INPUTCHARSET", "UTF8", *[f"-D{k}={v}" for k, v in defs.items()],
                     str(ROOT / "packaging" / "windows" / "nexus.nsi")], check=True)
     log(f"-> {out.name} ({out.stat().st_size / 1e6:.1f} MB)")
