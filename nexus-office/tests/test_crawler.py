@@ -49,6 +49,14 @@ def fake_fetch(calls: list[str] | None = None, site: dict = SITE):
     return fetch
 
 
+def test_robots_as_bytes_like_the_real_fetcher():
+    """El fetcher real entrega robots.txt (un .txt) como bytes: tambien se lee y se respeta."""
+    site = dict(SITE)
+    site["/robots.txt"] = (200, "text/plain", SITE["/robots.txt"][2].encode())
+    res = crawler.crawl(f"{BASE}/guia/", max_pages=20, max_depth=1, fetch=fake_fetch(None, site), delay=0)
+    assert res["robots"] and dict(res["skipped"])[f"{BASE}/guia/privado/secreto.html"] == "robots.txt"
+
+
 def test_scope_and_normalize():
     assert crawler.scope_prefix(f"{BASE}/guia/", "path") == "/guia/"
     assert crawler.scope_prefix(f"{BASE}/guia/index.html", "path") == "/guia/"

@@ -222,6 +222,8 @@ def _robots(fetch: Fetcher, start: str) -> tuple[RobotFileParser | None, list[st
         status, _, text, _ = fetch(f"{p.scheme}://{p.netloc}/robots.txt")
     except Exception:  # noqa: BLE001
         return None, []
+    if isinstance(text, bytes):   # robots.txt llega como documento .txt (bytes) del fetcher
+        text = text.decode("utf-8", "replace")
     if status != 200 or not text.strip():
         return None, []
     rp = RobotFileParser()

@@ -21,6 +21,7 @@
 #include "office/bolsa.h"
 #include "memory/kg.h"
 #include "memory/kg_jobs.h"
+#include "rag/web.h"
 #include "util/rx.h"
 #include "office/office.h"
 #include "rag/rag.h"
@@ -955,16 +956,130 @@ void register_routes(App& app) {
     return json{{"results", res}, {"ok", ok}, {"failed", failed}, {"seconds", round_to(now() - t0, 2)}, {"agent", target}};
   });
 
-  app.post("/api/rag/url", [](Ctx&) -> Out { not_in_cpp("Guardar una URL como PDF en la biblioteca"); });
-  app.post("/api/rag/crawl", [](Ctx&) -> Out { not_in_cpp("Rastrear sitios de documentacion"); });
-  app.get("/api/rag/crawls", [](Ctx&) -> Out { return json::array(); });
-  app.post("/api/rag/crawls/{job_id}/resume", [](Ctx&) -> Out { throw HttpErr(404, "Rastreo no encontrado"); });
-  app.post("/api/rag/crawls/{job_id}/knowledge", [](Ctx&) -> Out { throw HttpErr(404, "Rastreo no encontrado"); });
-  app.get("/api/rag/crawls/{job_id}/knowledge", [](Ctx&) -> Out { throw HttpErr(404, "Rastreo no encontrado"); });
-  app.post("/api/rag/crawls/{job_id}/knowledge/import", [](Ctx&) -> Out { throw HttpErr(404, "Rastreo no encontrado"); });
-  app.post("/api/rag/domain-knowledge/import", [](Ctx&) -> Out { not_in_cpp("Importar paquetes de conocimiento de dominio"); });
-  app.post("/api/rag/crawls/{job_id}/pause", [](Ctx&) -> Out { throw HttpErr(404, "Rastreo no encontrado"); });
-  app.del("/api/rag/crawls/{job_id}", [](Ctx&) -> Out { throw HttpErr(404, "Rastreo no encontrado"); });
+  // peticion explicita del usuario desde la Biblioteca: URL -> PDF -> RAG -> conocimiento
+  app.post("/api/rag/url", [rag_target](Ctx& c) -> Out {
+    std::string url = c.bs("url");
+    std::string target = rag_target(c.bs("agent", ""));
+    App* a = &c.app;
+    json res;
+    try {
+      res = rag::process_url(c.app.S(), url, [a](const json& e) { a->broadcast(e); }, 8, target);
+    } catch (const HttpErr&) {
+      throw;
+    } catch (const std::exception& e) {
+      throw HttpErr(400, e.what());
+    }
+    c.app.broadcast({{"type", "graph_update"}});
+    return res;
+  });
+
+  // rastreo de un sitio de documentacion; background=true (o todo el dominio): por lotes reanudables
+  app.post("/api/rag/crawl", [rag_target](Ctx& c) -> Out {
+    std::string url = c.bs("url"), scope = c.bs("scope", "path");
+    int max_pages = (int)c.bn("max_pages", 40), max_depth = (int)c.bn("max_depth", 3), batch_pages = (int)c.bn("batch_pages", 0);
+    bool background = c.bb("background", false);
+    if (scope != "path" && scope != "domain") throw HttpErr(400, "scope debe ser 'path' o 'domain'");
+    if (!re_search(R"(^https?://)", url, Rx::I)) throw HttpErr(400, "la URL debe empezar por http:// o https://");
+    std::string target = rag_target(c.bs("agent", ""));
+    App* a = &c.app;
+    rag::Emit emit = [a](const json& e) { a->broadcast(e); };
+    if (background || scope == "domain") {   // dominio completo: siempre por lotes, hasta agotar el dominio
+      auto [pages, chars] = rag::crawl_jobs::auto_batch(c.app.S().profile);
+      json job = rag::crawl_jobs::create(url, max_pages, max_depth, scope, target, true,
+                                         std::clamp(batch_pages ? batch_pages : pages, 1, 500), chars);
+      rag::crawl_jobs::run_background(c.app.S(), job["id"], emit);
+      return json{{"job", rag::crawl_jobs::pub(rag::crawl_jobs::get(job["id"]))}};
+    }
+    json res;
+    try {
+      res = rag::crawler::crawl_site(c.app.S(), url, max_pages, max_depth, scope, emit, target);
+    } catch (const std::exception& e) {
+      throw HttpErr(400, e.what());
+    }
+    c.app.broadcast({{"type", "graph_update"}});
+    return res;
+  });
+
+  auto crawl_job = [](const std::string& id) {
+    json job = rag::crawl_jobs::get(id);
+    if (job.is_null()) throw HttpErr(404, "Rastreo no encontrado");
+    return job;
+  };
+  app.get("/api/rag/crawls", [](Ctx&) -> Out { return rag::crawl_jobs::list_jobs(); });
+  app.post("/api/rag/crawls/{job_id}/resume", [crawl_job](Ctx& c) -> Out {
+    std::string id = c.p("job_id");
+    json job = crawl_job(id);
+    App* a = &c.app;
+    if (jstr(job, "status") != rag::crawl_jobs::DONE && !rag::crawl_jobs::is_running(id)) {
+      try {
+        rag::crawl_jobs::run_background(c.app.S(), id, [a](const json& e) { a->broadcast(e); });
+      } catch (const std::runtime_error&) {   // ya estaba en marcha
+      }
+    }
+    return rag::crawl_jobs::pub(rag::crawl_jobs::get(id));
+  });
+  app.post("/api/rag/crawls/{job_id}/knowledge", [crawl_job](Ctx& c) -> Out {
+    std::string id = c.p("job_id");
+    json job = crawl_job(id);
+    if (!path_exists(rag::crawl_jobs::kg_path(id)))
+      throw HttpErr(400, "Este rastreo no tiene grafo de dominio (solo los de «todo el dominio»)");
+    App* a = &c.app;
+    try {
+      return rag::crawl_jobs::build_knowledge(c.app.S(), job, [a](const json& e) { a->broadcast(e); });
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
+  });
+  app.get("/api/rag/crawls/{job_id}/knowledge", [crawl_job](Ctx& c) -> Out {
+    std::string id = c.p("job_id");
+    json job = crawl_job(id);
+    fs::path f = rag::crawl_jobs::knowledge_path(id);
+    if (!path_exists(f)) throw HttpErr(404, "El grafo del dominio aun no esta construido");
+    std::string site = jstr(job, "site").empty() ? id : jstr(job, "site");
+    return FileOut{f, uleft(re_sub("[^A-Za-z0-9._-]+", "-", site), 60) + "-conocimiento.zip", "application/zip"};
+  });
+  app.post("/api/rag/crawls/{job_id}/knowledge/import", [crawl_job, rag_target](Ctx& c) -> Out {
+    std::string id = c.p("job_id");
+    crawl_job(id);
+    fs::path f = rag::crawl_jobs::knowledge_path(id);
+    if (!path_exists(f)) throw HttpErr(404, "El grafo del dominio aun no esta construido");
+    std::string target = rag_target(c.bs("agent", ""));
+    json res = rag::domain_kg::import_package(c.app.S(), rag::domain_kg::read_package(f), target);
+    c.app.broadcast({{"type", "graph_update"}});
+    return res;
+  });
+  // paquete de conocimiento de dominio (.zip) hecho en este u otro Nexus-Office
+  app.post("/api/rag/domain-knowledge/import", [rag_target](Ctx& c) -> Out {
+    auto f = c.file("file");
+    if (!f) throw missing_field("body", "file");
+    std::string target = rag_target(c.form("agent"));
+    fs::path tmp = paths::sub({"cache"}) / P("dk_" + token_hex(6) + ".zip");
+    if (!write_file(tmp, f->content)) throw HttpErr(500, "No se pudo guardar el paquete");
+    json data;
+    try {
+      data = rag::domain_kg::read_package(tmp);
+    } catch (const std::exception& e) {
+      remove_file(tmp);
+      throw HttpErr(400, std::string("No es un paquete de conocimiento de dominio: ") + e.what());
+    }
+    remove_file(tmp);
+    json res = rag::domain_kg::import_package(c.app.S(), data, target);
+    c.app.broadcast({{"type", "graph_update"}});
+    return res;
+  });
+  app.post("/api/rag/crawls/{job_id}/pause", [crawl_job](Ctx& c) -> Out {
+    std::string id = c.p("job_id");
+    crawl_job(id);
+    return json{{"stopping", rag::crawl_jobs::stop(id)}};
+  });
+  app.del("/api/rag/crawls/{job_id}", [](Ctx& c) -> Out {
+    std::string id = c.p("job_id");
+    if (rag::crawl_jobs::stop(id))   // espera (hasta 30 s) a que el lote en curso pare
+      for (int i = 0; i < 300 && rag::crawl_jobs::is_running(id); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    if (!rag::crawl_jobs::remove(c.app.S(), id, c.qb("docs", false))) throw HttpErr(404, "Rastreo no encontrado");
+    c.app.broadcast({{"type", "graph_update"}});
+    return json{{"deleted", id}};
+  });
 
   app.get("/api/rag/{doc_id}/file", [](Ctx& c) -> Out {
     json d = c.app.S().rag->get(c.pi("doc_id"));

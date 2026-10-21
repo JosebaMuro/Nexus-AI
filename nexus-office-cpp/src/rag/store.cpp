@@ -16,7 +16,7 @@ namespace nx::rag {
 
 static auto L = log::get("rag");
 static const size_t EMBED_BLOCK = 2048;
-static const std::set<std::string> STOP = {"de", "la", "el",  "los", "las", "y",   "en",   "un",  "una",
+const std::set<std::string> STOP_WORDS = {"de", "la", "el",  "los", "las", "y",   "en",   "un",  "una",
                                            "que", "a", "por", "con", "para", "del", "se",  "es",  "the",
                                            "of", "and", "to", "in",  "is",  "for", "on",   "with"};
 
@@ -288,7 +288,7 @@ json RAGStore::search(const std::string& query, int k, double min_score, long lo
   if (sims_by_id.empty()) return json::array();
   std::set<std::string> qterms;
   for (auto& t : tokens(query))
-    if (!STOP.count(t) && ulen(t) > 2) qterms.insert(t);
+    if (!STOP_WORDS.count(t) && ulen(t) > 2) qterms.insert(t);
   std::string ids;
   for (size_t i = 0; i < sims_by_id.size(); ++i) ids += (i ? "," : "") + std::to_string(sims_by_id[i].first);
   std::map<long long, Row> rows;

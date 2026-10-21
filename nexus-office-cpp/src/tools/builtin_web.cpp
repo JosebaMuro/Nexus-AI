@@ -2,6 +2,7 @@
 #include "core/services.h"
 #include "memory/memory.h"
 #include "rag/rag.h"
+#include "rag/web.h"
 #include "tools/tools.h"
 #include "util/http.h"
 #include "util/net.h"
@@ -139,7 +140,74 @@ json web_search(const json& args, ToolContext& ctx) {
   return {{"query", q}, {"results", top}};
 }
 
-Register r1("web_fetch", web_fetch), r2("web_search", web_search);
+// destino "agente": solo el subgrafo del agente que llama; "general" (por defecto): para todos
+std::string rag_dest(const json& args, ToolContext& ctx) {
+  return jstr(args, "target") == "agente" && !ctx.agent.empty() ? ctx.agent : "";
+}
+
+template <class F>
+json as_tool_error(F f) {
+  try {
+    return f();
+  } catch (const ToolError&) {
+    throw;
+  } catch (const std::invalid_argument& e) {
+    throw ToolError("ValueError", e.what());
+  } catch (const std::exception& e) {
+    throw ToolError("RuntimeError", e.what());
+  }
+}
+
+json url_to_pdf(const json& args, ToolContext& ctx) {
+  return as_tool_error([&] {
+    json res = rag::process_url(*ctx.services, jstr(args, "url"), ctx.emit, (int)jnum(args.value("max_images", json(8)), 8),
+                                rag_dest(args, ctx));
+    if (ctx.emit) {
+      ctx.emit({{"type", "media"}, {"kind", "document"}, {"url", res["url"]}, {"title", res["title"]}});
+      ctx.emit({{"type", "graph_update"}});
+    }
+    return res;
+  });
+}
+
+json crawl_docs(const json& args, ToolContext& ctx) {
+  return as_tool_error([&] {
+    Services& s = *ctx.services;
+    std::string url = jstr(args, "url"), scope = jstr(args, "scope", "path"), dest = rag_dest(args, ctx);
+    int max_pages = (int)jnum(args.value("max_pages", json(40)), 40), max_depth = (int)jnum(args.value("max_depth", json(3)), 3);
+    std::string job = jstr(args, "job");
+    if (job.empty() && truthy(args.value("continue", json(false)))) {   // el ultimo rastreo sin terminar de esa URL
+      std::string n = rag::crawler::normalize(url);
+      for (auto& j : rag::crawl_jobs::list_jobs())
+        if (jstr(j, "status") != rag::crawl_jobs::DONE && jstr(j, "agent") == dest &&
+            (rag::crawler::normalize(jstr(j, "url")) == n || jstr(j, "start") == n)) {
+          job = jstr(j, "id");
+          break;
+        }
+    }
+    if (truthy(args.value("background", json(false))) || scope == "domain") {   // dominios: siguen solos, por lotes
+      if (job.empty()) {
+        auto [pages, chars] = rag::crawl_jobs::auto_batch(s.profile);
+        job = jstr(rag::crawl_jobs::create(url, max_pages, max_depth, scope, dest, true, pages, chars), "id");
+      }
+      rag::crawl_jobs::run_background(s, job, ctx.emit);
+      std::string note = "Rastreo por lotes en segundo plano. Cada lote aparece en la biblioteca RAG en cuanto termina; "
+                         "consulta con rag_search.";
+      if (scope == "domain")
+        note += " Se lee todo el dominio sin limite (subdominios y documentos) y al terminar se crea su grafo de "
+                "conocimiento multicapa, que se puede dar a un agente desde la Biblioteca RAG.";
+      return json{{"job", job}, {"status", "en curso"}, {"note", note}};
+    }
+    json res = rag::crawler::crawl_site(s, url, max_pages, max_depth, scope, ctx.emit, dest, 0, job, 1500);
+    if (jstr(res, "status") == rag::crawl_jobs::PAUSED)
+      res["note"] = "Quedan " + res["pending"].dump() + " paginas por rastrear. Vuelve a llamar a crawl_docs con job=\"" +
+                    jstr(res, "job") + "\" para seguir por el siguiente lote.";
+    if (ctx.emit) ctx.emit({{"type", "graph_update"}});
+    return res;
+  });
+}
+
+Register r1("web_fetch", web_fetch), r2("web_search", web_search), r3("url_to_pdf", url_to_pdf), r4("crawl_docs", crawl_docs);
 
 }  // namespace
 

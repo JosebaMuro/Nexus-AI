@@ -129,6 +129,37 @@ def flows(base, only=""):
         rec("kg_overview", c.get("/api/kg/overview"))
         rec("dk_list", c.get("/api/rag/domain-knowledge"))
 
+    if only in ("", "web"):   # necesita el sitio de pruebas en 127.0.0.1:8777 y rag.allow_private_urls
+        import time
+        site = "http://127.0.0.1:8777"
+        rec("crawl", c.post("/api/rag/crawl", json={"url": site + "/docs/index.html", "max_pages": 10}))
+        rec("crawl_again", c.post("/api/rag/crawl", json={"url": site + "/docs/", "max_pages": 10}))
+        rec("crawl_bad_scope", c.post("/api/rag/crawl", json={"url": site + "/docs/", "scope": "todo"}))
+        rec("crawl_bad_url", c.post("/api/rag/crawl", json={"url": "ftp://x"}))
+        rec("crawl_404", c.post("/api/rag/crawl", json={"url": site + "/nada/", "max_pages": 3}))
+        rec("url_pdf", c.post("/api/rag/url", json={"url": site + "/docs/guia/facturas.html"}))
+        rec("url_pdf_short", c.post("/api/rag/url", json={"url": site + "/robots.txt"}))
+        j = rec("crawl_domain", c.post("/api/rag/crawl", json={"url": site + "/docs/", "scope": "domain"}))
+        jid = (j.get("job") or {}).get("id", "")
+        for _ in range(300):
+            st = [x for x in c.get("/api/rag/crawls").json() if x["id"] == jid]
+            if st and not st[0]["running"] and st[0]["status"] != "en curso":
+                break
+            time.sleep(0.2)
+        out["crawl_domain_done"] = (200, st[0] if st else {})
+        rec("crawls", c.get("/api/rag/crawls"))
+        rec("kg_build", c.post(f"/api/rag/crawls/{jid}/knowledge"))
+        kz = c.get(f"/api/rag/crawls/{jid}/knowledge")
+        out["kg_file"] = (kz.status_code, {"_type": kz.headers.get("content-type", "").split(";")[0],
+                                           "_name": "conocimiento" in kz.headers.get("content-disposition", "")})
+        rec("kg_import_pkg", c.post(f"/api/rag/crawls/{jid}/knowledge/import", json={"agent": ""}))
+        rec("dk_import", c.post("/api/rag/domain-knowledge/import", files={"file": ("k.zip", kz.content, "application/zip")}))
+        rec("dk_import_bad", c.post("/api/rag/domain-knowledge/import", files={"file": ("k.zip", b"nada", "application/zip")}))
+        rec("crawl_resume_404", c.post("/api/rag/crawls/noexiste99/resume"))
+        rec("crawl_pause", c.post(f"/api/rag/crawls/{jid}/pause"))
+        rec("crawl_delete", c.delete(f"/api/rag/crawls/{jid}"))
+        rec("crawl_delete_again", c.delete(f"/api/rag/crawls/{jid}"))
+
     if only in ("", "red"):
         rec("coop", c.get("/api/coop"))
         rec("remote", c.get("/api/remote", headers=h))

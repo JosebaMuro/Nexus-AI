@@ -29,6 +29,7 @@
 #include "memory/kg.h"
 #include "models/models.h"
 #include "office/bolsa.h"
+#include "rag/web.h"
 #include "office/office.h"
 #include "server/app.h"
 #include "tools/tools.h"
@@ -132,6 +133,8 @@ int cmd_run(const Args& a) {
     listeners->push_back([&app](const json& e) { app.broadcast(e); });
   app.on_shutdown_request = [] { g_stop = true; };
   s.start();
+  // siguen solos los rastreos de dominio completo que se cortaron (cierre, apagado)
+  rag::crawl_jobs::resume_interrupted(s, [&app](const json& e) { app.broadcast(e); });
   std::thread watcher([&app] {
     while (!g_stop) std::this_thread::sleep_for(std::chrono::milliseconds(200));
     app.stop();

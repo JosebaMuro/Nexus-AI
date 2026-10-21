@@ -16,6 +16,7 @@
 namespace nx::rag {
 
 constexpr size_t CHUNK = 900, OVERLAP = 150;
+extern const std::set<std::string> STOP_WORDS;   // rag/store.py STOP
 std::vector<std::string> chunk_text(const std::string& text, size_t size = CHUNK, size_t overlap = OVERLAP);
 
 // ---------------------------------------------------------------- lectores
