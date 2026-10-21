@@ -16,6 +16,11 @@ static auto L = log::get("tools");
 const std::vector<std::string> RISKS = {"low", "medium", "high"};
 const std::vector<std::string> PERMISSIONS = {"network", "filesystem", "code_exec", "system", "memory", "media", "agents"};
 
+void link_builtin_core();
+void link_builtin_files();
+void link_builtin_web();
+void link_builtin_media();
+
 std::map<std::string, ToolFn>& builtin_functions() {
   static std::map<std::string, ToolFn> m;
   return m;
@@ -307,6 +312,11 @@ void ToolRegistry::reload() {
   std::vector<std::shared_ptr<ToolSpec>> order;
   std::map<std::string, std::shared_ptr<ToolSpec>> found;
   std::vector<std::string> missing;
+  // los ficheros builtin_*.cpp se registran solos; esto obliga al enlazador a incluirlos
+  link_builtin_core();
+  link_builtin_files();
+  link_builtin_web();
+  link_builtin_media();
   auto& fns = builtin_functions();
   for (auto& m : data::get("tools")) {
     std::string name = jstr(m, "name");

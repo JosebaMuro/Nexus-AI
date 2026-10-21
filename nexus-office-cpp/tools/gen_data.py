@@ -64,5 +64,20 @@ def main() -> None:
     print("datos:", ", ".join(f"{n} ({s} B)" for n, _, s in names))
 
 
+@extra("tools")
+def _tools():
+    """Manifiestos de las herramientas integradas (nombre, descripcion, parametros, riesgo, permisos, limite), en el
+    mismo orden en que las carga la version Python."""
+    import importlib
+    import pkgutil
+    from nexus.tools import builtin
+    out = []
+    for mod in pkgutil.iter_modules(builtin.__path__):
+        m = importlib.import_module(f"nexus.tools.builtin.{mod.name}")
+        for manifest, _fn in getattr(m, "TOOLS", []):
+            out.append(manifest)
+    return out
+
+
 if __name__ == "__main__":
     main()
