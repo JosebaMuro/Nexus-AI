@@ -132,6 +132,7 @@ jobs:
         shell: pwsh
         run: |
           $exe = Get-ChildItem inst -Recurse -Filter "Nexus-Office-Setup-*.exe" | Select-Object -First 1
+          $env:NEXUS_CLEAN = "no"   # sin la limpieza final: se prueba el paquete entero (OpenVINO aunque no haya NPU)
           $p = Start-Process -FilePath $exe.FullName -ArgumentList '/S', '/D=C:\nx' -Wait -PassThru
           "instalador: codigo $($p.ExitCode)"
           Get-ChildItem C:\nx | Select-Object -First 30 | Format-Table Name
