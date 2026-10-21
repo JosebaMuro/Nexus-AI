@@ -1,0 +1,10 @@
+id: transporte-logistica
+name: "Transporte y logística"
+sector: "Transporte · transporte de mercancías por carretera y logística"
+assistant_name: "Oficina Transporte"
+icon: "⛟"
+description: "Empresa de transporte de mercancías por carretera: cargas completas y grupaje, nacional e internacional, flota propia y mercancías peligrosas."
+agents: [transportista, mecanico, medioambiente, recepcion, administracion, comercial, rrhh, prl]
+coordinator:
+  context: |
+    La empresa es de transporte de mercancías por carretera con flota propia de camiones y furgonetas: hace cargas completas y grupaje en nacional e internacional, algunos portes ADR, controla tacógrafos y tiempos de conducción, lleva el mantenimiento de la flota y factura los portes a sus clientes.

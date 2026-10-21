@@ -1,0 +1,10 @@
+id: pintura
+name: "Pintura y decoración"
+sector: "Acabados · pintura de interiores, fachadas y decoración"
+assistant_name: "Oficina Pintura"
+icon: "▧"
+description: "Empresa de pintura y decoración de interiores, fachadas, comunidades y locales comerciales."
+agents: [pintor, albanil, recepcion, presupuestos, administracion, compras, prl]
+coordinator:
+  context: |
+    La empresa pinta y decora viviendas, locales, comunidades de vecinos y fachadas (con andamio o plataforma), hace pequeños arreglos de albañilería previos y asesora sobre colores y acabados.

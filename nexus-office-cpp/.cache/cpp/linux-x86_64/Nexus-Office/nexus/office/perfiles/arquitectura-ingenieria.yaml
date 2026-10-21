@@ -1,0 +1,10 @@
+id: arquitectura-ingenieria
+name: "Estudio de arquitectura e ingeniería"
+sector: "Servicios técnicos · proyectos, dirección de obra y certificados"
+assistant_name: "Oficina Estudio"
+icon: "△"
+description: "Estudio técnico: proyectos de edificación e instalaciones, CTE, licencias, visados, dirección de obra, certificados e informes."
+agents: [arquitecto, presupuestos, prl, calidad, administracion, recepcion, agenda, proteccion-datos]
+coordinator:
+  context: |
+    La empresa es un estudio de arquitectura e ingeniería que redacta proyectos básicos y de ejecución, memorias de instalaciones y legalizaciones, tramita licencias y visados colegiales, dirige obras y emite certificados (eficiencia energética, ITE/IEE, final de obra) e informes periciales. Trabaja con el Código Técnico de la Edificación y la LOE; la firma y la responsabilidad son siempre del técnico competente colegiado.

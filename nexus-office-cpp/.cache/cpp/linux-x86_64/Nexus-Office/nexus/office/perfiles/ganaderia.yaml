@@ -1,0 +1,10 @@
+id: ganaderia
+name: "Explotación ganadera"
+sector: "Agro · ganadería y producción animal"
+assistant_name: "Oficina Ganadera"
+icon: "♉"
+description: "Explotación ganadera de vacuno, ovino, caprino, porcino o avícola: REGA, identificación, movimientos, sanidad, bienestar animal, purines y forrajes."
+agents: [ganadero, agricultor, veterinario, medioambiente, administracion, compras, calidad, prl]
+coordinator:
+  context: |
+    La empresa es una explotación ganadera inscrita en el REGA: identifica y mueve animales, lleva el libro de registro, los tratamientos veterinarios y el saneamiento, cuida el bienestar animal, gestiona estiércol, purines y cadáveres, cultiva forrajes y vende animales, leche o huevos. El veterinario de la explotación es externo.

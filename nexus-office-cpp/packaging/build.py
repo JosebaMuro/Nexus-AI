@@ -168,7 +168,6 @@ tail -n +"$LINE" "$0" | tar -xz -C "$DEST" --strip-components=1
 cd "$DEST"
 ./install.sh "$@"
 if [ "$(id -u)" = 0 ] && [ -n "${{SUDO_USER:-}}" ]; then chown -R "$SUDO_USER" "$DEST"; fi
-echo "[Nexus-Office] Listo. Arranca con: $DEST/start.sh"
 exit 0
 __NEXUS_ARCHIVE__
 """

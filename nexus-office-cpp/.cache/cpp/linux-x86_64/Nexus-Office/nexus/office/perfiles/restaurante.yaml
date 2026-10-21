@@ -1,0 +1,10 @@
+id: restaurante
+name: "Restaurante"
+sector: "Hostelería · restauración con servicio de mesa"
+assistant_name: "Oficina Restaurante"
+icon: "♨"
+description: "Restaurante con cocina, sala y reservas: escandallos, carta y menú del día, APPCC, alérgenos y turnos."
+agents: [cocinero, camarero, agenda, calidad, compras, administracion, rrhh, comercial]
+coordinator:
+  context: |
+    La empresa es un restaurante con cocina propia, sala y terraza: sirve carta y menú del día, trabaja con reservas, controla escandallos y costes, cumple el APPCC y la información de los 14 alérgenos, compra a diario a proveedores y organiza los turnos del personal.

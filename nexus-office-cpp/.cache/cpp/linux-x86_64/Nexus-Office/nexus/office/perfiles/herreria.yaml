@@ -1,0 +1,10 @@
+id: herreria
+name: "Herrería y forja"
+sector: "Metal · fabricación de elementos metálicos para la construcción"
+assistant_name: "Oficina Herrería"
+icon: "⚒"
+description: "Taller de herrería y forja que fabrica y monta rejas, barandillas, escaleras, cancelas y estructuras ligeras."
+agents: [herrero, soldador, recepcion, presupuestos, administracion, compras, prl]
+coordinator:
+  context: |
+    La empresa es un taller de herrería y forja: fabrica en taller y monta en obra rejas, barandillas, escaleras, cancelas, pérgolas y estructuras ligeras, y hace piezas de forja artística.

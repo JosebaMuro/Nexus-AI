@@ -5,6 +5,7 @@ name: Nexus-Office C++ (compilar y probar)
 # carpeta instalada (ejecutable + nexus/) como artefacto «cpp-<plataforma>», que usa cpp-entrega.yml.
 on:
   workflow_dispatch:
+  workflow_call:
   push:
     paths:
       - nexus-office-cpp/**

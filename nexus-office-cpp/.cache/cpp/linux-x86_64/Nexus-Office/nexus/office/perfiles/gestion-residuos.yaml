@@ -1,0 +1,10 @@
+id: gestion-residuos
+name: "Gestión de residuos"
+sector: "Medio ambiente · recogida, transporte y tratamiento de residuos"
+assistant_name: "Oficina Residuos"
+icon: "♻"
+description: "Gestor y transportista de residuos: recogida, transporte, almacenamiento y tratamiento de residuos peligrosos y no peligrosos, contenedores y RCD."
+agents: [medioambiente, transportista, mecanico, recepcion, administracion, comercial, calidad, rrhh, prl]
+coordinator:
+  context: |
+    La empresa es un gestor autorizado y transportista de residuos: alquila contenedores, recoge y transporta residuos peligrosos y no peligrosos y RCD, los almacena y trata o los entrega a otros gestores, tramita contratos de tratamiento, notificaciones previas y documentos de identificación, y lleva el archivo cronológico y las memorias anuales.
