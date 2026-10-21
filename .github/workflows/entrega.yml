@@ -1,0 +1,145 @@
+name: Instaladores de Nexus-Office (construir y probar)
+
+# Construye los instaladores 100 % offline de escritorio de la version del codigo (nexus-office/nexus/__init__.py)
+# y los prueba instalandolos en cada sistema. Los runtimes nativos (CPython, llama-server y sd-cli en sus variantes)
+# salen de la Release anterior (BASE) para no recompilarlos; los del selector de inicio (llama-cpp-python y
+# llama-server con OpenVINO), de la Release «selector-runtimes»; GIMP, de «gimp-runtimes». Los instaladores quedan
+# como artefactos de esta ejecucion; publicar.yml los junta con las APK y publica la Release.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/entrega.yml
+
+permissions:
+  contents: read
+
+env:
+  BASE: v1.8.0
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  escritorio:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [windows-x64, windows-arm64, linux-x86_64, linux-aarch64, macos-arm64, macos-x86_64]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Liberar espacio
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost && df -h /
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Herramientas
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq nsis flatpak p7zip-full >/dev/null
+          python -m pip install -q -r nexus-office/requirements.txt
+      - name: Runtimes nativos de la Release anterior
+        run: |
+          set -e
+          T=${{ matrix.target }}; PYT=$T; [ "$T" = windows-arm64 ] && PYT=windows-x64
+          V=${BASE#v}
+          case $T in
+            windows-*) A=Nexus-Office-Setup-$V-$T.exe ;;
+            linux-*) A=Nexus-Office-$V-$T.run ;;
+            macos-*) A=Nexus-Office-$V-$T.tar.gz ;;
+          esac
+          gh release download "$BASE" -R "$GITHUB_REPOSITORY" -p "$A" -D old
+          mkdir -p x
+          case $A in
+            *.exe) 7z x -y -ox "old/$A" >/dev/null ;;
+            *.run) l=$(awk '/^__NEXUS_ARCHIVE__$/{print NR + 1; exit}' "old/$A"); tail -n +"$l" "old/$A" | tar -xz -C x ;;
+            *.tar.gz) tar -xzf "old/$A" -C x ;;
+          esac
+          rm -rf old
+          R=$(dirname "$(find x -type d -name bundled | head -1)")
+          echo "paquete anterior en $R:"; ls "$R" "$R/bundled/runtimes"
+          RT=nexus-office/.cache/desktop-runtimes
+          mkdir -p "$RT/$T" "$RT/$PYT" nexus-office/.cache/wheelhouse-all
+          cp "$R"/runtime/cpython-*.tar.gz "$RT/$PYT/"
+          for r in llama sd gimp; do
+            [ -d "$R/bundled/runtimes/$r" ] && cp -r "$R/bundled/runtimes/$r" "$RT/$T/$r"
+          done
+          cp "$R"/wheelhouse/*.whl nexus-office/.cache/wheelhouse-all/
+          rm -rf x
+          # selector de inicio: motor integrado y NPU Intel
+          gh release download selector-runtimes -R "$GITHUB_REPOSITORY" -p "llama-python-$PYT.zip" -D sel
+          unzip -q -o "sel/llama-python-$PYT.zip" -d "$RT/$PYT/llama-python"
+          if [ "$T" = linux-x86_64 ] || [ "$T" = windows-x64 ]; then
+            gh release download selector-runtimes -R "$GITHUB_REPOSITORY" -p "llama-openvino-$T.zip" -D sel
+            rm -rf "$RT/$T/llama/openvino" && unzip -q -o "sel/llama-openvino-$T.zip" -d "$RT/$T/llama"
+          fi
+          rm -rf sel
+          ls "$RT/$T" "$RT/$T/llama" "$RT/$PYT/llama-python"; df -h /
+      - name: Construir
+        run: cd nexus-office && python packaging/build.py --targets ${{ matrix.target }}
+      - name: Lista
+        run: ls -la nexus-office/dist/*/ && df -h /
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instalador-${{ matrix.target }}
+          path: |
+            nexus-office/dist/windows/
+            nexus-office/dist/linux/
+            nexus-office/dist/macos/
+          retention-days: 5
+          compression-level: 0
+
+  humo:
+    needs: escritorio
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x86_64, os: ubuntu-24.04, openvino: "1" }
+          - { target: linux-aarch64, os: ubuntu-24.04-arm }
+          - { target: macos-arm64, os: macos-latest }
+          - { target: macos-x86_64, os: macos-15-intel }
+          - { target: windows-x64, os: windows-latest, openvino: "1" }
+          - { target: windows-arm64, os: windows-11-arm }
+    runs-on: ${{ matrix.os }}
+    env:
+      NEXUS_CON_OPENVINO: ${{ matrix.openvino }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: nexus-office/packaging
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          name: instalador-${{ matrix.target }}
+          path: inst
+      - name: Instalar (.run)
+        if: runner.os == 'Linux'
+        run: |
+          ls -laR inst
+          sh inst/*/Nexus-Office-*-${{ matrix.target }}.run "$HOME/nx" --offline --no-clean --modelos=no
+          echo "NX=$HOME/nx" >> "$GITHUB_ENV"
+      - name: Instalar (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p "$HOME/nxa" && tar -xzf inst/*/Nexus-Office-*-${{ matrix.target }}.tar.gz -C "$HOME/nxa"
+          cd "$HOME/nxa"/Nexus-Office && ./install.sh --offline --no-clean --modelos=no
+          echo "NX=$HOME/nxa/Nexus-Office" >> "$GITHUB_ENV"
+      - name: Instalar (Windows, instalador grafico en silencio)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem inst -Recurse -Filter "Nexus-Office-Setup-*.exe" | Select-Object -First 1
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList '/S', '/D=C:\nx' -Wait -PassThru
+          "instalador: codigo $($p.ExitCode)"
+          Get-ChildItem C:\nx | Select-Object -First 30 | Format-Table Name
+          "NX=C:\nx" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Probar el selector con Qwen3.5 0.8B
+        shell: bash
+        run: python nexus-office/packaging/smoke_test.py "$NX"
+      - name: Probar la AppImage
+        if: matrix.target == 'linux-x86_64'
+        run: |
+          cd "$RUNNER_TEMP" && chmod +x "$GITHUB_WORKSPACE"/inst/*/*.AppImage
+          "$GITHUB_WORKSPACE"/inst/*/Nexus-Office-*-linux-x86_64.AppImage --appimage-extract >/dev/null
+          python "$GITHUB_WORKSPACE/nexus-office/packaging/smoke_test.py" "$RUNNER_TEMP/squashfs-root/nexus"
