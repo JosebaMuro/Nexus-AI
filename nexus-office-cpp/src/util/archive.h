@@ -38,6 +38,9 @@ class Zip {
 
 // gzip -> bytes (zlib.decompress con cabecera gzip)
 std::optional<std::string> gunzip(const std::string& data);
+// bzip2 y xz -> bytes (nullopt si no es valido o pasa de max_bytes)
+std::optional<std::string> bunzip2(const std::string& data, size_t max_bytes = 512u << 20);
+std::optional<std::string> unxz(const std::string& data, size_t max_bytes = 512u << 20);
 // deflate crudo o con cabecera zlib
 std::optional<std::string> inflate(const std::string& data, bool zlib_header);
 // crea un zip (para exportaciones); files: (nombre en el zip, bytes)

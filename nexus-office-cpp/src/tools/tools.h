@@ -66,6 +66,9 @@ struct Register {
   Register(const std::string& name, ToolFn fn) { builtin_functions()[name] = std::move(fn); }
 };
 
+// ruta dentro de data/sandbox (ToolError si se sale)
+fs::path sandbox_safe(const std::string& rel);
+
 // Python del sistema para las herramientas de la comunidad y python_exec ("" si no hay)
 std::vector<std::string> python_cmd();
 // ayudante Python (manifiesto, analisis, ejecucion aislada); lanza ToolError si no hay Python

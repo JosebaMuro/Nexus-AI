@@ -1,0 +1,6 @@
+@prefix ex: <http://ex.org/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+ex:Perro rdfs:label "Perro"@es ;
+  ex:es ex:Animal ;
+  rdfs:subClassOf ex:Mamifero .
+ex:Gato ex:come ex:Raton , ex:Pez .

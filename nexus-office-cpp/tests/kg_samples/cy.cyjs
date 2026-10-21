@@ -1,0 +1,1 @@
+{"elements": {"nodes": [{"data": {"id": "n1", "name": "Uno"}}, {"data": {"id": "n2", "name": "Dos"}}], "edges": [{"data": {"source": "n1", "target": "n2", "interaction": "pp"}}]}}

@@ -19,6 +19,9 @@
 #include "models/models.h"
 #include "models/runtimes.h"
 #include "office/bolsa.h"
+#include "memory/kg.h"
+#include "memory/kg_jobs.h"
+#include "util/rx.h"
 #include "office/office.h"
 #include "rag/rag.h"
 #include "server/app.h"
@@ -717,10 +720,87 @@ void register_routes(App& app) {
     return json{{"ok", true}};
   }, true);
 
-  app.get("/api/kg/formats", [](Ctx&) -> Out { not_in_cpp("Importar y exportar grafos en otros formatos"); });
-  app.post("/api/kg/import", [](Ctx&) -> Out { not_in_cpp("Importar grafos de conocimiento"); }, true);
-  app.post("/api/kg/archive", [](Ctx&) -> Out { not_in_cpp("Razonar archivos comprimidos completos"); }, true);
-  app.get("/api/kg/export", [](Ctx&) -> Out { not_in_cpp("Exportar el grafo"); });
+  app.get("/api/kg/formats", [](Ctx&) -> Out { return kg::formats_json(); });
+
+  // otro grafo en cualquier formato (se detecta por el contenido); varios ficheros (files) se unen en uno solo
+  app.post("/api/kg/import", [kg_jobs](Ctx& c) -> Out {
+    std::vector<Upload> ups;
+    if (auto f = c.file("file")) ups.push_back(*f);
+    for (auto& f : c.files("files")) ups.push_back(f);
+    if (ups.empty()) throw HttpErr(400, "Falta el fichero del grafo");
+    kg::Files items;
+    size_t total = 0;
+    for (size_t i = 0; i < ups.size() && i < 50; ++i) {
+      total += ups[i].content.size();
+      if (total > 300u * 1024 * 1024) throw HttpErr(400, "El grafo supera 300 MB");
+      items.emplace_back(base_name(ups[i].filename, "grafo.json"), std::move(ups[i].content));
+    }
+    Services* s = &c.app.S();
+    std::string target, name;
+    json parsed;
+    try {
+      target = kg::resolve_target(*s, c.form("target"));
+      if (items.size() == 1) {
+        name = items[0].first;
+        parsed = kg::parse_bytes(std::move(items[0].second), name);
+      } else {
+        parsed = kg::parse_many(items);
+        for (size_t i = 0; i < items.size() && i < 3; ++i) name += (i ? ", " : "") + items[i].first;
+        if (items.size() > 3) name += "…";
+      }
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    } catch (const std::exception& e) {
+      throw HttpErr(400, std::string("No se pudo leer el grafo: ") + e.what());
+    }
+    KgJobs* jobs = kg_jobs.get();
+    auto p = std::make_shared<json>(std::move(parsed));
+    return kg_jobs->start("import", "Importar grafo «" + name + "»", [s, p, name, target, jobs](const std::string& jid) {
+      return kg::run_import(*s, *p, name, target,
+                            [jobs, jid](const std::string& t, long d, long n) { jobs->step(jid, t, d, n); });
+    });
+  }, true);
+
+  // ZIP (o RAR, 7z, tar) razonado con el LLM y procesado en segundo plano
+  app.post("/api/kg/archive", [kg_jobs](Ctx& c) -> Out {
+    auto f = c.file("file");
+    if (!f) throw missing_field("body", "file");
+    std::string name = base_name(f->filename, "archivo.zip");
+    std::string safe = re_sub("[^A-Za-z0-9._-]+", "_", name);
+    fs::path tmp = paths::sub({"cache"}) / P("tmp" + token_hex(4) + "_" + uright(safe, 60));
+    if (!write_file(tmp, f->content)) throw HttpErr(500, "No se pudo guardar " + name);
+    Services* s = &c.app.S();
+    std::string target;
+    try {
+      target = kg::resolve_target(*s, c.form("target", "auto"));
+    } catch (const std::invalid_argument& e) {
+      remove_file(tmp);
+      throw HttpErr(400, e.what());
+    }
+    bool reason = c.form_bool("reason", true), rag = c.form_bool("rag", true);
+    long long mr = -1;
+    try {
+      mr = std::stoll(c.form("max_reason", "-1"));
+    } catch (...) {
+      remove_file(tmp);
+      throw HttpErr(422, "max_reason: Input should be a valid integer");
+    }
+    int max_reason = mr < 0 ? (int)s->config.num("memory.zip_reason_docs", 12) : (int)mr;
+    KgJobs* jobs = kg_jobs.get();
+    return kg_jobs->start("zip", "Procesar «" + name + "»", [s, tmp, name, target, reason, rag, max_reason, jobs](const std::string& jid) {
+      return kg::run_archive(*s, tmp, name, target, reason, rag, max_reason,
+                             [jobs, jid](const std::string& t, long d, long n) { jobs->step(jid, t, d, n); });
+    });
+  }, true);
+
+  app.get("/api/kg/export", [kg_scope](Ctx& c) -> Out {
+    std::string fmt = c.q("format", "json");
+    if (fmt != "json" && fmt != "graphml" && fmt != "csv") throw HttpErr(400, "format: json, graphml o csv");
+    auto sc = kg_scope(c.qopt("scope"));
+    auto [data, mime, ext] = kg::export_graph(*c.app.S().graph, sc, fmt);
+    std::string fname = "nexus-conocimiento-" + (!sc ? std::string("todo") : sc->empty() ? std::string("general") : *sc) + "." + ext;
+    return Raw{200, data, mime, {{"Content-Disposition", "attachment; filename=" + fname}}};
+  });
 
   app.post("/api/kg/reorganize", [kg_jobs](Ctx& c) -> Out {
     Services* s = &c.app.S();

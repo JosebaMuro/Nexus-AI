@@ -1,0 +1,1 @@
+{"directed": true, "multigraph": false, "graph": {}, "nodes": [{"id": "a"}, {"id": "b"}], "adjacency": [[{"id": "b", "weight": 3}], []]}

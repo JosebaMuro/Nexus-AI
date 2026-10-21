@@ -29,7 +29,7 @@ static const size_t READ_GROUP = 200;
 static const std::set<std::string> DOC_EXT = {".pdf", ".docx", ".odt", ".ods", ".odp", ".pptx", ".xlsx", ".epub",
                                               ".rtf", ".html", ".htm", ".xhtml", ".md", ".markdown", ".txt", ".rst",
                                               ".adoc", ".org"};
-static const std::set<std::string> RICH_EXT = {".pdf", ".docx", ".odt", ".ods", ".odp", ".pptx",
+const std::set<std::string> RICH_EXT = {".pdf", ".docx", ".odt", ".ods", ".odp", ".pptx",
                                                ".xlsx", ".epub", ".rtf", ".html", ".htm", ".xhtml"};
 static const std::set<std::string> CODE_EXT = {
     ".py",   ".pyi",    ".ipynb",  ".js",    ".mjs",  ".cjs",  ".ts",    ".tsx",  ".jsx",   ".vue",  ".svelte",
@@ -70,7 +70,7 @@ static std::optional<Parts> clean_name(const std::string& raw) {
   return parts;
 }
 
-static bool indexable(const std::string& rel) {
+bool indexable(const std::string& rel) {
   static const Rx secret(R"((^|/)(\.env(\..*)?|.*\.(pem|key|p12|pfx|keystore|jks)|id_(rsa|ed25519|ecdsa|dsa))$)", Rx::I);
   static const Rx noise(R"(\.min\.(js|css)$|\.map$|(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|)"
                         R"(Cargo\.lock|composer\.lock|Gemfile\.lock)$|(^|/)(vendor|third_party)/)",
@@ -90,12 +90,7 @@ static bool strip_root(const std::vector<std::optional<Parts>>& rels) {
   return tops.size() == 1;
 }
 
-struct Result {
-  std::vector<std::string> files;
-  std::vector<std::pair<std::string, std::string>> skipped;
-  uint64_t bytes = 0;
-  std::string tool;
-};
+using Result = ExtractResult;
 
 static bool skip_path(const Parts& rel) {
   for (size_t i = 0; i + 1 < rel.size(); ++i)
@@ -407,7 +402,7 @@ static Result safe_extract_external(const fs::path& path, const fs::path& dest, 
   return res;
 }
 
-static std::string detect_kind(const fs::path& path, const std::string& name) {
+std::string detect_kind(const fs::path& path, const std::string& name) {
   std::string head = read_file(path, 512).value_or("");
   if (starts_with(head, "Rar!\x1a\x07")) return "rar";
   if (starts_with(head, std::string("7z\xbc\xaf\x27\x1c", 6))) return "7z";
@@ -421,7 +416,7 @@ static std::string detect_kind(const fs::path& path, const std::string& name) {
   return "";
 }
 
-static Result extract_any(const fs::path& path, const fs::path& dest, const std::string& kind) {
+Result extract_any(const fs::path& path, const fs::path& dest, const std::string& kind) {
   if (kind == "zip") return safe_extract_zip(path, dest);
   if (kind == "tar") return safe_extract_tar(path, dest);
   return safe_extract_external(path, dest, kind);
@@ -445,7 +440,7 @@ std::string tree_text(const std::vector<std::string>& files, size_t limit) {
   return join(lines, "\n");
 }
 
-static std::pair<std::vector<std::string>, std::string> read_for_index(const fs::path& p) {
+std::pair<std::vector<std::string>, std::string> read_for_index(const fs::path& p) {
   try {
     if (RICH_EXT.count(suffix_lower(p))) return {read_document(p).pages, ""};
     std::string data = read_file(p, MAX_INDEX_FILE).value_or("");

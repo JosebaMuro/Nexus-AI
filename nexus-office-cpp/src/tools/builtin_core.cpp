@@ -9,6 +9,7 @@
 #include "core/services.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
+#include "memory/kg.h"
 #include "tools/tools.h"
 #include "util/crypto.h"
 #include "util/text.h"
@@ -364,6 +365,35 @@ json knowledge_graph(const json& args, ToolContext& ctx) {
   return {{"facts", facts}, {"attributes", own_notes}};
 }
 
+json graph_import(const json& args, ToolContext& ctx) {
+  Services& s = *ctx.services;
+  std::string data, name;
+  if (truthy(args.value("path", json()))) {
+    fs::path p = sandbox_safe(jstr(args, "path"));
+    if (!is_file(p)) throw ToolError("ValueError", "no existe " + jstr(args, "path") + " en el sandbox");
+    std::error_code ec;
+    if (fs::file_size(p, ec) > 300ull * 1024 * 1024) throw ToolError("ValueError", "el grafo supera 300 MB");
+    data = read_file(p).value_or("");
+    name = S(p.filename());
+  } else if (truthy(args.value("content", json()))) {
+    data = jstr(args, "content");
+    name = truthy(args.value("name", json())) ? jstr(args, "name") : "grafo.txt";
+  } else {
+    throw ToolError("ValueError", "indica path (fichero del sandbox) o content (el grafo en texto)");
+  }
+  std::string target = jstr(args, "target", "general");
+  target = target == "agente" ? ctx.agent : target == "auto" ? "auto" : "";
+  json parsed;
+  try {
+    parsed = kg::parse_bytes(std::move(data), name);
+  } catch (const kg::FormatError& e) {
+    throw ToolError("GraphFormatError", e.what());
+  }
+  json res = kg::insert_graph(*s.graph, parsed, target, s.organizer.get(), s.agents->ids(), "grafo:" + name);
+  if (ctx.emit) ctx.emit({{"type", "graph_update"}});
+  return res;
+}
+
 json system_info(const json&, ToolContext& ctx) {
   Services& s = *ctx.services;
   return {{"profile", s.profile}, {"live", s.monitor->live()["current"]}, {"llm", s.llm->status()}, {"tuning", s.tuning_reasons}};
@@ -408,6 +438,7 @@ json list_agents(const json&, ToolContext& ctx) {
 
 Register r1("calculator", calculator), r2("datetime_now", datetime_now), r3("memory_search", memory_search),
     r4("memory_save", memory_save), r5("knowledge_graph", knowledge_graph), r6("system_info", system_info),
+    r10("graph_import", graph_import),
     r7("delegate", delegate), r8("propose_tool", propose_tool), r9("list_agents", list_agents);
 
 }  // namespace

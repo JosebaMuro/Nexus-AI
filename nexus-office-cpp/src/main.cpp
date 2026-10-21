@@ -7,8 +7,11 @@
 //   nexus-office servicio instalar|quitar|estado [--red] [--puerto P]   (arranque automatico con el equipo)
 //   nexus-office chat [--agent A]
 //   nexus-office oficina [<perfil>|--quitar] [--reset-agentes]
+//   nexus-office bolsa [accion] ...                 (mesa de bolsa simulada)
+//   nexus-office grafo formatos|importar|exportar   (grafos de cualquier formato como conocimiento)
 #include <atomic>
 #include <chrono>
+#include <cstdarg>
 #include <csignal>
 #include <cstdio>
 #include <iostream>
@@ -23,7 +26,9 @@
 #include "core/system.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
+#include "memory/kg.h"
 #include "models/models.h"
+#include "office/bolsa.h"
 #include "office/office.h"
 #include "server/app.h"
 #include "tools/tools.h"
@@ -352,6 +357,183 @@ int cmd_office(const Args& a) {
   return 0;
 }
 
+std::string fmt(const char* f, ...) {
+  char buf[1024];
+  va_list ap;
+  va_start(ap, f);
+  std::vsnprintf(buf, sizeof buf, f, ap);
+  va_end(ap);
+  return buf;
+}
+
+double num(const json& v) { return v.is_number() ? v.get<double>() : 0.0; }
+
+// importar grafos de cualquier formato como conocimiento, o exportarlos, desde la terminal y sin red
+int cmd_graph(const Args& a) {
+  std::string acc = a.pos.empty() ? "formatos" : a.pos[0];
+  std::vector<std::string> files(a.pos.begin() + (a.pos.empty() ? 0 : 1), a.pos.end());
+  std::string en = a.get("en");
+  if (acc == "formatos") {
+    std::printf("Formatos de grafo que se pueden importar (se reconocen por el contenido):\n\n");
+    for (auto& f : kg::formats_json()["formats"]) {
+      std::string ext = join(f["extensions"].get<std::vector<std::string>>(), " ");
+      std::printf("  %s %s %s\n", rpad(jstr(f, "name"), 34).c_str(), rpad(ext, 34).c_str(), jstr(f, "description").c_str());
+    }
+    std::printf("\nUso: nexus-office grafo importar FICHERO [FICHERO...] [--en general|auto|<agente>]\n");
+    return 0;
+  }
+  if (acc == "leer") {   // solo lee y muestra el grafo normalizado (sin tocar la memoria): pruebas y diagnostico
+    kg::Files items;
+    for (auto& f : files) items.emplace_back(S(fs::path(f).filename()), read_file(fs::path(f)).value_or(""));
+    try {
+      std::printf("%s\n", kg::parse_many(items).dump(1).c_str());
+    } catch (const std::exception& e) {
+      die(std::string("No se pudo leer el grafo: ") + e.what(), 1);
+    }
+    return 0;
+  }
+  Services s;
+  if (acc == "importar") {
+    if (files.empty()) die("Indica uno o varios ficheros", 1);
+    kg::Files items;
+    std::string names;
+    for (auto& f : files) {
+      auto data = read_file(fs::path(f));
+      if (!data) die("No se puede leer " + f, 1);
+      items.emplace_back(S(fs::path(f).filename()), std::move(*data));
+      names += (names.empty() ? "" : ", ") + items.back().first;
+    }
+    json parsed;
+    try {
+      parsed = kg::parse_many(items);
+    } catch (const std::exception& e) {
+      die(std::string("No se pudo leer el grafo: ") + e.what(), 1);
+    }
+    std::string target = en == "general" ? "" : en;
+    if (!target.empty() && target != "auto" && !s.agents->get(target))
+      die("Agente desconocido: " + target + ". Agentes: " + join(s.agents->ids(), ", "), 1);
+    std::printf("Formato %s: %zu nodos y %zu relaciones\n", jstr(parsed, "format").c_str(), parsed["nodes"].size(),
+                parsed["edges"].size());
+    json res = kg::insert_graph(*s.graph, parsed, target, s.organizer.get(), s.agents->ids(), "grafo:" + uleft(names, 100));
+    std::printf("Importado: %lld nodos (%lld nuevos, %lld fusionados con los que ya habia) y %lld relaciones.\n",
+                res["nodes"].get<long long>(), res["new"].get<long long>(), res["merged"].get<long long>(),
+                res["relations"].get<long long>());
+    std::vector<std::string> by;
+    for (auto& [k, v] : res["by_scope"].items()) {
+      auto ag = s.agents->get(k);
+      by.push_back((ag ? ag->name : k) + ": " + server::Ctx::as_str(v));
+    }
+    std::printf("Por grafo: %s\n", join(by, ", ").c_str());
+    return 0;
+  }
+  if (acc == "exportar") {
+    std::string f = a.get("formato", "json");
+    if (f != "json" && f != "graphml" && f != "csv") die("--formato: json, graphml o csv", 2);
+    std::optional<std::string> scope;
+    if (!en.empty() && en != "todo") scope = en == "general" ? "" : en;
+    auto [data, mime, ext] = kg::export_graph(*s.graph, scope, f);
+    fs::path out = files.empty() ? fs::path("nexus-conocimiento." + ext) : fs::path(files[0]);
+    if (!write_file(out, data)) die("No se pudo escribir " + S(out), 1);
+    std::printf("Exportado a %s (%zu bytes)\n", S(out).c_str(), data.size());
+    return 0;
+  }
+  die("Acciones: formatos | importar | exportar", 1);
+  return 1;
+}
+
+// mesa de bolsa simulada en la terminal (office/bolsa.h)
+int cmd_bolsa(const Args& a) {
+  auto& b = bolsa::get();
+  std::string acc = a.pos.empty() ? "cartera" : a.pos[0];
+  std::vector<std::string> rest(a.pos.begin() + (a.pos.empty() ? 0 : 1), a.pos.end());
+  json cid = a.get("cartera").empty() ? json(nullptr) : json(std::stoll(a.get("cartera")));
+  auto show = [](const json& x) { std::printf("%s\n", x.dump(2).c_str()); };
+  auto need = [&](size_t n, const std::string& uso) {
+    if (rest.size() < n) die("Uso: nexus-office bolsa " + uso, 1);
+  };
+  auto optnum = [&](const std::string& k) { return a.get(k).empty() ? json(nullptr) : json(std::stod(a.get(k))); };
+  try {
+    if (acc == "cartera") {
+      json r = b.resumen(cid);
+      std::printf("%s (%s, tarifa %s) · total %.2f € · efectivo %.2f € · rentabilidad %+.2f %% · gastos %.2f €\n",
+                  jstr(r, "nombre").c_str(), jstr(r, "modo").c_str(), jstr(r, "tarifa").c_str(), num(r["total_eur"]),
+                  num(r["efectivo_eur"]), num(r["rentabilidad_pct"]), num(r["gastos_eur"]));
+      for (auto& p : r["posiciones"])
+        std::printf("  %-10s %12g  coste %10.4f €  precio %10s %s  valor %10.2f €  %+.2f %%\n", jstr(p, "simbolo").c_str(),
+                    num(p["cantidad"]), num(p["coste_medio_eur"]), server::Ctx::as_str(p["precio"]).c_str(),
+                    jstr(p, "divisa").c_str(), num(p["valor_eur"]), num(p["plusvalia_pct"]));
+      std::printf("\n%s\n", bolsa::AVISO);
+    } else if (acc == "mercados") {
+      for (auto& m : b.mercados()) {
+        bool open = m.value("abierto", false);
+        std::string nxt = open ? "cierra " + server::Ctx::as_str(m["cierra"]) : "abre " + server::Ctx::as_str(m["abre"]);
+        std::printf("  %s %-8s %s  %s\n", rpad(jstr(m, "nombre"), 32).c_str(), open ? "ABIERTA" : "cerrada",
+                    jstr(m, "hora_local").c_str(), nxt.c_str());
+      }
+    } else if (acc == "valores") {
+      for (auto& i : b.instrumentos(join(rest, " ")))
+        std::printf("  %-10s %-9s %s  %s\n", jstr(i, "simbolo").c_str(), jstr(i, "mercado").c_str(), jstr(i, "divisa").c_str(),
+                    jstr(i, "nombre").c_str());
+    } else if (acc == "cotizar") {
+      need(1, "cotizar SIMBOLO");
+      show(b.precio(rest[0]));
+    } else if (acc == "comprar" || acc == "vender") {
+      need(2, acc + " SIMBOLO CANTIDAD [--tipo limitada --limite P] [--stop P] [--validez hasta_cancelar]");
+      show(b.ordenar(rest[0], acc, rest[1], a.get("tipo", "mercado"), optnum("limite"), optnum("stop"),
+                     a.get("validez", "dia"), cid, "terminal"));
+    } else if (acc == "ordenes") {
+      for (auto& o : b.ordenes(cid))
+        std::printf("  #%-5lld %-13s %-6s %10g %-10s %s %s\n", o["id"].get<long long>(), jstr(o, "estado").c_str(),
+                    jstr(o, "lado").c_str(), num(o["cantidad"]), jstr(o, "simbolo").c_str(), jstr(o, "tipo").c_str(),
+                    jstr(o, "motivo").c_str());
+    } else if (acc == "operaciones") {
+      for (auto& o : b.operaciones(cid)) {
+        std::string g = o["ganancia_eur"].is_null() ? "" : fmt(" resultado %+.2f €", num(o["ganancia_eur"]));
+        std::printf("  %s %-6s %10g %-10s a %.4f  total %.2f € (comisión %.2f, impuestos %.2f, cambio %.2f)%s\n",
+                    jstr(o, "fecha").c_str(), jstr(o, "lado").c_str(), num(o["cantidad"]), jstr(o, "simbolo").c_str(),
+                    num(o["precio"]), num(o["total_eur"]), num(o["comision_eur"]), num(o["impuestos_eur"]),
+                    num(o["cambio_eur"]), g.c_str());
+      }
+    } else if (acc == "cancelar") {
+      need(1, "cancelar ID");
+      show(b.cancelar(std::stoll(rest[0])));
+    } else if (acc == "confirmar") {   // solo una persona, en la terminal, confirma una orden de cartera real
+      need(1, "confirmar ID");
+      json o = b.orden(std::stoll(rest[0]));
+      std::printf("Orden REAL #%lld: %s %g %s (%s). Nexus-Office no la envía a ningún bróker: después la ejecutas tú.\n",
+                  o["id"].get<long long>(), jstr(o, "lado").c_str(), num(o["cantidad"]), jstr(o, "simbolo").c_str(),
+                  jstr(o, "tipo").c_str());
+      std::printf("Escribe %s para confirmarla: ", bolsa::CONFIRMACION);
+      std::fflush(stdout);
+      std::string line;
+      std::getline(std::cin, line);
+      show(b.confirmar(o["id"].get<long long>(), line));
+    } else if (acc == "ejecucion") {
+      need(2, "ejecucion ID PRECIO [--comision EUROS]");
+      json com = optnum("comision");
+      show(b.registrar_ejecucion(std::stoll(rest[0]), rest[1], com.is_null() ? json(0.0) : com));
+    } else if (acc == "nueva") {
+      show(b.crear_cartera(rest.empty() ? "Cartera simulada" : join(rest, " "), std::stod(a.get("capital", "10000")),
+                           a.get("tarifa", "broker-online"), a.get("modo", "simulado")));
+    } else if (acc == "reiniciar") {
+      double cap = std::stod(a.get("capital", "10000"));
+      show(b.reiniciar(cid, cap != 10000 ? json(cap) : json(nullptr)));
+    } else if (acc == "importar") {
+      need(2, "importar SIMBOLO fichero.csv");
+      auto txt = read_file(fs::path(rest[1]));
+      if (!txt) die("No se puede leer " + rest[1], 1);
+      show(b.importar_csv(rest[0], *txt));
+    } else if (acc == "fiscal") {
+      show(b.informe_fiscal(cid, rest.empty() ? json(nullptr) : json(std::stoll(rest[0]))));
+    } else {
+      die("acción desconocida: " + acc, 1);
+    }
+  } catch (const std::exception& e) {   // ValueError, PermissionError y numeros mal escritos
+    die(e.what(), 1);
+  }
+  return 0;
+}
+
 const char* HELP =
     "Nexus-Office " NEXUS_VERSION " - oficina de IA local para pymes (edicion C++)\n\n"
     "  nexus-office run [--host H] [--port P] [--no-browser] [--motor auto|llamaserver] [--acelerador auto|cpu|gpu|npu]\n"
@@ -361,6 +543,11 @@ const char* HELP =
     "  nexus-office servicio instalar|quitar|estado [--red] [--puerto P]\n"
     "  nexus-office chat [--agent A]            chat en la terminal\n"
     "  nexus-office oficina [<perfil>|--quitar] [--reset-agentes]\n"
+    "  nexus-office bolsa [cartera|mercados|valores|cotizar|comprar|vender|ordenes|operaciones|cancelar|confirmar|\n"
+    "                     ejecucion|nueva|reiniciar|importar|fiscal] [--cartera N] [--tipo T] [--limite P] [--stop P]\n"
+    "                     [--validez dia|hasta_cancelar] [--capital C] [--tarifa T] [--modo simulado|real] [--comision E]\n"
+    "  nexus-office grafo [formatos|importar|exportar] [FICHEROS...] [--en general|auto|<agente>|todo]\n"
+    "                     [--formato json|graphml|csv]\n"
     "  nexus-office --version\n";
 
 }  // namespace
@@ -387,7 +574,10 @@ int run_main(std::vector<std::string> argv) {
   if (cmd == "modelos") return cmd_models(parse(argv, {}));
   if (cmd == "chat") return cmd_chat(parse(argv, {"agent"}));
   if (cmd == "oficina") return cmd_office(parse(argv, {}));
-  if (cmd == "grafo" || cmd == "bolsa" || cmd == "wheels" || cmd == "cleanup" || cmd == "setup") {
+  if (cmd == "grafo") return cmd_graph(parse(argv, {"en", "formato"}));
+  if (cmd == "bolsa")
+    return cmd_bolsa(parse(argv, {"cartera", "tipo", "limite", "stop", "validez", "capital", "tarifa", "modo", "comision"}));
+  if (cmd == "wheels" || cmd == "cleanup" || cmd == "setup") {
     std::fprintf(stderr, "'%s' todavia no esta disponible en la edicion C++ (2.0 beta C). Usa la edicion Python.\n", cmd.c_str());
     return 2;
   }

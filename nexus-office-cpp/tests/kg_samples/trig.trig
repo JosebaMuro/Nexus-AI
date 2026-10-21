@@ -1,0 +1,2 @@
+@prefix ex: <http://ex.org/> .
+ex:g { ex:a ex:r ex:b . }

@@ -658,8 +658,8 @@ def create_app(services: Services | None = None) -> FastAPI:
             raise HTTPException(400, f"No se pudo leer el grafo: {e}") from e
 
     @app.post("/api/kg/archive", dependencies=[Depends(require_admin)])
-    async def kg_archive(file: UploadFile = File(...), target: str = Form("auto"), reason: bool = Form(True),
-                         rag: bool = Form(True), max_reason: int = Form(-1)):
+    async def kg_archive(file: UploadFile = File(...), target: str = Form("auto"), reason: str = Form("true"),
+                         rag: str = Form("true"), max_reason: int = Form(-1)):
         """Lee un ZIP (o RAR, 7z, tar), lo razona con el LLM y lo procesa en segundo plano: grafos, biblioteca,
         temas, hechos y procedimientos, cada cosa en el grafo general o en el del especialista."""
         import tempfile
@@ -669,7 +669,10 @@ def create_app(services: Services | None = None) -> FastAPI:
             while chunk := await file.read(1024 * 1024):
                 out.write(chunk)
         try:
-            return S().kg_jobs.process_archive(Path(tmp), name, target, reason, rag, None if max_reason < 0 else max_reason)
+            # texto y no bool: algunas versiones de FastAPI dan False a un bool de formulario que no llega
+            yes = ("1", "true", "on", "yes", "si", "sí")
+            return S().kg_jobs.process_archive(Path(tmp), name, target, reason.strip().lower() in yes,
+                                               rag.strip().lower() in yes, None if max_reason < 0 else max_reason)
         except ValueError as e:
             Path(tmp).unlink(missing_ok=True)
             raise HTTPException(400, str(e)) from e

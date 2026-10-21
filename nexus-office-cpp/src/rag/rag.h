@@ -3,6 +3,7 @@
 #include <functional>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -36,6 +37,19 @@ std::tuple<std::string, std::vector<std::string>, std::string> read_safe(const f
 json extract_html(const std::string& raw, const std::string& url);
 std::string urljoin(const std::string& base, const std::string& href);
 std::string url_host(const std::string& url);
+
+// archivos comprimidos: extraccion segura (zip slip, bombas, enlaces) y lectura para indexar
+struct ExtractResult {
+  std::vector<std::string> files;   // rutas relativas con "/"
+  std::vector<std::pair<std::string, std::string>> skipped;
+  uint64_t bytes = 0;
+  std::string tool;
+};
+extern const std::set<std::string> RICH_EXT;
+std::string detect_kind(const fs::path& path, const std::string& name);   // zip, rar, 7z, tar o ""
+ExtractResult extract_any(const fs::path& path, const fs::path& dest, const std::string& kind);
+bool indexable(const std::string& rel);
+std::pair<std::vector<std::string>, std::string> read_for_index(const fs::path& p);   // (paginas, error)
 
 class RAGStore;
 json ingest_archive(RAGStore& rag, const fs::path& src, std::string title, const std::string& source,

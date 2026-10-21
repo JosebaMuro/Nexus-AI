@@ -1,0 +1,1 @@
+digraph G { a [label="Inicio"]; b [label="Fin"]; a -> b [label="pasa a", weight=2]; b -> c; }

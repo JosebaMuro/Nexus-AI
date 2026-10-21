@@ -132,13 +132,20 @@ bool Ctx::bb(const std::string& k, bool def) const {
   throw HttpErr(422, unprocessable("body", k, "Input should be a valid boolean"));
 }
 
+// formulario multipart o application/x-www-form-urlencoded (este llega mezclado con la consulta en req.params)
+static bool urlencoded(const httplib::Request& req) {
+  return starts_with(req.get_header_value("Content-Type"), "application/x-www-form-urlencoded");
+}
+
 std::string Ctx::form(const std::string& k, const std::string& def) const {
-  return req.form.has_field(k) ? req.form.get_field(k) : def;
+  if (req.form.has_field(k)) return req.form.get_field(k);
+  if (urlencoded(req) && req.has_param(k)) return req.get_param_value(k);
+  return def;
 }
 
 bool Ctx::form_bool(const std::string& k, bool def) const {
-  if (!req.form.has_field(k)) return def;
-  return to_bool(req.form.get_field(k)).value_or(def);
+  if (!req.form.has_field(k) && !(urlencoded(req) && req.has_param(k))) return def;
+  return to_bool(form(k)).value_or(def);
 }
 
 std::optional<Upload> Ctx::file(const std::string& k) const {
@@ -302,7 +309,8 @@ void App::dispatch(const Handler& h, bool admin_required, const std::vector<std:
   try {
     if (admin_required && !c.admin) throw HttpErr(403, "Requiere modo administrador");
     std::string ctype = req.get_header_value("Content-Type");
-    if (!req.body.empty() && !starts_with(ctype, "multipart/form-data")) {
+    if (!req.body.empty() && !starts_with(ctype, "multipart/form-data") &&
+        !starts_with(ctype, "application/x-www-form-urlencoded")) {
       c.body = jparse(req.body);
       if (c.body.is_discarded()) throw HttpErr(422, unprocessable("body", "", "JSON decode error"));
     }

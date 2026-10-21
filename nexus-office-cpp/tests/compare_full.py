@@ -81,15 +81,51 @@ def flows(base, only=""):
         rec("bolsa_after", c.get(f"/api/bolsa?cartera={real.get('id', 0)}"))
 
     if only in ("", "grafo"):
+        import time
+
+        def wait(job):
+            for _ in range(200):
+                j = c.get(f"/api/kg/jobs/{job.get('id', '')}").json()
+                if j.get("status") != "en curso":
+                    return j
+                time.sleep(0.1)
+            return j
+
         rec("kg_formats", c.get("/api/kg/formats"))
-        rec("kg_import", c.post("/api/kg/import", files={"files": ("g.graphml", GRAPHML.encode(), "application/xml")},
-                                data={"scope": ""}, headers=h))
-        rec("kg_import_json", c.post("/api/kg/import", files={"files": ("g.json", json.dumps(
+        j = rec("kg_import", c.post("/api/kg/import", files={"files": ("g.graphml", GRAPHML.encode(), "application/xml")},
+                                    headers=h))
+        out["kg_import_done"] = (200, wait(j))
+        j = rec("kg_import_json", c.post("/api/kg/import", files={"file": ("g.json", json.dumps(
             {"nodes": [{"id": "x", "label": "Nómina"}, {"id": "y", "label": "IRPF"}],
              "edges": [{"source": "x", "target": "y", "label": "retiene"}]}).encode(), "application/json")},
-            data={"scope": ""}, headers=h))
-        for fmt in ("json", "graphml", "gexf", "csv", "dot", "ttl", "cypher", "md"):
-            rec(f"kg_export_{fmt}", c.get(f"/api/kg/export?fmt={fmt}"))
+            headers=h))
+        out["kg_import_json_done"] = (200, wait(j))
+        j = rec("kg_import_many", c.post("/api/kg/import", files=[
+            ("files", ("nodes.csv", b"id:ID,name,:LABEL\n1,Proveedor,Empresa\n2,Pedido,Documento\n", "text/csv")),
+            ("files", ("edges.csv", b":START_ID,:END_ID,:TYPE\n1,2,RECIBE\n", "text/csv"))], headers=h))
+        out["kg_import_many_done"] = (200, wait(j))
+        rec("kg_import_bad", c.post("/api/kg/import", files={"file": ("x.bin", b"\x00\x01\x02", "application/x")},
+                                    headers=h))
+        rec("kg_import_noadmin", c.post("/api/kg/import", files={"file": ("g.graphml", GRAPHML.encode(), "text/xml")}))
+        rec("kg_import_empty", c.post("/api/kg/import", data={"target": ""}, headers=h))
+        rec("kg_import_badtarget", c.post("/api/kg/import", files={"file": ("g.graphml", GRAPHML.encode(), "text/xml")},
+                                          data={"target": "nadie"}, headers=h))
+        import io
+        import zipfile
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("red/g.graphml", GRAPHML)
+            z.writestr("notas/Ana.md", "# Ana\nTrabaja con [[Luis]] en [[Proyecto X]].\n")
+            z.writestr("notas/Luis.md", "Luis conoce a [[Ana]].\n")
+            z.writestr("docs/leeme.txt", "Manual de facturacion. La factura incluye el IVA y se emite al cliente.")
+        j = rec("kg_archive", c.post("/api/kg/archive", files={"file": ("paquete.zip", buf.getvalue(), "application/zip")},
+                                     data={"target": "general", "reason": "false"}, headers=h))
+        out["kg_archive_done"] = (200, wait(j))
+        rec("kg_archive_badtarget", c.post("/api/kg/archive", files={"file": ("p.zip", buf.getvalue(), "application/zip")},
+                                           data={"target": "nadie"}, headers=h))
+        for fmt in ("json", "graphml", "csv", "gexf"):
+            rec(f"kg_export_{fmt}", c.get(f"/api/kg/export?format={fmt}"))
+        rec("kg_export_general", c.get("/api/kg/export?format=json&scope=general"))
         rec("kg_overview", c.get("/api/kg/overview"))
         rec("dk_list", c.get("/api/rag/domain-knowledge"))
 

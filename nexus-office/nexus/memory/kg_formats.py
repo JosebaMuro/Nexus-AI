@@ -958,7 +958,7 @@ def parse_xml_generic(root: ET.Element) -> dict:
             props = child_props(el)
             name = _first(a, *XML_NAME) or _first(props, *XML_NAME)
             count[0] += 1
-            nid = _first(a, *XML_ID) or (f"{parent}/{name}" if name else f"_n{count[0]}")
+            nid = _first(a, *XML_ID) or (f"{parent or ''}/{name}" if name else f"_n{count[0]}")
             rest = {k: v for k, v in {**a, **props}.items() if k not in XML_ID + XML_NAME + ("type", "category")
                     and len(str(v)) < 300}
             b.entity(nid, rest, name=name, type=a.get("type") or a.get("category") or props.get("type"))

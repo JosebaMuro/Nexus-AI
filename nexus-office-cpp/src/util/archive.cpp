@@ -1,3 +1,7 @@
+#include <bzlib.h>
+extern "C" {
+#include <xz.h>
+}
 #include "util/archive.h"
 
 #include <miniz.h>
@@ -108,6 +112,62 @@ std::optional<std::string> inflate(const std::string& data, bool zlib_header) {
   if (!p) return std::nullopt;
   std::string out((const char*)p, out_len);
   mz_free(p);
+  return out;
+}
+
+std::optional<std::string> bunzip2(const std::string& d, size_t max_bytes) {
+  bz_stream bz{};
+  if (BZ2_bzDecompressInit(&bz, 0, 0) != BZ_OK) return std::nullopt;
+  std::string out;
+  std::vector<char> buf(1 << 16);
+  size_t pos = 0;
+  int rc = BZ_OK;
+  while (rc == BZ_OK || (rc == BZ_STREAM_END && pos < d.size())) {
+    if (rc == BZ_STREAM_END) {   // varios flujos concatenados (pbzip2)
+      BZ2_bzDecompressEnd(&bz);
+      bz = bz_stream{};
+      if (BZ2_bzDecompressInit(&bz, 0, 0) != BZ_OK) return std::nullopt;
+    }
+    bz.next_in = const_cast<char*>(d.data() + pos);
+    bz.avail_in = (unsigned)std::min<size_t>(d.size() - pos, 1u << 30);
+    bz.next_out = buf.data();
+    bz.avail_out = (unsigned)buf.size();
+    rc = BZ2_bzDecompress(&bz);
+    pos = d.size() - bz.avail_in;
+    out.append(buf.data(), buf.size() - bz.avail_out);
+    if (out.size() > max_bytes) rc = BZ_MEM_ERROR;
+    if (rc == BZ_OK && bz.avail_in == 0 && bz.avail_out != 0) rc = BZ_UNEXPECTED_EOF;
+  }
+  BZ2_bzDecompressEnd(&bz);
+  if (rc != BZ_STREAM_END) return std::nullopt;
+  return out;
+}
+
+std::optional<std::string> unxz(const std::string& d, size_t max_bytes) {
+  static bool crc_ready = [] {
+    xz_crc32_init();
+    xz_crc64_init();
+    return true;
+  }();
+  (void)crc_ready;
+  xz_dec* dec = xz_dec_init(XZ_DYNALLOC, 1u << 26);
+  if (!dec) return std::nullopt;
+  std::string out;
+  std::vector<uint8_t> buf(1 << 16);
+  xz_buf b{};
+  b.in = (const uint8_t*)d.data();
+  b.in_size = d.size();
+  xz_ret rc;
+  do {
+    b.out = buf.data();
+    b.out_pos = 0;
+    b.out_size = buf.size();
+    rc = xz_dec_run(dec, &b);
+    out.append((const char*)buf.data(), b.out_pos);
+    if (out.size() > max_bytes) rc = XZ_MEM_ERROR;
+  } while (rc == XZ_OK && !(b.in_pos == b.in_size && b.out_pos == 0));
+  xz_dec_end(dec);
+  if (rc != XZ_STREAM_END) return std::nullopt;
   return out;
 }
 
@@ -238,3 +298,7 @@ bool extract(const fs::path& archive, const fs::path& dest) {
 }
 
 }  // namespace nx::archive
+
+extern "C" void bz_internal_error(int code) {
+  throw std::runtime_error("bzip2: error interno " + std::to_string(code));
+}

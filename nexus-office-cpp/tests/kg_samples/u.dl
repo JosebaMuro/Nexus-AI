@@ -1,0 +1,7 @@
+DL n=3
+format = edgelist1
+labels:
+A,B,C
+data:
+1 2 1
+2 3 1
