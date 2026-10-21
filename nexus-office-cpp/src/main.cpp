@@ -18,6 +18,11 @@
 #include <map>
 #include <set>
 #include <thread>
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 #include "agents/agents.h"
 #include "coop/coop.h"
@@ -29,6 +34,7 @@
 #include "llm/llm.h"
 #include "memory/kg.h"
 #include "models/models.h"
+#include "models/runtimes.h"
 #include "office/bolsa.h"
 #include "rag/web.h"
 #include "remote/remote.h"
@@ -566,6 +572,138 @@ int cmd_bolsa(const Args& a) {
   return 0;
 }
 
+// ---------------------------------------------------------------- setup, wheels y cleanup
+// setup: comprueba que los runtimes nativos de este equipo estan en el paquete (la edicion C++ no instala nada:
+// voz, imagen, musica y NPU van dentro del binario o en bundled/runtimes)
+int cmd_setup(const Args&) {
+  log::setup();
+  auto info = hw::detect();
+  hw::save(info);
+  json prof = hw::build_profile(info);
+  runtimes::RuntimeManager rm;
+  std::printf("Equipo: %s | acelerador %s\n", jstr(prof, "device_name", "?").c_str(), jstr(prof, "accelerator", "cpu").c_str());
+  int missing = 0;
+  for (auto* rt : {"llama", "sd"}) {
+    auto want = runtimes::candidates(prof, rt);
+    auto f = rm.exe(rt, prof);
+    std::string name = std::string(rt) == "llama" ? "Runtime LLM llama.cpp" : "Runtime imagen sd.cpp";
+    if (f) {
+      std::printf("  [ok] %-24s %s (%s)\n", name.c_str(), f->variant.c_str(), S(f->exe).c_str());
+    } else {
+      ++missing;
+      std::printf("  [--] %-24s falta la variante %s: copia el paquete offline completo o usa\n"
+                  "       'nexus-office run' con internet para descargarla una vez\n", name.c_str(),
+                  want.empty() ? "?" : want[0].c_str());
+    }
+  }
+  json npu = prof.value("npu", json::object());
+  if (truthy(npu.value("present", json(false))))
+    std::printf("  [%s] NPU %s: %s\n", truthy(npu.value("ready", json(false))) ? "ok" : "--", jstr(npu, "vendor").c_str(),
+                jstr(npu, "hint", "lista").c_str());
+  std::printf("  [ok] Voz, transcripcion, musica y edicion de imagen: integradas en este binario\n");
+  return missing ? 1 : 0;
+}
+
+int cmd_wheels(const Args&) {
+  std::printf("La edicion C++ no usa Python ni wheels: todo va en el binario y en bundled/runtimes.\n"
+              "Solo las herramientas de la comunidad (data/tools/community/*.py) usan el Python del sistema si lo hay.\n"
+              "Para preparar un wheelhouse/ usa la edicion Python: python -m nexus wheels --help\n");
+  return 0;
+}
+
+uintmax_t tree_size(const fs::path& p) {
+  if (is_file(p)) return fsize(p);
+  uintmax_t t = 0;
+  std::error_code ec;
+  for (auto it = fs::recursive_directory_iterator(p, ec); it != fs::recursive_directory_iterator(); it.increment(ec))
+    if (!ec && it->is_regular_file(ec)) t += it->file_size(ec);
+  return t;
+}
+
+// variantes de bundled/runtimes que usa este equipo: la de su perfil, las que el selector de inicio puede pedir
+// (GPU y NPU) y una CPU de respaldo. Ante cualquier duda no se borra ninguna.
+std::set<fs::path> runtimes_in_use(const fs::path& bundled) {
+  std::set<fs::path> keep;
+  try {
+    hw::HardwareInfo info;
+    if (!hw::load_cached(info)) info = hw::detect("http://127.0.0.1:11434", false);
+    json prof = hw::build_profile(info);
+    runtimes::RuntimeManager rm;
+    for (auto* rt : {"llama", "sd"}) {
+      if (!is_dir(bundled / rt)) continue;
+      std::vector<std::string> prefs = {""};
+      if (std::string(rt) == "llama")
+        for (auto* a : {"gpu", "npu"}) prefs.push_back(jstr(hw::plan(info, a), "variant"));
+      for (auto& pref : prefs) {
+        auto f = rm.exe(rt, prof, pref);
+        if (!f || !is_relative_to(f->exe, bundled / rt)) continue;
+        fs::path rel = resolve(f->exe).lexically_relative(resolve(bundled / rt));
+        if (!rel.empty()) keep.insert(resolve(bundled / rt / *rel.begin()));
+      }
+      for (auto& v : runtimes::bundled_variants(rt))
+        if (starts_with(v, "cpu")) {
+          keep.insert(resolve(bundled / rt / P(v)));
+          break;
+        }
+    }
+  } catch (const std::exception&) {
+    for (auto* rt : {"llama", "sd"})
+      for (auto& v : glob(bundled / rt, "*")) keep.insert(resolve(v));
+  }
+  return keep;
+}
+
+bool ask(const std::string& q, bool def) {
+#ifdef _WIN32
+  bool tty = _isatty(_fileno(stdin));
+#else
+  bool tty = isatty(fileno(stdin));
+#endif
+  if (!tty) return def;
+  std::printf("[Nexus-Office] %s [%s] ", q.c_str(), def ? "S/n" : "s/N");
+  std::fflush(stdout);
+  std::string ans;
+  if (!std::getline(std::cin, ans)) return def;
+  ans = lower(trim(ans));
+  return ans.empty() ? def : (ans[0] == 's' || ans[0] == 'y');
+}
+
+// cleanup: quita del paquete offline las variantes de runtime (GPU o CPU) que este equipo no usa
+int cmd_cleanup(const Args& a) {
+  log::setup();
+  fs::path root = paths::root(), bundled = root / "bundled" / "runtimes";
+  auto keep = runtimes_in_use(bundled);
+  std::vector<fs::path> unused;
+  for (auto* rt : {"llama", "sd"})
+    for (auto& v : glob(bundled / rt, "*"))
+      if (is_dir(v) && !keep.count(resolve(v))) unused.push_back(v);
+  for (auto& t : {root / ".cache" / "extract"})
+    if (path_exists(t)) unused.push_back(t);
+  uintmax_t bytes = 0;
+  for (auto& p : unused) bytes += tree_size(p);
+  double mb = bytes / 1048576.0;
+  std::printf("[Nexus-Office] Limpieza de la instalacion: %zu elementos sin usar (%.0f MB).\n", unused.size(), mb);
+  for (auto& k : keep)
+    std::printf("[Nexus-Office]   se conserva el runtime %s\n", k.lexically_relative(resolve(root)).generic_string().c_str());
+  json report = {{"removed", json::array()}, {"kept_for_reinstall", json::array()}, {"dry_run", a.has("dry-run")}};
+  for (auto& p : unused) report["removed"].push_back(p.lexically_relative(root).generic_string());
+  if (a.has("dry-run")) {
+    for (auto& r : report["removed"]) std::printf("%s\n", r.get<std::string>().c_str());
+    return 0;
+  }
+  if (!unused.empty() && (a.has("yes") || ask("¿Eliminar lo que este equipo no usa (" + fnum(mb, 0) + " MB)?", false))) {
+    for (auto& p : unused) rm_rf(p);
+    std::printf("[Nexus-Office] Eliminado: %.0f MB.\n", mb);
+  } else {
+    report["removed"] = json::array();
+    std::printf("[Nexus-Office] Sin limpieza: el paquete queda completo (reinstalable en cualquier equipo de esta "
+                "plataforma).\n");
+  }
+  mkdirs(root / ".cache");
+  write_file(root / ".cache" / "limpieza.json", jdump(report, 2) + "\n");
+  return 0;
+}
+
 const char* HELP =
     "Nexus-Office " NEXUS_VERSION " - oficina de IA local para pymes (edicion C++)\n\n"
     "  nexus-office run [--host H] [--port P] [--no-browser] [--motor auto|llamaserver] [--acelerador auto|cpu|gpu|npu]\n"
@@ -580,6 +718,8 @@ const char* HELP =
     "                     [--validez dia|hasta_cancelar] [--capital C] [--tarifa T] [--modo simulado|real] [--comision E]\n"
     "  nexus-office grafo [formatos|importar|exportar] [FICHEROS...] [--en general|auto|<agente>|todo]\n"
     "                     [--formato json|graphml|csv]\n"
+    "  nexus-office setup                       comprueba los runtimes de este equipo en el paquete\n"
+    "  nexus-office cleanup [--yes] [--dry-run] quita las variantes de runtime que este equipo no usa\n"
     "  nexus-office --version\n";
 
 }  // namespace
@@ -609,10 +749,9 @@ int run_main(std::vector<std::string> argv) {
   if (cmd == "grafo") return cmd_graph(parse(argv, {"en", "formato"}));
   if (cmd == "bolsa")
     return cmd_bolsa(parse(argv, {"cartera", "tipo", "limite", "stop", "validez", "capital", "tarifa", "modo", "comision"}));
-  if (cmd == "wheels" || cmd == "cleanup" || cmd == "setup") {
-    std::fprintf(stderr, "'%s' todavia no esta disponible en la edicion C++ (2.0 beta C). Usa la edicion Python.\n", cmd.c_str());
-    return 2;
-  }
+  if (cmd == "setup") return cmd_setup(parse(argv, {}));
+  if (cmd == "wheels") return cmd_wheels(parse(argv, {}));
+  if (cmd == "cleanup") return cmd_cleanup(parse(argv, {}));
   std::fprintf(stderr, "orden desconocida: %s\n\n%s", cmd.c_str(), HELP);
   return 2;
 }
