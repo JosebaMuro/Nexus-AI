@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <string_view>
 #include <vector>
 
@@ -43,10 +44,14 @@ class Rx {
   bool test(std::string_view s) const { return exec(s, 0, 0).has_value(); }
   std::vector<Match> finditer(std::string_view s) const;
   // Match guarda una vista del texto: con un temporario quedaria colgando (usar test() o guardar el texto antes)
-  std::optional<Match> search(std::string&& s, size_t pos = 0) const = delete;
-  std::optional<Match> match(std::string&& s, size_t pos = 0) const = delete;
-  std::optional<Match> fullmatch(std::string&& s) const = delete;
-  std::vector<Match> finditer(std::string&& s) const = delete;
+  template <class T, class = std::enable_if_t<std::is_same_v<T, std::string>>>
+  std::optional<Match> search(T&& s, size_t pos = 0) const = delete;
+  template <class T, class = std::enable_if_t<std::is_same_v<T, std::string>>>
+  std::optional<Match> match(T&& s, size_t pos = 0) const = delete;
+  template <class T, class = std::enable_if_t<std::is_same_v<T, std::string>>>
+  std::optional<Match> fullmatch(T&& s) const = delete;
+  template <class T, class = std::enable_if_t<std::is_same_v<T, std::string>>>
+  std::vector<Match> finditer(T&& s) const = delete;
   // findall: el grupo 1 si existe, si no la coincidencia entera
   std::vector<std::string> findall(std::string_view s) const;
   // sub: \1, \g<1> y \g<nombre> en el reemplazo (como re.sub)
