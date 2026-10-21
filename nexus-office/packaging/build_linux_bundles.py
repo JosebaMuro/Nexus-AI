@@ -103,7 +103,8 @@ def installed_tree(dest: Path, arch: str, pip_platforms: list[str], work: Path) 
     tree = work / "nexus"
     shutil.rmtree(tree, ignore_errors=True)
     shutil.copytree(dest, tree, ignore=shutil.ignore_patterns("runtime", "wheelhouse", "install.ps1", "install.bat",
-                                                              "start.bat", "Dockerfile", ".dockerignore"))
+                                                              "start.bat", "Dockerfile", ".dockerignore"),
+                    symlinks=True)   # GIMP trae enlaces a ficheros del sistema que no existen en el equipo de construccion
     rt = next((dest / "runtime").glob("cpython-*.tar.gz"))
     with tarfile.open(rt) as t:
         t.extractall(work, filter="tar") if sys.version_info >= (3, 12) else t.extractall(work)  # noqa: S202
