@@ -2,6 +2,8 @@
 #include "core/services.h"
 
 #include "agents/agents.h"
+#include "coop/coop.h"
+#include "remote/remote.h"
 #include "llm/llm.h"
 #include "media/media.h"
 #include "models/models.h"
@@ -98,6 +100,12 @@ Services::Services(bool detect_hardware) : config(get_config()) {
     L.warning("No se pudo sembrar el grafo de los agentes de la oficina: ", e.what());
   }
   lounge = std::make_unique<agents::Lounge>(*this);
+  coop = std::make_unique<coop::CoopNode>(*this);
+  remote = std::make_unique<remote::RemoteAccess>(cfg);
+  vpn = std::make_unique<remote::VPN>(cfg);
+  llm->remote = [this](const std::string& node, const json& messages, const llm::Opts& opts, const llm::Sink& out) {
+    coop->remote_llm(node, messages, opts.o, out);
+  };
 }
 
 Services::~Services() {
@@ -157,12 +165,20 @@ void Services::start() {
   std::vector<mem::ToolView> views;
   for (auto& t : tools->for_agent({"*"})) views.push_back(t->view());
   assist->prewarm(views, agents->list());
+  if (config.flag("coop.enabled", false)) {
+    try {
+      coop->start();
+    } catch (const std::exception& e) {
+      L.warning("No se pudo iniciar el modo cooperativo: ", e.what());
+    }
+  }
 }
 
 void Services::shutdown() {
   if (shut_) return;
   shut_ = true;
   L.info("Apagando Nexus-Office...");
+  if (coop) coop->stop();
   if (llm) {
     auto ls = std::dynamic_pointer_cast<llm::LlamaServerBackend>(llm->backend("llamaserver"));
     if (ls) ls->stop();

@@ -422,7 +422,8 @@ def windows_exe(target: str, dest: Path) -> Path | None:
 # del repositorio: la edicion C++ entera y los recursos compartidos con la Python que necesita para compilar
 SOURCE_PARTS = ["nexus-office-cpp", "nexus-office/nexus/web", "nexus-office/nexus/office/perfiles",
                 "nexus-office/nexus/office/agentes", "nexus-office/nexus/office/conocimiento",
-                "nexus-office/nexus/agents/defaults", "nexus-office/LICENSE", ".github/workflows/cpp.yml",
+                "nexus-office/nexus/agents/defaults", "nexus-office/nexus/remote/pair.html", "nexus-office/LICENSE",
+                ".github/workflows/cpp.yml",
                 ".github/workflows/cpp-entrega.yml", ".github/workflows/cpp-publicar.yml"]
 SOURCE_SKIP = re.compile(r"(^|/)(build[^/]*|dist[^/]*|\.cache|__pycache__|node_modules|\.git)/|\.pyc$")   # carpetas
 SECRET_FILES = re.compile(r"\.(jks|keystore|pass|pem|key|p12|log)$|(^|/)(config\.ya?ml|\.env)$", re.I)

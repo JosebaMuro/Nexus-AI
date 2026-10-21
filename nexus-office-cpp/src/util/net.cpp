@@ -1,6 +1,9 @@
 #include "util/net.h"
 
+#include <chrono>
+#include <cstdio>
 #include <cstring>
+#include <map>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -13,6 +16,13 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#if defined(__linux__) || defined(__ANDROID__)
+#include <linux/if_packet.h>
+#elif defined(__APPLE__)
+#include <net/if_dl.h>
+#endif
+#include <fcntl.h>
+#include <poll.h>
 #endif
 
 namespace nx::net {
@@ -164,6 +174,180 @@ bool is_private_ip(const std::string& ip) {
     return is_private_ip(v4);
   }
   return false;
+}
+
+// ------------------------------------------------------------------ adaptadores, UDP y TCP en bruto
+static std::string mac_text(const unsigned char* b, size_t n) {
+  if (n != 6) return "";
+  char buf[24];
+  std::snprintf(buf, sizeof buf, "%02X:%02X:%02X:%02X:%02X:%02X", b[0], b[1], b[2], b[3], b[4], b[5]);
+  return buf;
+}
+
+std::vector<Iface> interfaces() {
+  std::vector<Iface> out;
+#ifdef _WIN32
+  wsa();
+  ULONG size = 32000;
+  std::string buf(size, '\0');
+  if (GetAdaptersAddresses(AF_INET, GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER, nullptr,
+                           (PIP_ADAPTER_ADDRESSES)buf.data(), &size) != NO_ERROR)
+    return out;
+  for (auto* a = (PIP_ADAPTER_ADDRESSES)buf.data(); a; a = a->Next) {
+    if (a->OperStatus != IfOperStatusUp) continue;
+    char name[256] = {0};
+    WideCharToMultiByte(CP_UTF8, 0, a->FriendlyName, -1, name, sizeof name - 1, nullptr, nullptr);
+    std::string mac = mac_text(a->PhysicalAddress, a->PhysicalAddressLength);
+    for (auto* u = a->FirstUnicastAddress; u; u = u->Next) {
+      char ip[64];
+      inet_ntop(AF_INET, &((sockaddr_in*)u->Address.lpSockaddr)->sin_addr, ip, sizeof ip);
+      out.push_back({name, ip, mac});
+    }
+  }
+#else
+  ifaddrs* ifs = nullptr;
+  if (getifaddrs(&ifs) != 0) return out;
+  std::map<std::string, std::string> macs;
+  for (auto* i = ifs; i; i = i->ifa_next) {
+    if (!i->ifa_addr) continue;
+#if defined(__linux__) || defined(__ANDROID__)
+    if (i->ifa_addr->sa_family == AF_PACKET) {
+      auto* ll = (sockaddr_ll*)i->ifa_addr;
+      macs[i->ifa_name] = mac_text(ll->sll_addr, ll->sll_halen);
+    }
+#elif defined(__APPLE__)
+    if (i->ifa_addr->sa_family == AF_LINK) {
+      auto* dl = (sockaddr_dl*)i->ifa_addr;
+      macs[i->ifa_name] = mac_text((const unsigned char*)LLADDR(dl), dl->sdl_alen);
+    }
+#endif
+  }
+  for (auto* i = ifs; i; i = i->ifa_next) {
+    if (!i->ifa_addr || i->ifa_addr->sa_family != AF_INET) continue;
+    char ip[64];
+    inet_ntop(AF_INET, &((sockaddr_in*)i->ifa_addr)->sin_addr, ip, sizeof ip);
+    out.push_back({i->ifa_name, ip, macs[i->ifa_name]});
+  }
+  freeifaddrs(ifs);
+#endif
+  return out;
+}
+
+static bool v4addr(const std::string& host, int port, sockaddr_in& a) {
+  a = {};
+  a.sin_family = AF_INET;
+  a.sin_port = htons((unsigned short)port);
+  if (inet_pton(AF_INET, host.c_str(), &a.sin_addr) == 1) return true;
+  auto ips = resolve(host);
+  for (auto& ip : ips)
+    if (inet_pton(AF_INET, ip.c_str(), &a.sin_addr) == 1) return true;
+  return false;
+}
+
+std::string local_ip_towards(const std::string& host) {
+  wsa();
+  sockaddr_in a;
+  if (!v4addr(host, 80, a)) return "";
+  sock_t s = socket(AF_INET, SOCK_DGRAM, 0);
+  if (s == BAD) return "";
+  std::string out;
+  if (connect(s, (sockaddr*)&a, sizeof a) == 0) {
+    sockaddr_in me{};
+    socklen_t len = sizeof me;
+    if (getsockname(s, (sockaddr*)&me, &len) == 0) {
+      char ip[64];
+      inet_ntop(AF_INET, &me.sin_addr, ip, sizeof ip);
+      out = ip;
+    }
+  }
+  close_sock(s);
+  return out == "0.0.0.0" ? "" : out;
+}
+
+static bool wait_readable(sock_t s, int ms) {
+#ifdef _WIN32
+  WSAPOLLFD p{s, POLLRDNORM, 0};
+  return WSAPoll(&p, 1, ms) > 0;
+#else
+  pollfd p{s, POLLIN, 0};
+  return poll(&p, 1, ms) > 0;
+#endif
+}
+
+std::vector<std::pair<std::string, std::string>> udp_query(const std::string& host, int port,
+                                                           const std::vector<std::string>& messages, double timeout) {
+  wsa();
+  std::vector<std::pair<std::string, std::string>> out;
+  sockaddr_in a;
+  if (!v4addr(host, port, a)) return out;
+  sock_t s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  if (s == BAD) return out;
+  int ttl = 2;
+  setsockopt(s, IPPROTO_IP, IP_MULTICAST_TTL, (const char*)&ttl, sizeof ttl);
+  for (auto& m : messages) sendto(s, m.data(), (int)m.size(), 0, (sockaddr*)&a, sizeof a);
+  auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds((long long)(timeout * 1000));
+  char buf[8192];
+  while (true) {
+    auto left = std::chrono::duration_cast<std::chrono::milliseconds>(end - std::chrono::steady_clock::now()).count();
+    if (left <= 0 || !wait_readable(s, (int)left)) break;
+    sockaddr_in from{};
+    socklen_t fl = sizeof from;
+    int n = (int)recvfrom(s, buf, sizeof buf, 0, (sockaddr*)&from, &fl);
+    if (n <= 0) continue;
+    char ip[64];
+    inet_ntop(AF_INET, &from.sin_addr, ip, sizeof ip);
+    out.emplace_back(std::string(buf, (size_t)n), ip);
+  }
+  close_sock(s);
+  return out;
+}
+
+std::optional<std::string> tcp_exchange(const std::string& host, int port, const std::string& data, double timeout,
+                                        size_t max_bytes) {
+  wsa();
+  sockaddr_in a;
+  if (!v4addr(host, port, a)) return std::nullopt;
+  sock_t s = socket(AF_INET, SOCK_STREAM, 0);
+  if (s == BAD) return std::nullopt;
+  int ms = (int)(timeout * 1000);
+#ifdef _WIN32
+  u_long nb = 1;
+  ioctlsocket(s, FIONBIO, &nb);
+#else
+  int fl = fcntl(s, F_GETFL, 0);
+  fcntl(s, F_SETFL, fl | O_NONBLOCK);
+#endif
+  connect(s, (sockaddr*)&a, sizeof a);
+#ifdef _WIN32
+  WSAPOLLFD p{s, POLLWRNORM, 0};
+  bool ok = WSAPoll(&p, 1, ms) > 0 && !(p.revents & (POLLERR | POLLHUP));
+  nb = 0;
+  ioctlsocket(s, FIONBIO, &nb);
+#else
+  pollfd p{s, POLLOUT, 0};
+  bool ok = poll(&p, 1, ms) > 0 && !(p.revents & (POLLERR | POLLHUP));
+  if (ok) {
+    int err = 0;
+    socklen_t el = sizeof err;
+    getsockopt(s, SOL_SOCKET, SO_ERROR, &err, &el);
+    ok = err == 0;
+  }
+  fcntl(s, F_SETFL, fl);
+#endif
+  if (!ok) {
+    close_sock(s);
+    return std::nullopt;
+  }
+  std::string out;
+  send(s, data.data(), (int)data.size(), 0);
+  char buf[8192];
+  while (out.size() < max_bytes && wait_readable(s, ms)) {
+    int n = (int)recv(s, buf, sizeof buf, 0);
+    if (n <= 0) break;
+    out.append(buf, (size_t)n);
+  }
+  close_sock(s);
+  return out;
 }
 
 }  // namespace nx::net

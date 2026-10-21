@@ -45,6 +45,12 @@ std::optional<std::string> unxz(const std::string& data, size_t max_bytes = 512u
 std::optional<std::string> inflate(const std::string& data, bool zlib_header);
 // crea un zip (para exportaciones); files: (nombre en el zip, bytes)
 bool write_zip(const fs::path& dest, const std::vector<std::pair<std::string, std::string>>& files);
+// tar.gz en memoria: (nombre, bytes, modo) por fichero (nombres de hasta 255 bytes, formato ustar)
+struct TarFile {
+  std::string name, data;
+  int mode = 0644;
+};
+std::string write_targz(const std::vector<TarFile>& files);
 // .tar, .tar.gz, .tgz
 bool extract_tar(const fs::path& archive, const fs::path& dest);
 bool extract(const fs::path& archive, const fs::path& dest);   // por extension

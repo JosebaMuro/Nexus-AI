@@ -10,6 +10,7 @@
 #include "agents/agents.h"
 #include "core/services.h"
 #include "memory/memory.h"
+#include "remote/remote.h"
 #include "tools/tools.h"
 #include "util/crypto.h"
 #include "util/log.h"
@@ -165,6 +166,18 @@ std::string Ctx::header(const std::string& k) const { return req.get_header_valu
 // ======================================================================== App
 App::App(Services* services) : services_(services), srv_(std::make_unique<httplib::Server>()) { setup(); }
 
+App::App(Services* services, App& primary, const fs::path& cert, const fs::path& key) : services_(services), primary_(&primary) {
+#ifdef CPPHTTPLIB_SSL_ENABLED
+  srv_ = std::make_unique<httplib::SSLServer>(nx::S(cert).c_str(), nx::S(key).c_str());
+#else
+  (void)cert, (void)key;
+  srv_ = std::make_unique<httplib::Server>();
+#endif
+  setup();
+}
+
+bool App::valid() const { return srv_ && srv_->is_valid(); }
+
 App::~App() = default;
 
 Services& App::S() {
@@ -173,6 +186,7 @@ Services& App::S() {
 }
 
 std::string App::new_admin_token() {
+  if (primary_ != this) return primary_->new_admin_token();
   std::string tok = token_hex(16);
   std::lock_guard<std::mutex> lk(mu_);
   admin_tokens_[tok] = now() + 8 * 3600;
@@ -180,6 +194,7 @@ std::string App::new_admin_token() {
 }
 
 bool App::is_admin(const std::string& token) {
+  if (primary_ != this) return primary_->is_admin(token);
   if (token.empty()) return false;
   std::lock_guard<std::mutex> lk(mu_);
   auto it = admin_tokens_.find(token);
@@ -187,6 +202,7 @@ bool App::is_admin(const std::string& token) {
 }
 
 void App::drop_admin_token(const std::string& token) {
+  if (primary_ != this) return primary_->drop_admin_token(token);
   std::lock_guard<std::mutex> lk(mu_);
   admin_tokens_.erase(token);
 }
@@ -215,9 +231,10 @@ bool App::lan_ok(const httplib::Request& req, const std::string& host) {
 }
 
 void App::broadcast(const json& event) {
+  if (primary_ != this) return primary_->broadcast(event);
   std::string text = jdump(event);
   std::lock_guard<std::mutex> lk(ws_mu_);
-  for (auto* ws : sockets_) {
+  for (auto& [ws, dev] : sockets_) {
     try {
       if (ws->is_open()) ws->send(text);
     } catch (...) {
@@ -306,6 +323,7 @@ void App::dispatch(const Handler& h, bool admin_required, const std::vector<std:
   c.host = req.remote_addr.empty() ? "127.0.0.1" : req.remote_addr;
   for (size_t i = 0; i < names.size() && i + 1 < req.matches.size(); ++i) c.path[names[i]] = url_decode(req.matches[i + 1].str());
   c.admin = is_admin(req.get_header_value("X-Admin-Token"));
+  c.remote = remote();
   try {
     if (admin_required && !c.admin) throw HttpErr(403, "Requiere modo administrador");
     std::string ctype = req.get_header_value("Content-Type");
@@ -348,6 +366,30 @@ void App::setup() {
   s.set_read_timeout(300, 0);
   s.set_write_timeout(300, 0);
   s.new_task_queue = [] { return new httplib::ThreadPool(48); };
+  if (remote()) {
+    // puerto remoto: todo exige la llave de un dispositivo emparejado, venga de donde venga (tambien desde 127.0.0.1,
+    // para que un tunel o proxy no pueda saltarselo)
+    s.set_pre_routing_handler([this](const httplib::Request& req, httplib::Response& res) {
+      auto deny = [&](int status, const std::string& body, const std::string& mime) {
+        res.status = status;
+        for (auto& [k, v] : remote::SECURITY_HEADERS) res.set_header(k, v);
+        res.set_content(body, mime);
+        return httplib::Server::HandlerResponse::Handled;
+      };
+      if (!services_) return deny(503, json{{"detail", "Nexus-Office esta arrancando"}}.dump(), "application/json");
+      std::string host = req.remote_addr.empty() ? "127.0.0.1" : req.remote_addr;
+      std::string token = cookie(req, remote::COOKIE);
+      if (token.empty()) token = req.get_header_value("X-Nexus-Device");
+      if (!services_->remote->devices.check(token, host).empty() || remote::open_path(req.path))
+        return httplib::Server::HandlerResponse::Unhandled;
+      if (req.path == "/") return deny(401, services_->remote->pair_page(), "text/html; charset=utf-8");
+      return deny(401, json{{"detail", "Dispositivo no emparejado"}}.dump(), "application/json");
+    });
+    s.set_post_routing_handler([](const httplib::Request& req, httplib::Response& res) {
+      for (auto& [k, v] : remote::SECURITY_HEADERS)
+        if (!(k == "cache-control" && starts_with(req.path, "/static/"))) res.set_header(k, v);
+    });
+  } else
   // guarda de la red local: fuera de este equipo hace falta la clave de red
   s.set_pre_routing_handler([this](const httplib::Request& req, httplib::Response& res) {
     std::string host = req.remote_addr.empty() ? "127.0.0.1" : req.remote_addr;
@@ -391,6 +433,21 @@ bool App::listen(const std::string& host, int port) {
   return ok;
 }
 
+bool App::bind(const std::string& host, int port) { return srv_->bind_to_port(host, port); }
+bool App::listen_after_bind() { return srv_->listen_after_bind(); }
+
+void App::close_device(const std::string& dev_id) {
+  if (primary_ != this) return primary_->close_device(dev_id);
+  std::lock_guard<std::mutex> lk(ws_mu_);
+  for (auto& [ws, dev] : sockets_)
+    if (dev == dev_id && ws->is_open()) {
+      try {
+        ws->close((httplib::ws::CloseStatus)4401, "revocado");
+      } catch (...) {
+      }
+    }
+}
+
 void App::stop() {
   stopping = true;
   srv_->stop();
@@ -416,15 +473,25 @@ struct Link {
 
 void App::websocket(const httplib::Request& req, httplib::ws::WebSocket& ws) {
   std::string host = req.remote_addr.empty() ? "127.0.0.1" : req.remote_addr;
-  if (!services_ || !lan_ok(req, host)) {
+  std::string device;
+  if (remote()) {
+    std::string token = cookie(req, remote::COOKIE);
+    if (token.empty()) token = req.get_header_value("X-Nexus-Device");
+    if (services_) device = services_->remote->devices.check(token, host);
+    if (device.empty()) {
+      ws.close((httplib::ws::CloseStatus)4401, "Dispositivo no emparejado");
+      return;
+    }
+  } else if (!services_ || !lan_ok(req, host)) {
     ws.close(httplib::ws::CloseStatus::PolicyViolation, "Clave de red requerida");
     return;
   }
   auto link = std::make_shared<Link>();
   link->ws = &ws;
+  App& hub = *primary_;
   {
-    std::lock_guard<std::mutex> lk(ws_mu_);
-    sockets_.insert(&ws);
+    std::lock_guard<std::mutex> lk(hub.ws_mu_);
+    hub.sockets_[&ws] = device;
   }
   Services& s = *services_;
   link->send({{"type", "hello"}, {"version", NEXUS_VERSION}});
@@ -464,8 +531,8 @@ void App::websocket(const httplib::Request& req, httplib::ws::WebSocket& ws) {
     }
   }
   {
-    std::lock_guard<std::mutex> lk(ws_mu_);
-    sockets_.erase(&ws);
+    std::lock_guard<std::mutex> lk(hub.ws_mu_);
+    hub.sockets_.erase(&ws);
   }
   std::lock_guard<std::mutex> lk(link->mu);
   link->alive = false;

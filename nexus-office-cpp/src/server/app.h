@@ -70,6 +70,7 @@ struct Ctx {
   std::map<std::string, std::string> path;
   json body = nullptr;
   bool admin = false;
+  bool remote = false;   // llego por el puerto remoto (HTTPS, dispositivos emparejados)
   std::string host;
 
   bool local() const;
@@ -100,9 +101,17 @@ using Handler = std::function<Out(Ctx&)>;
 class App {
  public:
   explicit App(Services* services = nullptr);
+  // puerto remoto: la misma aplicacion por HTTPS detras de la puerta de dispositivos emparejados; comparte con la
+  // local los administradores y las interfaces conectadas
+  App(Services* services, App& primary, const fs::path& cert, const fs::path& key);
   ~App();
+  bool valid() const;   // el certificado del puerto remoto se pudo cargar
   // arranca y bloquea hasta stop(); devuelve false si no se pudo abrir el puerto
   bool listen(const std::string& host, int port);
+  bool bind(const std::string& host, int port);   // listen en dos pasos (para saber si el puerto esta libre)
+  bool listen_after_bind();
+  bool remote() const { return primary_ != this; }
+  void close_device(const std::string& dev_id);   // corta las interfaces abiertas de un dispositivo revocado
   void stop();
   Services& S();
   bool ready() const { return services_ != nullptr; }
@@ -130,11 +139,12 @@ class App {
 
  private:
   Services* services_;
+  App* primary_ = this;
   std::unique_ptr<httplib::Server> srv_;
   std::mutex mu_;
   std::map<std::string, double> admin_tokens_;
   std::mutex ws_mu_;
-  std::set<httplib::ws::WebSocket*> sockets_;
+  std::map<httplib::ws::WebSocket*, std::string> sockets_;   // interfaz -> dispositivo remoto ("" si es local)
   void setup();
   void websocket(const httplib::Request& req, httplib::ws::WebSocket& ws);
   void dispatch(const Handler& h, bool admin_required, const std::vector<std::string>& names,

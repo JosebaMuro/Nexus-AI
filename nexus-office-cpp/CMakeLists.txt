@@ -142,6 +142,7 @@ add_custom_command(TARGET nexus-office POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${NEXUS_RESOURCES}/office/agentes $<TARGET_FILE_DIR:nexus-office>/nexus/office/agentes
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${NEXUS_RESOURCES}/office/conocimiento $<TARGET_FILE_DIR:nexus-office>/nexus/office/conocimiento
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${NEXUS_RESOURCES}/agents/defaults $<TARGET_FILE_DIR:nexus-office>/nexus/agents/defaults
+  COMMAND ${CMAKE_COMMAND} -E copy ${NEXUS_RESOURCES}/remote/pair.html $<TARGET_FILE_DIR:nexus-office>/nexus/remote/pair.html
   COMMAND ${CMAKE_COMMAND} -E copy ${TP}/certs/cacert.pem $<TARGET_FILE_DIR:nexus-office>/nexus/certs/cacert.pem
   VERBATIM)
 
@@ -150,6 +151,7 @@ install(DIRECTORY ${NEXUS_RESOURCES}/web DESTINATION nexus)
 install(DIRECTORY ${NEXUS_RESOURCES}/office/perfiles ${NEXUS_RESOURCES}/office/agentes ${NEXUS_RESOURCES}/office/conocimiento
         DESTINATION nexus/office)
 install(DIRECTORY ${NEXUS_RESOURCES}/agents/defaults DESTINATION nexus/agents)
+install(FILES ${NEXUS_RESOURCES}/remote/pair.html DESTINATION nexus/remote)
 install(FILES ${TP}/certs/cacert.pem DESTINATION nexus/certs)
 
 if(NEXUS_BUILD_TESTS)

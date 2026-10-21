@@ -38,6 +38,14 @@ class MusicEngine;
 class VoiceEngine;
 }  // namespace nx::media
 
+namespace nx::coop {
+class CoopNode;
+}
+namespace nx::remote {
+class RemoteAccess;
+class VPN;
+}  // namespace nx::remote
+
 namespace nx {
 
 class Services {
@@ -79,6 +87,9 @@ class Services {
   std::unique_ptr<tools::ProposalManager> proposals;
   std::unique_ptr<agents::AgentManager> agents;
   std::unique_ptr<agents::Lounge> lounge;
+  std::unique_ptr<coop::CoopNode> coop;
+  std::unique_ptr<remote::RemoteAccess> remote;
+  std::unique_ptr<remote::VPN> vpn;
 
  private:
   std::mutex emb_mu_;

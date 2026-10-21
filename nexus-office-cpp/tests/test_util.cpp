@@ -60,6 +60,28 @@ TEST("crypto: pbkdf2 compatible con Python") {
   CHECK_EQ(sha256_hex(""), std::string("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
 }
 
+TEST("crypto: scrypt (RFC 7914), X25519 (RFC 7748) y AES-GCM") {
+  CHECK_EQ(to_hex(scrypt("password", "NaCl", 1024, 8, 16, 64)),
+           std::string("fdbabe1c9d3472007856e7190d01e9fe7c6ad7cbc8237830e77376634b3731622eaf30d92e22a3886ff109279d9830dac727afb94a83ee6d8360cbdfa2cc0640"));
+  CHECK_EQ(to_hex(x25519_base(from_hex("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a"))),
+           std::string("8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a"));
+#ifdef CPPHTTPLIB_MBEDTLS_SUPPORT
+  std::string key(32, 'k'), nonce(12, 'n');
+  std::string ct = aes_gcm_encrypt(key, nonce, "hola", "tag");
+  CHECK_EQ(aes_gcm_decrypt(key, nonce, ct, "tag"), std::string("hola"));
+  bool bad = false;
+  try {
+    aes_gcm_decrypt(key, nonce, ct, "otra");
+  } catch (const std::exception&) {
+    bad = true;
+  }
+  CHECK(bad);
+  auto [cert, pk] = selfsigned_cert("Nexus-Office", "Prueba", {"127.0.0.1", "localhost"}, 30);
+  CHECK(cert.find("BEGIN CERTIFICATE") != std::string::npos);
+  CHECK_EQ(cert_fingerprint(cert).size(), (size_t)64);
+#endif
+}
+
 #ifndef _WIN32
 TEST("procesos: run con captura, entrada y tiempo limite") {
   auto r = proc::run({"sh", "-c", "cat; echo err >&2; exit 3"}, 10, {.input = "hola"});

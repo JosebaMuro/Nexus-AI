@@ -104,9 +104,9 @@ TEST("servidor: API, administrador, memoria, biblioteca y chat por WebSocket") {
   auto mus = c.Post("/api/music/generate", R"({"prompt":"musica tranquila","seconds":3})", "application/json");
   CHECK(mus && mus->status == 200 && !body(mus).contains("path"));
 
-  // lo que aun no esta en C++ responde 501 con un mensaje
+  // red COOP sin red creada: 400 con el mismo mensaje que la version Python
   auto coop = c.Post("/api/coop/start", "{}", "application/json");
-  CHECK(coop && coop->status == 501);
+  CHECK(coop && coop->status == 400);
 
   // chat por WebSocket con el motor integrado (sin modelo): usa la calculadora
   httplib::ws::WebSocketClient ws("ws://127.0.0.1:" + std::to_string(srv.port) + "/ws");

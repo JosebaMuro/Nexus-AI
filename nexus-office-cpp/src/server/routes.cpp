@@ -1,6 +1,5 @@
 // Rutas de la API (server/app.py): mismas URLs, mismos parametros y mismos JSON que la version Python, en el mismo
-// orden. Lo que la edicion C++ aun no trae (red COOP, acceso remoto, VPN, mesa de bolsa, rastreo web, importar grafos)
-// responde 501 con un mensaje claro en lugar de fallar a medias.
+// orden.
 #include <httplib.h>
 
 #include <algorithm>
@@ -8,6 +7,8 @@
 #include <thread>
 
 #include "agents/agents.h"
+#include "coop/coop.h"
+#include "remote/remote.h"
 #include "core/service.h"
 #include "core/services.h"
 #include "core/system.h"
@@ -27,6 +28,7 @@
 #include "rag/rag.h"
 #include "server/app.h"
 #include "tools/tools.h"
+#include "util/archive.h"
 #include "util/crypto.h"
 #include "util/log.h"
 #include "util/net.h"
@@ -233,7 +235,29 @@ void register_routes(App& app) {
   }, true);
 
   app.get("/api/package/termux", [](Ctx&) -> Out {
-    not_in_cpp("El paquete para Termux (Android) se instala con la APK de Nexus-Office;");
+    // paquete para instalar Nexus-Office en Android/Termux desde este equipo: el ejecutable Android de esta instalacion
+    // (con sus bibliotecas) y los recursos; en un PC no hay binario Android que dar
+#ifdef __ANDROID__
+    std::vector<archive::TarFile> files;
+    fs::path exe = paths::exe_path(), dir = exe.parent_path();
+    files.push_back({"Nexus-Office/nexus-office", read_text(exe), 0755});
+    for (auto& so : glob(dir, "*.so")) files.push_back({"Nexus-Office/" + S(so.filename()), read_text(so), 0755});
+    for (auto& f : glob(paths::package(), "*", true))
+      if (is_file(f) && !contains(S(f), "__pycache__"))
+        files.push_back({"Nexus-Office/nexus/" + S(fs::relative(f, paths::package()).generic_u8string()), read_text(f)});
+    files.push_back({"Nexus-Office/install-termux.sh",
+                     "#!/data/data/com.termux/files/usr/bin/sh\n# Nexus-Office (edicion C++) en Termux\nset -e\n"
+                     "cd \"$(dirname \"$0\")\"\nchmod +x nexus-office\n"
+                     "printf '#!/data/data/com.termux/files/usr/bin/sh\\ncd \"%s\"\\nLD_LIBRARY_PATH=\"%s:$LD_LIBRARY_PATH\" exec ./nexus-office \"$@\"\\n' "
+                     "\"$(pwd)\" \"$(pwd)\" > start.sh\nchmod +x start.sh\n"
+                     "echo 'Listo. Arranca con: ./start.sh  (y abre http://127.0.0.1:8775 en el navegador)'\n",
+                     0755});
+    return Raw{200, archive::write_targz(files), "application/gzip",
+               {{"Content-Disposition", std::string("attachment; filename=Nexus-Office-") + NEXUS_VERSION + "-termux.tar.gz"}}};
+#else
+    throw HttpErr(501, "Este equipo no lleva el binario de Android: en Termux descarga el paquete de Android "
+                       "(Nexus-Office-...-android-arm64) de la pagina de descargas o instala la APK de Nexus-Office.");
+#endif
   });
 
   // ------------------------------------------------------------------ estaticos
@@ -265,7 +289,7 @@ void register_routes(App& app) {
                 {"rag", s.rag->stats()},
                 {"tuning", s.tuning_reasons},
                 {"assist", s.assist->info()},
-                {"coop", {{"running", false}, {"peers", 0}, {"vip", ""}}},
+                {"coop", {{"running", s.coop->running()}, {"peers", s.coop->peer_count()}, {"vip", s.coop->vip()}}},
                 {"pending_approvals", s.supervisor->list_pending().size()},
                 {"pending_proposals", s.proposals->list("pendiente").size()},
                 {"suggest_smaller_model", s.profile.value("llm", json::object()).value("suggest_smaller_model", false)},
@@ -1506,36 +1530,276 @@ void register_routes(App& app) {
     return json{{"ok", true}};
   }, true);
 
-  // ------------------------------------------------------------------ cooperativo (pendiente en C++)
-  app.get("/api/coop", [](Ctx& c) -> Out {
-    Services& s = c.app.S();
-    json addresses = json::array();
-    for (auto& ip : net::lan_ips()) addresses.push_back({{"iface", ""}, {"ip", ip}, {"kind", "lan"}});
-    return json{{"running", false}, {"node_id", ""}, {"name", s.config.get("coop.node_name", "")}, {"vip", ""},
-                {"network_id", ""}, {"configured", false}, {"listen", false}, {"port", s.config.get("coop.listen_port", 8766)},
-                {"links", json::array()}, {"outbound", json::object()}, {"peers", json::array()}, {"chat", json::array()},
-                {"addresses", addresses}, {"available", false},
-                {"detail", "La red COOP todavia no esta disponible en la edicion C++ (2.0 beta C)."}};
-  });
-  for (auto* p : {"/api/coop/join", "/api/coop/start", "/api/coop/stop", "/api/coop/chat", "/api/coop/ping/{node}",
-                  "/api/coop/agent"})
-    app.post(p, [](Ctx&) -> Out { not_in_cpp("La red COOP"); });
-  for (auto* p : {"/api/coop/create", "/api/coop/share-proposal/{pid}", "/api/coop/share-facts"})
-    app.post(p, [](Ctx&) -> Out { not_in_cpp("La red COOP"); }, true);
-  app.get("/api/coop/invite", [](Ctx&) -> Out { not_in_cpp("La red COOP"); }, true);
+  // ------------------------------------------------------------------ cooperativo
+  app.get("/api/coop", [](Ctx& c) -> Out { return c.app.S().coop->status(); });
 
-  // ------------------------------------------------------------------ acceso remoto y VPN (pendiente en C++)
-  app.post("/api/remote/pair", [](Ctx&) -> Out { not_in_cpp("El acceso remoto por internet"); });
-  for (auto* p : {"/api/remote", "/api/remote/router"})
-    app.get(p, [](Ctx&) -> Out { not_in_cpp("El acceso remoto por internet"); }, true);
-  for (auto* p : {"/api/remote/enable", "/api/remote/pairing", "/api/remote/upnp", "/api/remote/public-ip",
-                  "/api/remote/check", "/api/remote/certificate"})
-    app.post(p, [](Ctx&) -> Out { not_in_cpp("El acceso remoto por internet"); }, true);
-  app.del("/api/remote/devices/{dev_id}", [](Ctx&) -> Out { not_in_cpp("El acceso remoto por internet"); }, true);
-  for (auto* p : {"/api/vpn", "/api/vpn/server.conf"}) app.get(p, [](Ctx&) -> Out { not_in_cpp("La VPN cifrada"); }, true);
-  for (auto* p : {"/api/vpn/enable", "/api/vpn/peers", "/api/vpn/apply", "/api/vpn/upnp"})
-    app.post(p, [](Ctx&) -> Out { not_in_cpp("La VPN cifrada"); }, true);
-  app.del("/api/vpn/peers/{peer_id}", [](Ctx&) -> Out { not_in_cpp("La VPN cifrada"); }, true);
+  app.post("/api/coop/create", [](Ctx& c) -> Out { return c.app.S().coop->create_network(c.bs("name", "")); }, true);
+
+  app.post("/api/coop/join", [](Ctx& c) -> Out {
+    std::string code = c.bs("code");
+    try {
+      return c.app.S().coop->join(code);
+    } catch (const std::exception& e) {
+      throw HttpErr(400, e.what());
+    }
+  });
+
+  app.get("/api/coop/invite", [](Ctx& c) -> Out { return json{{"code", c.app.S().coop->invite()}}; }, true);
+
+  app.post("/api/coop/start", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    try {
+      s.coop->start();
+    } catch (const std::runtime_error& e) {
+      throw HttpErr(400, e.what());
+    }
+    s.config.set("coop.enabled", true);
+    return s.coop->status();
+  });
+
+  app.post("/api/coop/stop", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    s.coop->stop();
+    s.config.set("coop.enabled", false);
+    return s.coop->status();
+  });
+
+  app.post("/api/coop/chat", [](Ctx& c) -> Out {
+    std::string text = c.bs("text");
+    try {
+      return c.app.S().coop->send_chat(text);
+    } catch (const std::runtime_error& e) {
+      throw HttpErr(400, e.what());
+    }
+  });
+
+  // str(KeyError) de Python lleva comillas
+  auto coop_err = [](const std::exception& e) {
+    return HttpErr(400, dynamic_cast<const std::out_of_range*>(&e) ? key_msg(e) : std::string(e.what()));
+  };
+
+  app.post("/api/coop/ping/{node}", [coop_err](Ctx& c) -> Out {
+    try {
+      return json{{"ms", c.app.S().coop->ping(c.p("node"))}};
+    } catch (const std::exception& e) {
+      throw coop_err(e);
+    }
+  });
+
+  app.post("/api/coop/agent", [coop_err](Ctx& c) -> Out {
+    std::string node = c.bs("node"), agent = c.bs("agent", "auto"), text = c.bs("text");
+    try {
+      return json{{"answer", c.app.S().coop->remote_agent(node, agent, text)}};
+    } catch (const std::exception& e) {
+      throw coop_err(e);
+    }
+  });
+
+  app.post("/api/coop/share-proposal/{pid}", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    s.coop->share_proposal(s.proposals->get(c.p("pid")));
+    return json{{"ok", true}};
+  }, true);
+
+  app.post("/api/coop/share-facts", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    std::vector<std::string> facts;
+    for (auto& m : s.memory->list("fact", 30)) facts.push_back(jstr(m, "content"));
+    s.coop->share_facts(facts);
+    return json{{"shared", facts.size()}};
+  }, true);
+
+  // ------------------------------------------------------------------ acceso remoto por internet
+  app.post("/api/remote/pair", [](Ctx& c) -> Out {
+    // canjea un codigo de emparejamiento por la llave del dispositivo (cookie segura + JSON para apps)
+    std::string code = c.bs("code"), name = c.bs("name", "");
+    auto& r = *c.app.S().remote;
+    if (r.limiter.blocked("pair:" + c.host)) throw HttpErr(429, "Demasiados intentos fallidos: espera 15 minutos");
+    auto res = r.devices.pair(code, name, c.host);
+    if (!res) {
+      r.limiter.fail("pair:" + c.host);
+      L.warning("Emparejamiento remoto rechazado desde ", c.host);
+      throw HttpErr(401, "Codigo incorrecto o caducado (pide uno nuevo en tu Nexus-Office)");
+    }
+    auto& [token, dev] = *res;
+    r.limiter.reset("pair:" + c.host);
+    L.info("Dispositivo emparejado: ", jstr(dev, "name"), " (", c.host, ")");
+    c.app.broadcast({{"type", "remote"}, {"event", "paired"}, {"device", dev}});
+    c.res.set_header("Set-Cookie", std::string(remote::COOKIE) + "=" + token + "; HttpOnly; Max-Age=31536000; Path=/; SameSite=strict" +
+                                       (c.remote ? "; Secure" : ""));
+    return json{{"ok", true}, {"device", dev}, {"token", token}};
+  });
+
+  app.get("/api/remote", [](Ctx& c) -> Out { return c.app.S().remote->status(); }, true);
+
+  app.post("/api/remote/enable", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    bool enabled = truthy(c.b("enabled"));
+    int port = (int)c.bn("port", 8443);
+    if (port < 1024 || port > 65535 || port == (int)s.config.num("server.port", 8775))
+      throw HttpErr(400, "Puerto no valido (1024-65535 y distinto del puerto local)");
+    s.config.set("remote.enabled", enabled);
+    s.config.set("remote.port", port);
+    s.remote->cert();   // crea el certificado ya para poder mostrar la huella
+    int running = s.remote->listening_port;
+    return merged(s.remote->status(), {{"restart_required", enabled ? running != port : running != 0}});
+  }, true);
+
+  app.post("/api/remote/pairing", [](Ctx& c) -> Out {
+    auto& r = *c.app.S().remote;
+    std::string name = c.bs("name", "");
+    json p = r.devices.new_pairing(name);
+    json urls = r.urls(), links = json::array();
+    for (auto& u : urls) links.push_back(jstr(u, "url") + "/?pair=" + jstr(p, "code"));
+    return merged(p, {{"invite", r.invite(p, name)}, {"urls", urls}, {"fingerprint", remote::pretty(r.fingerprint())},
+                      {"links", links}});
+  }, true);
+
+  app.del("/api/remote/devices/{dev_id}", [](Ctx& c) -> Out {
+    if (!c.app.S().remote->devices.revoke(c.p("dev_id"))) throw HttpErr(404, "Dispositivo no encontrado");
+    c.app.close_device(c.p("dev_id"));   // corta al momento sus conexiones abiertas
+    return json{{"ok", true}};
+  }, true);
+
+  app.post("/api/remote/upnp", [](Ctx& c) -> Out {
+    auto& r = *c.app.S().remote;
+    bool open = truthy(c.b("open"));
+    try {
+      auto gw = remote::Gateway::discover();
+      std::string ext = gw.external_ip();
+      if (open) {
+        std::string internal = gw.add_mapping(r.port());
+        r.upnp = {{"mapped", true}, {"external_ip", ext}, {"internal", internal}, {"error", ""},
+                  {"cgnat", remote::is_cgnat_or_private(ext)}};
+      } else {
+        gw.delete_mapping(r.port());
+        r.upnp = {{"mapped", false}, {"external_ip", ext}, {"error", ""}, {"cgnat", remote::is_cgnat_or_private(ext)}};
+      }
+    } catch (const std::exception& e) {
+      r.upnp["error"] = e.what();
+    }
+    return r.status();
+  }, true);
+
+  auto lookup_public = [](remote::RemoteAccess& r) {
+    try {
+      r.public_ip = remote::public_ip_lookup();
+    } catch (const std::exception& e) {
+      throw HttpErr(502, std::string("No se pudo consultar la IP publica: ") + e.what());
+    }
+    std::string ext = jstr(r.upnp, "external_ip");
+    r.behind_cgnat = (!ext.empty() && ext != r.public_ip) || remote::is_cgnat_or_private(ext.empty() ? r.public_ip : ext);
+  };
+
+  app.post("/api/remote/public-ip", [lookup_public](Ctx& c) -> Out {
+    auto& r = *c.app.S().remote;
+    lookup_public(r);   // servicio externo ipify: solo cuando el administrador lo pide
+    return r.status();
+  }, true);
+
+  // ------------------------------------------------------------------ VPN cifrada (WireGuard)
+  app.get("/api/vpn", [](Ctx& c) -> Out { return c.app.S().vpn->status(); }, true);
+
+  app.post("/api/vpn/enable", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    bool enabled = truthy(c.b("enabled"));
+    int port = (int)c.bn("port", 51820);
+    if (port < 1 || port > 65535) throw HttpErr(400, "Puerto no valido");
+    s.config.set("vpn.enabled", enabled);
+    s.config.set("vpn.port", port);
+    bool restart = false;
+    if (enabled) {
+      s.vpn->write_conf();
+      std::string host = s.config.str("server.host", "127.0.0.1");
+      if (host == "127.0.0.1" || host == "localhost") {
+        s.config.set("server.host", "0.0.0.0");
+        restart = true;
+      }
+      c.app.lan_key();
+    }
+    return merged(s.vpn->status(), {{"restart_required", restart}});
+  }, true);
+
+  app.post("/api/vpn/peers", [](Ctx& c) -> Out {
+    // nuevo dispositivo: el codigo NEXUSV1:... para la app (incluye su clave privada: se muestra una vez)
+    Services& s = c.app.S();
+    auto& r = *s.remote;
+    std::string name = c.bs("name", "");
+    bool lookup = c.bb("lookup_public_ip", false);
+    if (!s.config.flag("vpn.enabled", false)) throw HttpErr(400, "Activa primero la VPN");
+    std::string public_ip = jstr(r.upnp, "external_ip");
+    if (public_ip.empty()) public_ip = r.public_ip;
+    if (lookup && public_ip.empty()) {
+      try {
+        public_ip = r.public_ip = remote::public_ip_lookup();
+      } catch (const std::exception& e) {
+        L.info("VPN: sin IP publica (", e.what(), ")");
+      }
+    }
+    try {
+      return s.vpn->add_peer(name, c.app.lan_key(), public_ip);
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
+  }, true);
+
+  app.del("/api/vpn/peers/{peer_id}", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    if (!s.vpn->remove_peer(c.p("peer_id"))) throw HttpErr(404, "Dispositivo no encontrado");
+    return merged(s.vpn->status(), {{"restart_tunnel", true}});
+  }, true);
+
+  app.get("/api/vpn/server.conf", [](Ctx& c) -> Out {
+    return Raw{200, c.app.S().vpn->server_conf(), "text/plain; charset=utf-8",
+               {{"Content-Disposition", std::string("attachment; filename=") + remote::IFACE + ".conf"}}};
+  }, true);
+
+  app.post("/api/vpn/apply", [](Ctx& c) -> Out {
+    auto& v = *c.app.S().vpn;
+    json res = v.apply();
+    return merged(res, {{"tunnel_up", v.tunnel_up()}});
+  }, true);
+
+  app.post("/api/vpn/upnp", [](Ctx& c) -> Out {
+    bool open = truthy(c.b("open"));
+    int port = c.app.S().vpn->port();
+    try {
+      auto gw = remote::Gateway::discover();
+      if (open) {
+        std::string internal = gw.add_mapping(port, 0, "UDP");
+        return json{{"mapped", true}, {"external_ip", gw.external_ip()}, {"internal", internal}, {"port", port}};
+      }
+      gw.delete_mapping(port, "UDP");
+      return json{{"mapped", false}, {"port", port}};
+    } catch (const std::exception& e) {
+      throw HttpErr(502, std::string("UPnP: ") + e.what());
+    }
+  }, true);
+
+  app.get("/api/remote/router", [](Ctx& c) -> Out {
+    // asistente del router: puerta de enlace, pagina de configuracion, marca, UPnP y la regla exacta a crear
+    Services& s = c.app.S();
+    auto& r = *s.remote;
+    return merged(remote::detect(r.port()), {{"enabled", s.config.flag("remote.enabled", false)},
+                                             {"listening", r.listening_port != 0}, {"port", r.port()}});
+  }, true);
+
+  app.post("/api/remote/check", [lookup_public](Ctx& c) -> Out {
+    // comprueba desde este equipo si el puerto responde en la IP publica (ipify, solo a peticion)
+    auto& r = *c.app.S().remote;
+    lookup_public(r);
+    bool listening = r.listening_port != 0;
+    bool ok = listening && remote::reachable_from_outside(r.public_ip, r.port());
+    return json{{"public_ip", r.public_ip}, {"port", r.port()}, {"listening", listening}, {"reachable", ok},
+                {"behind_cgnat", r.behind_cgnat}, {"url", "https://" + r.public_ip + ":" + std::to_string(r.port())}};
+  }, true);
+
+  app.post("/api/remote/certificate", [](Ctx& c) -> Out {
+    // certificado nuevo: invalida la huella anclada (habra que volver a emparejar las apps)
+    auto& r = *c.app.S().remote;
+    r.cert(true);
+    return merged(r.status(), {{"restart_required", true}});
+  }, true);
 }
 
 }  // namespace nx::server

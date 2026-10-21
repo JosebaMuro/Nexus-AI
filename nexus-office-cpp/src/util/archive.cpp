@@ -6,10 +6,12 @@ extern "C" {
 
 #include <miniz.h>
 
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <vector>
 
+#include "util/crypto.h"
 #include "util/text.h"
 
 namespace nx::archive {
@@ -217,6 +219,50 @@ bool write_zip(const fs::path& dest, const std::vector<std::pair<std::string, st
   if (ok) ok = write_file(dest, std::string((const char*)buf, size));
   mz_zip_writer_end(&z);
   return ok;
+}
+
+std::string write_targz(const std::vector<TarFile>& files) {
+  std::string tar;
+  auto field = [](char* dst, size_t n, uint64_t v) { std::snprintf(dst, n, "%0*llo", (int)n - 1, (unsigned long long)v); };
+  long long mtime = (long long)now();
+  for (auto& f : files) {
+    char h[512] = {0};
+    std::string name = f.name, prefix;
+    if (name.size() > 100) {   // ustar: prefijo de hasta 155 bytes cortado en una barra
+      size_t cut = name.rfind('/', 155);
+      if (cut == std::string::npos || name.size() - cut - 1 > 100) continue;
+      prefix = name.substr(0, cut);
+      name = name.substr(cut + 1);
+    }
+    std::memcpy(h, name.data(), name.size());
+    field(h + 100, 8, (uint64_t)f.mode);
+    field(h + 108, 8, 0);
+    field(h + 116, 8, 0);
+    field(h + 124, 12, f.data.size());
+    field(h + 136, 12, (uint64_t)mtime);
+    std::memset(h + 148, ' ', 8);
+    h[156] = '0';
+    std::memcpy(h + 257, "ustar\0" "00", 8);
+    std::memcpy(h + 345, prefix.data(), prefix.size());
+    unsigned sum = 0;
+    for (unsigned char c : h) sum += c;
+    std::snprintf(h + 148, 8, "%06o", sum);
+    tar.append(h, 512);
+    tar += f.data;
+    tar.append((512 - f.data.size() % 512) % 512, '\0');
+  }
+  tar.append(1024, '\0');
+  size_t clen = 0;
+  void* comp = tdefl_compress_mem_to_heap(tar.data(), tar.size(), &clen, tdefl_create_comp_flags_from_zip_params(9, -15, 0));
+  std::string out("\x1f\x8b\x08\x00\0\0\0\0\x02\xff", 10);
+  if (comp) {
+    out.append((const char*)comp, clen);
+    mz_free(comp);
+  }
+  uint32_t crc = crc32(tar), isize = (uint32_t)tar.size();
+  for (int i = 0; i < 4; ++i) out += (char)((crc >> (8 * i)) & 0xFF);
+  for (int i = 0; i < 4; ++i) out += (char)((isize >> (8 * i)) & 0xFF);
+  return out;
 }
 
 static uint64_t octal(const char* p, size_t n) {

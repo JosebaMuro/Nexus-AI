@@ -20,6 +20,7 @@
 #include <thread>
 
 #include "agents/agents.h"
+#include "coop/coop.h"
 #include "core/config.h"
 #include "core/service.h"
 #include "core/services.h"
@@ -30,6 +31,7 @@
 #include "models/models.h"
 #include "office/bolsa.h"
 #include "rag/web.h"
+#include "remote/remote.h"
 #include "office/office.h"
 #include "server/app.h"
 #include "tools/tools.h"
@@ -129,15 +131,41 @@ int cmd_run(const Args& a) {
 
   Services s;
   server::App app(&s);
-  for (auto* listeners : {&s.supervisor->listeners, &s.lounge->listeners})
+  for (auto* listeners : {&s.supervisor->listeners, &s.lounge->listeners, &s.coop->listeners})
     listeners->push_back([&app](const json& e) { app.broadcast(e); });
   app.on_shutdown_request = [] { g_stop = true; };
   s.start();
   // siguen solos los rastreos de dominio completo que se cortaron (cierre, apagado)
   rag::crawl_jobs::resume_interrupted(s, [&app](const json& e) { app.broadcast(e); });
-  std::thread watcher([&app] {
+  // acceso remoto por internet: la misma aplicacion por HTTPS en su puerto, solo para dispositivos emparejados
+  std::unique_ptr<server::App> remote_app;
+  std::thread remote_thread;
+  if (cfg.flag("remote.enabled", false)) {
+    try {
+      auto [cert, key, fp] = s.remote->cert();
+      int rport = s.remote->port();
+      std::string rhost = cfg.str("remote.host", "0.0.0.0");
+      remote_app = std::make_unique<server::App>(&s, app, cert, key);
+      if (!remote_app->valid()) {
+        std::fprintf(stderr, "  Acceso remoto: no se pudo cargar el certificado de %s\n", S(cert).c_str());
+      } else if (!remote_app->bind(rhost, rport)) {
+        std::fprintf(stderr, "  Acceso remoto: el puerto %d esta ocupado\n", rport);
+      } else {
+        s.remote->listening_port = rport;
+        remote_thread = std::thread([&] {
+          remote_app->listen_after_bind();
+          s.remote->listening_port = 0;
+        });
+        log::get("remote").info("Acceso remoto HTTPS en el puerto ", rport, " · huella ", remote::pretty(fp));
+      }
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "  Acceso remoto no disponible: %s\n", e.what());
+    }
+  }
+  std::thread watcher([&app, &remote_app] {
     while (!g_stop) std::this_thread::sleep_for(std::chrono::milliseconds(200));
     app.stop();
+    if (remote_app) remote_app->stop();
   });
   if (browser)
     std::thread([url] {
@@ -147,6 +175,7 @@ int cmd_run(const Args& a) {
   bool ok = app.listen(host, port);
   g_stop = true;
   watcher.join();
+  if (remote_thread.joinable()) remote_thread.join();
   if (!ok && !app.stopping) std::fprintf(stderr, "  No se pudo abrir el puerto %d en %s (¿ya esta en uso?)\n", port, host.c_str());
   s.shutdown();
   proc::cleanup();
