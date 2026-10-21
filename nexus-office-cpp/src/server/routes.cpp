@@ -18,6 +18,7 @@
 #include "memory/memory.h"
 #include "models/models.h"
 #include "models/runtimes.h"
+#include "office/bolsa.h"
 #include "office/office.h"
 #include "rag/rag.h"
 #include "server/app.h"
@@ -1049,13 +1050,90 @@ void register_routes(App& app) {
   }, true);
 
   // ------------------------------------------------------------------ mesa de bolsa (oficina bolsa-inversiones)
-  for (auto* p : {"/api/bolsa", "/api/bolsa/instrumentos", "/api/bolsa/cotizacion/{simbolo}", "/api/bolsa/fiscal"})
-    app.get(p, [](Ctx&) -> Out { not_in_cpp("La mesa de bolsa"); });
-  for (auto* p : {"/api/bolsa/costes", "/api/bolsa/orden", "/api/bolsa/orden/{oid}/cancelar", "/api/bolsa/cartera",
-                  "/api/bolsa/cartera/{cid}/reiniciar", "/api/bolsa/instrumento", "/api/bolsa/importar"})
-    app.post(p, [](Ctx&) -> Out { not_in_cpp("La mesa de bolsa"); });
-  for (auto* p : {"/api/bolsa/orden/{oid}/confirmar", "/api/bolsa/orden/{oid}/ejecucion"})
-    app.post(p, [](Ctx&) -> Out { not_in_cpp("La mesa de bolsa"); }, true);
+  auto B = [](auto fn) -> Out {
+    try {
+      return fn(bolsa::get());
+    } catch (const bolsa::PermissionDenied& e) {
+      throw HttpErr(403, e.what());
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
+  };
+  app.get("/api/bolsa", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      long long cid = c.qi("cartera", 0);
+      json res = b.resumen(cid ? json(cid) : json(nullptr));
+      return json{{"aviso", bolsa::AVISO},       {"confirmacion", bolsa::CONFIRMACION}, {"mercados", b.mercados()},
+                  {"carteras", b.carteras()},    {"tarifas", bolsa::tarifas_json()},   {"tipos", bolsa::ORDER_TYPES},
+                  {"resumen", res},              {"ordenes", b.ordenes(res["cartera"])},
+                  {"operaciones", b.operaciones(res["cartera"], 50)}};
+    });
+  });
+  app.get("/api/bolsa/instrumentos", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) { return b.instrumentos(c.q("q")); });
+  });
+  app.get("/api/bolsa/cotizacion/{simbolo}", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) { return merged(b.precio(c.p("simbolo")), {{"ticks", b.ticks(c.p("simbolo"))}}); });
+  });
+  app.post("/api/bolsa/costes", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      json q = b.precio(c.bs("simbolo", ""));
+      std::string lado = c.bs("lado", "compra");
+      json pin = c.b("precio", nullptr);
+      double px = truthy(pin) ? bolsa::num(pin) : jnum(lado == "compra" ? q["venta"] : q["compra"]);
+      json cart = c.b("cartera", nullptr);
+      json cant = c.b("cantidad", nullptr);
+      return b.costes(truthy(cart) ? cart : json(nullptr), jstr(q, "simbolo"), lado, truthy(cant) ? bolsa::num(cant) : 0.0, px);
+    });
+  });
+  app.post("/api/bolsa/orden", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      json cart = c.b("cartera", nullptr);
+      return b.ordenar(c.bs("simbolo", ""), c.bs("lado", ""), c.b("cantidad", 0), c.bs("tipo", "mercado"),
+                       c.b("limite", nullptr), c.b("stop", nullptr), c.bs("validez", "dia"),
+                       truthy(cart) ? cart : json(nullptr), "usuario");
+    });
+  });
+  app.post("/api/bolsa/orden/{oid}/cancelar", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) { return b.cancelar(c.pi("oid")); });
+  });
+  app.post("/api/bolsa/orden/{oid}/confirmar", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) { return b.confirmar(c.pi("oid"), c.bs("confirmacion", "")); });
+  }, true);
+  app.post("/api/bolsa/orden/{oid}/ejecucion", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      json com = c.b("comision_eur", nullptr), fx = c.b("fx", nullptr);
+      return b.registrar_ejecucion(c.pi("oid"), c.b("precio", 0), truthy(com) ? com : json(0),
+                                   c.b("impuestos_eur", nullptr), truthy(fx) ? fx : json(nullptr));
+    });
+  }, true);
+  app.post("/api/bolsa/cartera", [B](Ctx& c) -> Out {
+    if (c.bs("modo", "") == "real" && !c.admin) throw HttpErr(403, "Una cartera real requiere modo administrador");
+    return B([&](bolsa::Bolsa& b) {
+      return b.crear_cartera(str_or(c.b("nombre", nullptr), "Cartera simulada"), c.b("capital", 10000),
+                             str_or(c.b("tarifa", nullptr), "broker-online"), str_or(c.b("modo", nullptr), "simulado"));
+    });
+  });
+  app.post("/api/bolsa/cartera/{cid}/reiniciar", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) { return b.reiniciar(c.pi("cid"), c.b("capital", nullptr)); });
+  });
+  app.post("/api/bolsa/instrumento", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      auto orv = [&](const char* k, json d) { json v = c.b(k, nullptr); return truthy(v) ? v : d; };
+      return b.anadir_instrumento(c.bs("simbolo", ""), c.bs("nombre", ""), c.bs("mercado", ""), c.b("precio", 0),
+                                  c.bs("divisa", ""), str_or(c.b("tipo", nullptr), "acción"), orv("vol", 0.25),
+                                  orv("spread_bps", 5), orv("adv", 1e6), orv("impuesto_pct", 0));
+    });
+  });
+  app.post("/api/bolsa/importar", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) { return b.importar_csv(c.bs("simbolo", ""), c.bs("csv", "")); });
+  });
+  app.get("/api/bolsa/fiscal", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      long long cid = c.qi("cartera", 0), anio = c.qi("anio", 0);
+      return b.informe_fiscal(cid ? json(cid) : json(nullptr), anio ? json(anio) : json(nullptr));
+    });
+  });
 
   // ------------------------------------------------------------------ herramientas
   app.get("/api/tools", [](Ctx& c) -> Out {

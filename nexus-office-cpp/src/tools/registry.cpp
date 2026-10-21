@@ -20,6 +20,7 @@ void link_builtin_core();
 void link_builtin_files();
 void link_builtin_web();
 void link_builtin_media();
+void link_builtin_bolsa();
 
 std::map<std::string, ToolFn>& builtin_functions() {
   static std::map<std::string, ToolFn> m;
@@ -317,6 +318,7 @@ void ToolRegistry::reload() {
   link_builtin_files();
   link_builtin_web();
   link_builtin_media();
+  link_builtin_bolsa();
   auto& fns = builtin_functions();
   for (auto& m : data::get("tools")) {
     std::string name = jstr(m, "name");
