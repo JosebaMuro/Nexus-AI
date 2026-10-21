@@ -286,9 +286,11 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096
           script: |
+            unzip -q -o -j apk/*.apk lib/arm64-v8a/libnexusoffice.so -d nx && adb push nx/libnexusoffice.so /data/local/tmp/nx && adb shell chmod 755 /data/local/tmp/nx
+            adb shell /data/local/tmp/nx --version; adb shell /data/local/tmp/nx detect | head -30 || true
             adb install -r apk/*.apk
             adb shell am start -n ai.nexus.office.cpp/ai.nexus.office.autonomo.MainActivity
             adb forward tcp:8775 tcp:8775
-            ok=0; for i in $(seq 120); do if curl -sf http://127.0.0.1:8775/api/ping; then ok=1; break; fi; sleep 3; done; echo; adb shell run-as ai.nexus.office.cpp cat files/nexus.log | tail -40 || true; test $ok = 1
+            ok=0; for i in $(seq 80); do if curl -sf http://127.0.0.1:8775/api/ping; then ok=1; break; fi; sleep 3; done; echo; test $ok = 1 || { adb logcat -d | grep -iE "nexus|translation|AndroidRuntime|FATAL|linker" | tail -120; adb shell dumpsys notification --noredact | grep -iE -A4 "ai.nexus" | head -60; adb shell dumpsys activity services ai.nexus.office.cpp | head -40; }; test $ok = 1
             curl -sf http://127.0.0.1:8775/api/status | head -c 600; echo
             curl -sf -X POST http://127.0.0.1:8775/api/accel/test -H 'Content-Type: application/json' -d '{}' | head -c 400; echo
