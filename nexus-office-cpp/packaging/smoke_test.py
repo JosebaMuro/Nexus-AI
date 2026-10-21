@@ -13,6 +13,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -129,7 +130,7 @@ def main() -> int:
 
         try:
             answer = asyncio.run(ws_chat("Responde con una sola palabra: ¿cual es la capital de Francia?"))
-            check("par" in answer.lower(), f"chat por WebSocket con el modelo: {answer[:120]!r}")
+            check(re.search(r"par[ií]s", answer.lower()), f"chat por WebSocket con el modelo: {answer[:120]!r}")
             calc = asyncio.run(ws_chat("Cuanto es 12*7?"))
             check("84" in calc, f"chat con herramienta (calculadora): {calc[:120]!r}")
         except ImportError:

@@ -24,6 +24,7 @@ env:
   GH_TOKEN: ${{ github.token }}
   PIPER: "2023.11.14-2"
   WHISPER: v1.7.6
+  PIPER_PHONEMIZE: "2023.11.14-4"
 
 jobs:
   cpp:
@@ -77,10 +78,18 @@ jobs:
           mv px/piper voz/piper
           ls voz/piper | head -30
           if [ "$RUNNER_OS" = macOS ]; then
-            # el piper de macOS busca sus bibliotecas en @rpath sin tener rpath: se le pone su propia carpeta
+            # el piper de macOS no trae sus bibliotecas (espeak-ng, piper_phonemize, onnxruntime): salen de
+            # piper-phonemize, con el que se compilo, y se le pone su propia carpeta como rpath
+            case "${{ matrix.target }}" in macos-arm64) PP=macos_aarch64 ;; *) PP=macos_x64 ;; esac
+            curl -fsSL -o pp.tgz "https://github.com/rhasspy/piper-phonemize/releases/download/$PIPER_PHONEMIZE/piper-phonemize_$PP.tar.gz"
+            mkdir -p ppx && tar -xzf pp.tgz -C ppx
+            find ppx -name '*.dylib' -exec cp -a {} voz/piper/ \;
+            [ -d voz/piper/espeak-ng-data ] || cp -r "$(find ppx -type d -name espeak-ng-data | head -1)" voz/piper/
+            ls -la voz/piper
             install_name_tool -add_rpath @executable_path voz/piper/piper
             codesign -f -s - voz/piper/piper
             otool -L voz/piper/piper; otool -l voz/piper/piper | grep -A2 LC_RPATH
+            echo "Hola." | voz/piper/piper --help >/dev/null 2>&1 && echo "piper arranca" || { voz/piper/piper --help; exit 1; }
           fi
           echo "hola" | voz/piper/piper* --help 2>&1 | head -3 || true
       - uses: actions/upload-artifact@v4

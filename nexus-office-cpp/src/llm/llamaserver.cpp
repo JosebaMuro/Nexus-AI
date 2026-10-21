@@ -105,7 +105,8 @@ void LlamaServerBackend::ensure(const std::string& model, const json& opts) {
     cmd.push_back(device);
   }
   cmd.push_back("-np");
-  cmd.push_back(var == "cpu" || var == "system" || single ? "1" : "2");
+  // un solo slot tambien con la variante de GPU forzada a CPU (-ngl 0): si no, cada slot se queda con medio contexto
+  cmd.push_back(var == "cpu" || var == "system" || single || ngl == 0 ? "1" : "2");
   if (mmproj.empty()) {
     cmd.push_back("--cache-reuse");
     cmd.push_back("256");
