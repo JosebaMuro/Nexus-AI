@@ -7,7 +7,13 @@
 
 Unicode true
 ManifestDPIAware true
-SetCompressor /SOLID lzma
+; /SOLID guarda primero todo el paquete sin comprimir en un bloque de memoria que makensis no puede pasar de ~2 GB
+; (muere con SIGBUS): build.py pasa NOSOLID cuando el paquete es mayor y entonces cada fichero se comprime aparte
+!ifdef NOSOLID
+  SetCompressor lzma
+!else
+  SetCompressor /SOLID lzma
+!endif
 SetCompressorDictSize 64
 RequestExecutionLevel user
 

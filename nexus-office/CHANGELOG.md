@@ -1,5 +1,32 @@
 # Cambios
 
+## Nexus-Office 2.0.0
+
+### Todo un dominio, sin excepciones, convertido en conocimiento para un agente
+- **Antes**: *todo el dominio* recorría solo el host de la URL, hasta 100 000 páginas y 50 saltos, sin PDF ni documentos, y descartaba las páginas cortas.
+- **Ahora** lee el dominio entero, tenga las páginas que tenga: sin límite de páginas ni de profundidad, con todos sus subdominios (cada uno con su `robots.txt`), los documentos enlazados (PDF, Word, LibreOffice, PowerPoint, Excel, EPUB, RTF, texto, CSV, Markdown) y las URL que aparecen dentro de esos documentos. Siempre en segundo plano y por lotes; si se cierra Nexus-Office, se reanuda solo al volver a arrancar.
+- Al terminar construye un **grafo de conocimiento multicapa** propio del dominio: fuentes (secciones, páginas, documentos y enlaces), conceptos relacionados, afirmaciones **contrastadas entre fuentes** (contrastada, fuente única o discrepante, también cotejadas con el resto de la biblioteca), temas y, con el modelo de IA, una síntesis razonada de cada tema con sus conclusiones.
+- El grafo se descarga como **paquete ZIP** importable y con **DAR A AGENTE** pasa al subgrafo y a la biblioteca de un agente, que adquiere ese conocimiento. Otro Nexus-Office lo importa con *IMPORTAR CONOCIMIENTO DE DOMINIO (.zip)*. Ver [docs/RAG.md](docs/RAG.md).
+
+### Selector de motor y CPU/GPU/NPU al arrancar
+- **Antes**: Nexus-Office decidía solo el motor y el acelerador; no se podía forzar la CPU, la GPU o la NPU sin tocar la configuración, ni saber si de verdad se estaba usando.
+- **Ahora**, al abrir, la ventana **MOTOR Y ACELERADOR** deja elegir motor (*automático*, *llama-server* o *llama.cpp integrado*) y acelerador (*automático*, *CPU*, *GPU* o *NPU*), probarlo (tokens por segundo) y ver dónde ha quedado el modelo, leído del registro de llama-server. Lo que no está disponible en el equipo dice por qué y se usa lo siguiente que funcione.
+- NPU: Intel Core Ultra con OpenVINO (Windows x64 y Linux x86_64) y Snapdragon con Hexagon en la app Android autónoma.
+- **Cada opción lleva su runtime en los instaladores offline**: llama-server en sus variantes, el motor integrado (llama-cpp-python) y llama-server con OpenVINO. Ollama sale del selector porque es una aplicación aparte que no viene en el paquete; se sigue usando si está instalado.
+- También desde la terminal: `python -m nexus run --motor … --acelerador …`. Ver [docs/ACELERADOR.md](docs/ACELERADOR.md).
+
+### Modo en vivo por voz en el chat
+- Conversación manos libres: escucha, responde en voz alta y vuelve a escuchar; si hablas mientras responde, se calla y te atiende. Responde sin razonar y en frases cortas para contestar enseguida (`live.max_tokens`, `live.reasoning`). Funciona con Whisper local, con la voz del sistema en Android o con el reconocimiento del navegador.
+
+### Qwen3.5 con razonamiento y visión, y una IA de apoyo para todas las herramientas
+- Los modelos recomendados pasan a **Qwen3.5** (0.8B, 2B, 4B y 9B), que razonan y ven imágenes en un solo modelo. Los Qwen3-VL Thinking siguen en el catálogo como anteriores.
+- El modelo de embeddings multilingüe (Qwen3-Embedding) ayuda a todas las herramientas en cualquier idioma: elige qué herramientas pasan al modelo, enruta al agente adecuado, corrige nombres de herramienta y valores mal escritos, reduce resultados largos a lo relevante y reordena búsquedas.
+
+### Avatar, salón y reuniones
+- **Encuadre automático del avatar**: busto o cuerpo entero siempre dentro del hueco libre, con modelos propios en cualquier unidad y orientación. Ver [docs/AVATAR.md](docs/AVATAR.md).
+- **Agentes del salón más realistas** (proporciones, ropa, pelo, brazos y mirada) sin coste apreciable: alrededor de 1,3 ms por fotograma.
+- **Convocar reunión** ya no se puede pulsar encima de otra reunión (*REUNIÓN EN CURSO…*), la ronda de presentaciones se limita a los agentes más activos y las intervenciones van sin razonar para no hacer esperar. **Convocar reunión** y **Transcripción** funcionan en ordenador, móvil (también Android 7 a 9) y tableta en vertical y horizontal.
+
 ## Nexus-Office 1.9.0: importar grafos de cualquier formato como conocimiento
 
 ### Cualquier grafo se convierte en conocimiento de los agentes

@@ -38,6 +38,11 @@ class Services:
         else:  # modo rapido para tests
             self.hw = hardware.load_cached() or hardware.detect(probe_runtimes=False)
             self.profile, self.tuning_reasons = hardware.build_profile(self.hw), []
+        if detect_hardware and cfg.get("hardware.accel", "auto") != "auto":   # CPU/GPU/NPU elegido a mano al arrancar
+            from .hardware.accel_choice import build_for
+            self.profile, _plan = build_for(self.hw, cfg.get("hardware.accel"))
+            if _plan["note"]:
+                L.warning("Acelerador %s: %s", cfg.get("hardware.accel"), _plan["note"])
         self.monitor.settings = {k: self.profile["llm"][k] for k in ("n_ctx", "n_threads", "n_batch", "gpu_layers")}
         self.runtimes = RuntimeManager()
         self.db = DB()
@@ -61,6 +66,10 @@ class Services:
         self.voice = VoiceEngine(cfg, self.models.catalog, lambda: self.profile)
         self.tools = ToolRegistry(cfg.get("tools.sandbox_community_tools", True))
         self.supervisor = Supervisor(self.tools, self.db, cfg)
+        # IA de apoyo: el embed multilingue ayuda a todas las herramientas (nexus/memory/assist.py)
+        from .memory.assist import SemanticAssist
+        self.assist = SemanticAssist(lambda: self.embedder, cfg)
+        self.supervisor.assist = self.assist
         self.proposals = ProposalManager(self.tools, self.supervisor, self.learner)
         self.agents = AgentManager(self)
         self.graph.namer = lambda aid: getattr(self.agents.get(aid), "name", "") or aid   # ancla de cada subgrafo
@@ -112,6 +121,7 @@ class Services:
     def start(self) -> None:
         self.monitor.start()
         self.embed_worker.start()
+        self.assist.prewarm(self.tools.for_agent(["*"]), self.agents.list())
         if hardware.profiles.android() and self.config.get("hardware.adaptive_tuning", True):
             from .android_tune import LiveTuner
             self.android_tuner = LiveTuner(self)

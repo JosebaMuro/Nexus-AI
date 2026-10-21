@@ -59,6 +59,9 @@ def create_app(services: Services | None = None) -> FastAPI:
         s.kg_jobs.listeners.append(hub.broadcast)
         s.remote.server = getattr(app.state, "remote_server", None)
         s.start()
+        if services is None:     # servidor real (no en pruebas): siguen los rastreos de dominio que se cortaron
+            from ..rag import crawl_jobs
+            crawl_jobs.resume_interrupted(s, hub.broadcast)
         yield
         await asyncio.to_thread(s.shutdown)
 
@@ -179,6 +182,7 @@ def create_app(services: Services | None = None) -> FastAPI:
                 "has_pin": s.config.has_pin(), "profile": {k: s.profile[k] for k in ("id", "tier", "accelerator", "device_name", "ram_gb", "vram_gb")},
                 "npu": s.profile["npu"], "llm": s.llm.status(), "image": s.images.status(), "voice": s.voice.info(),
                 "memory": mem, "graph": s.graph.stats(), "rag": s.rag.stats(), "tuning": s.tuning_reasons,
+                "assist": s.assist.info(),
                 "coop": {"running": s.coop.running, "peers": len(s.coop.peers), "vip": s.coop.vip},
                 "pending_approvals": len(s.supervisor.list_pending()),
                 "pending_proposals": len(s.proposals.list("pendiente")),
@@ -304,6 +308,38 @@ def create_app(services: Services | None = None) -> FastAPI:
         s.llm.rebuild()
         return {"hardware": s.hw.to_dict(), "profile": s.profile}
 
+    @app.get("/api/accel")
+    def accel_options():
+        """Selector de inicio: motor llama y acelerador (CPU/GPU/NPU) con su disponibilidad y lo que se usa de verdad."""
+        from ..hardware.accel_choice import options
+        return options(S())
+
+    @app.post("/api/accel")
+    async def accel_apply(engine: str = Body("auto"), accel: str = Body("auto"), remember: bool = Body(True)):
+        from ..hardware.accel_choice import apply
+        try:
+            res = await asyncio.to_thread(apply, S(), engine, accel, remember)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        hub.broadcast({"type": "status_changed"})
+        return res
+
+    @app.post("/api/accel/test")
+    async def accel_test():
+        """Carga el modelo con la eleccion actual, genera unas palabras y dice donde se ha ejecutado y a que velocidad."""
+        from ..hardware.accel_choice import options
+        s = S()
+        backend = s.llm.select()[0]
+        t0 = time.time()
+        try:
+            text = await asyncio.to_thread(lambda: s.llm.complete("Responde solo: hola", max_tokens=16, temperature=0,
+                                                                  reasoning="off"))
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "backend": backend, "error": str(e)[:400], **options(s)}
+        st = getattr(s.llm.backends.get(backend), "last_stats", None) or {}
+        return {"ok": True, "backend": backend, "text": text.strip()[:80], "seconds": round(time.time() - t0, 2),
+                "tokens_s": round(st["tokens"] / st["seconds"], 1) if st.get("seconds") else None, **options(s)}
+
     @app.get("/api/service")
     async def service_status():
         from .. import service
@@ -413,11 +449,13 @@ def create_app(services: Services | None = None) -> FastAPI:
         from dataclasses import asdict
         s = S()
         return {"messages": s.lounge.history(150), "skills": s.lounge.skills(), "proposals": s.lounge.proposals(),
-                "gaps": s.lounge.detect_gaps(), "agents": [asdict(a) for a in s.agents.list()]}
+                "gaps": s.lounge.detect_gaps(), "agents": [asdict(a) for a in s.agents.list()], "busy": s.lounge.busy}
 
     @app.post("/api/lounge/meet")
     def lounge_meet(topic: str = Body("", embed=True)):
         import threading
+        if S().lounge.busy:
+            return {"started": False, "busy": True}
         threading.Thread(target=S().lounge.meet, kwargs={"topic": topic}, daemon=True).start()
         return {"started": True}
 
@@ -791,7 +829,7 @@ def create_app(services: Services | None = None) -> FastAPI:
         if not re.match(r"^https?://", url or "", re.I):
             raise HTTPException(400, "la URL debe empezar por http:// o https://")
         target = rag_target(agent)
-        if background:
+        if background or scope == "domain":     # dominio completo: siempre por lotes, hasta agotar el dominio
             pages, chars = crawl_jobs.auto_batch(S().profile)
             job = crawl_jobs.create(url, max_pages, max_depth, scope, target, True,
                                     max(1, min(batch_pages or pages, 500)), chars)
@@ -820,6 +858,69 @@ def create_app(services: Services | None = None) -> FastAPI:
         if job["status"] != crawl_jobs.DONE and not crawl_jobs.is_running(job_id):
             crawl_jobs.run_background(S(), job_id, emit=hub.broadcast)
         return crawl_jobs.public(crawl_jobs.get(job_id))
+
+    def _job_or_404(job_id: str) -> dict:
+        from ..rag import crawl_jobs
+        job = crawl_jobs.get(job_id)
+        if not job:
+            raise HTTPException(404, "Rastreo no encontrado")
+        return job
+
+    @app.post("/api/rag/crawls/{job_id}/knowledge")
+    async def rag_crawl_knowledge_build(job_id: str):
+        """Razona ya el grafo multicapa del dominio con lo leido hasta ahora (al completarse se hace solo)."""
+        from ..rag import crawl_jobs
+        job = _job_or_404(job_id)
+        if not crawl_jobs.kg_path(job_id).exists():
+            raise HTTPException(400, "Este rastreo no tiene grafo de dominio (solo los de «todo el dominio»)")
+        try:
+            return await asyncio.to_thread(crawl_jobs.build_knowledge, S(), job, hub.broadcast)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/rag/crawls/{job_id}/knowledge")
+    def rag_crawl_knowledge_file(job_id: str):
+        from ..rag import crawl_jobs
+        job = _job_or_404(job_id)
+        f = crawl_jobs.knowledge_path(job_id)
+        if not f.exists():
+            raise HTTPException(404, "El grafo del dominio aun no esta construido")
+        name = re.sub(r"[^A-Za-z0-9._-]+", "-", (job.get("site") or job_id))[:60] + "-conocimiento.zip"
+        return FileResponse(f, media_type="application/zip", filename=name)
+
+    @app.post("/api/rag/crawls/{job_id}/knowledge/import")
+    async def rag_crawl_knowledge_import(job_id: str, agent: str = Body("", embed=True)):
+        """Da el conocimiento del dominio a un agente (su subgrafo y su biblioteca) o al general."""
+        from ..rag import crawl_jobs, domain_kg
+        _job_or_404(job_id)
+        f = crawl_jobs.knowledge_path(job_id)
+        if not f.exists():
+            raise HTTPException(404, "El grafo del dominio aun no esta construido")
+        target = rag_target(agent)
+        res = await asyncio.to_thread(domain_kg.import_package, S(), domain_kg.read_package(f), target)
+        hub.broadcast({"type": "graph_update"})
+        return res
+
+    @app.post("/api/rag/domain-knowledge/import")
+    async def rag_domain_knowledge_import(file: UploadFile = File(...), agent: str = Form("")):
+        """Importa un paquete de conocimiento de dominio (.zip) hecho en este u otro Nexus-Office."""
+        import tempfile
+        import zipfile
+        from ..rag import domain_kg
+        target = rag_target(agent)
+        fd, tmp = tempfile.mkstemp(suffix=".zip", dir=paths.sub("cache"))
+        with open(fd, "wb") as out:
+            while chunk := await file.read(1024 * 1024):
+                out.write(chunk)
+        try:
+            data = domain_kg.read_package(Path(tmp))
+        except (zipfile.BadZipFile, KeyError, ValueError) as e:
+            raise HTTPException(400, f"No es un paquete de conocimiento de dominio: {e}") from e
+        finally:
+            Path(tmp).unlink(missing_ok=True)
+        res = await asyncio.to_thread(domain_kg.import_package, S(), data, target)
+        hub.broadcast({"type": "graph_update"})
+        return res
 
     @app.post("/api/rag/crawls/{job_id}/pause")
     def rag_crawl_pause(job_id: str):
@@ -1498,7 +1599,8 @@ def create_app(services: Services | None = None) -> FastAPI:
             emit({"type": "session", "session_id": sid})
             images = [i.split(",", 1)[-1] for i in data.get("images", [])][:4]
             try:
-                await asyncio.to_thread(s.agents.run, data.get("agent", "auto"), data.get("text", ""), sid, images, emit)
+                await asyncio.to_thread(s.agents.run, data.get("agent", "auto"), data.get("text", ""), sid, images, emit,
+                                        live=bool(data.get("live")))
             except Exception as e:  # noqa: BLE001
                 L.exception("Error en el chat")
                 emit({"type": "error", "message": str(e)})

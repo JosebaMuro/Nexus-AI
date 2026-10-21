@@ -220,6 +220,54 @@ class Base3D {
     this.renderer.setSize(r.width, r.height, false); this.camera.aspect = r.width / r.height; this.camera.updateProjectionMatrix();
     this.frame && this.frame(r.width / r.height);
   }
+  /* ---- autoencuadre: el personaje cabe entero en el hueco del avatar, sea una columna alta, una franja ancha del
+     movil o una ventana pequeña, y sin quedar tapado por los rotulos de arriba (HUD) y de abajo (estado) */
+  safeInsets() {
+    const r = this.container.getBoundingClientRect(); let top = 0, bottom = 0;
+    for (const el of this.container.querySelectorAll(".avatar-hud, .avatar-state")) {
+      const b = el.getBoundingClientRect(); if (!b.height || !b.width) continue;
+      if (b.top + b.height / 2 - r.top < r.height / 2) top = Math.max(top, b.bottom - r.top + 4); else bottom = Math.max(bottom, r.bottom - b.top + 4);
+    }
+    return { w: r.width, h: r.height, top: Math.min(top, r.height * 0.25), bottom: Math.min(bottom, r.height * 0.25) };
+  }
+  fitBox(box, margin = 0.08) {
+    const ins = this.safeInsets(); if (!ins.w || !ins.h || box.isEmpty()) return;
+    const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+    const aspect = ins.w / ins.h, usable = Math.max(0.4, 1 - (ins.top + ins.bottom) / ins.h);
+    const tv = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const dV = (size.y / 2) * (1 + margin) / (tv * usable), dH = (size.x / 2) * (1 + margin) / (tv * aspect);
+    const d = Math.max(dV, dH) + size.z / 2;
+    // centro del hueco libre (entre los rotulos) en vez del centro del lienzo
+    const shift = ((ins.bottom - ins.top) / 2) * (2 * (d - size.z / 2) * tv / ins.h);
+    this.camera.position.set(c.x, c.y - shift + d * 0.04, c.z + d);
+    this.camera.lookAt(c.x, c.y - shift, c.z);
+    this.camera.near = Math.max(0.01, d / 100); this.camera.far = Math.max(100, d * 20);
+    this.camera.updateProjectionMatrix();
+    this.fitted = { d, aspect, box: [size.x, size.y, size.z] };
+  }
+  // caja del sujeto segun el encuadre: «busto» (cabeza y hombros) o «cuerpo» (entero)
+  subjectBox() {
+    const body = this.body || this.model; if (!body) return null;
+    body.updateMatrixWorld(true);
+    const full = new THREE.Box3().setFromObject(body), H = full.max.y - full.min.y;
+    if (this.framing === "cuerpo") return full;
+    let head = this.head && !this.head.isBone ? new THREE.Box3().setFromObject(this.head) : null;
+    if (!head || head.isEmpty()) {   // modelo propio: el hueso de la cabeza o el 18 % superior
+      const hy = this.head ? this.head.getWorldPosition(new THREE.Vector3()).y : full.max.y - H * 0.09;
+      head = new THREE.Box3(new THREE.Vector3(-H * 0.06, hy - H * 0.06, -H * 0.06), new THREE.Vector3(H * 0.06, Math.min(full.max.y, hy + H * 0.1), H * 0.06));
+    }
+    const hh = head.max.y - head.min.y, hw = Math.max(head.max.x - head.min.x, hh * 0.7);
+    const cx = (head.min.x + head.max.x) / 2, cz = (head.min.z + head.max.z) / 2;
+    const halfW = Math.min(Math.max(hw * 1.5, hh * 1.15), (full.max.x - full.min.x) / 2);
+    return new THREE.Box3(new THREE.Vector3(cx - halfW, Math.max(full.min.y, head.min.y - hh * 0.95), cz - hw / 2),
+                          new THREE.Vector3(cx + halfW, head.max.y, cz + hw / 2));
+  }
+  frame() { const b = this.subjectBox(); if (b) this.fitBox(b); }
+  toggleFraming() {
+    this.framing = this.framing === "busto" ? "cuerpo" : "busto";
+    try { localStorage.setItem("nexus_avatar_framing", this.framing); } catch {}
+    this.frame();
+  }
   setState(s) { this.state = STATE_COLORS[s] ? s : "idle"; this.targetColor.set(STATE_COLORS[this.state] === STATE_COLORS.idle ? this.accent : STATE_COLORS[this.state]); }
   setLevel(v) { this.level = Math.max(0, Math.min(1, v)); }
   setAccent(c) { this.accent = c; if (this.state === "idle") this.targetColor.set(c); }
@@ -260,6 +308,7 @@ class Base3D {
     this.renderer.render(this.scene, this.camera);
   }
   destroy() {
+    if (this.onDbl) this.container.removeEventListener("dblclick", this.onDbl);
     cancelAnimationFrame(this.raf); this.ro.disconnect(); window.removeEventListener("pointermove", this.onMove);
     this.scene.traverse((o) => { o.geometry?.dispose?.(); [].concat(o.material || []).forEach((mt) => { mt.map?.dispose?.(); mt.dispose?.(); }); });
     this.renderer.dispose(); this.canvas.remove(); this.renderer = null;
@@ -271,14 +320,12 @@ class ProceduralGeisha extends Base3D {
   constructor(container) {
     super(container);
     this.swing = []; this.blinkAt = 1.5; this.blink = 0;
+    this.framing = (() => { try { return localStorage.getItem("nexus_avatar_framing") || "busto"; } catch { return "busto"; } })();
+    container.addEventListener("dblclick", this.onDbl = () => this.toggleFraming());
     this.build();
-    this.frame(this.camera.aspect);
+    this.frame();
   }
-  frame(aspect) { // encuadre adaptable: busto en paneles estrechos, mas escena en anchos
-    const wide = aspect > 1.1;
-    this.camera.fov = wide ? 28 : 32; this.camera.position.set(0, wide ? 1.4 : 1.38, wide ? 2.4 : 2.75);
-    this.camera.lookAt(0, wide ? 1.33 : 1.27, 0); this.camera.updateProjectionMatrix();
-  }
+  // encuadre automatico (Base3D.frame): busto o cuerpo entero, siempre dentro del hueco del avatar
   mat(color, o = {}) { return new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.0, ...o }); }
   build() {
     const S = this.scene;
@@ -506,16 +553,7 @@ class GeishaAvatar extends Base3D {
     container.addEventListener("dblclick", this.onDbl = () => this.toggleFraming());
     this.load().catch((e) => { console.warn("geisha: recursos no disponibles, modelo procedural", e); this.fallback = new ProceduralGeisha(container); this.destroy(); });
   }
-  toggleFraming() {
-    this.framing = this.framing === "busto" ? "cuerpo" : "busto";
-    try { localStorage.setItem("nexus_avatar_framing", this.framing); } catch {}
-    this.frame(this.camera.aspect);
-  }
-  frame(aspect) {
-    if (this.framing === "cuerpo") { this.camera.fov = 30; this.camera.position.set(0, 0.95, 3.9 / Math.min(1, aspect + 0.25)); this.camera.lookAt(0, 0.88, 0); }
-    else { this.camera.fov = 30; this.camera.position.set(0, 1.5, 1.25 / Math.min(1, aspect + 0.3)); this.camera.lookAt(0, 1.5, 0); }
-    this.camera.updateProjectionMatrix();
-  }
+  frame() { if (this.ready) super.frame(); }
   async load() {
     const rig = await fetch(ASSETS + "rig.json").then((r) => { if (!r.ok) throw new Error("rig"); return r.json(); });
     const loader = new THREE.TextureLoader();
@@ -579,7 +617,7 @@ class GeishaAvatar extends Base3D {
     S.add(new THREE.HemisphereLight(0xc8d0e0, 0x301018, 1.2));
     const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(-1, 2.5, 2); S.add(key);
     this.ready = true;
-    this.frame(this.camera.aspect);
+    this.frame();
   }
   animate(t, dt) {
     if (!this.ready) return;
@@ -626,11 +664,19 @@ class GLBAvatar extends Base3D {
     ring.rotation.x = -Math.PI / 2; S.add(ring); this.ring = ring;
     this.camera.position.set(0, 1.4, 2.6); this.camera.lookAt(0, 1.2, 0);
     this.morphs = []; this.headBone = null; this.mixer = null;
+    this.framing = (() => { try { return localStorage.getItem("nexus_avatar_framing") || "busto"; } catch { return "busto"; } })();
+    container.addEventListener("dblclick", this.onDbl = () => this.toggleFraming());
     new GLTFLoader().load(url, (gltf) => {
-      const model = gltf.scene, box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3());
-      const k = 1.75 / (size.y || 1); model.scale.setScalar(k);
+      const model = gltf.scene || gltf.scenes?.[0];
+      if (!model) return onError && onError(new Error("el fichero no tiene escena"));
+      model.updateMatrixWorld(true);
+      // VRM 0.x mira hacia -Z: se gira para que mire a la camara
+      const vrm0 = gltf.parser?.json?.extensions?.VRM; if (vrm0) model.rotation.y = Math.PI;
+      const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3());
+      // cualquier unidad (cm, mm, m): se normaliza a 1,75 de alto; los modelos tumbados o anchos (no humanos) por su lado mayor
+      const k = 1.75 / (Math.max(size.y, size.x * 0.75, size.z * 0.75) || 1); model.scale.multiplyScalar(k);
       const b2 = new THREE.Box3().setFromObject(model), c = b2.getCenter(new THREE.Vector3());
-      model.position.x -= c.x; model.position.z -= c.z; model.position.y -= b2.min.y;
+      model.position.x -= c.x; model.position.z -= c.z; model.position.y -= b2.min.y; this.baseY = model.position.y;
       S.add(model); this.model = model;
       model.traverse((o) => {
         if (o.isBone && !this.headBone && /head/i.test(o.name)) this.headBone = o;
@@ -642,9 +688,16 @@ class GLBAvatar extends Base3D {
         const clip = gltf.animations.find((a) => /idle|breath|stand/i.test(a.name)) || gltf.animations[0];
         this.mixer.clipAction(clip).play();
       }
-      const h = 1.75; this.camera.position.set(0, h * 0.82, h * 1.25); this.camera.lookAt(0, h * 0.78, 0);
+      this.body = model; if (this.headBone) this.head = this.headBone;
+      this.ringAt(); this.frame();
     }, undefined, (err) => onError && onError(err));
   }
+  ringAt() {   // el aro del estado y las particulas a la medida del modelo
+    const b = new THREE.Box3().setFromObject(this.model), sz = b.getSize(new THREE.Vector3());
+    this.ring.scale.setScalar(Math.max(0.6, Math.max(sz.x, sz.z) / 1.1)); this.ringBase = this.ring.scale.x;
+    this.moteCenter = new THREE.Vector3(0, b.min.y + sz.y * 0.74, 0);
+  }
+  destroy() { this.container.removeEventListener("dblclick", this.onDbl); super.destroy(); }
   animate(t, dt) {
     this.mixer && this.mixer.update(dt);
     const L = this.levelS;
@@ -653,10 +706,12 @@ class GLBAvatar extends Base3D {
       this.headBone.rotation.y += ((this.mouse.x * 0.4) - this.headBone.rotation.y) * 0.05;
       this.headBone.rotation.x += ((this.mouse.y * 0.2) - this.headBone.rotation.x) * 0.05;
     } else if (this.model) this.model.rotation.y += ((this.mouse.x * 0.3) - this.model.rotation.y) * 0.04;
-    if (this.model && !this.mixer) this.model.position.y = Math.sin(t * 1.5) * 0.005;
+    // respiracion sobre su altura de reposo (antes se pisaba el desplazamiento que lo apoya en el suelo y el modelo
+    // quedaba fuera del encuadre si su origen no estaba en los pies)
+    if (this.model && !this.mixer) this.model.position.y = this.baseY + Math.sin(t * 1.5) * 0.005;
     this.rim.color.copy(this.stateColor); this.rim.intensity = 5 + L * 8;
-    this.ring.material.color.copy(this.stateColor); this.ring.scale.setScalar(1 + L * 0.2 + Math.sin(t * 2) * 0.02);
-    this.animateMotes(t, new THREE.Vector3(0, 1.3, 0));
+    this.ring.material.color.copy(this.stateColor); this.ring.scale.setScalar((this.ringBase || 1) * (1 + L * 0.2 + Math.sin(t * 2) * 0.02));
+    this.animateMotes(t, this.moteCenter || new THREE.Vector3(0, 1.3, 0));
   }
 }
 

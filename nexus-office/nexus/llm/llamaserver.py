@@ -45,6 +45,7 @@ class LlamaServerBackend(OpenAICompatBackend):
         self.proc: subprocess.Popen | None = None
         self.key = None
         self.variant = ""
+        self.effective: dict = {}      # donde ha quedado el modelo de verdad (leido del registro al arrancar)
         self._lock = threading.Lock()
         self.port = 0
 
@@ -90,7 +91,15 @@ class LlamaServerBackend(OpenAICompatBackend):
                 ngl, device = 0, ""
         if variant == "cpu":
             ngl = 0
-        key = (str(exe), path, entry.get("mmproj"), opts.get("n_ctx"), opts.get("n_threads"), opts.get("n_batch"), ngl, device)
+        extra_env = dict(self.profile_getter().get("llm", {}).get("device_env") or {})
+        if extra_env:      # OpenVINO NPU (GGML_OPENVINO_DEVICE) y similares
+            env = {**(env or os.environ), **extra_env}
+        if variant not in ("embedded", "system"):
+            from ..runtimes import lib_env
+            env = lib_env(exe, env)
+        single = bool(self.profile_getter().get("llm", {}).get("single_slot"))
+        key = (str(exe), path, entry.get("mmproj"), opts.get("n_ctx"), opts.get("n_threads"), opts.get("n_batch"), ngl, device,
+               tuple(sorted(extra_env.items())))
         with self._lock:
             if self.proc and self.proc.poll() is None and self.key == key:
                 return
@@ -105,14 +114,16 @@ class LlamaServerBackend(OpenAICompatBackend):
                 cmd += ["--device", device]
             # en CPU un solo slot: las peticiones se encolan en vez de repartirse los pocos nucleos;
             # cache-reuse reaprovecha el KV del prompt de sistema entre turnos
-            cmd += ["-np", "1" if variant in ("cpu", "system") else "2"]
+            cmd += ["-np", "1" if variant in ("cpu", "system") or single else "2"]
             if not entry.get("mmproj"):  # no soportado con proyector multimodal
                 cmd += ["--cache-reuse", "256"]
             if entry.get("mmproj"):
                 cmd += ["--mmproj", entry["mmproj"]]
                 if variant == "cpu":  # en CPU limitamos los tokens por imagen para acelerar la vision
                     cmd += ["--image-max-tokens", "384"]
-            logf = open(paths.logs_dir() / "llama-server.log", "ab")
+            log_path = paths.logs_dir() / "llama-server.log"
+            log_from = log_path.stat().st_size if log_path.exists() else 0
+            logf = open(log_path, "ab")
             L.info("Arrancando llama-server [%s]: %s", variant, " ".join(cmd[1:]))
             self.proc = popen(cmd, stdout=logf, stderr=subprocess.STDOUT, cwd=str(exe.parent), env=env)
             self.base_url = f"http://127.0.0.1:{self.port}/v1"
@@ -132,6 +143,7 @@ class LlamaServerBackend(OpenAICompatBackend):
                 try:
                     if httpx.get(f"http://127.0.0.1:{self.port}/health", timeout=1).status_code == 200:
                         L.info("llama-server listo en %.1fs", time.time() - t0)
+                        self._check_device(log_path, log_from, variant, ngl, device, extra_env)
                         return
                 except httpx.HTTPError:
                     pass
@@ -140,6 +152,18 @@ class LlamaServerBackend(OpenAICompatBackend):
                 self.stop()
                 raise _GpuFailed(f"llama-server con GPU ({device}) no respondio a tiempo")
             raise RuntimeError("llama-server no respondio a tiempo")
+
+    def _check_device(self, log_path, log_from: int, variant: str, ngl, device: str, extra_env: dict) -> None:
+        """Comprueba en el registro donde se ha cargado el modelo y lo deja en ``effective`` para la interfaz."""
+        from ..hardware.accel_choice import effective_from_log, read_log_since
+        eff = effective_from_log(read_log_since(log_path, log_from), extra_env)
+        eff.update(variant=variant, requested="NPU" if extra_env.get("GGML_OPENVINO_DEVICE") == "NPU" or
+                   (device or "").startswith("HTP") else "GPU" if ngl else "CPU", at=time.time())
+        eff["ok"] = eff["requested"] == "CPU" or eff["device"].startswith(eff["requested"])
+        if not eff["ok"]:
+            L.warning("Se pidio %s pero el modelo ha quedado en %s (%s)", eff["requested"], eff["device"],
+                      eff.get("detail") or variant)
+        self.effective = eff
 
     def _gpu_failed(self, reason: str, device: str = "") -> dict:
         """Android: la NPU o la GPU no sirve para llama.cpp en este movil (driver). Se apunta y se sigue con la GPU

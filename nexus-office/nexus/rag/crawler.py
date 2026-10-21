@@ -2,7 +2,10 @@
 
 Parte de una URL y recorre en anchura las paginas enlazadas del mismo sitio:
 - Ambito: por defecto la "seccion" de la URL inicial (https://docs.x.org/3/library/ -> solo /3/library/...);
-  con scope="domain", todo el host (www. incluido).
+  con scope="domain", TODO el dominio: el host, www. y sus subdominios (docs.x.org, blog.x.org...), sin limite de
+  paginas ni de profundidad, leyendo tambien los documentos enlazados (PDF, Word, OpenDocument, PowerPoint, Excel,
+  EPUB, RTF, texto) y las paginas cortas. Con el se construye ademas un grafo de conocimiento propio del dominio
+  (nexus.rag.domain_kg).
 - Respeta robots.txt (Disallow y Crawl-delay) y usa el sitemap.xml como semilla si existe.
 - Solo direcciones publicas (tambien tras redirecciones); no sale del ambito aunque redirija.
 - Limites: paginas, profundidad, tiempo, 3 MB por pagina y 6 millones de caracteres en total.
@@ -36,9 +39,16 @@ UA = {"User-Agent": f"Mozilla/5.0 (compatible; {UA_NAME}/1.0; documentation read
 
 MAX_PAGES_LIMIT = 500               # tope duro aunque se pida mas
 MAX_PAGE_BYTES = 3_000_000
+MAX_DOC_BYTES = 60_000_000          # PDF y documentos enlazados (solo en el rastreo de dominio completo)
 MAX_TOTAL_CHARS = 6_000_000
 MAX_CRAWL_DELAY = 5.0
 MIN_WORDS = 30
+MIN_WORDS_DOMAIN = 5                # dominio completo: tambien las paginas cortas (fichas, definiciones...)
+DOC_EXT = {".pdf", ".docx", ".odt", ".ods", ".odp", ".pptx", ".xlsx", ".epub", ".rtf", ".txt", ".csv", ".md"}
+DOC_CTYPES = {"application/pdf": ".pdf", "wordprocessingml": ".docx", "spreadsheetml": ".xlsx", "presentationml": ".pptx",
+              "opendocument.text": ".odt", "opendocument.spreadsheet": ".ods", "opendocument.presentation": ".odp",
+              "epub": ".epub", "rtf": ".rtf", "text/plain": ".txt", "text/csv": ".csv", "text/markdown": ".md"}
+SLD = {"co", "com", "org", "net", "gov", "gob", "edu", "ac", "nhs", "ltd", "plc", "or", "ne", "go"}
 
 SKIP_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".bmp", ".tif", ".tiff", ".avif",
             ".css", ".js", ".mjs", ".map", ".json", ".xml", ".rss", ".atom", ".woff", ".woff2", ".ttf", ".otf", ".eot",
@@ -65,8 +75,29 @@ def normalize(url: str) -> str:
 
 
 def _host(netloc: str) -> str:
-    h = netloc.lower().split("@")[-1].split(":")[0]
+    h = netloc.lower().split("@")[-1]
+    h = h[1:].split("]")[0] if h.startswith("[") else h.split(":")[0]   # [::1]:8080 -> ::1
     return h[4:] if h.startswith("www.") else h
+
+
+def site_root(netloc: str) -> str:
+    """Dominio registrable aproximado: docs.python.org -> python.org, www.bbc.co.uk -> bbc.co.uk."""
+    host = _host(netloc)
+    if ":" in host or host.replace(".", "").isdigit():   # IP: no tiene subdominios
+        return host
+    parts = host.split(".")
+    if len(parts) >= 3 and parts[-2] in SLD and len(parts[-1]) == 2:
+        return ".".join(parts[-3:])
+    return ".".join(parts[-2:])
+
+
+def doc_suffix(url: str, ctype: str = "") -> str:
+    """Extension de documento legible ('.pdf', '.docx'...) por la URL o el tipo MIME; '' si es una pagina."""
+    suf = PurePosixPath(urlparse(url).path).suffix.lower()
+    if suf in DOC_EXT:
+        return suf
+    c = (ctype or "").lower()
+    return next((v for k, v in DOC_CTYPES.items() if k in c), "")
 
 
 def scope_prefix(start: str, scope: str) -> str:
@@ -80,14 +111,22 @@ def scope_prefix(start: str, scope: str) -> str:
     return path
 
 
-def in_scope(url: str, start: str, prefix: str) -> bool:
+def in_scope(url: str, start: str, prefix: str, domain: bool = False) -> bool:
+    """domain=True: cualquier pagina o documento del dominio y sus subdominios."""
     p, s = urlparse(url), urlparse(start)
-    if p.scheme not in ("http", "https") or _host(p.netloc) != _host(s.netloc):
+    if p.scheme not in ("http", "https"):
+        return False
+    if domain:
+        host, root = _host(p.netloc), site_root(s.netloc)
+        if host != root and not host.endswith("." + root):
+            return False
+    elif _host(p.netloc) != _host(s.netloc):
         return False
     path = p.path or "/"
-    if not (path + "/").startswith(prefix) and not path.startswith(prefix):
+    if not domain and not (path + "/").startswith(prefix) and not path.startswith(prefix):
         return False
-    if PurePosixPath(path).suffix.lower() in SKIP_EXT or SKIP_PATH.search(path) or SKIP_QUERY.search(p.query):
+    suf = PurePosixPath(path).suffix.lower()
+    if (suf in SKIP_EXT and not (domain and suf in DOC_EXT)) or SKIP_PATH.search(path) or SKIP_QUERY.search(p.query):
         return False
     return True
 
@@ -157,18 +196,22 @@ def http_fetcher(connections: int = 8) -> tuple[Fetcher, Callable[[], None]]:
     limits = httpx.Limits(max_connections=connections, max_keepalive_connections=connections)
     client = httpx.Client(headers=UA, timeout=25, follow_redirects=True, limits=limits)
 
-    def fetch(url: str) -> tuple[int, str, str, str]:
+    def fetch(url: str) -> tuple[int, str, str | bytes, str]:
+        """Las paginas llegan como texto; los documentos (PDF, Office...) como bytes, para leerlos despues."""
         _public_url(url)
         with client.stream("GET", url) as r:
             _public_url(str(r.url))
             ctype = r.headers.get("content-type", "")
+            is_doc = "html" not in ctype.lower() and bool(doc_suffix(str(r.url), ctype))
+            cap = MAX_DOC_BYTES if is_doc else MAX_PAGE_BYTES
             data = bytearray()
             if r.status_code == 200:
                 for chunk in r.iter_bytes(65536):
                     data += chunk
-                    if len(data) > MAX_PAGE_BYTES:
+                    if len(data) > cap:
                         break
-            return r.status_code, ctype, bytes(data).decode(r.encoding or "utf-8", errors="replace"), str(r.url)
+            body = bytes(data) if is_doc else bytes(data).decode(r.encoding or "utf-8", errors="replace")
+            return r.status_code, ctype, body, str(r.url)
 
     return fetch, client.close
 
@@ -187,18 +230,20 @@ def _robots(fetch: Fetcher, start: str) -> tuple[RobotFileParser | None, list[st
     return rp, sitemaps
 
 
-def _sitemap_seeds(fetch: Fetcher, start: str, declared: list[str], limit: int) -> list[str]:
+def _sitemap_seeds(fetch: Fetcher, start: str, declared: list[str], limit: int, max_files: int = 6) -> list[str]:
     p = urlparse(start)
     queue = list(declared) or [f"{p.scheme}://{p.netloc}/sitemap.xml"]
     pages: list[str] = []
     read = 0
-    while queue and read < 6 and len(pages) < limit:
+    while queue and read < max_files and len(pages) < limit:
         sm = queue.pop(0)
         read += 1
         try:
             status, ctype, text, _ = fetch(sm)
         except Exception:  # noqa: BLE001
             continue
+        if isinstance(text, bytes):
+            text = text.decode("utf-8", "replace")
         if status != 200 or "<" not in text[:200]:
             continue
         locs, children = sitemap_urls(text)
@@ -217,6 +262,43 @@ def analyze_page(raw: str, url: str) -> dict:
         out["doc"] = {k: doc[k] for k in ("title", "text", "words", "headings", "description", "site", "author", "lang")}
         out["hash"] = hashlib.sha1(doc["text"].encode("utf-8", "replace")).hexdigest()
     return out
+
+
+URL_IN_TEXT = re.compile(r"https?://[^\s<>\"'\)\]]+")
+
+
+def analyze_document(data: str | bytes, url: str, ctype: str = "") -> dict:
+    """Un documento enlazado (PDF, Word, hoja de calculo, texto...) leido con los lectores de la biblioteca RAG.
+    Devuelve lo mismo que analyze_page; los enlaces son las URLs que aparezcan en su texto."""
+    import os
+    import tempfile
+
+    from .readers import read_document
+    suf = doc_suffix(url, ctype) or ".txt"
+    raw = data.encode("utf-8") if isinstance(data, str) else data
+    fd, tmp = tempfile.mkstemp(suffix=suf)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(raw)
+        title, pages = read_document(tmp)
+    finally:
+        os.unlink(tmp)
+    text = clean("\n\n".join(p for p in pages if p and p.strip()))
+    name = PurePosixPath(urlparse(url).path).name
+    if not title or title.startswith("tmp"):
+        title = name or url
+    links = [normalize(u.rstrip(".,;:")) for u in URL_IN_TEXT.findall(text)][:500]
+    return {"links": links, "canonical": "", "noindex": False, "nofollow": False,
+            "doc": {"title": f"{title} ({suf[1:].upper()})", "text": text, "words": len(text.split()), "headings": [],
+                    "description": "", "site": "", "author": "", "lang": ""},
+            "hash": hashlib.sha1(text.encode("utf-8", "replace")).hexdigest(), "document": suf}
+
+
+def _analyze_doc_safe(data, url: str, ctype: str) -> dict:
+    try:
+        return analyze_document(data, url, ctype)
+    except Exception as e:  # noqa: BLE001 - PDF cifrado o roto
+        return {"error": f"documento ilegible: {type(e).__name__}: {e}"[:160]}
 
 
 def default_connections() -> int:
@@ -257,6 +339,7 @@ def crawl(start_url: str, max_pages: int = 40, max_depth: int = 3, scope: str = 
     max_chars = max(1, min(int(max_chars), MAX_TOTAL_CHARS))
     if state:
         start, prefix = state["start"], state["prefix"]
+        scope = state.get("scope", scope)
     else:
         start = normalize(start_url)
         prefix = scope_prefix(start, scope)
@@ -264,6 +347,9 @@ def crawl(start_url: str, max_pages: int = 40, max_depth: int = 3, scope: str = 
     if fetch is None:
         fetch, close = http_fetcher(connections or default_connections())
     step = (lambda s: emit({"type": "progress", "text": s})) if emit else (lambda s: None)
+    dom = scope == "domain"            # dominio completo: subdominios, documentos, sin limite de profundidad
+    min_words = MIN_WORDS_DOMAIN if dom else MIN_WORDS
+    scoped = lambda u: in_scope(u, start, prefix, dom)   # noqa: E731
     t0 = time.time()
     pool = None
     try:
@@ -274,7 +360,17 @@ def crawl(start_url: str, max_pages: int = 40, max_depth: int = 3, scope: str = 
             cd = robots.crawl_delay(UA_NAME) or robots.crawl_delay("*")
             if cd:
                 wait, conns = max(wait, min(float(cd), MAX_CRAWL_DELAY)), 1
-        allowed = (lambda u: robots.can_fetch(UA_NAME, u)) if robots else (lambda u: True)
+        start_host = urlparse(start).netloc
+        host_robots: dict[str, RobotFileParser | None] = {start_host: robots}
+
+        def allowed(u: str) -> bool:
+            if not respect_robots:
+                return True
+            h = urlparse(u).netloc
+            if h not in host_robots:      # cada subdominio tiene su propio robots.txt
+                host_robots[h] = _robots(fetch, u)[0]
+            rp = host_robots[h]
+            return rp.can_fetch(UA_NAME, u) if rp else True
         cpu_split = max_pages >= 8 and parallel.process_pool() is not None   # paginas sueltas: no compensa
 
         if state:
@@ -285,9 +381,9 @@ def crawl(start_url: str, max_pages: int = 40, max_depth: int = 3, scope: str = 
             queued = {start}
         if use_sitemap and not state:
             step("Leyendo el sitemap")
-            for u in _sitemap_seeds(fetch, start, declared, seed_limit or max_pages * 5):
+            for u in _sitemap_seeds(fetch, start, declared, seed_limit or max_pages * 5, 2000 if dom else 6):
                 n = normalize(u)
-                if n not in queued and in_scope(n, start, prefix):
+                if n not in queued and scoped(n):
                     queued.add(n)
                     queue.append((n, 1))
 
@@ -309,7 +405,15 @@ def crawl(start_url: str, max_pages: int = 40, max_depth: int = 3, scope: str = 
             except Exception as e:  # noqa: BLE001
                 return {"error": f"error: {e}"[:160]}
             res = {"status": status, "ctype": ctype, "final": normalize(final or url)}
-            if status == 200 and (not ctype or "html" in ctype.lower()):
+            if status == 200 and dom and (isinstance(raw, bytes) or doc_suffix(res["final"], ctype)) \
+                    and "html" not in (ctype or "").lower():
+                got = _analyze_doc_safe(raw, res["final"], ctype)
+                if "error" in got:
+                    return got
+                res["page"] = got
+            elif status == 200 and (not ctype or "html" in ctype.lower()):
+                if isinstance(raw, bytes):
+                    raw = raw.decode("utf-8", "replace")
                 res["page"] = parallel.run_cpu(analyze_page, raw, res["final"]) if cpu_split else analyze_page(raw, res["final"])
             return res
 
@@ -328,7 +432,7 @@ def crawl(start_url: str, max_pages: int = 40, max_depth: int = 3, scope: str = 
             # llenar la ventana de descargas en curso (la portada sola hasta conocer su destino)
             while queue and len(window) < conns and len(pages) + len(window) < max_pages and (committed or not window):
                 url, depth = queue.popleft()
-                if url in visited or (pages or skipped or state) and not in_scope(url, start, prefix):
+                if url in visited or (pages or skipped or state) and not scoped(url):
                     continue   # (el ambito puede haber cambiado si la portada redirigio)
                 visited.add(url)
                 fut = ready({"robots": True}) if not allowed(url) else pool.submit(task, url)
@@ -350,7 +454,8 @@ def crawl(start_url: str, max_pages: int = 40, max_depth: int = 3, scope: str = 
             if res.get("robots"):
                 skipped.append((url, "robots.txt"))
                 continue
-            step(f"Rastreando {offset + len(pages) + 1}/{total or max_pages}: {url}")
+            of = "?" if dom and (total or max_pages) >= 10 ** 9 else (total or max_pages)
+            step(f"Rastreando {offset + len(pages) + 1}/{of}: {url}")
             if "error" in res:
                 skipped.append((url, res["error"]))
                 continue
@@ -358,7 +463,7 @@ def crawl(start_url: str, max_pages: int = 40, max_depth: int = 3, scope: str = 
             if status != 200:
                 skipped.append((url, f"HTTP {status}"))
                 continue
-            if ctype and "html" not in ctype.lower():
+            if ctype and "html" not in ctype.lower() and "page" not in res:
                 skipped.append((url, f"no es HTML ({ctype.split(';')[0]})"))
                 continue
             if final != url and url == start and not pages and not skipped and not state:
@@ -366,27 +471,30 @@ def crawl(start_url: str, max_pages: int = 40, max_depth: int = 3, scope: str = 
                 start, prefix = final, scope_prefix(final, scope)
                 visited.add(final)
             elif final != url:
-                if not in_scope(final, start, prefix) and final != start:
+                if not scoped(final) and final != start:
                     skipped.append((url, f"redirige fuera del ambito ({final})"))
                     continue
                 if final in visited and url != start:
                     continue
                 visited.add(final)
             info = res["page"]
-            if depth < max_depth and not info["nofollow"]:
+            inside = []
+            if (dom or depth < max_depth) and not info["nofollow"]:
                 for link in info["links"]:
-                    if link not in queued and in_scope(link, start, prefix):
-                        queued.add(link)
-                        queue.append((link, depth + 1))
+                    if scoped(link):
+                        inside.append(link)
+                        if link not in queued:
+                            queued.add(link)
+                            queue.append((link, depth + 1))
             canonical = info["canonical"]
-            if canonical and canonical != final and canonical in visited and in_scope(canonical, start, prefix):
+            if canonical and canonical != final and canonical in visited and scoped(canonical):
                 skipped.append((url, "duplicado (canonica)"))
                 continue
             if info["noindex"]:
                 skipped.append((url, "noindex"))
                 continue
             doc = info["doc"]
-            if doc["words"] < MIN_WORDS:
+            if doc["words"] < min_words:
                 skipped.append((url, "apenas tiene texto"))
                 continue
             if info["hash"] in hashes:
@@ -398,7 +506,8 @@ def crawl(start_url: str, max_pages: int = 40, max_depth: int = 3, scope: str = 
             total_chars += len(text)
             pages.append({"url": final, "title": doc["title"], "text": text, "depth": depth, "words": doc["words"],
                           "headings": doc["headings"], "description": doc["description"], "site": doc["site"],
-                          "author": doc["author"], "lang": doc["lang"]})
+                          "author": doc["author"], "lang": doc["lang"], "links": inside[:200],
+                          "document": info.get("document", "")})
             if len(pages) >= max_pages:
                 break
         for _, _, f in window:
@@ -563,7 +672,8 @@ def crawl_batches(services, job: dict, emit=None, fetch: Fetcher | None = None, 
             break
         n = len(job["batches"]) + 1
         want = min(job["batch_pages"], job["max_pages"] - job["pages_done"])
-        step(f"Lote {n}: rastreando hasta {want} páginas (llevas {job['pages_done']} de {job['max_pages']})")
+        step(f"Lote {n}: rastreando hasta {want} páginas (llevas {job['pages_done']}"
+             + (" de todo el dominio)" if job.get("complete") else f" de {job['max_pages']})"))
         res = crawl(job["url"], want, job["max_depth"], job["scope"], fetch=fetch, emit=emit, delay=delay,
                     max_seconds=min(batch_seconds, left_time) if left_time is not None else batch_seconds,
                     connections=connections, state=job["state"], max_chars=job["batch_chars"], should_stop=stop,
@@ -582,6 +692,10 @@ def crawl_batches(services, job: dict, emit=None, fetch: Fetcher | None = None, 
             out = _ingest_batch(services, res, title, agent, job["learn"], n == 1,
                                 {"job": job["id"], "batch": n, "page_from": first, "page_to": last,
                                  "max_pages": job["max_pages"], "max_depth": job["max_depth"], "suffix": f"_lote{n:03d}"})
+            if job.get("complete"):   # dominio completo: cada lote alimenta su grafo multicapa (en disco)
+                from .domain_kg import DomainGraph
+                step(f"Lote {n}: añadiendo al grafo del dominio")
+                DomainGraph(crawl_jobs.kg_path(job["id"])).add_pages(res["pages"])
             job["batches"].append({"n": n, "doc_id": out["doc"]["id"], "title": title, "pages": len(res["pages"]),
                                    "page_from": first, "page_to": last, "chunks": out["doc"]["chunks"],
                                    "words": sum(p["words"] for p in res["pages"]), "learned": out["learned"],
@@ -616,6 +730,12 @@ def crawl_batches(services, job: dict, emit=None, fetch: Fetcher | None = None, 
             job.update(status=crawl_jobs.PAUSED, reason=job.get("reason") or "detenido")
     if not job["batches"] and job["status"] == crawl_jobs.DONE:
         job.update(status=crawl_jobs.FAILED, error="no se ha podido leer ninguna pagina con texto")
+    elif job["status"] == crawl_jobs.DONE and job.get("complete"):
+        try:
+            crawl_jobs.build_knowledge(services, job, emit)
+        except Exception as e:  # noqa: BLE001
+            L.warning("Grafo del dominio %s no construido: %s", job["id"], e)
+            job["knowledge_error"] = str(e)[:300]
     job["seconds"] = round(time.time() - t0, 1)
     crawl_jobs.save(job)
     L.info("Rastreo por lotes %s (%s): %d lotes, %d paginas, %s", job["id"], job["start"] or job["url"],

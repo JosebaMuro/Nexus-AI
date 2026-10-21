@@ -40,6 +40,7 @@ DEFAULTS: dict[str, Any] = {
     "llm": {
         # orden de preferencia; se usa el primer backend disponible
         "backend_order": ["llamaserver", "llamacpp", "ollama", "openai", "transformers", "builtin"],
+        "engine": "auto",               # motor elegido al arrancar: auto | llamaserver | llamacpp | ollama
         "default_model": "",            # id del catalogo, nombre ollama o modelo del endpoint
         "ollama_url": "http://127.0.0.1:11434",
         "openai_base_url": "http://127.0.0.1:1234/v1",   # LM Studio / vLLM / llama-server
@@ -47,7 +48,7 @@ DEFAULTS: dict[str, Any] = {
         "openai_model": "",
         "temperature": 0.7,
         "max_tokens": 1024,
-        # modelos que razonan (Qwen3-VL Thinking...): auto = razonan antes de responder; off = responden directo
+        # modelos que razonan (Qwen3.5, Qwen3-VL Thinking...): auto = razonan antes de responder; off = responden directo
         "reasoning": "auto",
         "reasoning_budget": 2048,       # tokens extra reservados para razonar en el chat
         "reasoning_budget_tasks": 768,  # en tareas internas (resumenes, extraccion de conocimiento)
@@ -77,6 +78,8 @@ DEFAULTS: dict[str, Any] = {
     },
     "hardware": {
         "profile_override": "",         # forzar un acelerador: cuda | rocm | directml | xpu | openvino | mps | cpu
+        "accel": "auto",                # eleccion del selector de inicio: auto | cpu | gpu | npu
+        "llama_variant": "",            # binario de llama.cpp preferido (lo fija el selector: cpu, cuda, vulkan...)
         "adaptive_tuning": True,
         "monitor_interval_s": 2.0,
     },
@@ -114,6 +117,7 @@ DEFAULTS: dict[str, Any] = {
     # perfil de oficina activo (nexus/office): la instalacion como oficina de una pyme con agentes de su gremio
     "office": {"profile": ""},
     "lounge": {"auto_meet": True, "meet_every_tasks": 8},
+    "startup": {"ask_accel": True},     # mostrar al abrir el selector de motor llama y CPU/GPU/NPU
     "server": {"host": "127.0.0.1", "port": 8775, "open_browser": True,
                "lan_key": ""},                 # clave para dispositivos de la red (movil, tablet, consola); se genera sola
     # acceso remoto por internet: HTTPS (TLS 1.3) en un puerto propio, solo para dispositivos emparejados

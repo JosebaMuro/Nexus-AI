@@ -1,7 +1,8 @@
 """Catalogo curado por niveles. La linea base esta pensada para CPU: cualquier hardware superior
 solo puede ir a mejor (modelos mayores, mas contexto, mas resolucion).
 
-Los LLM son todos multimodales con vision Y razonamiento (Qwen3-VL Thinking).
+Los LLM son todos multimodales con vision Y razonamiento: Qwen3.5 (2026, vision nativa y razonamiento hibrido) y,
+como alternativa ya probada, Qwen3-VL Thinking.
 """
 from __future__ import annotations
 
@@ -10,18 +11,40 @@ RECOMMENDED: list[dict] = [
     # Todos ven imagenes (mmproj) y razonan antes de responder (variantes «Thinking» de Qwen3-VL). Nexus-Office separa
     # el razonamiento de la respuesta y lo muestra plegado en el chat (llm.reasoning en config.yaml).
     # Si el nombre de un fichero cambiase en Hugging Face, la descarga busca en el repositorio el GGUF equivalente.
-    {"id": "qwen3-vl-2b-thinking", "kind": "llm", "name": "Qwen3-VL 2B Thinking · base CPU", "vision": True,
+    # Qwen3.5 (Apache 2.0): vision nativa en todos los tamanos (imagen y video), razonamiento activado por defecto
+    # (se apaga con enable_thinking=false para respuestas rapidas, p. ej. el modo en vivo por voz), 201 idiomas,
+    # herramientas y 262k de contexto. Necesita llama.cpp con la arquitectura «qwen35» (la incluida la tiene).
+    {"id": "qwen3.5-0.8b", "kind": "llm", "name": "Qwen3.5 0.8B · móviles y equipos muy justos", "vision": True,
+     "reasoning": True, "params_b": 0.8, "repo": "unsloth/Qwen3.5-0.8B-GGUF", "file": "Qwen3.5-0.8B-Q4_K_M.gguf",
+     "mmproj": "mmproj-F16.gguf", "size_mb": 738, "min_ram_gb": 2,
+     "desc": "El mas pequeno con vision y razonamiento: moviles de 4-6 GB, Raspberry Pi y CPU antiguas."},
+    {"id": "qwen3.5-2b", "kind": "llm", "name": "Qwen3.5 2B · base CPU", "vision": True, "reasoning": True,
+     "params_b": 2, "repo": "unsloth/Qwen3.5-2B-GGUF", "file": "Qwen3.5-2B-Q4_K_M.gguf", "mmproj": "mmproj-F16.gguf",
+     "size_mb": 1948, "min_ram_gb": 3, "baseline": True,
+     "desc": "Ve imagenes, documentos y video, razona paso a paso y usa herramientas. Multilingue (201 idiomas). "
+             "Linea base: CPU de 2-4 nucleos y moviles."},
+    {"id": "qwen3.5-4b", "kind": "llm", "name": "Qwen3.5 4B · equilibrado", "vision": True, "reasoning": True,
+     "params_b": 4, "repo": "unsloth/Qwen3.5-4B-GGUF", "file": "Qwen3.5-4B-Q4_K_M.gguf", "mmproj": "mmproj-F16.gguf",
+     "size_mb": 3412, "min_ram_gb": 8, "min_vram_gb": 4,
+     "desc": "Razonamiento, vision y uso de herramientas mucho mejores. CPU de 6+ nucleos, GPU de 4 GB o movil de "
+             "gama alta."},
+    {"id": "qwen3.5-9b", "kind": "llm", "name": "Qwen3.5 9B · alto rendimiento", "vision": True, "reasoning": True,
+     "params_b": 9, "repo": "unsloth/Qwen3.5-9B-GGUF", "file": "Qwen3.5-9B-Q4_K_M.gguf", "mmproj": "mmproj-F16.gguf",
+     "size_mb": 6598, "min_ram_gb": 16, "min_vram_gb": 8,
+     "desc": "Calidad alta en razonamiento, matematicas, documentos y vision. Recomendado con GPU de 8 GB o mas."},
+    # Qwen3-VL Thinking (2025): alternativa probada; no compite por el «★ recomendado»
+    {"id": "qwen3-vl-2b-thinking", "kind": "llm", "name": "Qwen3-VL 2B Thinking · base CPU", "vision": True, "previous": True,
      "reasoning": True, "params_b": 2, "repo": "Qwen/Qwen3-VL-2B-Thinking-GGUF",
      "file": "Qwen3VL-2B-Thinking-Q4_K_M.gguf", "mmproj": "mmproj-Qwen3VL-2B-Thinking-Q8_0.gguf",
-     "size_mb": 1480, "min_ram_gb": 3, "baseline": True,
+     "size_mb": 1480, "min_ram_gb": 3,
      "desc": "Ve imagenes (OCR, graficos) y razona paso a paso antes de responder. Multilingue (espanol) y con "
              "herramientas. El mas ligero con vision y razonamiento: CPU de 2-4 nucleos y moviles."},
-    {"id": "qwen3-vl-4b-thinking", "kind": "llm", "name": "Qwen3-VL 4B Thinking · equilibrado", "vision": True,
+    {"id": "qwen3-vl-4b-thinking", "kind": "llm", "name": "Qwen3-VL 4B Thinking · equilibrado", "vision": True, "previous": True,
      "reasoning": True, "params_b": 4, "repo": "Qwen/Qwen3-VL-4B-Thinking-GGUF",
      "file": "Qwen3VL-4B-Thinking-Q4_K_M.gguf", "mmproj": "mmproj-Qwen3VL-4B-Thinking-Q8_0.gguf",
      "size_mb": 2815, "min_ram_gb": 10, "min_vram_gb": 4,
      "desc": "Razonamiento y vision mucho mejores. CPU de 6+ nucleos, GPU de 4 GB o movil de gama alta."},
-    {"id": "qwen3-vl-8b-thinking", "kind": "llm", "name": "Qwen3-VL 8B Thinking · alto rendimiento", "vision": True,
+    {"id": "qwen3-vl-8b-thinking", "kind": "llm", "name": "Qwen3-VL 8B Thinking · alto rendimiento", "vision": True, "previous": True,
      "reasoning": True, "params_b": 8, "repo": "Qwen/Qwen3-VL-8B-Thinking-GGUF",
      "file": "Qwen3VL-8B-Thinking-Q4_K_M.gguf", "mmproj": "mmproj-Qwen3VL-8B-Thinking-Q8_0.gguf",
      "size_mb": 5512, "min_ram_gb": 16, "min_vram_gb": 7,
@@ -99,8 +122,8 @@ ANDROID_KINDS = {"llm", "embed"}
 
 
 # modelos de catalogos anteriores (sin razonamiento): siguen funcionando si ya estan descargados
-LEGACY_LLM = {"smolvlm-500m": "qwen3-vl-2b-thinking", "qwen3-vl-2b": "qwen3-vl-2b-thinking",
-              "qwen3-vl-4b": "qwen3-vl-4b-thinking", "qwen3-vl-8b": "qwen3-vl-8b-thinking"}
+LEGACY_LLM = {"smolvlm-500m": "qwen3.5-0.8b", "qwen3-vl-2b": "qwen3.5-2b", "qwen3-vl-4b": "qwen3.5-4b",
+              "qwen3-vl-8b": "qwen3.5-9b"}
 
 
 def recommend(profile: dict, sector: dict[str, str] | None = None) -> list[dict]:
@@ -117,7 +140,7 @@ def recommend(profile: dict, sector: dict[str, str] | None = None) -> list[dict]
         if r["id"] in sector:
             item["sector"] = sector[r["id"]]
         out.append(item)
-    general = [r for r in out if not r.get("sector_only")]
+    general = [r for r in out if not r.get("sector_only") and not r.get("previous")]
     # marcar el mejor "ideal" por tipo
     for kind in {r["kind"] for r in general}:
         ideal = [r for r in general if r["kind"] == kind and r["fit"] == "ideal"]

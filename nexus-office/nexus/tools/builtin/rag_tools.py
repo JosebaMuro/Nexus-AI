@@ -28,14 +28,18 @@ def crawl_docs(args, ctx):
     if not job and args.get("continue"):
         prev = crawl_jobs.find_resumable(args["url"], _target(args, ctx))
         job = prev["id"] if prev else ""
-    if args.get("background"):   # dominios enormes: sigue solo, por lotes, mientras el agente hace otras cosas
+    if args.get("background") or args.get("scope") == "domain":   # dominios: siguen solos, por lotes, sin limite
         if not job:
             pages, chars = crawl_jobs.auto_batch(getattr(ctx.services, "profile", None))
             job = crawl_jobs.create(args["url"], int(args.get("max_pages", 40)), int(args.get("max_depth", 3)),
                                     args.get("scope", "path"), _target(args, ctx), True, pages, chars)["id"]
         crawl_jobs.run_background(ctx.services, job, emit=ctx.emit)
-        return {"job": job, "status": "en curso", "note": "Rastreo por lotes en segundo plano. Cada lote aparece en "
-                "la biblioteca RAG en cuanto termina; consulta con rag_search."}
+        note = ("Rastreo por lotes en segundo plano. Cada lote aparece en la biblioteca RAG en cuanto termina; "
+                "consulta con rag_search.")
+        if args.get("scope") == "domain":
+            note += (" Se lee todo el dominio sin limite (subdominios y documentos) y al terminar se crea su grafo "
+                     "de conocimiento multicapa, que se puede dar a un agente desde la Biblioteca RAG.")
+        return {"job": job, "status": "en curso", "note": note}
     res = crawl_site(ctx.services, args["url"], max_pages=int(args.get("max_pages", 40)),
                      max_depth=int(args.get("max_depth", 3)), scope=args.get("scope", "path"), emit=ctx.emit,
                      agent=_target(args, ctx), job=job or None, max_seconds=1500)
@@ -76,10 +80,10 @@ TOOLS = [
       "parameters": {"type": "object", "properties": {
           "url": {"type": "string", "description": "pagina inicial de la documentacion"},
           "max_pages": {"type": "integer", "default": 40,
-                        "description": "maximo de paginas en total (hasta 100000; por encima del lote se divide sola)"},
+                        "description": "maximo de paginas en total de una seccion (hasta 100000; por encima del lote se divide sola). Con scope=domain no hay limite"},
           "max_depth": {"type": "integer", "default": 3, "description": "saltos de enlace desde la pagina inicial"},
           "scope": {"type": "string", "enum": ["path", "domain"], "default": "path",
-                    "description": "path: solo la seccion de la URL; domain: todo el sitio"},
+                    "description": "path: solo la seccion de la URL; domain: todo el dominio sin limite (subdominios, documentos enlazados) y su grafo de conocimiento"},
           "job": {"type": "string", "description": "id de un rastreo por lotes pausado para continuarlo"},
           "continue": {"type": "boolean", "default": False,
                        "description": "continuar el ultimo rastreo sin terminar de esta URL"},

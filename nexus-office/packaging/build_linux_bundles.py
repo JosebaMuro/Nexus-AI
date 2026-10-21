@@ -103,7 +103,8 @@ def installed_tree(dest: Path, arch: str, pip_platforms: list[str], work: Path) 
     tree = work / "nexus"
     shutil.rmtree(tree, ignore_errors=True)
     shutil.copytree(dest, tree, ignore=shutil.ignore_patterns("runtime", "wheelhouse", "install.ps1", "install.bat",
-                                                              "start.bat", "Dockerfile", ".dockerignore"))
+                                                              "start.bat", "Dockerfile", ".dockerignore"),
+                    symlinks=True)   # GIMP trae enlaces a ficheros del sistema que no existen en el equipo de construccion
     rt = next((dest / "runtime").glob("cpython-*.tar.gz"))
     with tarfile.open(rt) as t:
         t.extractall(work, filter="tar") if sys.version_info >= (3, 12) else t.extractall(work)  # noqa: S202
@@ -117,6 +118,14 @@ def installed_tree(dest: Path, arch: str, pip_platforms: list[str], work: Path) 
     for p in pip_platforms:
         cmd += ["--platform", p]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
+    lp = sorted((dest / "bundled" / "runtimes" / "llama-python").glob("*.whl"))
+    if lp:   # motor «llama.cpp integrado»: ya instalado, porque AppImage y Flatpak son de solo lectura
+        lcmd = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "--no-index", "--no-deps",
+                "--only-binary=:all:", "--python-version", "3.11", "--implementation", "cp", "--abi", "cp311",
+                "--abi", "abi3", "--abi", "none", "--target", str(site), "--upgrade", *map(str, lp)]
+        for p in pip_platforms:
+            lcmd += ["--platform", p]
+        subprocess.run(lcmd, check=True, stdout=subprocess.DEVNULL)
     if arch == platform.machine():                 # .pyc con el Python del paquete (arranque mas rapido)
         subprocess.run([str(tree / "venv" / "bin" / "python3"), "-m", "compileall", "-q", "-j0", str(tree / "nexus"), str(site)],
                        check=False, stdout=subprocess.DEVNULL)

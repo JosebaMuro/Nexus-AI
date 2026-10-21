@@ -56,13 +56,20 @@ def _runtimes_in_use() -> set[Path]:
         return keep
     try:
         from . import hardware
-        from .runtimes import RuntimeManager, bundled_variants
-        profile = hardware.build_profile(hardware.load_cached() or hardware.detect(probe_runtimes=False))
+        from .runtimes import RUNTIMES, RuntimeManager, bundled_variants
+        from .hardware.accel_choice import plan as accel_plan
+        hw = hardware.load_cached() or hardware.detect(probe_runtimes=False)
+        profile = hardware.build_profile(hw)
         rm = RuntimeManager()
-        for rt in [p.name for p in BUNDLED.iterdir() if p.is_dir()]:
-            found = rm.exe(rt, profile)
-            if found and BUNDLED in found[0].parents:
-                keep.add(next(p for p in found[0].parents if p.parent == BUNDLED / rt))
+        for rt in [p.name for p in BUNDLED.iterdir() if p.is_dir() and p.name in RUNTIMES]:   # no GIMP ni llama-python
+            # la del perfil y las que el selector de inicio puede pedir en este equipo (GPU y NPU)
+            prefs = [""]
+            if rt == "llama" and hw is not None:
+                prefs += [accel_plan(hw, a)["variant"] for a in ("gpu", "npu")]
+            for pref in dict.fromkeys(prefs):
+                found = rm.exe(rt, profile, pref)
+                if found and BUNDLED in found[0].parents:
+                    keep.add(next(p for p in found[0].parents if p.parent == BUNDLED / rt))
             cpu = [v for v in bundled_variants(rt) if v.startswith("cpu")]
             if cpu:
                 keep.add(BUNDLED / rt / cpu[0])
@@ -77,7 +84,9 @@ def plan() -> dict:
     used_wheels = [w for w in wheels if _wheel_id(w) in installed]
     unused = [w for w in wheels if w not in used_wheels]
     keep_rt = _runtimes_in_use()
-    variants = [v for rt in BUNDLED.iterdir() if rt.is_dir() for v in rt.iterdir() if v.is_dir()] if BUNDLED.is_dir() else []
+    from .runtimes import RUNTIMES
+    variants = [v for rt in BUNDLED.iterdir() if rt.is_dir() and rt.name in RUNTIMES for v in rt.iterdir() if v.is_dir()] \
+        if BUNDLED.is_dir() else []
     unused += [v for v in variants if v not in keep_rt]
     used = used_wheels + (sorted(RUNTIME.glob("*")) if RUNTIME.is_dir() else [])
     temp = [p for p in (ROOT / ".cache" / "extract", ROOT / ".cache" / "python-standalone.tar.gz") if p.exists()]

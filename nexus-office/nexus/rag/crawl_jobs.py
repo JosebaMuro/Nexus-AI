@@ -21,7 +21,8 @@ from pathlib import Path
 from .. import log, paths
 
 L = log.get("crawl_jobs")
-MAX_DOMAIN_PAGES = 100_000          # tope de un trabajo completo (suma de todos sus lotes)
+MAX_DOMAIN_PAGES = 100_000          # tope de un trabajo de seccion (suma de todos sus lotes)
+UNLIMITED = 10 ** 12                # dominio completo: sin tope, hasta agotar todos los enlaces del dominio
 RUNNING, PAUSED, DONE, INTERRUPTED, FAILED = "en curso", "pausado", "completado", "interrumpido", "error"
 _running: dict[str, threading.Event] = {}
 _threads: dict[str, threading.Thread] = {}
@@ -82,9 +83,11 @@ def get(job_id: str) -> dict | None:
 
 def create(start_url: str, max_pages: int, max_depth: int, scope: str, agent: str, learn: bool,
            batch_pages: int, batch_chars: int) -> dict:
+    complete = scope == "domain"
     job = {"id": time.strftime("%Y%m%d%H%M%S-") + uuid.uuid4().hex[:6], "url": start_url, "start": "", "prefix": "",
-           "scope": scope, "agent": agent or "", "learn": learn, "max_pages": max(1, min(int(max_pages), MAX_DOMAIN_PAGES)),
-           "max_depth": max(0, int(max_depth)), "batch_pages": batch_pages, "batch_chars": batch_chars,
+           "scope": scope, "agent": agent or "", "learn": learn,
+           "max_pages": UNLIMITED if complete else max(1, min(int(max_pages), MAX_DOMAIN_PAGES)),
+           "max_depth": 10 ** 6 if complete else max(0, int(max_depth)), "complete": complete, "batch_pages": batch_pages, "batch_chars": batch_chars,
            "status": RUNNING, "reason": "", "pages_done": 0, "fetched": 0, "skipped": 0, "pending": 0, "batches": [],
            "title": "", "site": "", "state": None, "created": time.time(), "seconds": 0.0, "error": ""}
     save(job)
@@ -131,6 +134,9 @@ def delete(job_id: str, docs: bool = False, rag=None) -> bool:
         for b in job["batches"]:
             rag.delete(b["doc_id"])
     _path(job_id).unlink(missing_ok=True)
+    for extra in (kg_path(job_id), knowledge_path(job_id)):
+        for f in (extra, Path(str(extra) + "-wal"), Path(str(extra) + "-shm")):
+            f.unlink(missing_ok=True)
     return True
 
 
@@ -197,6 +203,50 @@ def run_background(services, job_id: str, emit=None, **kw) -> None:
     th = threading.Thread(target=body, name=f"nexus-crawl-{job_id}", daemon=True)
     _threads[job_id] = th
     th.start()
+
+
+def kg_path(job_id: str) -> Path:
+    return _path(job_id).with_suffix(".kg.sqlite")
+
+
+def knowledge_path(job_id: str) -> Path:
+    return _path(job_id).with_suffix(".conocimiento.zip")
+
+
+def build_knowledge(services, job: dict, emit=None) -> dict:
+    """Razona el grafo multicapa del dominio rastreado y deja el paquete importable junto al trabajo."""
+    from .domain_kg import DomainGraph
+    step = (lambda s: emit({"type": "progress", "text": s})) if emit else (lambda s: None)
+    g = DomainGraph(kg_path(job["id"]))
+    llm = None
+    try:
+        if services.llm.has_real_llm():
+            llm = lambda prompt: services.llm.complete(prompt, max_tokens=700, temperature=0.3)  # noqa: E731
+    except Exception:  # noqa: BLE001
+        llm = None
+    built = g.build(job.get("title") or "", job.get("site") or "", llm=llm, embedder=getattr(services, "embedder", None),
+                    rag=getattr(services, "rag", None), exclude_docs=[b["doc_id"] for b in job.get("batches", [])],
+                    progress=step, max_llm_topics=int(services.config.get("rag.domain_kg_llm_topics", 40)))
+    g.package(knowledge_path(job["id"]), built)
+    job["knowledge"] = {**built["manifest"], "file": knowledge_path(job["id"]).name, "built": time.time()}
+    save(job)
+    step(f"Grafo del dominio listo: {built['manifest']['nodes']} nodos, {built['manifest']['facts']} afirmaciones")
+    return job["knowledge"]
+
+
+def resume_interrupted(services, emit=None) -> list[str]:
+    """Al arrancar: los rastreos de dominio completo que se cortaron (cierre, apagado) siguen solos donde iban."""
+    out = []
+    try:
+        if not services.config.get("rag.auto_resume_crawls", True):
+            return out
+        for j in list_jobs():
+            if j.get("complete") and j["status"] == INTERRUPTED and not j["running"]:
+                run_background(services, j["id"], emit=emit)
+                out.append(j["id"])
+    except Exception as e:  # noqa: BLE001
+        L.warning("No se pudieron reanudar los rastreos: %s", e)
+    return out
 
 
 def wait(job_id: str, timeout: float | None = None) -> None:

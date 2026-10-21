@@ -56,6 +56,7 @@ def test_gguf_reader_and_classify(tmp_path):
 def test_recommendations_fit_hardware():
     small = recommend(build_profile(hw(8, cores=2)))
     best = {r["kind"]: r["id"] for r in small if r.get("best")}
-    assert best["llm"] == "qwen3-vl-2b-thinking" and best["image"] == "sdxs-512"
+    assert best["llm"] == "qwen3.5-2b" and best["image"] == "sdxs-512"
     big = recommend(build_profile(hw(32, gpus=[__import__("nexus.hardware.detect", fromlist=["GPU"]).GPU("nvidia", "RTX", 12, False)])))
-    assert next(r for r in big if r["id"] == "qwen3-vl-8b-thinking")["fit"] in ("ideal", "ok")
+    assert next(r for r in big if r["id"] == "qwen3.5-9b")["fit"] in ("ideal", "ok")
+    assert next(r for r in big if r.get("best") and r["kind"] == "llm")["id"].startswith("qwen3.5-")

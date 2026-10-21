@@ -161,8 +161,13 @@ class AgentManager:
             return "nexus"
         lounge = getattr(self.s, "lounge", None)
         best, score = "nexus", 0.5
-        for a in self.list():
-            sc = self.keyword_score(a, text) + (0.8 * lounge.skill_score(a.id, text) if lounge and a.id != "nexus" else 0)
+        agents = self.list()
+        # IA de apoyo: parecido semantico multilingue con la especialidad de cada agente (0..3)
+        assist = getattr(self.s, "assist", None)
+        semantic = assist.route_bonus(text, [a for a in agents if a.id != "nexus"]) if assist is not None else {}
+        for a in agents:
+            sc = self.keyword_score(a, text) + (0.8 * lounge.skill_score(a.id, text) if lounge and a.id != "nexus" else 0) \
+                + semantic.get(a.id, 0.0)
             if sc > score:
                 best, score = a.id, sc
         return best
@@ -219,7 +224,8 @@ class AgentManager:
 
     # ------------------------------------------------------------ ejecucion
     def run(self, agent_id: str, text: str, session_id: str, images: list[str] | None = None, emit=None,
-            remote: bool = False, depth: int = 0, save: bool = True) -> dict:
+            remote: bool = False, depth: int = 0, save: bool = True, live: bool = False) -> dict:
+        """live: modo en vivo por voz (respuesta corta y hablada, sin razonamiento largo para contestar enseguida)."""
         s = self.s
         emit = emit or (lambda e: None)
         routed_by = "usuario"
@@ -241,9 +247,19 @@ class AgentManager:
                 info["documents"] = rag.search(text, k=3, min_score=0.3, agent=spec.id)   # general + los suyos
             except Exception as e:  # noqa: BLE001
                 L.warning("Busqueda RAG fallida: %s", e)
-        tools = s.tools.for_agent(spec.tools)
+        all_tools = tools = s.tools.for_agent(spec.tools)
+        assist = getattr(s, "assist", None)
+        if assist is not None and tools and not images:
+            # IA de apoyo: solo las herramientas que vienen al caso (prompt mas corto y eleccion mas certera)
+            tools = assist.select_tools(text, tools)
+            if len(tools) < len(all_tools):
+                emit({"type": "assist", "tools": [t.name for t in tools], "of": len(all_tools)})
         native = bool(tools) and s.llm.native_tools(spec.model)
         msgs = [{"role": "system", "content": self.build_system(spec, info, tools, text_tools=not native)}]
+        if live:
+            msgs[0]["content"] += ("\n\nConversacion EN VIVO por voz: lo que digas se leera en voz alta. Responde como al "
+                                   "hablar: 1-3 frases cortas y naturales, sin Markdown, listas, tablas, enlaces ni emojis. "
+                                   "Si hace falta mas detalle, ofrece ampliarlo.")
         if save:
             for m in s.memory.history(session_id, 12):
                 if m["role"] in ("user", "assistant") and m["content"]:
@@ -258,7 +274,9 @@ class AgentManager:
         max_steps = int(s.config.get("llm.max_tool_steps", 5))
         answer_parts, media, tool_log = [], [], []
         # via rapida: intenciones inequivocas se ejecutan sin esperar al LLM (fiable y rapido en CPU)
-        intent = detect_intent(text, {t.name for t in tools}) if tools and not images else None
+        intent = detect_intent(text, {t.name for t in all_tools}) if all_tools and not images else None
+        if intent is None and assist is not None and all_tools and not images and not s.llm.has_real_llm():
+            intent = assist.guess_tool(text, all_tools)   # modo basico: la herramienta que encaja, por significado
         for step in range(max_steps + 1):
             emit({"type": "state", "state": "thinking"})
             buf = ""
@@ -267,6 +285,12 @@ class AgentManager:
             else:
                 opts = {"temperature": spec.temperature, "max_tokens": spec.max_tokens, "tools": [t.name for t in tools],
                         "on_reasoning": lambda t, a=spec.id: emit({"type": "reasoning", "text": t, "agent": a})}
+                if live:   # contestar ya: sin razonamiento (o con muy poco) y respuesta breve
+                    opts["max_tokens"] = min(int(spec.max_tokens or 400), int(s.config.get("live.max_tokens", 400)))
+                    if s.config.get("live.reasoning", False):
+                        opts["reasoning_budget"] = int(s.config.get("live.reasoning_budget", 256))
+                    else:
+                        opts["reasoning"] = "off"
                 if native:
                     opts["tool_specs"] = [t.public() for t in tools]
                 try:
@@ -296,6 +320,8 @@ class AgentManager:
                 media.append((name, result["url"]))
             tool_log.append({"tool": name, "ok": not (isinstance(result, dict) and result.get("error"))})
             emit({"type": "tool_result", "name": name, "result": json.dumps(result, ensure_ascii=False, default=str)[:1500]})
+            if assist is not None:   # resultados largos: los fragmentos que responden a la peticion, no un corte a ciegas
+                result = assist.condense_result(text, result, int(s.config.get("assist.result_chars", 5000)))
             if step == 0 and intent and not (isinstance(result, dict) and result.get("error")):
                 # via rapida: respuesta inmediata con plantilla (evita reprocesar todo el prompt en CPU)
                 final = BuiltinBackend._after_tool(name, json.dumps(result, ensure_ascii=False, default=str))

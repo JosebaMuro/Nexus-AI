@@ -216,6 +216,7 @@ El modo **USUARIO** (arriba a la derecha) muestra solo lo necesario. Nada de lo 
 - Escribe y pulsa **Enter** (Shift+Enter = nueva línea). El selector de la izquierda elige agente; *Automático* deja que Nexus-Office decida.
 - **📎** adjunta imágenes (también puedes pegarlas): Nexus-Office las describe, lee texto (OCR) y responde preguntas sobre ellas.
 - **🎤** habla; **🔊** activa la lectura en voz alta de las respuestas.
+- **Modo en vivo** (botón de ondas junto al micrófono): conversación por voz manos libres. Hablas, Nexus-Office te escucha, responde en voz alta y vuelve a escuchar. Si hablas mientras responde, se calla y te atiende (*interrumpir hablando*). **PAUSAR** y **TERMINAR** abajo. Para ir rápido responde sin razonar y en frases cortas (como máximo `live.max_tokens`, 400 por defecto; `live.reasoning: true` le deja razonar un poco). Escucha con Whisper local si está instalado, con la voz del sistema en la app Android o con el reconocimiento del navegador (Chrome, Edge, Safari). El micrófono del navegador solo funciona en este mismo equipo o por https.
 - Bajo cada respuesta: **👍 / 👎** enseñan a Nexus-Office qué te gusta (aprende ejemplos, lecciones y la longitud preferida), **🔊** lee, **⧉** copia.
 - Las líneas verdes “⟡ aprendido” muestran lo que acaba de memorizar de ti.
 - Si un agente necesita una herramienta con riesgo, aparece una tarjeta **APROBACIÓN REQUERIDA**: tú decides.
@@ -226,7 +227,7 @@ Prueba: *«Me llamo Ane y me gusta el surf»*, *«¿Qué sabes de mí?»*, *«Ge
 A la derecha del chat está el **núcleo cognitivo**: cada punto es algo que Nexus-Office ha aprendido (personas, lugares, gustos, conceptos) y las líneas son relaciones. Cambia de color según su estado: cian (en línea), violeta (pensando), ámbar (herramienta), magenta (hablando, late con la voz), verde (escuchando).
 
 ### Salón
-Representación gráfica de los agentes reunidos. Mira cómo conversan, cómo se delegan tareas y qué habilidades han demostrado. Pulsa **Convocar reunión** o escribe algo en el salón.
+Representación gráfica de los agentes reunidos. Mira cómo conversan, cómo se delegan tareas y qué habilidades han demostrado. Pulsa **Convocar reunión** o escribe algo en el salón. Mientras dura una reunión el botón muestra *REUNIÓN EN CURSO…* y no se puede convocar otra encima. La **Transcripción** recoge todo lo dicho y funciona igual en ordenador, móvil y tableta.
 
 ### Núcleo
 Explora tu grafo de conocimiento en 3D (arrastra para girar, rueda para acercar), busca recuerdos, borra los que no quieras y enséñale datos nuevos.
@@ -248,6 +249,9 @@ En modo administrador aparece el **Gestor de conocimiento**: lo que Nexus-Office
 Puedes **importar como conocimiento un grafo de cualquier formato** (Gephi, Cytoscape, Neo4j, RDF/OWL, Excel, Mermaid, mapas mentales, la base de otro Nexus-Office…): suéltalo en *Gestor de conocimiento > Importar / exportar*, pídeselo a un agente en el chat o usa `python -m nexus grafo importar fichero`. El formato se reconoce solo y lo importado se suma a lo que Nexus-Office ya sabe. Ver [GRAFOS.md](GRAFOS.md).
 
 Nexus-Office recuerda las pautas que le pidas («no uses emojis», «respóndeme siempre con ejemplos», «llámame Joseba») y todos los agentes las respetan.
+
+### Motor y acelerador
+Al abrir Nexus-Office puedes elegir el motor de IA y si usa la CPU, la GPU o la NPU, probarlo y ver dónde ha quedado el modelo de verdad. Ver [ACELERADOR.md](ACELERADOR.md).
 
 ### Usarlo desde el móvil, tablet o consola
 Nexus-Office tiene que escuchar en la red local: instala el [arranque automático](#arranque-automático) con *accesible desde la red local*, activa *Red COOP → Conectar dispositivos → Permitir acceso desde la red* o arráncalo con `--host 0.0.0.0`. Después abre `http://IP-DEL-PC:8775` desde el navegador del otro dispositivo e introduce la **clave de red** que aparece en *Conectar dispositivos*. Puedes **instalarlo como app** (PWA) desde el menú del navegador, o usar la **app Nexus-Office VPN**.

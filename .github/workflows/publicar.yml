@@ -1,0 +1,68 @@
+name: Publicar la Release de Nexus-Office
+
+# Se lanza al empujar la rama temporal «entrega-<version>»: trae entrega/entrega.json ({"run": <id de la ejecucion de
+# entrega.yml>, "tag": "vX.Y.Z"}), las APK ya firmadas en trozos (entrega/apk/) y los manuales en PDF (entrega/*.pdf).
+# Junta los instaladores de esa ejecucion, el codigo fuente limpio, LEEME y SHA256SUMS, publica la Release y borra la
+# rama temporal.
+on:
+  push:
+    branches:
+      - "entrega-*"
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  publicar:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Liberar espacio
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost && df -h /
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Instaladores de la ejecucion de entrega.yml
+        run: |
+          set -e
+          python -m pip install -q -r nexus-office/requirements.txt
+          RUN=$(python -c "import json; print(json.load(open('entrega/entrega.json'))['run'])")
+          gh run download "$RUN" -R "$GITHUB_REPOSITORY" -p 'instalador-*' -D art
+          mkdir -p nexus-office/dist
+          for d in art/*/; do cp -r "$d"* nexus-office/dist/; done
+          rm -rf art
+          ls -laR nexus-office/dist
+      - name: APK firmadas
+        run: |
+          set -e
+          mkdir -p apk
+          for f in $(ls entrega/apk/*.apk.[0-9][0-9][0-9] | sed 's/\.[0-9][0-9][0-9]$//' | sort -u); do
+            cat "$f".[0-9][0-9][0-9] > "apk/$(basename "$f")"
+          done
+          (cd apk && sha256sum -c ../entrega/apk/SHA256SUMS.txt)
+      - name: Codigo fuente, LEEME y sumas
+        run: |
+          set -e
+          cd nexus-office
+          python packaging/build.py --targets --keep --apk ../apk/*.apk --docs ../entrega/*.pdf
+          mkdir -p ../release
+          find dist -type f ! -name SHA256SUMS.txt -exec mv {} ../release/ \;
+          cd ../release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt && du -sh .
+      - name: Publicar
+        run: |
+          set -e
+          TAG=$(python -c "import json; print(json.load(open('entrega/entrega.json'))['tag'])")
+          V=${TAG#v}
+          awk -v v="## Nexus-Office $V" '$0 ~ "^## " {p = (index($0, v) == 1)} p' nexus-office/CHANGELOG.md > notas.md
+          printf '\nInstaladores 100 %% offline para Windows (x64 y ARM64), Linux (x86_64 y ARM64: .run, .deb, AppImage y Flatpak), macOS (Apple Silicon e Intel) y Android (autónoma y VPN). Instrucciones en LEEME.txt; integridad en SHA256SUMS.txt.\n' >> notas.md
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target main -t "Nexus-Office $V" -F notas.md
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber release/*
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets -q '.assets[] | "\(.name) \(.size)"'
+      - name: Borrar la rama temporal
+        if: success()
+        run: git push origin --delete "${GITHUB_REF_NAME}"

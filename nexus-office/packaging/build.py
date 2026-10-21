@@ -171,6 +171,15 @@ def offline(target: str, dest: Path) -> None:
             log(f"offline: {exe} {', '.join(sorted(p.name for p in src.iterdir()))}")
         else:
             log(f"offline: sin {exe} precompilado para {target} (se descargara desde Sistema > Runtimes)")
+    # motor «llama.cpp integrado» del selector de inicio: wheel de llama-cpp-python de la plataforma del Python
+    # (Windows ARM usa el Python x64) mas sus dependencias puras; se instala sin red al elegirlo
+    lp = DESKTOP_RT / py_target / "llama-python"
+    if lp.is_dir() and any(lp.glob("llama_cpp_python-*.whl")):
+        shutil.copytree(lp, dest / "bundled" / "runtimes" / "llama-python")
+        _llama_python_deps(dest / "bundled" / "runtimes" / "llama-python", py_target)
+        log(f"offline: llama-cpp-python {', '.join(p.name for p in lp.glob('*.whl'))}")
+    else:
+        log(f"offline: sin llama-cpp-python para {py_target} (el selector solo ofrecera llama-server)")
     # GIMP portable (packaging/fetch_gimp.py): los agentes editan imagenes con GIMP sin instalar nada
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import fetch_gimp
@@ -376,6 +385,19 @@ def _profiles_nsh(path: Path) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _llama_python_deps(d: Path, py_target: str) -> None:
+    """llama-cpp-python se instala con --no-deps: Jinja2 (plantillas de chat) y MarkupSafe van junto a su wheel
+    (numpy y typing-extensions ya estan en el wheelhouse base)."""
+    have = {p.name.split("-")[0].lower() for p in d.glob("*.whl")}
+    need = [n for n in ("jinja2", "markupsafe") if n not in have]
+    if not need:
+        return
+    plats = [a for p in TARGETS[py_target]["pip"] for a in ("--platform", p)]
+    subprocess.run([sys.executable, "-m", "pip", "download", "-q", "--disable-pip-version-check", "--no-deps",
+                    "--only-binary", ":all:", "--python-version", "3.11", "--implementation", "cp", *plats,
+                    "-d", str(d), *need], check=True)
+
+
 def windows_exe(target: str, dest: Path) -> Path | None:
     """Instalador grafico NSIS con el paquete portable completo dentro (makensis: Windows, Linux o macOS)."""
     makensis = shutil.which("makensis")
@@ -391,7 +413,10 @@ def windows_exe(target: str, dest: Path) -> Path | None:
     defs = {"VERSION": VERSION, "ARCH": arch, "PAYLOAD": str(dest), "OUTFILE": str(out),
             "ICON": str(ROOT / "packaging" / "windows" / "nexus.ico"), "LICENSE": str(ROOT / "LICENSE"),
             "PROFILES": str(work / "profiles.nsh")}
-    log(f"makensis {out.name} (compresion LZMA, tarda)...")
+    size = sum(f.stat().st_size for f in dest.rglob("*") if f.is_file())
+    if size > 1_800_000_000:     # /SOLID no admite paquetes de mas de ~2 GB sin comprimir
+        defs["NOSOLID"] = "1"
+    log(f"makensis {out.name} ({size / 1e9:.2f} GB sin comprimir, LZMA{'' if 'NOSOLID' in defs else ' solida'}, tarda)...")
     subprocess.run([makensis, "-V2", "-INPUTCHARSET", "UTF8", *[f"-D{k}={v}" for k, v in defs.items()],
                     str(ROOT / "packaging" / "windows" / "nexus.nsi")], check=True)
     log(f"-> {out.name} ({out.stat().st_size / 1e6:.1f} MB)")

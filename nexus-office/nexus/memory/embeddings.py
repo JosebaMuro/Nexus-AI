@@ -43,6 +43,9 @@ TASKS = {
     "organize": "Identify the main topic of this document to organize a documentation library",
     "dedupe": "Retrieve names of concepts that refer to the same thing as this concept",
     "graph": "Given a query, retrieve knowledge graph entities and facts related to it",
+    "tools": "Given a user request in any language, retrieve the software tool (function) that should be used to fulfil it",
+    "route": "Given a user request in any language, retrieve the specialist assistant whose field of expertise fits it best",
+    "claim": "Given a statement, retrieve passages that state the same fact or contradict it",
 }
 
 
