@@ -24,6 +24,8 @@ struct Doc {
 };
 std::string archive_suffix(const std::string& name);   // ".tar.gz", ".zip"... o ""
 bool supported(const std::string& name);
+json formats_info();                                    // GET /api/rag/formats
+std::pair<std::string, std::string> find_extractor(const std::string& kind);   // (herramienta, ruta) para rar o 7z
 Doc read_document(const fs::path& path);                // lanza si no se puede leer
 Doc read_pdf(const std::string& bytes, const std::string& fallback_title);
 Doc read_text_file(const fs::path& path);

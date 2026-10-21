@@ -149,7 +149,7 @@ void OpenAICompatBackend::stream_chat(const json& messages, const std::string& m
                {"temperature", temp.is_null() ? json(0.7) : temp},
                {"max_tokens", mt.is_null() ? json(1024) : mt}};
   if (jstr(o, "reasoning") == "off") body["chat_template_kwargs"] = {{"enable_thinking", false}};
-  for (auto& [k, v] : o.value("extra_body", json::object()).items()) body[k] = v;
+  for (json items_tmp_ = o.value("extra_body", json::object()); auto& [k, v] : items_tmp_.items()) body[k] = v;
   bool with_tools = truthy(o.value("tool_specs", json()));
   if (with_tools) {
     json tools = json::array();

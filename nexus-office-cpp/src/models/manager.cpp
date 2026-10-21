@@ -106,7 +106,8 @@ json annotate(json files, const json& profile, const std::string& source, const 
     else if (source == "ollama") set("llm", {"Ollama", "llama-server (GGUF del registro)"});
     else set("otro", {});
     f["split"] = SPLIT_RE().test(low);
-    auto pm = params.search(repo + " " + fname);
+    std::string repo_file = repo + " " + fname;
+    auto pm = params.search(repo_file);
     if (pm && f["kind"] == "llm" && std::atof(pm->str(1).c_str()) > jnum(profile["llm"]["max_model_b"])) f["slow"] = true;
     f["fits"] = size_gb ? json(size_gb < mem) : json(nullptr);
     f["fit"] = !size_gb ? "?" : size_gb < mem * 0.6 ? "ideal" : size_gb < mem ? "ok" : "pesado";
@@ -563,7 +564,7 @@ json ModelManager::import_local(const std::string& path_in, bool copy, const std
 
 void ModelManager::autoregister() {
   std::set<std::string> known;
-  for (auto& [k, m] : catalog.items().items()) {
+  for (json items_tmp_ = catalog.items(); auto& [k, m] : items_tmp_.items()) {
     known.insert(jstr(m, "path"));
     if (m.value("mmproj", json()).is_string()) known.insert(m["mmproj"].get<std::string>());
   }

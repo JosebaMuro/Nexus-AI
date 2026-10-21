@@ -50,14 +50,22 @@ static std::optional<long long> to_int(const std::string& s) {
   }
 }
 
-static json unprocessable(const std::string& where, const std::string& name, const std::string& msg) {
-  return json::array({{{"type", "value_error"}, {"loc", {where, name}}, {"msg", msg}}});
+// detalle 422 de FastAPI: [{"type", "loc", "msg", "input"}]
+static json unprocessable(const std::string& where, const std::string& name, const std::string& msg,
+                          const std::string& type = "value_error", const json& input = nullptr) {
+  return json::array({{{"type", type}, {"loc", {where, name}}, {"msg", msg}, {"input", input}}});
+}
+
+HttpErr missing_field(const std::string& where, const std::string& name) {
+  return HttpErr(422, unprocessable(where, name, "Field required", "missing"));
 }
 
 long long Ctx::qi(const std::string& k, long long def) const {
   if (!req.has_param(k)) return def;
   auto v = to_int(req.get_param_value(k));
-  if (!v) throw HttpErr(422, unprocessable("query", k, "Input should be a valid integer"));
+  if (!v)
+    throw HttpErr(422, unprocessable("query", k, "Input should be a valid integer, unable to parse string as an integer",
+                                     "int_parsing", req.get_param_value(k)));
   return *v;
 }
 
@@ -71,7 +79,9 @@ static std::optional<bool> to_bool(std::string s) {
 bool Ctx::qb(const std::string& k, bool def) const {
   if (!req.has_param(k)) return def;
   auto v = to_bool(req.get_param_value(k));
-  if (!v) throw HttpErr(422, unprocessable("query", k, "Input should be a valid boolean"));
+  if (!v)
+    throw HttpErr(422, unprocessable("query", k, "Input should be a valid boolean, unable to interpret input",
+                                     "bool_parsing", req.get_param_value(k)));
   return *v;
 }
 
@@ -82,14 +92,16 @@ std::string Ctx::p(const std::string& k) const {
 
 long long Ctx::pi(const std::string& k) const {
   auto v = to_int(p(k));
-  if (!v) throw HttpErr(422, unprocessable("path", k, "Input should be a valid integer"));
+  if (!v)
+    throw HttpErr(422, unprocessable("path", k, "Input should be a valid integer, unable to parse string as an integer",
+                                     "int_parsing", p(k)));
   return *v;
 }
 
 bool Ctx::has_b(const std::string& k) const { return body.is_object() && body.contains(k); }
 
 json Ctx::b(const std::string& k) const {
-  if (!has_b(k)) throw HttpErr(422, unprocessable("body", k, "Field required"));
+  if (!has_b(k)) throw missing_field("body", k);
   return body[k];
 }
 
@@ -397,7 +409,7 @@ struct Link {
 void App::websocket(const httplib::Request& req, httplib::ws::WebSocket& ws) {
   std::string host = req.remote_addr.empty() ? "127.0.0.1" : req.remote_addr;
   if (!services_ || !lan_ok(req, host)) {
-    ws.close(httplib::ws::CloseStatus::Normal, "4401");
+    ws.close(httplib::ws::CloseStatus::PolicyViolation, "Clave de red requerida");
     return;
   }
   auto link = std::make_shared<Link>();

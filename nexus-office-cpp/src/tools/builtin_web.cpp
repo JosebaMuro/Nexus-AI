@@ -119,7 +119,8 @@ json web_search(const json& args, ToolContext& ctx) {
   for (auto& m : RES.finditer(r.body)) {
     std::string href = m.str(1);
     if (contains(href, "uddg=")) {
-      auto u = UDDG.search(html_unescape(href));
+      std::string unesc = html_unescape(href);
+      auto u = UDDG.search(unesc);
       if (u) href = url_decode(u->str(1));
     }
     results.push_back({{"title", html_to_text(m.str(2))}, {"url", href}, {"snippet", html_to_text(m.str(3))}});

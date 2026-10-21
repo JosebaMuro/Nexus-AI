@@ -95,7 +95,8 @@ bool looks_spanish(const std::string& text) {
 std::string translate_rules(const std::string& text) {
   static const Rx WORDS(R"(\w+|[^\w\s])");
   std::vector<std::string> out;
-  for (auto& m : WORDS.finditer(lower(text))) {
+  std::string low_text = lower(text);
+  for (auto& m : WORDS.finditer(low_text)) {
     std::string w = m.str();
     auto it = ES_EN.find(w);
     if (it == ES_EN.end()) it = ES_EN.find(normalize(w));

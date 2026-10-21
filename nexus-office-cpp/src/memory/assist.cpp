@@ -402,7 +402,7 @@ json EmbedWorker::status() {
     std::lock_guard<std::mutex> lk(mu_);
     s = state_;
   }
-  for (auto& [k, v] : pending().items()) s[k] = v;
+  for (json items_tmp_ = pending(); auto& [k, v] : items_tmp_.items()) s[k] = v;
   s["embedder"] = emb_()->info();
   return s;
 }

@@ -169,7 +169,7 @@ double Lounge::skill_score(const std::string& agent, const std::string& text) {
 
 std::string Lounge::directory(const std::string& exclude) {
   std::vector<std::string> lines;
-  for (auto& [agent, rows] : skills().items()) {
+  for (json items_tmp_ = skills(); auto& [agent, rows] : items_tmp_.items()) {
     if (agent == exclude || agent == "usuario" || !s_.agents->get(agent)) continue;
     std::vector<std::string> good;
     for (auto& r : rows)

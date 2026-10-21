@@ -353,9 +353,8 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
   json state = st.is_object() ? st : load_state();
   const json& base = profile["llm"];
   json llm = base;
-  for (auto it = state.value("overrides", json::object()).begin(); it != state.value("overrides", json::object()).end();
-       ++it)
-    llm[it.key()] = it.value();
+  json overrides = state.value("overrides", json::object());
+  for (auto it = overrides.begin(); it != overrides.end(); ++it) llm[it.key()] = it.value();
   auto I = [&](const char* k) { return (int)jnum(llm[k]); };
   auto B = [&](const char* k) { return (int)jnum(base[k]); };
   llm["n_ctx"] = std::max(std::min(MIN_CTX, B("n_ctx")), I("n_ctx"));

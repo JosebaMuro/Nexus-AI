@@ -35,6 +35,14 @@ std::string archive_suffix(const std::string& name) {
   return "";
 }
 
+json formats_info() {
+  std::set<std::string> docs = {".pdf"};
+  for (auto* set : {&OFFICE, &MARKUP, &TEXT, &CODE}) docs.insert(set->begin(), set->end());
+  return {{"documents", json(std::vector<std::string>(docs.begin(), docs.end()))},
+          {"archives", {".zip", ".rar", ".7z", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz"}},
+          {"extractors", {{"rar", find_extractor("rar").first}, {"7z", find_extractor("7z").first}}}};
+}
+
 bool supported(const std::string& name) {
   if (!archive_suffix(name).empty()) return true;
   std::string s = suffix_lower(P(name));

@@ -40,8 +40,13 @@ class Rx {
   std::optional<Match> search(std::string_view s, size_t pos = 0) const;
   std::optional<Match> match(std::string_view s, size_t pos = 0) const;   // anclada al inicio (re.match)
   std::optional<Match> fullmatch(std::string_view s) const;
-  bool test(std::string_view s) const { return search(s).has_value(); }
+  bool test(std::string_view s) const { return exec(s, 0, 0).has_value(); }
   std::vector<Match> finditer(std::string_view s) const;
+  // Match guarda una vista del texto: con un temporario quedaria colgando (usar test() o guardar el texto antes)
+  std::optional<Match> search(std::string&& s, size_t pos = 0) const = delete;
+  std::optional<Match> match(std::string&& s, size_t pos = 0) const = delete;
+  std::optional<Match> fullmatch(std::string&& s) const = delete;
+  std::vector<Match> finditer(std::string&& s) const = delete;
   // findall: el grupo 1 si existe, si no la coincidencia entera
   std::vector<std::string> findall(std::string_view s) const;
   // sub: \1, \g<1> y \g<nombre> en el reemplazo (como re.sub)

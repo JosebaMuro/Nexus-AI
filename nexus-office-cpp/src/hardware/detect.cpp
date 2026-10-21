@@ -149,7 +149,8 @@ static std::string cpu_name() {
     std::string lscpu = proc::which("lscpu");
     if (!lscpu.empty()) {
       static const Rx r(R"(^Model name:\s*(.+)$)", Rx::M);
-      if (auto m = r.search(run({lscpu}))) {
+      std::string out = run({lscpu});
+      if (auto m = r.search(out)) {
         std::string v = trim(m->str(1));
         if (v != "-") return v;
       }
@@ -328,7 +329,7 @@ static void detect_linux(HardwareInfo& info) {
   std::vector<std::pair<int, fs::path>> cards;
   static const Rx card(R"(card\d+)");
   for (auto& c : glob(root / "class" / "drm", "card*"))
-    if (card.fullmatch(S(c.filename()))) cards.push_back({std::atoi(S(c.filename()).c_str() + 4), c});
+    if (std::string fn = S(c.filename()); card.fullmatch(fn)) cards.push_back({std::atoi(S(c.filename()).c_str() + 4), c});
   std::sort(cards.begin(), cards.end());
   for (auto& [_, c] : cards) {
     fs::path dev = c / "device";

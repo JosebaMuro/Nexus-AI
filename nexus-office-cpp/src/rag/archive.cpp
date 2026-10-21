@@ -208,7 +208,7 @@ static bool reads_rar(const std::string& exe) {
   return ok;
 }
 
-static std::pair<std::string, std::string> find_extractor(const std::string& kind) {
+std::pair<std::string, std::string> find_extractor(const std::string& kind) {
   std::vector<std::string> order = kind == "rar" ? std::vector<std::string>{"unrar", "7z", "bsdtar", "unar"}
                                                  : std::vector<std::string>{"7z", "bsdtar", "unar"};
   for (auto& tool : order) {

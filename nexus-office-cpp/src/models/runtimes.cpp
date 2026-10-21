@@ -218,7 +218,7 @@ fs::path RuntimeManager::install(const std::string& runtime, const std::string& 
       rel = r;
       assets.clear();
       for (auto& a : r.value("assets", json::array()))
-        if (pat.search(jstr(a, "name"))) assets.push_back(a);
+        if (pat.test(jstr(a, "name"))) assets.push_back(a);
       if (!assets.empty()) break;
     }
     if (assets.empty())
@@ -229,7 +229,7 @@ fs::path RuntimeManager::install(const std::string& runtime, const std::string& 
     if (!cp.empty()) {
       Rx c(cp);
       for (auto& a : rel["assets"])
-        if (c.search(jstr(a, "name"))) {
+        if (c.test(jstr(a, "name"))) {
           wanted.push_back(a);
           break;
         }

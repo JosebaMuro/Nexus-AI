@@ -35,8 +35,11 @@ struct HttpErr : std::runtime_error {
   int status;
   json detail;
   HttpErr(int st, const std::string& msg) : std::runtime_error(msg), status(st), detail(msg) {}
+  HttpErr(int st, const char* msg) : HttpErr(st, std::string(msg)) {}
   HttpErr(int st, json d) : std::runtime_error(d.dump()), status(st), detail(std::move(d)) {}
 };
+
+HttpErr missing_field(const std::string& where, const std::string& name);   // 422 "Field required"
 
 struct Raw {
   int status = 200;

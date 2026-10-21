@@ -11,6 +11,7 @@
 #include "util/log.h"
 #include "util/proc.h"
 #include "util/rx.h"
+#include "util/crypto.h"
 #include "util/sysinfo.h"
 #include "util/text.h"
 

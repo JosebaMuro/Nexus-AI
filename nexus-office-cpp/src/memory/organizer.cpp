@@ -16,7 +16,7 @@ static auto L = log::get("organizer");
 static const std::string V_ =
     R"((?:respond|contest|habl|escrib|explic|us|utilic|trat|llam|dig|pong|hag|mand|formate|resum|corrij|pregunt|repit|)"
     R"(invent|tute|ignor|traduzc|cit|alarg|extiend|incluy|emple|met|dej|insist|enroll|interrump|repas|ofrezc|propong|)"
-    R"(sugier|recomiend|pid)\w*?(?:as|es)))";
+    R"(sugier|recomiend|pid)\w*?(?:as|es))";
 static const std::string KIN =
     R"(hermano|hermana|madre|padre|mam[aá]|pap[aá]|hijo|hija|mujer|marido|esposa|esposo|pareja|novio|novia|jefe|jefa|)"
     R"(amigo|amiga|compa[nñ]ero|compa[nñ]era|socio|socia|cliente|vecino|vecina|abuelo|abuela|t[ií]o|t[ií]a|primo|prima|)"

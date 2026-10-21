@@ -190,7 +190,7 @@ std::string Office::active() { return config_.str("office.profile", ""); }
 json Office::list() {
   json out = json::array();
   std::string act = active();
-  for (auto& [pid, _] : profiles().items()) out.push_back(describe(pid, act));
+  for (json items_tmp_ = profiles(); auto& [pid, _] : items_tmp_.items()) out.push_back(describe(pid, act));
   return out;
 }
 
@@ -399,7 +399,7 @@ json install_packs(Services& s, const std::vector<std::string>* agent_ids) {
   if (!env("NEXUS_NO_KNOWLEDGE_PACKS").empty() || !truthy(s.config.get("office.knowledge_packs", true))) return out;
   std::vector<std::string> v = agent_ids ? *agent_ids : s.agents->ids();
   std::set<std::string> ids(v.begin(), v.end());
-  for (auto& [pid, pack] : packs().items())
+  for (json items_tmp_ = packs(); auto& [pid, pack] : items_tmp_.items())
     for (auto& a : pack.value("agentes", json::array())) {
       std::string aid = a.get<std::string>();
       if (!ids.count(aid)) continue;

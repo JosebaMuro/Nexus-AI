@@ -337,7 +337,8 @@ struct Parser {
       }
       Attrs attrs;
       std::string rest = raw.substr(m->str().size());
-      for (auto& am : attr_rx.finditer(" " + rest)) {
+      std::string spaced = " " + rest;
+      for (auto& am : attr_rx.finditer(spaced)) {
         std::string k = lower(am.str(1));
         std::string v = am.has(3) ? am.str(3) : "";
         if (v.size() >= 2 && (v.front() == '\'' || v.front() == '"') && v.back() == v.front()) v = v.substr(1, v.size() - 2);
