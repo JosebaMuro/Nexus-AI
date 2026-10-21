@@ -1,0 +1,100 @@
+name: Nexus-Office C++ (compilar y probar)
+
+# Edicion C++ de Nexus-Office (nexus-office-cpp/, 2.0 beta C): compila y pasa las pruebas en cada sistema nativo,
+# compara la API y los flujos con la edicion Python y prueba la interfaz web en Chromium. Cada compilacion deja la
+# carpeta instalada (ejecutable + nexus/) como artefacto «cpp-<plataforma>», que usa cpp-entrega.yml.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - nexus-office-cpp/**
+      - .github/workflows/cpp.yml
+
+permissions:
+  contents: read
+
+jobs:
+  compilar:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux en 22.04 (glibc 2.35): funciona tambien en Debian 12 y Raspberry Pi OS de 64 bits
+          - { target: linux-x86_64, os: ubuntu-22.04 }
+          - { target: linux-aarch64, os: ubuntu-22.04-arm }
+          - { target: macos-arm64, os: macos-latest }
+          - { target: macos-x86_64, os: macos-15-intel }
+          - { target: windows-x64, os: windows-latest }
+          - { target: windows-arm64, os: windows-11-arm }
+    runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilador (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq g++-12 >/dev/null
+          echo "CC=gcc-12" >> "$GITHUB_ENV" && echo "CXX=g++-12" >> "$GITHUB_ENV"
+      - name: Configurar
+        shell: bash
+        run: cmake -S nexus-office-cpp -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Compilar
+        shell: bash
+        run: cmake --build build --config Release --parallel 4
+      - name: Pruebas
+        shell: bash
+        run: ctest --test-dir build -C Release --output-on-failure --timeout 900
+      - name: Instalar en una carpeta
+        shell: bash
+        run: |
+          cmake --install build --config Release --prefix out/Nexus-Office
+          ls -la out/Nexus-Office
+          EXE=out/Nexus-Office/nexus-office; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
+          "$EXE" --version
+          "$EXE" detect | head -40
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpp-${{ matrix.target }}
+          path: out/
+          retention-days: 7
+
+  comparar:
+    needs: compilar
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          name: cpp-linux-x86_64
+          path: cpp
+      - name: Edicion Python
+        run: python -m pip install -q -r nexus-office/requirements.txt httpx websockets
+      - name: Arrancar las dos ediciones
+        run: |
+          chmod +x cpp/Nexus-Office/nexus-office
+          NEXUS_DATA_DIR=$RUNNER_TEMP/cpp nohup cpp/Nexus-Office/nexus-office run --no-browser --port 8790 > cpp.log 2>&1 &
+          (cd nexus-office && NEXUS_DATA_DIR=$RUNNER_TEMP/py nohup python -m nexus run --no-browser --port 8791 > ../py.log 2>&1 &)
+          for i in $(seq 120); do curl -sf localhost:8790/api/ping && curl -sf localhost:8791/api/ping && break; sleep 2; done
+      - name: Comparar flujos y rutas con la edicion Python
+        run: |
+          python nexus-office-cpp/tests/compare_flows.py http://127.0.0.1:8790 http://127.0.0.1:8791 | tee flujos.txt || true
+          python nexus-office-cpp/tests/compare_api.py http://127.0.0.1:8790 http://127.0.0.1:8791 | tee rutas.txt || true
+          # diferencias aceptadas: la clave «edition» y la lista de herramientas (docs/CPP.md)
+          grep -q "40/41 flujos iguales\|41/41 flujos iguales" flujos.txt
+      - name: Interfaz web en Chromium
+        run: |
+          npm i --no-save playwright@1.48.2 >/dev/null && npx playwright install --with-deps chromium >/dev/null
+          mkdir -p capturas && node nexus-office-cpp/tests/ui_smoke.js http://127.0.0.1:8790 capturas
+      - name: Registros
+        if: always()
+        run: tail -50 cpp.log; tail -20 py.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-interfaz
+          path: capturas/
+          retention-days: 7

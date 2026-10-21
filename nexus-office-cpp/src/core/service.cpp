@@ -241,8 +241,15 @@ std::vector<std::string> command(const std::string& host, int port) {
     cmd = {env("APPIMAGE")};
   else if (bundle() == "flatpak")
     cmd = {"/usr/bin/flatpak", "run", env("FLATPAK_ID")};
-  else
-    cmd = {S(paths::exe_path())};
+  else {
+    fs::path exe = paths::exe_path();
+#ifdef _WIN32
+    // en Windows el servicio usa la variante sin ventana de consola (nexus-office-w.exe) si esta al lado
+    fs::path w = exe.parent_path() / "nexus-office-w.exe";
+    if (fs::exists(w)) exe = w;
+#endif
+    cmd = {S(exe)};
+  }
   cmd.insert(cmd.end(), tail.begin(), tail.end());
   return cmd;
 }
