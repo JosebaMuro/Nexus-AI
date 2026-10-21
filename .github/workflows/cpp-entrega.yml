@@ -53,6 +53,8 @@ jobs:
           case "${{ matrix.target }}" in
             # x86_64: sin AVX2 ni FMA para que funcione tambien en procesadores antiguos
             *x86_64|windows-x64) X="-DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_BMI2=OFF -DGGML_AVX=ON" ;;
+            # ggml no admite MSVC en ARM: Clang de Visual Studio (ClangCL)
+            windows-arm64) X="-T ClangCL -A ARM64" ;;
           esac
           L=(); [ "$RUNNER_OS" = Linux ] && L=("-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc")
           cmake -S w -B wb -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF \
