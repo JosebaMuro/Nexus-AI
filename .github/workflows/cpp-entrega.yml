@@ -24,6 +24,7 @@ env:
   GH_TOKEN: ${{ github.token }}
   PIPER: "2023.11.14-2"
   WHISPER: v1.7.6
+  PIPER_PHONEMIZE: "2023.11.14-4"
 
 jobs:
   cpp:
@@ -75,6 +76,14 @@ jobs:
           mkdir -p px
           case "${{ matrix.piper }}" in *.zip) unzip -q p.pkg -d px ;; *) tar -xzf p.pkg -C px ;; esac
           mv px/piper voz/piper
+          if [ "$RUNNER_OS" = macOS ]; then
+            # el piper de macOS no trae sus bibliotecas (espeak-ng, piper_phonemize, onnxruntime): salen de
+            # piper-phonemize, con el que se compilo
+            case "${{ matrix.target }}" in macos-arm64) PP=macos_aarch64 ;; *) PP=macos_x64 ;; esac
+            curl -fsSL -o pp.tgz "https://github.com/rhasspy/piper-phonemize/releases/download/$PIPER_PHONEMIZE/piper-phonemize_$PP.tar.gz"
+            mkdir -p ppx && tar -xzf pp.tgz -C ppx
+            find ppx -name '*.dylib' -not -path '*.dSYM*' -exec cp -a {} voz/piper/ \;
+          fi
           # los artefactos de Actions no guardan enlaces simbolicos (libespeak-ng.1.dylib -> ...): copias reales
           for f in $(find voz -type l); do t=$(cd "$(dirname "$f")" && cd "$(dirname "$(readlink "$f")")" && pwd)/$(basename "$(readlink "$f")"); rm "$f"; cp -RL "$t" "$f"; done
           find voz -name '*.dSYM' -prune -exec rm -rf {} +
