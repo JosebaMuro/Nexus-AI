@@ -1,12 +1,15 @@
 // Supervision de herramientas (tools/supervisor.py): politica por riesgo (auto, ask, admin, deny), aprobaciones
 // humanas, limites de tiempo, aislamiento de las de la comunidad y registro de auditoria.
+#include <algorithm>
 #include <chrono>
+#include <set>
 #include <future>
 #include <thread>
 
 #include "tools/tools.h"
 #include "util/crypto.h"
 #include "util/log.h"
+#include "util/rx.h"
 #include "util/text.h"
 
 namespace nx::tools {
@@ -243,7 +246,7 @@ json analyze(const std::string& code, const std::string& name) {
   }
   warnings.push_back("analisis aproximado: no hay Python en este equipo para el analisis por AST");
   json manifest = nullptr;
-  if (auto m = Rx(R"rx(["']name["']\s*:\s*["']([^"']+)["'])rx").search(code)) manifest = {{"name", m->str(1)}};
+  if (auto m = Rx(R"rx(["']name["']\s*:\s*["']([^"']+)["'])rx").search(code)) manifest = json{{"name", m->str(1)}};
   if (auto m = Rx(R"rx(["']risk["']\s*:\s*["'](\w+)["'])rx").search(code); m && manifest.is_object())
     manifest["risk"] = m->str(1);
   return {{"ok", errors.empty()}, {"errors", errors}, {"warnings", warnings}, {"imports", imports},

@@ -67,7 +67,7 @@ find_package(Threads REQUIRED)
 file(GLOB_RECURSE NEXUS_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 list(FILTER NEXUS_SRC EXCLUDE REGEX "/src/main\\.cpp$")
 add_library(nexus_core STATIC ${NEXUS_SRC})
-target_include_directories(nexus_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${TP}/httplib ${TP}/json ${TP}/ryml)
+target_include_directories(nexus_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${TP}/httplib ${TP}/json ${TP}/ryml ${TP}/stb)
 target_compile_definitions(nexus_core PUBLIC NEXUS_VERSION="${NEXUS_VERSION}" CPPHTTPLIB_THREAD_POOL_COUNT=16
                            ${NX_TLS_DEFS})
 target_link_libraries(nexus_core PUBLIC nx_sqlite3 nx_miniz nx_pcre2 ${NX_TLS_LIBS} Threads::Threads)

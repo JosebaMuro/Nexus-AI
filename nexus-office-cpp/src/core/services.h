@@ -37,9 +37,6 @@ class ImageEngine;
 class MusicEngine;
 class VoiceEngine;
 }  // namespace nx::media
-namespace nx::kg {
-class KnowledgeJobs;
-}
 
 namespace nx {
 
@@ -81,7 +78,6 @@ class Services {
   std::unique_ptr<mem::SemanticAssist> assist;
   std::unique_ptr<tools::ProposalManager> proposals;
   std::unique_ptr<agents::AgentManager> agents;
-  std::unique_ptr<kg::KnowledgeJobs> kg_jobs;
   std::unique_ptr<agents::Lounge> lounge;
 
  private:

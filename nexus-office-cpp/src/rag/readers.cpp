@@ -1,4 +1,5 @@
 // Lectura de documentos sueltos (rag/readers.py): PDF, Word, OpenDocument, PowerPoint, Excel, EPUB, RTF, HTML y texto.
+#include <memory>
 #include <algorithm>
 #include <set>
 
@@ -85,9 +86,9 @@ static bool natural_less(const std::string& a, const std::string& b) {
   return pa.size() < pb.size();
 }
 
-static archive::Zip open_zip(const fs::path& p) {
-  archive::Zip z(p);
-  if (!z.ok()) throw std::runtime_error("BadZipFile: el fichero no es un ZIP valido");
+static std::unique_ptr<archive::Zip> open_zip(const fs::path& p) {
+  auto z = std::make_unique<archive::Zip>(p);
+  if (!z->ok()) throw std::runtime_error("BadZipFile: el fichero no es un ZIP valido");
   return z;
 }
 
@@ -98,7 +99,8 @@ static std::string zread(const archive::Zip& z, const std::string& name) {
 }
 
 static Doc read_docx(const fs::path& path) {
-  auto z = open_zip(path);
+  auto zp = open_zip(path);
+  auto& z = *zp;
   std::string xml = zread(z, "word/document.xml");
   static const Rx para(R"(<w:p[ >].*?</w:p>)", Rx::S);
   std::string text = para.sub(xml, [](const Rx::Match& m) { return strip_tags(m.str()) + "\n\n"; });
@@ -106,7 +108,8 @@ static Doc read_docx(const fs::path& path) {
 }
 
 static Doc read_opendocument(const fs::path& path) {
-  auto z = open_zip(path);
+  auto zp = open_zip(path);
+  auto& z = *zp;
   std::string xml = zread(z, "content.xml");
   std::string meta = z.has("meta.xml") ? zread(z, "meta.xml") : "";
   static const Rx title_rx(R"(<dc:title>(.*?)</dc:title>)", Rx::S);
@@ -146,7 +149,8 @@ static Doc read_opendocument(const fs::path& path) {
 }
 
 static Doc read_pptx(const fs::path& path) {
-  auto z = open_zip(path);
+  auto zp = open_zip(path);
+  auto& z = *zp;
   static const Rx slide(R"(^ppt/slides/slide\d+\.xml$)");
   std::vector<std::string> names;
   for (auto& e : z.entries())
@@ -159,7 +163,8 @@ static Doc read_pptx(const fs::path& path) {
 }
 
 static Doc read_xlsx(const fs::path& path) {
-  auto z = open_zip(path);
+  auto zp = open_zip(path);
+  auto& z = *zp;
   std::vector<std::string> shared;
   if (z.has("xl/sharedStrings.xml")) {
     static const Rx si(R"(<si>(.*?)</si>)", Rx::S);
@@ -212,7 +217,8 @@ static std::string posix_join(const std::string& base, const std::string& rel) {
 }
 
 static Doc read_epub(const fs::path& path) {
-  auto z = open_zip(path);
+  auto zp = open_zip(path);
+  auto& z = *zp;
   std::vector<std::string> names;
   for (auto& e : z.entries()) names.push_back(e.name);
   auto has = [&](const std::string& n) { return std::find(names.begin(), names.end(), n) != names.end(); };
