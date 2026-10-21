@@ -94,6 +94,14 @@ endif()
 
 add_executable(nexus-office src/main.cpp)
 target_link_libraries(nexus-office PRIVATE nexus_core)
+# Android ARM64: el servidor sin instrucciones AdvSIMD propias (la IA va en llama-server, que si las usa). Asi
+# funciona tambien con la traduccion de ARM64 de los emuladores y Chromebook x86 (ndk_translation no las tiene todas).
+option(NEXUS_ANDROID_NOSIMD "Android ARM64 sin AdvSIMD en el servidor" ON)
+if(ANDROID AND NEXUS_ANDROID_NOSIMD AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+  foreach(t nx_sqlite3 nx_miniz nx_pcre2 nexus_core nexus-office)
+    target_compile_options(${t} PRIVATE -march=armv8-a+nosimd)
+  endforeach()
+endif()
 if(MINGW)
   target_link_options(nexus-office PRIVATE -municode)
 endif()

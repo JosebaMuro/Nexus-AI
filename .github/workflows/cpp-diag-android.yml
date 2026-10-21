@@ -1,24 +1,67 @@
 name: Nexus-Office C++ (diagnostico temporal de la APK)
+# Temporal: compila la APK y la prueba en el emulador sin repetir toda la entrega. Se borra al terminar.
 on:
   push:
     paths:
       - .github/workflows/cpp-diag-android.yml
+      - nexus-office-cpp/CMakeLists.txt
 permissions:
   contents: read
   actions: read
 env:
+  BASE: v2.0.0
   GH_TOKEN: ${{ github.token }}
-  RUN: "39593421958"
 jobs:
-  emulador:
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: nexus-office para Android (NDK, ARM64)
+        run: |
+          set -e
+          NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"; echo "NDK: $NDK"
+          cmake -S nexus-office-cpp -B abuild -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DANDROID_STL=c++_static -DNEXUS_BUILD_TESTS=OFF
+          cmake --build abuild --parallel 4
+          cmake --install abuild --prefix aout/Nexus-Office --strip
+          file aout/Nexus-Office/nexus-office; ls -la aout/Nexus-Office
+      - name: llama-server de la APK autonoma de la edicion Python (BASE)
+        run: |
+          set -e
+          gh release download "$BASE" -R "$GITHUB_REPOSITORY" -p "Nexus-Office-${BASE#v}-android-autonomo.apk" -D old
+          mkdir -p alibs && (cd alibs && unzip -q -j ../old/*.apk 'lib/arm64-v8a/libllama-server*.so')
+          ls -la alibs; rm -rf old
+      - name: APK autonoma (firma temporal)
+        run: |
+          set -e
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          JAR=$(ls -d "$ANDROID_HOME"/platforms/android-* | sort -V | grep -E 'android-3[4-9]$' | head -1)/android.jar
+          export PATH="$BT:$PATH" NEXUS_ANDROID_JAR="$JAR"
+          python -m pip install -q pillow
+          python nexus-office-cpp/packaging/build_apk_autonomo.py --exe aout/Nexus-Office/nexus-office --libs alibs --recursos aout/Nexus-Office
+          "$BT/apksigner" verify --print-certs nexus-office-cpp/dist-apk/*.apk | head -4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-cpp
+          path: nexus-office-cpp/dist-apk/
+          retention-days: 7
+  android-emulador:
+    needs: android
     runs-on: ubuntu-24.04
     steps:
       - name: KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
-      - run: gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n apk-cpp -D apk && ls -la apk
-      - uses: reactivecircus/android-emulator-runner@v2
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk-cpp
+          path: apk
+      - name: Arrancar la APK en Android 11 (x86_64 con traduccion de ARM64)
+        uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
           arch: x86_64
@@ -27,14 +70,10 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096
           script: |
             unzip -q -o -j apk/*.apk lib/arm64-v8a/libnexusoffice.so -d nx && adb push nx/libnexusoffice.so /data/local/tmp/nx && adb shell chmod 755 /data/local/tmp/nx
-            adb shell getprop ro.product.cpu.abilist; adb shell getprop ro.dalvik.vm.native.bridge; adb shell ls /proc/sys/fs/binfmt_misc || true
-            adb shell /data/local/tmp/nx --version || true
-            adb shell /data/local/tmp/nx detect | head -30 || true
+            adb shell /data/local/tmp/nx --version; adb shell /data/local/tmp/nx detect | head -30 || true
             adb install -r apk/*.apk
             adb shell am start -n ai.nexus.office.cpp/ai.nexus.office.autonomo.MainActivity
-            sleep 90
-            adb logcat -d | grep -iE "nexus|translation|AndroidRuntime|FATAL|linker|bridge" | tail -150 || true
-            adb shell dumpsys notification --noredact | grep -iE -A6 "ai.nexus" | head -60 || true
-            adb shell dumpsys activity services ai.nexus.office.cpp | head -40 || true
-            adb shell ps -A | grep -iE "nexus|llama" || true
-            adb forward tcp:8775 tcp:8775; curl -s -m 10 http://127.0.0.1:8775/api/ping || true
+            adb forward tcp:8775 tcp:8775
+            ok=0; for i in $(seq 80); do if curl -sf http://127.0.0.1:8775/api/ping; then ok=1; break; fi; sleep 3; done; echo; test $ok = 1 || { adb logcat -d | grep -iE "nexus|translation|AndroidRuntime|FATAL|linker" | tail -120; adb shell dumpsys notification --noredact | grep -iE -A4 "ai.nexus" | head -60; adb shell dumpsys activity services ai.nexus.office.cpp | head -40; }; test $ok = 1
+            curl -sf http://127.0.0.1:8775/api/status | head -c 600; echo
+            curl -sf -X POST http://127.0.0.1:8775/api/accel/test -H 'Content-Type: application/json' -d '{}' | head -c 400; echo
