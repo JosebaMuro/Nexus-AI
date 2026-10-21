@@ -113,4 +113,17 @@ build/nexus-office run
   Intel; `.github/workflows/cpp-entrega.yml` construye los instaladores y los prueba instalados con un modelo real
   (Qwen3.5 0.8B) en cada sistema.
 
+Resultado de la entrega 2.0.0-beta-cpp: los seis instaladores de escritorio se instalaron y pasaron la prueba de
+humo con modelos reales (Windows x64 y ARM64, Linux x86_64 y ARM64 con .run, .deb, AppImage y Flatpak, macOS Apple
+Silicon e Intel): chat por WebSocket, herramienta de calculadora, voz con Piper, dictado con Whisper, imagen con
+stable-diffusion.cpp y servicio del sistema. La APK autónoma arranca en un emulador Android y responde a `/api/ping`,
+estado y prueba del acelerador.
+
+- En Android ARM64 el servidor se compila sin AdvSIMD (`NEXUS_ANDROID_NOSIMD`, activado por defecto): la traducción
+  ARM de los emuladores x86_64 no implementa algunas instrucciones escalares de AdvSIMD. Con `-DNEXUS_ANDROID_NOSIMD=OFF`
+  se compila para móviles reales con NEON.
+- En la máquina virtual macOS ARM de GitHub la GPU paravirtual devuelve texto sin sentido con Metal, así que allí el chat
+  se prueba en CPU; el chat con Metal en un Mac real está pendiente de probar.
+- Con `-ngl 0` (todo en CPU) llama-server usa un solo hueco de conversación para no partir el contexto en dos.
+
 Sin probar en hardware real (como en la edición Python): GPU dedicada, NPU Intel y NPU Hexagon.
