@@ -161,7 +161,8 @@ jobs:
         include:
           - { target: linux-x86_64, os: ubuntu-24.04 }
           - { target: linux-aarch64, os: ubuntu-24.04-arm }
-          - { target: macos-arm64, os: macos-latest }
+          # la GPU paravirtual de la maquina virtual de macOS devuelve texto sin sentido con Metal: el chat va en CPU
+          - { target: macos-arm64, os: macos-latest, accel: cpu }
           - { target: macos-x86_64, os: macos-15-intel }
           - { target: windows-x64, os: windows-latest }
           - { target: windows-arm64, os: windows-11-arm }
@@ -202,7 +203,7 @@ jobs:
           "NX=C:\nxc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Probar con modelos reales (chat, selector, voz, imagen y servicio)
         shell: bash
-        run: python nexus-office-cpp/packaging/smoke_test.py "$NX"
+        run: python nexus-office-cpp/packaging/smoke_test.py "$NX" --acelerador "${{ matrix.accel || 'auto' }}"
       - name: Probar el .deb
         if: runner.os == 'Linux'
         run: |

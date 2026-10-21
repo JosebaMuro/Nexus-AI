@@ -3,7 +3,7 @@ comprueba el selector de motor y acelerador, el chat por WebSocket, la voz (Pipe
 (stable-diffusion.cpp) y el servicio del sistema.
 
     python packaging/smoke_test.py <carpeta instalada> [--exe ruta/al/nexus-office] [--modelo qwen3.5-0.8b]
-                                   [--sin-imagen] [--sin-servicio]
+                                   [--sin-imagen] [--sin-servicio] [--acelerador auto|cpu|gpu|npu]
 
 Solo usa la biblioteca estandar (y websockets si esta, para el chat). Sale con error si algo falla.
 """
@@ -64,6 +64,7 @@ def main() -> int:
     ap.add_argument("--modelo", default="qwen3.5-0.8b")
     ap.add_argument("--sin-imagen", action="store_true")
     ap.add_argument("--sin-servicio", action="store_true")
+    ap.add_argument("--acelerador", default="auto", help="acelerador para el chat (cpu en maquinas virtuales con GPU emulada)")
     a = ap.parse_args()
     home = a.home.resolve()
     exe = a.exe or str(next(p for p in (home / "nexus-office.exe", home / "nexus-office") if p.exists()))
@@ -124,7 +125,7 @@ def main() -> int:
             t = call("/api/accel/test", {})
             check(t.get("ok"), f"{acc} pedida en un equipo sin {acc.upper()}: responde igual ({res.get('note')}; "
                                f"{t.get('backend')}: {t.get('error') or t.get('text')})")
-        call("/api/accel", {"engine": "auto", "accel": "auto", "remember": True})
+        call("/api/accel", {"engine": "auto", "accel": a.acelerador, "remember": True})
 
         try:
             answer = asyncio.run(ws_chat("Responde con una sola palabra: ¿cual es la capital de Francia?"))
