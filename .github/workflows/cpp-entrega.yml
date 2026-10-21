@@ -76,6 +76,12 @@ jobs:
           case "${{ matrix.piper }}" in *.zip) unzip -q p.pkg -d px ;; *) tar -xzf p.pkg -C px ;; esac
           mv px/piper voz/piper
           ls voz/piper | head -30
+          if [ "$RUNNER_OS" = macOS ]; then
+            # el piper de macOS busca sus bibliotecas en @rpath sin tener rpath: se le pone su propia carpeta
+            install_name_tool -add_rpath @executable_path voz/piper/piper
+            codesign -f -s - voz/piper/piper
+            otool -L voz/piper/piper; otool -l voz/piper/piper | grep -A2 LC_RPATH
+          fi
           echo "hola" | voz/piper/piper* --help 2>&1 | head -3 || true
       - uses: actions/upload-artifact@v4
         with:

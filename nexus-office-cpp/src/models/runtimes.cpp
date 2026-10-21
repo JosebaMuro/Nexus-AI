@@ -114,6 +114,10 @@ std::map<std::string, std::string> lib_env(const fs::path& exe) {
   if (sys::is_linux()) {
     std::string cur = env("LD_LIBRARY_PATH");
     e["LD_LIBRARY_PATH"] = S(exe.parent_path()) + (cur.empty() ? "" : ":" + cur);
+  } else if (sys::is_macos()) {
+    // piper de macOS enlaza @rpath/libespeak-ng.1.dylib sin rpath a su carpeta: dyld la busca aqui por su nombre
+    std::string cur = env("DYLD_FALLBACK_LIBRARY_PATH");
+    e["DYLD_FALLBACK_LIBRARY_PATH"] = S(exe.parent_path()) + (cur.empty() ? ":/usr/local/lib:/usr/lib" : ":" + cur);
   }
   return e;
 }
