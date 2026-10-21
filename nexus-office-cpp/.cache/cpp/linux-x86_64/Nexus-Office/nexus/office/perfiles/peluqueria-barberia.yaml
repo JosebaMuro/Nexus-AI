@@ -1,0 +1,10 @@
+id: peluqueria-barberia
+name: "Peluquería y barbería"
+sector: "Servicios personales · peluquería, barbería y estilismo"
+assistant_name: "Oficina Peluquería"
+icon: "✂"
+description: "Peluquería o barbería con cita previa: agenda, fichas de color, coste por servicio, productos y fidelización."
+agents: [peluquero, agenda, recepcion, compras, administracion, comercial, rrhh]
+coordinator:
+  context: |
+    La empresa es una peluquería y barbería con cita previa: corte, color, mechas, tratamientos, barba y afeitado; lleva la agenda de cada profesional, las fichas técnicas de color, el stock de productos de uso y de venta, las promociones y las redes sociales.

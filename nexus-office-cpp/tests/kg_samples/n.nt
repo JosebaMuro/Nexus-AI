@@ -1,0 +1,2 @@
+<http://ex.org/a> <http://ex.org/rel> <http://ex.org/b> .
+<http://ex.org/a> <http://www.w3.org/2000/01/rdf-schema#label> "A mayúscula" .

@@ -1,0 +1,10 @@
+id: despacho-abogados
+name: "Despacho de abogados"
+sector: "Servicios profesionales · asesoramiento jurídico y defensa en juicio"
+assistant_name: "Oficina Despacho"
+icon: "✒"
+description: "Despacho de abogados: expedientes, plazos procesales, escritos para revisión del letrado, hojas de encargo y protección de datos."
+agents: [abogado, proteccion-datos, recepcion, agenda, administracion, presupuestos]
+coordinator:
+  context: |
+    La empresa es un despacho de abogados (civil, familia, laboral, mercantil y penal) que atiende a particulares y empresas: abre expedientes, controla plazos procesales y vistas, prepara borradores de escritos y contratos y emite hojas de encargo con honorarios y provisión de fondos. Todo escrito es un borrador que revisa y firma el letrado colegiado; la confidencialidad y el secreto profesional son la norma.

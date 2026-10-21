@@ -1,0 +1,10 @@
+id: veterinaria
+name: "Clínica veterinaria"
+sector: "Sanidad animal · clínica de animales de compañía"
+assistant_name: "Oficina Veterinaria"
+icon: "❀"
+description: "Clínica veterinaria: citas, vacunas y recordatorios, microchip y pasaporte, recetas y PresVet, cirugías, tienda y peluquería."
+agents: [veterinario, agenda, recepcion, compras, administracion, comercial, proteccion-datos]
+coordinator:
+  context: |
+    La empresa es una clínica veterinaria de perros, gatos y otros animales de compañía con consulta, cirugía, hospitalización, peluquería y tienda: gestiona citas, recordatorios de vacunas y desparasitaciones, microchip y pasaporte europeo, recetas veterinarias y su comunicación a PresVet, pedidos de medicamentos y piensos. La oficina da soporte; el diagnóstico y el tratamiento son siempre del veterinario colegiado.

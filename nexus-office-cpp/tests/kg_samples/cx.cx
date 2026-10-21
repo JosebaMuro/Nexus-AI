@@ -1,0 +1,1 @@
+[{"nodes": [{"@id": 1, "n": "Uno"}, {"@id": 2, "n": "Dos"}]}, {"edges": [{"@id": 3, "s": 1, "t": 2, "i": "interactua"}]}]

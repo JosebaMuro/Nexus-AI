@@ -1,0 +1,10 @@
+id: fruteria-alimentacion
+name: "Frutería y alimentación"
+sector: "Alimentación · frutería, verdulería y ultramarinos"
+assistant_name: "Oficina Frutería"
+icon: "❧"
+description: "Frutería y tienda de alimentación: compra en mercado central, temporada, mermas, precios, origen y reparto."
+agents: [frutero, dependiente, calidad, compras, administracion, comercial]
+coordinator:
+  context: |
+    La empresa es una frutería y tienda de alimentación de barrio: compra a diario en el mercado central y a productores, expone y rota el género de temporada, controla mermas y precios por kilo, etiqueta el origen y la categoría, vende productos de alimentación envasados y a granel y reparte pedidos a domicilio.

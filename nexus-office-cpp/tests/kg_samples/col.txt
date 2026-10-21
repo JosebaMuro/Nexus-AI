@@ -1,0 +1,2 @@
+Fruta: Manzana, Pera, Plátano
+Verdura: Lechuga, Tomate

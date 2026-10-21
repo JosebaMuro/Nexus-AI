@@ -1,0 +1,10 @@
+id: lavanderia-tintoreria
+name: "Lavandería y tintorería"
+sector: "Servicios personales · lavandería, tintorería y planchado"
+assistant_name: "Oficina Tintorería"
+icon: "≋"
+description: "Lavandería-tintorería: recepción de prendas y resguardos, tratamientos, manchas, incidencias y seguridad."
+agents: [tintorero, recepcion, compras, administracion, prl, comercial]
+coordinator:
+  context: |
+    La empresa es una lavandería-tintorería: recibe prendas con resguardo, lava en agua y en seco, desmancha, plancha, limpia edredones, alfombras y trajes de novia, atiende a particulares y a pequeños hoteles y restaurantes, gestiona incidencias con prendas y los residuos de disolventes.

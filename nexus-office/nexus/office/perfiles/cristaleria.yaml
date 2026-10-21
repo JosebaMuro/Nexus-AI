@@ -1,0 +1,10 @@
+id: cristaleria
+name: "Cristalería"
+sector: "Construcción · vidrio plano, acristalamientos y mamparas"
+assistant_name: "Oficina Cristalería"
+icon: "◇"
+description: "Cristalería con taller de corte y manipulado: doble acristalamiento, vidrio de seguridad, mamparas, espejos, divisorias y reposición de roturas."
+agents: [cristalero, aluminio, recepcion, presupuestos, administracion, compras, prl]
+coordinator:
+  context: |
+    La empresa es una cristalería con taller: corta y manipula vidrio, monta doble acristalamiento, vidrio laminado y templado, mamparas de baño, espejos, divisorias de oficina, barandillas de vidrio y escaparates, y atiende roturas urgentes de particulares, comunidades y comercios.

@@ -1,0 +1,1 @@
+{"nodes": [{"id": "1", "type": "text", "text": "Idea principal"}, {"id": "2", "type": "text", "text": "Detalle"}], "edges": [{"id": "e", "fromNode": "1", "toNode": "2", "label": "ampl\u00eda"}]}

@@ -1,0 +1,9 @@
+venv/
+data/
+dist/
+build/
+.cache/
+wheelhouse/
+runtime/
+**/__pycache__/
+*.log

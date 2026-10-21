@@ -1,0 +1,10 @@
+[[nodes]]
+id = "a"
+name = "Contrato"
+[[nodes]]
+id = "b"
+name = "Firma"
+[[edges]]
+source = "a"
+target = "b"
+rel = "requiere"

@@ -1,0 +1,10 @@
+id: control-plagas
+name: "Control de plagas"
+sector: "Servicios · sanidad ambiental, DDD y legionela"
+assistant_name: "Oficina Control de Plagas"
+icon: "✣"
+description: "Empresa de servicios biocidas inscrita en el ROESB: desinsectación, desratización, desinfección, tratamientos de madera y prevención de legionela."
+agents: [controlador-plagas, limpieza, medioambiente, recepcion, presupuestos, administracion, calidad, prl]
+coordinator:
+  context: |
+    La empresa es de control de plagas y sanidad ambiental inscrita en el ROESB: hace desinsectación, desratización y desinfección (DDD), tratamientos de termitas y carcoma, control de aves y prevención de legionela para industrias alimentarias, hostelería, comunidades y particulares, con planes de control y certificados de servicio.

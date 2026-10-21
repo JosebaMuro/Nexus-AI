@@ -1,0 +1,168 @@
+# Nexus-Office 2.0.0 - dependencias y referencias
+# Generado por packaging/requirements_ref.py (no editar a mano: regeneralo tras cambiar dependencias o el catalogo).
+# pip solo lee las lineas sin '#'. El resto es la referencia del software nativo y de los pesos de IA.
+#
+# ============================================================================ 1. Paquetes Python (pip)
+# Minimo compatible; al lado, la version con la que se ha probado esta version de Nexus-Office.
+fastapi>=0.110              # probado 0.156.3
+uvicorn>=0.29               # probado 0.54.0
+websockets>=12              # probado 17.3
+pydantic>=2.5               # probado 2.14.1
+httpx>=0.27                 # probado 0.28.1
+psutil>=5.9                 # probado 7.2.2
+numpy>=1.26                 # probado 2.5.4
+pyyaml>=6.0                 # probado 6.0.3
+pillow>=10.0                # probado 13.0.0
+python-multipart>=0.0.9     # probado 0.0.32
+cryptography>=42            # probado 50.0.2
+fpdf2>=2.7                  # probado 2.8.9
+pypdf>=4.0                  # probado 6.21.1
+pytest>=8.0                 # probado 9.1.1
+#
+# Extras por hardware: los instala `python -m nexus setup --auto` segun el perfil detectado
+# (nexus/setup_extras.py). No van aqui para no forzar paquetes pesados donde no hacen falta.
+#   piper-tts                          voz neuronal offline (Piper)
+#   faster-whisper                     voz a texto (Whisper sobre CTranslate2)
+#   pyttsx3                            voz del sistema de respaldo (SAPI / espeak)
+#   openvino                           NPU / iGPU Intel
+#   onnxruntime                        NPU AMD (Ryzen AI) y modelos ONNX
+#   onnxruntime-qnn                    NPU Qualcomm (Snapdragon X)
+#   torch                              opcional: musica MusicGen en GPU (+ transformers, scipy)
+#   pyinstaller                        solo para crear el setup .exe
+#
+# ============================================================================ 2. Software nativo (no pip)
+# Lo descargan los instaladores (install.ps1 / install.sh / install-termux.sh) y `nexus setup --auto`;
+# las versiones offline de los paquetes ya lo incluyen.
+#
+# Python portable: python-build-standalone (astral-sh), CPython 3.11.17, build 20261009, variante install_only_stripped
+#   https://github.com/astral-sh/python-build-standalone/releases/tag/20261009
+#   cpython-3.11.17+20261009-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
+#   cpython-3.11.17+20261009-aarch64-pc-windows-msvc-install_only_stripped.tar.gz
+#   cpython-3.11.17+20261009-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz
+#   cpython-3.11.17+20261009-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz
+#   cpython-3.11.17+20261009-aarch64-apple-darwin-install_only_stripped.tar.gz
+#   cpython-3.11.17+20261009-x86_64-apple-darwin-install_only_stripped.tar.gz
+#   Android: el Python de Termux (pkg install python) · Docker: imagen python:3.11-slim
+#
+# LLM / multimodal (llama-server): https://github.com/ggml-org/llama.cpp/releases
+# Generacion de imagen (sd.cpp): https://github.com/leejet/stable-diffusion.cpp/releases
+#   Variantes de binario: cpu, cuda (12.x, con cudart), vulkan, rocm, sycl, openvino, metal (macOS).
+#   Termux: pkg install llama-cpp (CPU ARM64).
+#   Archivos RAR y 7z en el RAG (ZIP y TAR no necesitan nada): unrar, 7-Zip (7z/7zz), bsdtar o unar.
+#     Windows: 7-Zip o WinRAR (o el tar del sistema) · Ubuntu/WSL: sudo apt install unrar 7zip · macOS: brew install sevenzip
+#     Termux: pkg install unrar p7zip · el paquete 7zip de Debian/Ubuntu no lee RAR: para RAR, unrar o unar.
+#   VPN para la app Nexus-Office VPN: WireGuard (Windows: winget install WireGuard.WireGuard · Linux/WSL: wireguard-tools
+#     · macOS: brew install wireguard-tools o la app WireGuard). Ver docs/VPN.md.
+#
+# Herramientas de compilacion (solo para generar paquetes):
+#   APK Nexus-Office VPN (packaging/build_apk.py): JDK 17, Android build-tools 34.0.0 y platform android-34 en .cache/android/
+#     (o en Ubuntu/WSL: aapt zipalign apksigner dalvik-exchange); WireGuard tunnel 1.0.20230706 (Maven Central)
+#   APK Nexus-Office autonomo (packaging/build_android_runtime.sh + build_apk_autonomo.py): zig 0.17.0 (PyPI), CPython 3.12.3,
+#     musl 1.2.5, OpenSSL 3.5.5, SQLite 3.46.1, llama.cpp de llama-cpp-python 0.3.36, ruedas musllinux_aarch64 de PyPI
+#   Setup .exe: pyinstaller (ver arriba) · .deb y .run: los genera packaging/build.py sin herramientas externas
+#
+# ============================================================================ 3. Pesos de IA (referencia)
+# No se incluyen en los paquetes (varios GB y licencias propias). Se descargan desde la pestana Modelos
+# o con `python -m nexus pull auto` (elige los adecuados al perfil detectado).
+#
+# Catalogo recomendado (id, tamano, repositorio Hugging Face, ficheros):
+#  LLM multimodal (texto + vision), formato GGUF para llama.cpp
+#   qwen3.5-0.8b       738 MB  https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF  ->  Qwen3.5-0.8B-Q4_K_M.gguf + mmproj-F16.gguf
+#   qwen3.5-2b        1948 MB  https://huggingface.co/unsloth/Qwen3.5-2B-GGUF  ->  Qwen3.5-2B-Q4_K_M.gguf + mmproj-F16.gguf
+#   qwen3.5-4b        3412 MB  https://huggingface.co/unsloth/Qwen3.5-4B-GGUF  ->  Qwen3.5-4B-Q4_K_M.gguf + mmproj-F16.gguf
+#   qwen3.5-9b        6598 MB  https://huggingface.co/unsloth/Qwen3.5-9B-GGUF  ->  Qwen3.5-9B-Q4_K_M.gguf + mmproj-F16.gguf
+#   qwen3-vl-2b-thinking  1480 MB  https://huggingface.co/Qwen/Qwen3-VL-2B-Thinking-GGUF  ->  Qwen3VL-2B-Thinking-Q4_K_M.gguf + mmproj-Qwen3VL-2B-Thinking-Q8_0.gguf
+#   qwen3-vl-4b-thinking  2815 MB  https://huggingface.co/Qwen/Qwen3-VL-4B-Thinking-GGUF  ->  Qwen3VL-4B-Thinking-Q4_K_M.gguf + mmproj-Qwen3VL-4B-Thinking-Q8_0.gguf
+#   qwen3-vl-8b-thinking  5512 MB  https://huggingface.co/Qwen/Qwen3-VL-8B-Thinking-GGUF  ->  Qwen3VL-8B-Thinking-Q4_K_M.gguf + mmproj-Qwen3VL-8B-Thinking-Q8_0.gguf
+#   medgemma-4b       3300 MB  https://huggingface.co/unsloth/medgemma-4b-it-GGUF  ->  medgemma-4b-it-Q4_K_M.gguf + mmproj-F16.gguf
+#   qwen2.5-coder-7b  4680 MB  https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF  ->  qwen2.5-coder-7b-instruct-q4_k_m.gguf
+#  Imagen, GGUF para stable-diffusion.cpp
+#   sdxs-512           651 MB  https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF  ->  sdxs-512-tinySDdistilled_Q8_0.gguf
+#   sd-turbo          1930 MB  https://huggingface.co/Green-Sky/SD-Turbo-GGUF  ->  sd_turbo-f16-q8_0.gguf
+#   sdxl-turbo        3909 MB  https://huggingface.co/OlegSkutte/sdxl-turbo-GGUF  ->  sd_xl_turbo_1.0.q8_0.gguf
+#  Voz (texto a voz)
+#   piper-es-davefx     61 MB  https://huggingface.co/rhasspy/piper-voices  ->  es/es_ES/davefx/medium/es_ES-davefx-medium.onnx + es_ES-davefx-medium.onnx.json
+#  Embeddings (memoria, biblioteca y organizacion del conocimiento), GGUF en CPU
+#   qwen3-embedding-0.6b   639 MB  https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF  ->  Qwen3-Embedding-0.6B-Q8_0.gguf
+#  Voz a texto: faster-whisper tiny (~75 MB), base (~145 MB), small (~465 MB), medium (~1500 MB); se descarga al primer uso
+#
+# Pesos sugeridos por perfil de hardware (calculado con la logica real de Nexus-Office).
+# Primero el recomendado; entre parentesis las alternativas que tambien caben.
+#
+# [CPU basica · 2 nucleos · 8 GB RAM (portatil sencillo, iGPU Intel UHD)]
+#   perfil ligero · acelerador cpu · llama.cpp 'cpu' · LLM hasta 3B, ideal 1.5B Q4_K_M · contexto 4096
+#   LLM    qwen3.5-2b  (qwen3.5-0.8b, qwen3-vl-2b-thinking)
+#   imagen sdxs-512
+#   voz    piper-es-davefx
+#   embed  qwen3-embedding-0.6b
+#   STT    whisper tiny int8 en cpu
+# [CPU antigua sin AVX2 · 4 nucleos · 8 GB]
+#   perfil ligero · acelerador cpu · llama.cpp 'cpu' · LLM hasta 1.5B, ideal 1.5B Q4_K_M · contexto 8192
+#   LLM    qwen3.5-0.8b
+#   imagen sdxs-512  (sd-turbo)
+#   voz    piper-es-davefx
+#   embed  qwen3-embedding-0.6b
+#   STT    whisper base int8 en cpu
+# [CPU media · 4 nucleos · 16 GB (iGPU Iris Xe / Radeon)]
+#   perfil medio · acelerador cpu · llama.cpp 'cpu' · LLM hasta 4B, ideal 1.5B Q4_K_M · contexto 8192
+#   LLM    qwen3.5-4b  (qwen3.5-0.8b, qwen3.5-2b, qwen3-vl-2b-thinking, qwen3-vl-4b-thinking)
+#   imagen sdxs-512  (sd-turbo)
+#   voz    piper-es-davefx
+#   embed  qwen3-embedding-0.6b
+#   STT    whisper base int8 en cpu
+# [CPU potente · 8+ nucleos · 32 GB, sin GPU dedicada]
+#   perfil alto · acelerador cpu · llama.cpp 'cpu' · LLM hasta 14B, ideal 8B Q4_K_M · contexto 16384
+#   LLM    qwen3.5-9b  (qwen3.5-0.8b, qwen3.5-2b, qwen3.5-4b, qwen3-vl-2b-thinking, qwen3-vl-4b-thinking, qwen3-vl-8b-thinking)
+#   imagen sdxs-512  (sd-turbo)
+#   voz    piper-es-davefx
+#   embed  qwen3-embedding-0.6b
+#   STT    whisper base int8 en cpu
+# [NVIDIA 6 GB VRAM · 16 GB RAM (RTX 3050/3060 portatil)]
+#   perfil medio · acelerador cuda · llama.cpp 'cuda' · LLM hasta 4B, ideal 1.5B Q4_K_M · contexto 8192
+#   LLM    qwen3.5-4b  (qwen3.5-0.8b, qwen3.5-2b, qwen3-vl-2b-thinking, qwen3-vl-4b-thinking)
+#   imagen sdxl-turbo  (sdxs-512, sd-turbo)
+#   voz    piper-es-davefx
+#   embed  qwen3-embedding-0.6b
+#   STT    whisper small float16 en cuda · imagen en GPU (sugerido stabilityai/sd-turbo)
+# [NVIDIA 12 GB VRAM · 32 GB RAM (RTX 3060 12G / 4070)]
+#   perfil alto · acelerador cuda · llama.cpp 'cuda' · LLM hasta 14B, ideal 8B Q4_K_M · contexto 8192
+#   LLM    qwen3.5-9b  (qwen3.5-0.8b, qwen3.5-2b, qwen3.5-4b, qwen3-vl-2b-thinking, qwen3-vl-4b-thinking, qwen3-vl-8b-thinking)
+#   imagen sdxl-turbo  (sdxs-512, sd-turbo)
+#   voz    piper-es-davefx
+#   embed  qwen3-embedding-0.6b
+#   STT    whisper small float16 en cuda · imagen en GPU (sugerido stabilityai/sdxl-turbo)
+# [NVIDIA 24 GB VRAM · 64 GB RAM (RTX 3090 / 4090)]
+#   perfil alto · acelerador cuda · llama.cpp 'cuda' · LLM hasta 14B, ideal 8B Q4_K_M · contexto 16384
+#   LLM    qwen3.5-9b  (qwen3.5-0.8b, qwen3.5-2b, qwen3.5-4b, qwen3-vl-2b-thinking, qwen3-vl-4b-thinking, qwen3-vl-8b-thinking)
+#   imagen sdxl-turbo  (sdxs-512, sd-turbo)
+#   voz    piper-es-davefx
+#   embed  qwen3-embedding-0.6b
+#   STT    whisper small float16 en cuda · imagen en GPU (sugerido stabilityai/sdxl-turbo)
+# [AMD Radeon dedicada 8 GB · 16 GB RAM]
+#   perfil medio · acelerador rocm · llama.cpp 'vulkan' · LLM hasta 8B, ideal 4B Q4_K_M · contexto 8192
+#   LLM    qwen3.5-4b  (qwen3.5-0.8b, qwen3.5-2b, qwen3-vl-2b-thinking, qwen3-vl-4b-thinking, qwen3-vl-8b-thinking)
+#   imagen sdxl-turbo  (sdxs-512, sd-turbo)
+#   voz    piper-es-davefx
+#   embed  qwen3-embedding-0.6b
+#   STT    whisper base int8 en cpu · imagen en GPU (sugerido stabilityai/sd-turbo)
+# [Intel Arc dedicada 8 GB · 16 GB RAM]
+#   perfil medio · acelerador vulkan · llama.cpp 'vulkan' · LLM hasta 8B, ideal 4B Q4_K_M · contexto 8192
+#   LLM    qwen3.5-4b  (qwen3.5-0.8b, qwen3.5-2b, qwen3-vl-2b-thinking, qwen3-vl-4b-thinking, qwen3-vl-8b-thinking)
+#   imagen sdxs-512  (sd-turbo)
+#   voz    piper-es-davefx
+#   embed  qwen3-embedding-0.6b
+#   STT    whisper base int8 en cpu
+# [Apple Silicon M1-M4 · 16 GB memoria unificada]
+#   perfil alto · acelerador metal · llama.cpp 'metal' · LLM hasta 14B, ideal 8B Q4_K_M · contexto 8192
+#   LLM    qwen3.5-9b  (qwen3.5-0.8b, qwen3.5-2b, qwen3.5-4b, qwen3-vl-2b-thinking, qwen3-vl-4b-thinking, qwen3-vl-8b-thinking)
+#   imagen sdxl-turbo  (sdxs-512, sd-turbo)
+#   voz    piper-es-davefx
+#   embed  qwen3-embedding-0.6b
+#   STT    whisper base int8 en cpu · imagen en GPU (sugerido stabilityai/sdxl-turbo)
+# [Android ARM64 (Termux) · 8 GB · o Raspberry Pi 5]
+#   perfil medio · acelerador cpu · llama.cpp 'cpu' · LLM hasta 4B, ideal 1.5B Q4_K_M · contexto 8192
+#   LLM    qwen3.5-4b  (qwen3.5-0.8b, qwen3.5-2b, qwen3-vl-2b-thinking)
+#   imagen sdxs-512  (sd-turbo)
+#   voz    piper-es-davefx
+#   embed  qwen3-embedding-0.6b
+#   STT    whisper base int8 en cpu

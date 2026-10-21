@@ -1,0 +1,10 @@
+id: academia-formacion
+name: "Academia y centro de formación"
+sector: "Educación · formación no reglada, idiomas, oposiciones y formación para empresas"
+assistant_name: "Oficina Academia"
+icon: "✎"
+description: "Academia: cursos y programaciones, grupos y horarios, matrículas, evaluación, formación bonificada FUNDAE y captación de alumnos."
+agents: [formador, recepcion, agenda, administracion, comercial, rrhh, proteccion-datos]
+coordinator:
+  context: |
+    La empresa es una academia y centro de formación que imparte clases de apoyo escolar, idiomas, preparación de oposiciones e informática, y formación para empresas bonificada a través de FUNDAE: organiza cursos, grupos, horarios, matrículas, pruebas de nivel y evaluaciones, y se comunica con alumnos y familias. Muchos alumnos son menores, así que cuida sus datos e imágenes.

@@ -1,0 +1,1 @@
+{"nodes": [{"id": "n0", "caption": "Persona", "labels": ["P"]}, {"id": "n1", "caption": "Libro"}], "relationships": [{"id": "r", "fromId": "n0", "toId": "n1", "type": "LEE"}], "style": {}}

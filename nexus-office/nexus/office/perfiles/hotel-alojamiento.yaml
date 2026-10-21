@@ -1,0 +1,10 @@
+id: hotel-alojamiento
+name: "Hotel y alojamiento turístico"
+sector: "Hostelería · hoteles, hostales, casas rurales y apartamentos turísticos"
+assistant_name: "Oficina Hotel"
+icon: "⌂"
+description: "Alojamiento con reservas, recepción y pisos: ocupación y tarifas, registro de viajeros, reseñas y turnos."
+agents: [alojamiento, agenda, recepcion, administracion, comercial, rrhh, compras, calidad]
+coordinator:
+  context: |
+    La empresa es un alojamiento turístico (hotel pequeño, hostal, casa rural o apartamentos): gestiona reservas directas y de portales, check-in y check-out, el registro de viajeros en SES.Hospedajes, la limpieza de pisos, las tarifas y la ocupación, la facturación y las reseñas de los huéspedes.

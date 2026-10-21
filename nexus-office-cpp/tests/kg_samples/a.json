@@ -1,0 +1,1 @@
+{"nodes": [{"id": "a", "label": "Factura", "group": "doc"}, {"id": "b", "label": "IVA"}], "links": [{"source": "a", "target": "b", "label": "incluye", "value": 2}]}

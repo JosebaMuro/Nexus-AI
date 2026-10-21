@@ -1,0 +1,10 @@
+id: caldereria
+name: "Calderería industrial"
+sector: "Metal · calderería, depósitos y equipos a presión"
+assistant_name: "Oficina Calderería"
+icon: "◎"
+description: "Calderería que fabrica depósitos, tolvas, conducciones y recipientes a presión con soldadura cualificada."
+agents: [calderero, soldador, calidad, presupuestos, administracion, compras, prl, rrhh]
+coordinator:
+  context: |
+    La empresa es una calderería industrial: fabrica depósitos, tolvas, conductos, silos y recipientes a presión en acero al carbono e inoxidable, con soldadura cualificada, trazabilidad de materiales y dossier de calidad.

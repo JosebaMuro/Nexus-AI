@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns">
+  <key id="label" for="node" attr.name="label" attr.type="string"/>
+  <key id="rel" for="edge" attr.name="relation" attr.type="string"/>
+  <graph edgedefault="directed">
+    <node id="a"><data key="label">Factura</data></node>
+    <node id="b"><data key="label">IVA</data></node>
+    <node id="c"><data key="label">Cliente</data></node>
+    <edge source="a" target="b"><data key="rel">incluye</data></edge>
+    <edge source="a" target="c"><data key="rel">se emite a</data></edge>
+  </graph>
+</graphml>

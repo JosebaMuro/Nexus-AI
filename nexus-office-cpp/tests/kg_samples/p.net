@@ -1,0 +1,7 @@
+*Vertices 3
+1 "Uno"
+2 "Dos"
+3 "Tres"
+*Arcs
+1 2 1.5
+2 3

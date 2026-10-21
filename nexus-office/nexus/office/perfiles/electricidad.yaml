@@ -1,0 +1,10 @@
+id: electricidad
+name: "Instalaciones eléctricas"
+sector: "Instalaciones · empresa instaladora de baja tensión"
+assistant_name: "Oficina Electricidad"
+icon: "ϟ"
+description: "Empresa instaladora habilitada en baja tensión: viviendas, locales, autoconsumo y recarga de vehículo eléctrico."
+agents: [electricista, recepcion, presupuestos, administracion, compras, prl]
+coordinator:
+  context: |
+    La empresa es una instaladora eléctrica habilitada en baja tensión: hace instalaciones y reformas en viviendas, locales y naves, boletines, averías urgentes, autoconsumo fotovoltaico y puntos de recarga.

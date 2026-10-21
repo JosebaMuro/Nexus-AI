@@ -1,0 +1,10 @@
+id: mudanzas
+name: "Mudanzas y guardamuebles"
+sector: "Transporte · mudanzas, guardamuebles y traslados"
+assistant_name: "Oficina Mudanzas"
+icon: "⌂"
+description: "Empresa de mudanzas de particulares y oficinas, nacionales e internacionales, con guardamuebles, embalaje y montaje de muebles."
+agents: [mudancero, transportista, carpintero, recepcion, presupuestos, administracion, rrhh, prl]
+coordinator:
+  context: |
+    La empresa hace mudanzas de particulares, oficinas y empresas, locales, nacionales e internacionales: visita y cubica, embala, desmonta y monta muebles, usa elevador exterior, pide permisos de vía pública y tiene guardamuebles.

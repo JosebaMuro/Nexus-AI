@@ -1,0 +1,4 @@
+source,target,relation,weight
+Factura,IVA,incluye,1
+Factura,Cliente,se emite a,0.5
+Cliente,NIF,tiene,

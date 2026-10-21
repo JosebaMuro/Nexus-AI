@@ -1,0 +1,10 @@
+id: instalaciones-solares
+name: "Instalaciones solares"
+sector: "Energía · autoconsumo fotovoltaico y solar térmica"
+assistant_name: "Oficina Solar"
+icon: "☀"
+description: "Instaladora de autoconsumo fotovoltaico, baterías, solar térmica y recarga de vehículo eléctrico para viviendas, comunidades, empresas y naves."
+agents: [instalador-solar, electricista, climatizacion, recepcion, presupuestos, administracion, compras, prl]
+coordinator:
+  context: |
+    La empresa es una instaladora de energía solar: estudia consumos, dimensiona y monta instalaciones de autoconsumo fotovoltaico (individual y colectivo, con o sin baterías), solar térmica, aerotermia y puntos de recarga, y tramita la legalización, el registro de autoconsumo y la compensación de excedentes.

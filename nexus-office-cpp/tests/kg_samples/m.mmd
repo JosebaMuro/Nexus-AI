@@ -1,0 +1,4 @@
+flowchart TD
+  A[Pedido] -->|genera| B(Factura)
+  B --> C{Pago}
+  C -- no --> D[Recordatorio]
