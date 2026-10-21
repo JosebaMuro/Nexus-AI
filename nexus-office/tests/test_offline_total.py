@@ -88,3 +88,22 @@ def test_cleanup_removes_unused_and_keeps_what_was_used(tmp_path, monkeypatch, b
     fake_exe(bundled / "llama" / "cuda" / "bin" / "llama-server", False)
     cleanup.run(yes=True, keep=False)                       # --no-keep: tambien wheelhouse/ y runtime/
     assert not wh.exists() and not rt.exists() and cpu.exists()
+
+
+def test_cleanup_conserva_lo_que_puede_pedir_el_selector(tmp_path, monkeypatch, bundled):
+    """La NPU Intel usa llama-server con OpenVINO: la limpieza no lo borra aunque el perfil elija Vulkan."""
+    from nexus.hardware.detect import GPU, NPU
+    from test_hardware import hw
+    fake_exe(bundled / "llama" / "cpu" / "llama-server", True)
+    fake_exe(bundled / "llama" / "vulkan" / "llama-server", True)
+    fake_exe(bundled / "llama" / "openvino" / "llama-server", True)
+    fake_exe(bundled / "llama" / "cuda" / "llama-server", False)
+    for name, val in (("ROOT", tmp_path), ("WHEELHOUSE", tmp_path / "wh"), ("RUNTIME", tmp_path / "rt"), ("BUNDLED", bundled)):
+        monkeypatch.setattr(cleanup, name, val)
+    from nexus import hardware
+    monkeypatch.setattr(sys, "platform", "linux")
+    h = hw(gpus=[GPU("intel", "Arc", 0, True)], npus=[NPU("intel", "Intel AI Boost")])
+    monkeypatch.setattr(hardware, "load_cached", lambda: h)
+    pl = cleanup.plan()
+    assert bundled / "llama" / "openvino" in pl["runtimes_kept"] and bundled / "llama" / "vulkan" in pl["runtimes_kept"]
+    assert bundled / "llama" / "cuda" in pl["unused"]

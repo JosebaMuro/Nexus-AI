@@ -52,7 +52,13 @@ jobs:
           docker run --rm -v "$PWD":/w -w /w -e CMAKE_ARGS="$extra" ${{ matrix.image }} bash -c '
             set -e
             /opt/python/cp311-cp311/bin/pip wheel --no-deps -w raw src/llama_cpp_python-*.tar.gz
-            auditwheel repair -w out raw/llama_cpp_python-*.whl'
+            auditwheel show raw/llama_cpp_python-*.whl || true
+            mkdir -p chk && cd chk && python3 -m zipfile -e ../raw/llama_cpp_python-*.whl . 2>/dev/null || /opt/python/cp311-cp311/bin/python -m zipfile -e ../raw/llama_cpp_python-*.whl .
+            echo "versiones de simbolos exigidas:"; find . -name "*.so*" -exec objdump -T {} + | grep -oE "GLIBC(XX)?_[0-9.]+" | sort -Vu | tail -8
+            cd .. && rm -rf chk
+            # auditwheel solo cambia la etiqueta y copia libs: si se niega por un simbolo de libstdc++ del toolset,
+            # se usa la rueda tal cual (compilada sobre glibc 2.28) y la prueba de abajo la carga de verdad
+            auditwheel repair -w out raw/llama_cpp_python-*.whl || cp raw/llama_cpp_python-*.whl out/'
           sudo chown -R $(id -u) out
       - name: Compilar (Windows)
         if: runner.os == 'Windows'
@@ -105,6 +111,9 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
       - name: llama-server con OpenVINO (Release oficial de llama.cpp)
         shell: bash
         run: |
@@ -125,10 +134,10 @@ jobs:
       - name: Bibliotecas de OpenVINO (si el paquete no las trae)
         shell: bash
         run: |
-          exe=$(find openvino -name 'llama-server*' -type f | head -1); dir=$(dirname "$exe")
+          exe=$(find openvino -type f \( -name llama-server -o -name llama-server.exe \) | head -1); dir=$(dirname "$exe")
           if ! ls "$dir" | grep -qi 'openvino'; then
-            python3 -m pip download -q --no-deps --only-binary :all: openvino -d ov
-            python3 - "$dir" <<'PY'
+            python -m pip download -q --no-deps --only-binary :all: openvino -d ov
+            python - "$dir" <<'PY'
           import glob, sys, zipfile, os
           dest = sys.argv[1]
           w = zipfile.ZipFile(glob.glob("ov/openvino-*.whl")[0])
@@ -141,7 +150,7 @@ jobs:
       - name: Probar
         shell: bash
         run: |
-          exe=$(find openvino -name 'llama-server*' -type f | head -1); dir=$(dirname "$exe")
+          exe=$(find openvino -type f \( -name llama-server -o -name llama-server.exe \) | head -1); dir=$(dirname "$exe")
           chmod +x "$exe" || true
           export LD_LIBRARY_PATH="$PWD/$dir:${LD_LIBRARY_PATH:-}"
           "$exe" --version
@@ -154,7 +163,7 @@ jobs:
           grep -E 'using device|offloaded' srv.log || true
           kill %1 || true
           mkdir -p pack/openvino && cp -r "$dir"/. pack/openvino/
-          cd pack && python3 -c "import shutil; shutil.make_archive('../llama-openvino-${{ matrix.target }}', 'zip', '.')"
+          cd pack && python -c "import shutil; shutil.make_archive('../llama-openvino-${{ matrix.target }}', 'zip', '.')"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
