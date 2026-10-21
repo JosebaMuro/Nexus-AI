@@ -1,0 +1,14 @@
+{
+  "name": "Nexus-Office",
+  "short_name": "Nexus-Office",
+  "description": "Agente de IA multimodal portable con memoria, aprendizaje y agentes",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#04060c",
+  "theme_color": "#04060c",
+  "icons": [
+    { "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

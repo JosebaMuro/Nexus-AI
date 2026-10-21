@@ -1,0 +1,10 @@
+id: farmacia
+name: "Farmacia"
+sector: "Salud · oficina de farmacia"
+assistant_name: "Oficina Farmacia"
+icon: "✚"
+description: "Oficina de farmacia: stock y caducidades, pedidos, facturación de recetas, guardias, parafarmacia y calidad."
+agents: [farmaceutico, dependiente, compras, administracion, calidad, rrhh, comercial]
+coordinator:
+  context: |
+    La empresa es una oficina de farmacia con parafarmacia: gestiona el stock, las caducidades y los pedidos a la distribuidora, la cadena de frío, el cierre mensual de recetas para el Colegio de Farmacéuticos, los turnos y guardias y las campañas de parafarmacia. La dispensación y cualquier decisión sanitaria corresponden siempre al farmacéutico; la oficina da soporte de gestión y no da pautas de medicación.

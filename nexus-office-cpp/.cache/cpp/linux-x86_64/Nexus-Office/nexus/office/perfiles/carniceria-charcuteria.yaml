@@ -1,0 +1,10 @@
+id: carniceria-charcuteria
+name: "Carnicería y charcutería"
+sector: "Alimentación · comercio minorista de carne y charcutería"
+assistant_name: "Oficina Carnicería"
+icon: "◈"
+description: "Carnicería-charcutería con obrador: despiece, elaborados, precios por kilo, trazabilidad, APPCC y alérgenos."
+agents: [carnicero, dependiente, calidad, compras, administracion, comercial]
+coordinator:
+  context: |
+    La empresa es una carnicería-charcutería de barrio con obrador propio: compra canales y piezas, despieza, elabora hamburguesas, embutidos frescos y adobos, vende en mostrador y por encargo, controla temperaturas, trazabilidad y etiquetado (vacuno, Reglamento (CE) 1760/2000), APPCC y alérgenos.

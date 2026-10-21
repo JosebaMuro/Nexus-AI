@@ -1,0 +1,10 @@
+id: carpinteria
+name: "Carpintería y ebanistería"
+sector: "Madera · muebles a medida, puertas y armarios"
+assistant_name: "Oficina Carpintería"
+icon: "⌂"
+description: "Carpintería que fabrica muebles a medida, cocinas, armarios, puertas y tarimas y hace restauraciones."
+agents: [carpintero, pintor, recepcion, presupuestos, administracion, compras, prl]
+coordinator:
+  context: |
+    La empresa es una carpintería y ebanistería: fabrica en su taller muebles a medida, cocinas, armarios empotrados, puertas y tarimas, los barniza o laca y los monta en casa del cliente; también restaura muebles.

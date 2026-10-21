@@ -1,0 +1,10 @@
+id: comercio-minorista
+name: "Comercio minorista (tienda)"
+sector: "Comercio · tienda de venta al público"
+assistant_name: "Oficina Tienda"
+icon: "▣"
+description: "Tienda de barrio o especializada: venta, precios y márgenes, stock, caja, devoluciones, garantías y promociones."
+agents: [dependiente, compras, administracion, comercial, recepcion, rrhh]
+coordinator:
+  context: |
+    La empresa es un comercio minorista con tienda física (y quizá venta online): atiende al público, fija precios y márgenes, repone stock con sus proveedores, hace caja, gestiona devoluciones, garantías y reclamaciones, prepara rebajas y campañas y cuida a sus clientes habituales.

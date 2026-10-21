@@ -1,0 +1,10 @@
+id: escuela-infantil
+name: "Escuela infantil"
+sector: "Educación · primer ciclo de Educación Infantil (0-3 años)"
+assistant_name: "Oficina Escuela Infantil"
+icon: "✿"
+description: "Escuela infantil 0-3: propuesta pedagógica, aulas y ratios, adaptación, familias, menús con alérgenos, protocolos y personal."
+agents: [educador-infantil, recepcion, administracion, rrhh, calidad, compras, proteccion-datos, prl]
+coordinator:
+  context: |
+    La empresa es una escuela infantil autorizada de primer ciclo (0 a 3 años) con aulas de bebés, de 1-2 y de 2-3 años, comedor y horario ampliado: organiza matrículas y cuotas, el periodo de adaptación, la comunicación diaria con las familias, menús con alérgenos, protocolos de salud y de recogida, y turnos de educadoras respetando ratios y titulaciones de la norma autonómica. Trata datos e imágenes de menores con especial cuidado.

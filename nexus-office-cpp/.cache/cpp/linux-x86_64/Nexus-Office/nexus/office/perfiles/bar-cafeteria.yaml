@@ -1,0 +1,10 @@
+id: bar-cafeteria
+name: "Bar y cafetería"
+sector: "Hostelería · bares, cafeterías y tapas"
+assistant_name: "Oficina Bar"
+icon: "☕"
+description: "Bar-cafetería con barra, terraza, desayunos y tapas: caja, márgenes de bebida, alérgenos y licencias."
+agents: [camarero, cocinero, calidad, compras, administracion, rrhh, comercial]
+coordinator:
+  context: |
+    La empresa es un bar-cafetería de barrio con barra y terraza: sirve desayunos, cafés, tapas, raciones y bebidas, hace caja y arqueo cada día, controla el margen de las bebidas, informa de alérgenos, cumple la licencia de terraza y horario y organiza turnos de mañana y tarde.

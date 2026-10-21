@@ -1,0 +1,10 @@
+id: textil-confeccion
+name: "Textil y confección"
+sector: "Industria · confección textil, uniformes y ropa laboral"
+assistant_name: "Oficina Confección"
+icon: "✂"
+description: "Taller de confección: patronaje, corte y costura de prendas, uniformes y ropa laboral, producción para marcas y personalización."
+agents: [confeccion, tapicero, medioambiente, calidad, compras, comercial, presupuestos, administracion, rrhh]
+coordinator:
+  context: |
+    La empresa es un taller de confección textil: hace patronaje, escalado, corte y costura de prendas propias y para marcas, uniformes y ropa laboral, personalización (bordado y serigrafía) y arreglos, con control de calidad, fichas técnicas, etiquetado y talleres externos.

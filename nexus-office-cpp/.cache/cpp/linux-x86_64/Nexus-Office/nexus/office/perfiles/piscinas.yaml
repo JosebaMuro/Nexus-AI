@@ -1,0 +1,10 @@
+id: piscinas
+name: "Piscinas"
+sector: "Servicios · construcción y mantenimiento de piscinas"
+assistant_name: "Oficina Piscinas"
+icon: "≋"
+description: "Empresa de piscinas: construcción, reforma, mantenimiento y tratamiento del agua de piscinas privadas, comunitarias y de uso público."
+agents: [piscinero, fontanero, electricista, albanil, recepcion, presupuestos, administracion, compras, prl]
+coordinator:
+  context: |
+    La empresa construye, reforma y mantiene piscinas privadas, de comunidades de propietarios, hoteles y uso público: tratamiento del agua y autocontrol según el RD 742/2013, depuradoras, electrólisis salina, fugas, revestimientos, puesta en marcha e invernaje, y venta de productos químicos.
