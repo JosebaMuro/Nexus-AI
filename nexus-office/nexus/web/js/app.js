@@ -1805,6 +1805,7 @@
     })));
     if (window.NexusKG) guard(NexusKG.load)();   // gestor de conocimiento (js/kgadmin.js)
     if (!S.token) return;
+    guard(profesorPanel)();
     const c = S.fullCfg; const sections = Object.keys(c).filter((k) => k !== "user");
     $("#admin-settings").innerHTML = sections.map((sec) => `<details class="item"><summary style="cursor:pointer;font:700 12px var(--font-hud);letter-spacing:.15em">${sec.toUpperCase()}</summary>${Object.entries(c[sec]).map(([k, v]) => {
       const key = `${sec}.${k}`, t = typeof v;
@@ -1818,6 +1819,36 @@
       if (v === "********") return; await api("/api/config", { method: "PUT", body: { [el.dataset.a]: v } }); toast(`${el.dataset.a} actualizado`); await loadConfig(); loadStatus();
     })));
   };
+  /* ---------------- Profesor: IA online (/api/nube) */
+  async function profesorPanel(elegido) {
+    const box = $("#prof-box"), d = await api("/api/nube");
+    const sel = (typeof elegido === "string" && elegido) || d.proveedor || d.proveedores.find((p) => p.con_clave)?.id || "gemini";
+    const cur = d.proveedores.find((p) => p.id === sel) || d.proveedores[0];
+    box.innerHTML = `<div class="row" style="flex-wrap:wrap">
+        <select class="input" id="prof-prov" style="width:auto">${d.proveedores.map((p) => `<option value="${p.id}" ${p.id === sel ? "selected" : ""}>${esc(p.nombre)}${p.con_clave ? " ✓" : ""}</option>`).join("")}</select>
+        <input class="input" id="prof-model" placeholder="${esc(cur.modelo)}" value="${esc(d.proveedor === sel ? d.modelo : "")}" style="flex:1 1 160px;min-width:0" title="Modelo (vacío: el recomendado)">
+        <select class="input" id="prof-effort" style="width:auto" title="Esfuerzo de razonamiento">${["low", "medium", "high"].map((e) => `<option value="${e}" ${d.esfuerzo === e ? "selected" : ""}>${{ low: "Rápido", medium: "Equilibrado", high: "A fondo" }[e]}</option>`).join("")}</select></div>
+      <div class="row" style="flex-wrap:wrap"><input class="input" id="prof-key" type="password" autocomplete="off" placeholder="${cur.con_clave ? "Clave guardada (escribe otra para cambiarla)" : "Clave de API"}" style="flex:1 1 200px;min-width:0">
+        <button class="btn sm ghost" id="prof-get">CONSEGUIR CLAVE</button></div>
+      <div class="row" id="prof-url-row" style="display:${sel === "compatible" ? "flex" : "none"}"><input class="input" id="prof-url" placeholder="https://servidor/v1 (API compatible con OpenAI)" value="${esc(d.base_url)}" style="flex:1"></div>
+      <div class="row"><button class="btn primary" id="prof-save">GUARDAR</button><button class="btn" id="prof-test">PROBAR CONEXIÓN</button>
+        ${cur.con_clave ? '<button class="btn sm ghost" id="prof-del">BORRAR CLAVE</button>' : ""}
+        <span class="chip">${d.listo ? `Activo: ${esc((d.proveedores.find((p) => p.id === d.proveedor) || {}).nombre || d.proveedor)} · ${esc(d.modelo)}` : "Sin IA online: usa el modelo local"}</span></div>
+      <div id="prof-res"></div>`;
+    $("#prof-prov").onchange = (e) => guard(profesorPanel)(e.target.value);   // se guarda al pulsar GUARDAR
+    $("#prof-get").onclick = () => openExternal((d.proveedores.find((p) => p.id === $("#prof-prov").value) || cur).clave_en);
+    $("#prof-save").onclick = guard(async () => {
+      const body = { proveedor: $("#prof-prov").value, modelo: $("#prof-model").value.trim(), esfuerzo: $("#prof-effort").value, clave: $("#prof-key").value.trim() };
+      if ($("#prof-url-row").style.display !== "none") body.base_url = $("#prof-url").value.trim();
+      await api("/api/nube", { method: "PUT", body }); toast("Profesor guardado"); profesorPanel();
+    });
+    $("#prof-test").onclick = guard(async () => {
+      const res = $("#prof-res"); res.innerHTML = '<div class="chip"><span class="spin"></span>Probando…</div>';
+      const x = await api("/api/nube/probar", { body: { proveedor: $("#prof-prov").value } });
+      res.innerHTML = x.ok ? `<div class="notice" style="border-color:var(--ok)">Conectado en ${x.segundos} s: «${esc(x.respuesta)}»</div>` : `<div class="notice bad">${esc(x.error)}</div>`;
+    });
+    $("#prof-del") && ($("#prof-del").onclick = guard(async () => { await api("/api/nube", { method: "PUT", body: { borrar_claves: [sel] } }); toast("Clave borrada"); profesorPanel(); }));
+  }
   /* ---------------- editor de temas */
   function themeEditor() {
     const TH = NexusThemes;
