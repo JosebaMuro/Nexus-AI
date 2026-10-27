@@ -1,4 +1,4 @@
-; Nexus-Office 2.0 beta C (edicion C++) - instalador grafico de Windows (NSIS 3). Lo genera
+; Nexus-Office 2.1 (edicion C++) - instalador grafico de Windows (NSIS 3). Lo genera
 ; nexus-office-cpp/packaging/build.py (makensis funciona tambien en Linux): nexus-office.exe, la interfaz web y los
 ; motores de IA (llama-server, sd-cli, piper y whisper) van dentro del .exe. Se instala junto a la edicion Python
 ; sin pisarla (carpeta y entrada de «Aplicaciones» propias).
@@ -41,7 +41,7 @@ VIAddVersionKey "LegalCopyright" "Nexus-Office"
 !define MUI_UNICON "${ICON}"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Instalar Nexus-Office ${VERSION} (edicion C++)"
-!define MUI_WELCOMEPAGE_TEXT "Nexus-Office es una oficina de inteligencia artificial que funciona entera en este equipo, sin enviar nada a internet.$\r$\n$\r$\nEsta es la edicion C++ (beta): un unico programa nativo, mas ligero y rapido de arrancar, con la misma interfaz. El instalador incluye todo lo necesario (no descarga programas). Solo el modelo de IA, elegido segun tu hardware, se descarga si hay internet.$\r$\n$\r$\nLa carpeta de instalacion es portable: puedes elegir un disco USB."
+!define MUI_WELCOMEPAGE_TEXT "Nexus-Office es una oficina de inteligencia artificial que funciona entera en este equipo, sin enviar nada a internet.$\r$\n$\r$\nEsta es la edicion C++: un unico programa nativo, mas ligero y rapido de arrancar, con la misma interfaz. El instalador incluye todo lo necesario (no descarga programas). Solo el modelo de IA, elegido segun tu hardware, se descarga si hay internet.$\r$\n$\r$\nLa carpeta de instalacion es portable: puedes elegir un disco USB."
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_TEXT "Abrir Nexus-Office"
 !define MUI_FINISHPAGE_RUN_FUNCTION OpenNexus

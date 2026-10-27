@@ -1,11 +1,11 @@
-# Edición C++ (Nexus-Office 2.0 beta C)
+# Edición C++ (Nexus-Office 2.1)
 
-Nexus-Office 2.0 reescrito en C++20. Es la misma aplicación: la misma interfaz web (los ficheros de
+Nexus-Office reescrito en C++20, con todas las funciones de la edición Python. Es la misma aplicación: la misma interfaz web (los ficheros de
 `nexus-office/nexus/web` se usan tal cual), la misma API HTTP y WebSocket, los mismos perfiles de oficina, agentes,
 paquetes de conocimiento, base de datos y configuración. Cambia el motor: en vez de Python con sus dependencias es un
 único ejecutable nativo, `nexus-office` (`nexus-office.exe` en Windows).
 
-| | Edición Python 2.0.0 | Edición C++ 2.0 beta C |
+| | Edición Python | Edición C++ |
 |---|---|---|
 | Programa | CPython + ~60 paquetes en `venv/` | un ejecutable de unos 15 MB |
 | Arranque hasta responder (mismo equipo, datos nuevos) | 1,2 s | 0,13 s |
@@ -19,10 +19,11 @@ marcha, lo que más ocupa es llama-server, que es el mismo en las dos.
 
 - **Interfaz**: todas las vistas (Chat, Salón, Núcleo, Estudio, Agentes, Modelos, Herramientas, Sistema, Ajustes),
   modo usuario y administrador con PIN, temas, avatar y modo en vivo por voz.
-- **API**: las 137 rutas HTTP y el WebSocket de la edición Python, con las mismas respuestas (también los errores 422 al estilo de
+- **API**: todas las rutas HTTP y el WebSocket de la edición Python, con las mismas respuestas (también los errores 422 al estilo de
   FastAPI). Las pruebas `tests/compare_api.py` y `tests/compare_flows.py` arrancan las dos ediciones con datos nuevos y
   comparan 39 rutas y 41 flujos completos (administrador, memoria, agentes, biblioteca, multimedia, grafo, oficina y
-  chat por WebSocket): coinciden todos salvo la clave `edition` que añade esta edición.
+  chat por WebSocket), y `tests/compare_full.py` otros 108 (bolsa, grafos, web, red COOP, VPN y GIMP): coinciden
+  todos salvo la clave `edition` que añade esta edición y un código de error (404 frente a 405) en una ruta inexistente.
 - **Motor de IA**: llama-server (llama.cpp) con el selector de motor y acelerador (CPU, GPU, NPU) al arrancar, modelos
   recomendados según el hardware (Qwen3.5), descarga de Hugging Face, Ollama, ModelScope, Civitai y Kaggle, y el motor
   integrado sin modelo para las operaciones sencillas (la calculadora del chat responde aunque no haya modelo).
@@ -36,27 +37,38 @@ marcha, lo que más ocupa es llama-server, que es el mismo en las dos.
   aprobaciones, sandbox y auditoría, y propuestas de herramientas nuevas.
 - **Servicio**: `nexus-office servicio instalar [--red]` con systemd, launchd, el Programador de tareas de Windows (con
   `nexus-office-w.exe`, sin ventana) o Termux.
-- **Línea de órdenes**: `run`, `detect`, `pull`, `modelos`, `servicio`, `chat` y `oficina`, con las mismas opciones.
+- **Línea de órdenes**: `run`, `detect`, `pull`, `modelos`, `servicio`, `chat`, `oficina`, `bolsa`, `grafo`, `setup`,
+  `wheels` y `cleanup`, con las mismas opciones.
 
-## Qué falta todavía (beta)
+## Funciones que llegaron en la 2.1
 
-Lo que no está portado responde con un aviso claro (HTTP 501 en la API, un mensaje en la terminal) y no rompe nada más.
+La 2.0 beta C dejaba fuera varias funciones. Desde la 2.1 están todas, con las mismas respuestas que la edición Python:
 
-| Función | Estado en C++ | Alternativa mientras tanto |
-|---|---|---|
-| Mesa de bolsa (7 herramientas `bolsa_*` y su vista) | no portada | edición Python |
-| Red COOP (LAN virtual entre instancias) | la vista muestra el estado; no se puede activar | edición Python |
-| VPN WireGuard y acceso remoto por internet con TLS | no portados | red local con clave de red |
-| Importar y exportar grafos en otros formatos (GraphML, GEXF, RDF...) y paquetes de dominio | no portado | edición Python |
-| Rastrear sitios web enteros y guardar una URL como PDF | no portado | subir los documentos a la biblioteca |
-| Razonar un archivo comprimido completo | no portado | se leen sus documentos al subirlo |
-| Herramientas de GIMP (`gimp_estado`, `gimp_script`) y `imagen_editar`, `imagen_info` | no portadas | edición Python |
-| Motor «llama.cpp integrado» (llama-cpp-python) | no aplica: se usa llama-server, el mismo llama.cpp | — |
-| Backend `transformers` y MusicGen (PyTorch) | no aplica | compositor procedural |
-| Órdenes `grafo`, `bolsa`, `wheels`, `cleanup`, `setup` | no portadas | edición Python |
-| APK autónoma: GPU (Vulkan/OpenCL) y NPU Hexagon | la APK C++ usa la CPU | APK autónoma de la edición Python |
+| Función | Cómo está hecha en C++ |
+|---|---|
+| Mesa de bolsa (herramientas `bolsa_*`, vista y orden `bolsa`) | `src/office/bolsa.cpp`; mismos mercados, costes, órdenes e informe fiscal |
+| Red COOP, VPN WireGuard y acceso remoto por internet | `src/coop`, `src/remote`; cifrado propio (scrypt, X25519) y TLS 1.3 con mbedTLS |
+| Importar y exportar grafos de más de 50 formatos y paquetes de dominio | `src/memory/kg_formats.cpp`, con lectores propios de XML, CSV, TOML, bzip2 y xz |
+| Rastrear sitios web y guardar una URL como PDF maquetado | `src/rag/crawler.cpp` y `url_pdf.cpp`, con un escritor de PDF propio (`pdfgen.cpp`) |
+| Edición de imágenes como en GIMP (`imagen_editar`, `imagen_info`, `gimp_estado`, `gimp_script`) | `src/media/gimp.cpp` y un motor de imagen propio (`raster.cpp`) cuando no hay GIMP |
+| Agente Profesor con IA online (`/api/nube`, `consultar_profesor`) | `src/llm/cloud.cpp`: API compatible con OpenAI y Messages API de Anthropic en streaming |
+| APK autónoma con GPU (Vulkan, OpenCL) y NPU Hexagon | `src/hardware/android_accel.cpp`: sonda de llama-server-gpu y respaldo NPU → GPU → CPU |
+| Autoajuste en vivo en Android (`/api/android/autoajuste`) | `src/core/android_tune.cpp`: hilos medidos, temperatura, batería, GPU frente a CPU y consejo de modelo |
+| Órdenes `grafo`, `bolsa`, `setup`, `wheels` y `cleanup` | `src/main.cpp` |
 
-La herramienta de la API `/api/tools` lista 20 herramientas en C++ frente a 34 en Python por lo anterior.
+`/api/tools` lista las mismas herramientas en las dos ediciones. Quedan dos diferencias que no aplican a C++:
+
+| Función de la edición Python | En C++ |
+|---|---|
+| Motor «llama.cpp integrado» (llama-cpp-python) | se usa llama-server, que es el mismo llama.cpp |
+| Backend `transformers` y MusicGen (PyTorch) | el compositor procedural de música |
+
+## Ejemplos incluidos
+
+- `ejemplos/grafo-wikipedia-es/`: grafo multicapa de la Wikipedia en español para importar (capas `1-temas`,
+  `2-articulos`, `3-enlaces` y `4-wikidata`). Lo genera `tools/wikipedia_grafo.py` con las API públicas de
+  es.wikipedia.org y wikidata.org, desde la GitHub Action `wikipedia-grafo.yml`.
+- `ejemplos/resumen-proyecto/Nexus-Office-resumen.md`: resumen de todo el proyecto para subirlo a la biblioteca.
 
 ## Convivencia con la edición Python
 
@@ -104,7 +116,11 @@ build/nexus-office run
 - `nexus-tests`: unitarias (texto, expresiones regulares, YAML, JSON, configuración, base de datos, memoria, RAG...) y
   una de integración que levanta el servidor en un puerto libre y recorre API, administrador, memoria, biblioteca,
   multimedia y chat por WebSocket.
-- `tests/compare_api.py` y `tests/compare_flows.py`: comparación con la edición Python, ruta por ruta y flujo por flujo.
+- `tests/compare_api.py`, `tests/compare_flows.py` y `tests/compare_full.py`: comparación con la edición Python, ruta
+  por ruta y flujo por flujo; `tests/compare_kg.py` lee un ejemplo de cada formato de grafo en las dos ediciones y
+  `tests/compare_gimp.py` compara 73 ediciones de imagen píxel a píxel.
+- `nexus-tests nube` y `nexus-tests android`: el Profesor contra un servidor falso de OpenAI y de Anthropic, y la sonda,
+  el respaldo NPU → GPU → CPU y el autoajuste de Android con un llama-server falso.
 - `tests/ui_smoke.js`: abre la interfaz en Chromium, pregunta «¿Cuánto es 12*7?», espera «84», recorre las vistas y
   falla si hay errores de JavaScript o respuestas 5xx.
 - Revisión de memoria con AddressSanitizer y UndefinedBehaviorSanitizer recorriendo todas las pruebas anteriores: sin
@@ -126,4 +142,6 @@ estado y prueba del acelerador.
   se prueba en CPU; el chat con Metal en un Mac real está pendiente de probar.
 - Con `-ngl 0` (todo en CPU) llama-server usa un solo hueco de conversación para no partir el contexto en dos.
 
-Sin probar en hardware real (como en la edición Python): GPU dedicada, NPU Intel y NPU Hexagon.
+Sin probar en hardware real (como en la edición Python): GPU dedicada, NPU Intel, y la GPU y la NPU Hexagon de un
+móvil. La lógica de Android (sonda, respaldo NPU → GPU → CPU y autoajuste) se prueba en `tests/test_android.cpp` con un
+llama-server falso que falla con el dispositivo que se le pide.

@@ -1,10 +1,10 @@
 name: Publicar la Release de Nexus-Office C++
 
 # Se lanza al empujar la rama temporal «publicar-cpp-<version>» (no «entrega-*», que es la de la edicion Python): trae
-# entrega/entrega.json ({"run": <id de la ejecucion de cpp-entrega.yml>, "tag": "v2.0.0-beta-cpp", "target": <rama>}),
+# entrega/entrega.json ({"run": <id de la ejecucion de cpp-entrega.yml>, "tag": "v2.1.0-cpp", "target": <rama>}),
 # la APK autonoma ya firmada en trozos (entrega/apk/) y los manuales en PDF (entrega/*.pdf). Junta los instaladores de
 # esa ejecucion, la APK VPN (la app cliente es la misma de la 2.0.0), el codigo fuente limpio, LEEME y SHA256SUMS,
-# publica la Release como prerrelease y borra la rama temporal.
+# publica la Release y borra la rama temporal.
 on:
   push:
     branches:
@@ -63,9 +63,9 @@ jobs:
           TARGET=$(python -c "import json; print(json.load(open('entrega/entrega.json')).get('target', 'main'))")
           V=${TAG#v}
           awk -v v="## Nexus-Office $V" '$0 ~ "^## " {p = (index($0, v) == 1)} p' nexus-office-cpp/CHANGELOG.md > notas.md
-          printf '\nEdición C++ en beta: se instala junto a la edición Python sin pisarla. Instaladores 100 %% offline para Windows (x64 y ARM64), Linux (x86_64 y ARM64: .run, .deb, AppImage y Flatpak), macOS (Apple Silicon e Intel) y Android (autónoma y VPN). Instrucciones en LEEME.txt; integridad en SHA256SUMS.txt.\n' >> notas.md
+          printf '\nEdición C++: se instala junto a la edición Python sin pisarla. Instaladores 100 %% offline para Windows (x64 y ARM64), Linux (x86_64 y ARM64: .run, .deb, AppImage y Flatpak), macOS (Apple Silicon e Intel) y Android (autónoma y VPN). Instrucciones en LEEME.txt; integridad en SHA256SUMS.txt.\n' >> notas.md
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$TARGET" --prerelease --latest=false -t "Nexus-Office $V (2.0 beta C)" -F notas.md
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$TARGET" --latest=false -t "Nexus-Office $V (edición C++)" -F notas.md
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber release/*
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets -q '.assets[] | "\(.name) \(.size)"'
       - name: Borrar la rama temporal

@@ -41,9 +41,6 @@ namespace {
 
 auto L = log::get("server");
 
-[[noreturn]] void not_in_cpp(const std::string& what) {
-  throw HttpErr(501, what + " todavia no esta disponible en la edicion C++ (2.0 beta C). Usa la edicion Python para esto.");
-}
 
 // str(KeyError("x")) de Python
 std::string key_msg(const std::exception& e) { return "'" + std::string(e.what()) + "'"; }

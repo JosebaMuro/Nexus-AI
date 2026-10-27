@@ -1,6 +1,6 @@
 name: Nexus-Office C++ (compilar y probar)
 
-# Edicion C++ de Nexus-Office (nexus-office-cpp/, 2.0 beta C): compila y pasa las pruebas en cada sistema nativo,
+# Edicion C++ de Nexus-Office (nexus-office-cpp/, 2.1): compila y pasa las pruebas en cada sistema nativo,
 # compara la API y los flujos con la edicion Python y prueba la interfaz web en Chromium. Cada compilacion deja la
 # carpeta instalada (ejecutable + nexus/) como artefacto «cpp-<plataforma>», que usa cpp-entrega.yml.
 on:

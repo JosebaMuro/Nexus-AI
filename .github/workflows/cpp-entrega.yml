@@ -1,6 +1,6 @@
 name: Nexus-Office C++ (instaladores y pruebas con modelo real)
 
-# Entrega de la edicion C++ (nexus-office-cpp, 2.0 beta C):
+# Entrega de la edicion C++ (nexus-office-cpp, 2.1):
 #  1. cpp.yml compila y prueba nexus-office en cada sistema nativo (artefactos cpp-<plataforma>)
 #  2. voz: whisper-cli (whisper.cpp) compilado en cada sistema y piper (rhasspy/piper) precompilado
 #  3. paquetes: .exe (NSIS), .run, .deb, AppImage, Flatpak y macOS con packaging/build.py; llama-server y sd-cli salen
