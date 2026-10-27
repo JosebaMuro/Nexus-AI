@@ -128,13 +128,26 @@ DEFAULTS: dict[str, Any] = {
     "performance": {"workers": 0, "crawl_connections": 0},
     # rastreo web por lotes (0 = automatico segun la RAM) y acceso a webs de la red local (intranet, wiki interna)
     "rag": {"crawl_batch_pages": 0, "allow_private_urls": False},
+    # IA online para el agente Profesor: nada sale a internet hasta que un administrador pone una clave
+    "nube": {"proveedor": "", "modelo": "", "base_url": "", "esfuerzo": "medium",
+             "clave_gemini": "",
+             "clave_openai": "",
+             "clave_perplexity": "",
+             "clave_claude": "",
+             "clave_mistral": "",
+             "clave_deepseek": "",
+             "clave_groq": "",
+             "clave_openrouter": "",
+             "clave_compatible": ""},
     "admin": {"pin_hash": "", "pin_salt": ""},
 }
 
 # claves editables en modo usuario (seccion.clave)
 USER_KEYS = {f"user.{k}" for k in DEFAULTS["user"]}
 SECRET_KEYS = {"admin.pin_hash", "admin.pin_salt", "llm.openai_api_key", "models.huggingface_token",
-               "models.civitai_token", "models.kaggle_key", "models.modelscope_token", "coop.passphrase", "server.lan_key"}
+               "models.civitai_token", "models.kaggle_key", "models.modelscope_token", "coop.passphrase", "server.lan_key",
+               "nube.clave_gemini", "nube.clave_openai", "nube.clave_perplexity", "nube.clave_claude",
+               "nube.clave_mistral", "nube.clave_deepseek", "nube.clave_groq", "nube.clave_openrouter", "nube.clave_compatible"}
 
 
 def _deep_merge(base: dict, extra: dict) -> dict:
@@ -196,6 +209,8 @@ class Config:
                 continue  # el PIN solo se cambia via set_pin
             if not admin and key not in USER_KEYS:
                 raise PermissionError(f"'{key}' requiere modo administrador")
+            if key in SECRET_KEYS and value == "********":
+                continue  # la vista enmascarada de vuelta: se conserva el secreto guardado
             self.set(key, value, save=False)
             applied[key] = value
         self.save()

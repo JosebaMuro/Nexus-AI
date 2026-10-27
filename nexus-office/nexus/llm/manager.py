@@ -1,7 +1,8 @@
 """Gestor de LLM: elige el backend activo, resuelve el modelo y mide el rendimiento.
 
 Especificacion de modelo por agente: ``"default"`` o ``"backend:modelo"``
-(p.ej. ``ollama:qwen2.5:3b``, ``llamacpp:<id-catalogo>``, ``openai:gpt-4o-mini``, ``peer:<nodo>``).
+(p.ej. ``ollama:qwen2.5:3b``, ``llamacpp:<id-catalogo>``, ``openai:gpt-4o-mini``, ``peer:<nodo>``,
+``nube:claude`` para una IA online; esta solo se usa si un agente la pide, nunca como respaldo automatico).
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from typing import Iterator
 from .. import log
 from .backends import LlamaCppBackend, OllamaBackend, OpenAICompatBackend, TransformersBackend, is_reasoning_model
 from .builtin import BuiltinBackend
+from .cloud import CloudBackend
 from .llamaserver import LlamaServerBackend
 
 L = log.get("llm")
@@ -60,6 +62,7 @@ class LLMManager:
                                           c.get("llm.openai_model"), timeout),
             "transformers": TransformersBackend(self._resolve("transformers"), self.profile["image"]["device"]),
             "builtin": BuiltinBackend(),
+            "nube": CloudBackend(c, timeout),
         }
         self._avail_cache.clear()
 
@@ -96,7 +99,10 @@ class LLMManager:
         """Devuelve (backend, modelo) para una especificacion."""
         if spec and spec != "default" and ":" in spec:
             backend, model = spec.split(":", 1)
-            if backend == "peer" or self.is_available(backend):
+            if backend == "nube":   # IA online: solo con clave; si no, el modelo local de siempre
+                if self.backends["nube"].ready(model):
+                    return backend, model
+            elif backend == "peer" or self.is_available(backend):
                 return backend, model
         default = self.config.get("llm.default_model", "")
         if default and ":" in default:
@@ -119,10 +125,10 @@ class LLMManager:
         if engine in self.backends and engine != "auto":   # motor elegido al arrancar: primero (si no esta, el siguiente)
             order = [engine] + [n for n in order if n != engine]
         for name in self.backends:  # backends nuevos tras actualizar el proyecto
-            if name not in order:
+            if name not in order and name != "nube":
                 order.insert(0 if name == "llamaserver" else len(order) - 1, name)
         for name in order:
-            if self.is_available(name):
+            if name != "nube" and self.is_available(name):
                 return name, ""
         return "builtin", ""
 

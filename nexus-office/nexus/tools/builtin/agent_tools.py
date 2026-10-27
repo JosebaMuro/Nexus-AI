@@ -16,6 +16,30 @@ def delegate(args, ctx):
     return {"agent": target, "answer": answer}
 
 
+def consultar_profesor(args, ctx):
+    """Pregunta al Profesor (IA online si hay clave, si no el modelo local) y aprende de su respuesta."""
+    if ctx.agent == "profesor":
+        return {"error": "el Profesor no se consulta a si mismo"}
+    if ctx.depth >= 2:
+        return {"error": "profundidad maxima de delegacion alcanzada"}
+    agents = ctx.services.agents
+    if not agents.get("profesor"):
+        return {"error": "no hay agente Profesor (restauralo en Agentes)"}
+    pregunta = str(args.get("pregunta", "")).strip()
+    if not pregunta:
+        return {"error": "falta la pregunta"}
+    tarea = pregunta + (f"\n\nContexto: {args['contexto']}" if args.get("contexto") else "")
+    answer = agents.run_subtask("profesor", tarea, ctx)
+    out = {"agent": "profesor", "answer": answer, "online": ctx.services.llm.backends["nube"].ready()}
+    if args.get("guardar", True) and answer.strip():
+        # lo aprendido queda en la memoria y el conocimiento del agente que pregunto
+        lesson = f"Lección del Profesor sobre «{pregunta[:160]}»: {answer.strip()[:1200]}"
+        out["memoria"] = ctx.services.memory.remember(lesson, "leccion", 0.75, source="agente:profesor",
+                                                     agent=ctx.agent)
+        ctx.services.learner.learn_text(lesson, ctx.agent)
+    return out
+
+
 def propose_tool(args, ctx):
     if not ctx.services.config.get("tools.allow_agent_proposals", True):
         return {"error": "las propuestas de herramientas estan desactivadas"}
@@ -35,6 +59,14 @@ TOOLS = [
     ({"name": "delegate", "description": "Encarga una subtarea a otro agente especialista y devuelve su respuesta",
       "parameters": {"type": "object", "properties": {"agent": {"type": "string"}, "task": {"type": "string"}},
                      "required": ["agent", "task"]}, "risk": "low", "permissions": ["agents"], "timeout": 900}, delegate),
+    ({"name": "consultar_profesor",
+      "description": ("Pregunta al agente Profesor (usa una IA online como Gemini, ChatGPT, Perplexity o Claude si "
+                      "un administrador la ha configurado; si no, el modelo local) y guarda la leccion en tu memoria "
+                      "para la proxima vez. Para dudas de conocimiento que no sabes resolver bien"),
+      "parameters": {"type": "object", "properties": {
+          "pregunta": {"type": "string"}, "contexto": {"type": "string", "description": "lo que ya sabes o intentas hacer"},
+          "guardar": {"type": "boolean", "default": True}}, "required": ["pregunta"]},
+      "risk": "low", "permissions": ["agents"], "timeout": 900}, consultar_profesor),
     ({"name": "list_agents", "description": "Lista los agentes disponibles y su especialidad",
       "parameters": {"type": "object", "properties": {}}, "risk": "low", "permissions": ["agents"]}, list_agents),
     ({"name": "propose_tool", "description": ("Propone una NUEVA herramienta para el repositorio. 'code' debe definir "

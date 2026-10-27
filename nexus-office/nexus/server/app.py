@@ -259,6 +259,37 @@ def create_app(services: Services | None = None) -> FastAPI:
             s.tools.reload()
         return {"applied": applied}
 
+    # ------------------------------------------------------------------ IA online (agente Profesor)
+    @app.get("/api/nube")
+    def nube_status():
+        return S().llm.backends["nube"].status()
+
+    @app.put("/api/nube", dependencies=[Depends(require_admin)])
+    def nube_set(body: dict = Body(...)):
+        from ..llm.cloud import EFFORTS, PROVIDERS
+        cfg = S().config
+        prov = str(body.get("proveedor", cfg.get("nube.proveedor", "")) or "")
+        if prov and prov not in PROVIDERS:
+            raise HTTPException(400, f"proveedor desconocido: {prov}. Validos: {', '.join(PROVIDERS)}")
+        if "esfuerzo" in body and body["esfuerzo"] not in EFFORTS:
+            raise HTTPException(400, f"esfuerzo no valido. Validos: {', '.join(EFFORTS)}")
+        cfg.set("nube.proveedor", prov, save=False)
+        for k in ("modelo", "base_url", "esfuerzo"):
+            if k in body:
+                cfg.set(f"nube.{k}", str(body[k] or "").strip(), save=False)
+        clave = str(body.get("clave") or "").strip()
+        if prov and clave and clave != "********":
+            cfg.set(f"nube.clave_{prov}", clave, save=False)
+        for p in body.get("borrar_claves") or []:
+            if p in PROVIDERS:
+                cfg.set(f"nube.clave_{p}", "", save=False)
+        cfg.save()
+        return S().llm.backends["nube"].status()
+
+    @app.post("/api/nube/probar", dependencies=[Depends(require_admin)])
+    def nube_test(body: dict = Body(default={})):
+        return S().llm.backends["nube"].test(str(body.get("proveedor") or ""))
+
     # ------------------------------------------------------------------ hardware / rendimiento
     @app.get("/api/hardware")
     def hw():
