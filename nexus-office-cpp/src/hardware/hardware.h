@@ -49,6 +49,9 @@ std::vector<GPU> parse_nvidia_smi(const std::string& out);
 
 // perfiles
 const GPU* best_gpu(const HardwareInfo& hw);
+void select_gpu(const std::string& name);   // GPU elegida a mano (hardware.gpu); "" = la mejor
+std::string selected_gpu();
+bool gpu_matches(const GPU& g, const std::string& want);
 std::pair<std::string, const GPU*> choose_accelerator(const HardwareInfo& hw, const std::string& override_ = "");
 json build_profile(const HardwareInfo& hw, const std::string& override_ = "");
 bool android();

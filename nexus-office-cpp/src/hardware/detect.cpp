@@ -6,7 +6,9 @@
 #include <set>
 
 #include "hardware/android_accel.h"
+#include "hardware/gpu_devices.h"
 #include "hardware/hardware.h"
+#include "models/runtimes.h"
 #include "util/http.h"
 #include "util/log.h"
 #include "util/proc.h"
@@ -462,6 +464,20 @@ static void detect_android(HardwareInfo& info) {
                                     {"vulkan", jstr(g, "vulkan")}, {"soc", s}};
 }
 
+// GPU que ve de verdad el llama-server de GPU incluido (Vulkan/CUDA/ROCm): cuales funcionan con su driver
+static json llama_gpu_devices() {
+  for (const char* variant : {"cuda", "vulkan", "rocm"}) {
+    auto exe = runtimes::RuntimeManager().find_exe("llama", variant);
+    if (!exe) exe = runtimes::bundled_exe("llama", variant);
+    if (!exe) continue;
+    json devs = gpu_devices::list_devices(*exe, runtimes::lib_env(*exe));
+    if (devs.empty()) continue;
+    for (auto& d : devs) d["variant"] = variant;
+    return devs;
+  }
+  return json::array();
+}
+
 HardwareInfo detect(const std::string& ollama_url, bool probe) {
   HardwareInfo info;
   info.os = sys::os_name();
@@ -499,6 +515,13 @@ HardwareInfo detect(const std::string& ollama_url, bool probe) {
     json rt = probe_runtimes(ollama_url);
     for (auto it = info.runtimes.begin(); it != info.runtimes.end(); ++it) rt[it.key()] = it.value();
     info.runtimes = rt;
+    if (!info.gpus.empty() && !sys::is_android()) {
+      try {
+        info.runtimes["llama_devices"] = llama_gpu_devices();
+      } catch (const std::exception& e) {
+        L.warning("Sonda de dispositivos de llama.cpp fallo: ", e.what());
+      }
+    }
   }
   return info;
 }

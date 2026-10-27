@@ -6,6 +6,7 @@
 
 #include "core/services.h"
 #include "hardware/hardware.h"
+#include "hardware/hw_profiles.h"
 #include "llm/llm.h"
 #include "models/runtimes.h"
 #include "util/log.h"
@@ -63,12 +64,21 @@ json accel_options(Services& s) {
     if (id == "npu") label = "NPU" + (s.hw.npus.empty() ? std::string() : " · " + s.hw.npus[0].name);
     accels.push_back({{"id", id}, {"label", label}, {"available", p["ok"]}, {"note", p["note"]}});
   }
-  json eff = json::object();
-  if (auto ls = std::dynamic_pointer_cast<llm::LlamaServerBackend>(s.llm->backend("llamaserver"))) eff = ls->effective();
+  json eff = json::object(), gpu_llama = json::object();
+  std::string gpu_error;
+  if (auto ls = std::dynamic_pointer_cast<llm::LlamaServerBackend>(s.llm->backend("llamaserver"))) {
+    eff = ls->effective();
+    gpu_llama = ls->gpu();
+    gpu_error = ls->gpu_error();
+  }
   json gpus = json::array(), npus = json::array();
   for (auto& g : s.hw.gpus) gpus.push_back(g.name);
   for (auto& n : s.hw.npus) npus.push_back(n.name);
-  return {{"engine", s.config.str("llm.engine", "auto")},
+  return {{"gpu_llama", gpu_llama},
+          {"gpu_error", gpu_error},
+          {"gpus", hw::profiles::gpus(s)},
+          {"perfil_hw", s.config.get("hardware.perfil", "auto")},
+          {"engine", s.config.str("llm.engine", "auto")},
           {"accel", s.config.str("hardware.accel", "auto")},
           {"ask", truthy(s.config.get("startup.ask_accel", true))},
           {"engines", engines},
@@ -81,7 +91,7 @@ json accel_options(Services& s) {
           {"selected", s.llm->select().first}};
 }
 
-json accel_apply(Services& s, const std::string& engine, const std::string& accel, bool remember) {
+json accel_apply(Services& s, const std::string& engine, const std::string& accel, std::optional<bool> remember) {
   static const std::vector<std::string> E = {"auto", "llamaserver", "llamacpp"}, A = {"auto", "cpu", "gpu", "npu"};
   if (std::find(E.begin(), E.end(), engine) == E.end() || std::find(A.begin(), A.end(), accel) == A.end())
     throw std::invalid_argument("motor ('auto', 'llamaserver', 'llamacpp') y acelerador ('auto', 'cpu', 'gpu', 'npu')");
@@ -92,7 +102,7 @@ json accel_apply(Services& s, const std::string& engine, const std::string& acce
   s.config.set("llm.engine", engine);
   s.config.set("hardware.accel", accel);
   s.config.set("hardware.llama_variant", p["variant"]);
-  s.config.set("startup.ask_accel", !remember);
+  if (remember) s.config.set("startup.ask_accel", !*remember);
   s.llm->rebuild();
   if (!jstr(p, "note").empty()) notes.insert(notes.begin(), jstr(p, "note"));
   return {{"engine", engine},

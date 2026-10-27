@@ -42,6 +42,15 @@
 - Grabar el firmware por USB sin internet desde *Dispositivos > Grabar firmware*: los binarios y esptool vienen en el
   paquete, con puertos serie nativos en Windows, Linux y macOS.
 
+### Perfiles de hardware y elección de GPU
+- Perfiles con nombre (Automático, Rendimiento, Equilibrado, Modelo grande, Ahorro, Solo CPU y los tuyos) que juntan
+  motor, acelerador, GPU, modelo, capas en la VRAM, caché de contexto en VRAM o RAM, `--mlock`, contexto, hilos y lote.
+  Se eligen en la barra superior, en Sistema o con los modos de los dispositivos (`/api/hw/perfiles`).
+- Con varias GPU, llama-server usa solo una: la elegida (`POST /api/hw/gpu`) o la dedicada con más memoria. Se leen
+  sus dispositivos con `--list-devices` y nunca se usa un renderizador por software (llvmpipe). Si la GPU elegida no
+  arranca, el modelo sigue en la CPU y la causa se ve en `/api/accel`.
+- Bolsa: velas de CNBC cuando Yahoo limita y cierre anterior deducido de la variación si falta.
+
 ### Avatares 3D gratuitos
 - Biblioteca de avatares en *Ajustes > Avatar*: busca y descarga avatares VRM de Open Source Avatars, modelos de
   referencia (VRM Consortium, Khronos, three.js) y modelos CC de Sketchfab. Si una pasarela IPFS falla prueba otra, solo

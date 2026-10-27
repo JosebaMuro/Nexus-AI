@@ -4,6 +4,7 @@
 #include <thread>
 
 #include "hardware/android_accel.h"
+#include "hardware/gpu_devices.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
 #include "models/runtimes.h"
@@ -45,6 +46,16 @@ bool LlamaServerBackend::supports_vision(const std::string& model) {
   return r && truthy(r->second.value("mmproj", json()));
 }
 
+json LlamaServerBackend::gpu() {
+  std::lock_guard<std::recursive_mutex> lk(mu_);
+  return gpu_;
+}
+
+std::string LlamaServerBackend::gpu_error() {
+  std::lock_guard<std::recursive_mutex> lk(mu_);
+  return gpu_error_;
+}
+
 json LlamaServerBackend::effective() {
   std::lock_guard<std::recursive_mutex> lk(mu_);
   return effective_;
@@ -68,6 +79,16 @@ void LlamaServerBackend::ensure(const std::string& model, const json& opts_in) {
       ensure_once(model, opts);
       return;
     } catch (const GpuFailed& e) {
+      if (nx::env("NEXUS_RUNTIME_LLAMA_CPU").empty()) {   // escritorio: la GPU elegida no arranca -> CPU
+        L.warning(e.what(), ": se sigue en la CPU");
+        {
+          std::lock_guard<std::recursive_mutex> lk(mu_);
+          gpu_error_ = uleft(e.what(), 300);
+        }
+        opts["gpu_layers"] = 0;
+        opts["device"] = "";
+        continue;
+      }
       json nxt = gpu_failed(e.what(), jstr(opts, "device"));
       opts.update(nxt);
     }
@@ -120,10 +141,26 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
   if (var != "embedded" && var != "system")
     for (auto& [k, v] : runtimes::lib_env(exe)) env[k] = v;
   bool single = truthy(llm.value("single_slot", json(false)));
+  if (ngl && device.empty() && var != "cpu" && var != "embedded") {
+    // escritorio: con varias GPU (o una real y llvmpipe en Linux) se fija UNA, la elegida o la mejor
+    json devs = hw::gpu_devices::list_devices(exe, env);
+    json sel = hw::gpu_devices::pick(devs, jstr(llm, "gpu_select"));
+    if (!devs.empty() && sel.is_null()) {
+      std::vector<std::string> names;
+      for (auto& d : devs) names.push_back(jstr(d, "name"));
+      L.warning("llama.cpp solo ve renderizadores por software (", join(names, ", "), "): se usa la CPU");
+      ngl = 0;
+    } else if (!sel.is_null() && hw::gpu_devices::needs_device_flag(devs)) {
+      device = jstr(sel, "id");
+    }
+    std::lock_guard<std::recursive_mutex> lk(mu_);
+    gpu_ = sel.is_null() ? json::object() : sel;
+  }
+  bool kv_ram = truthy(opts.value("kv_ram", json(false))), mlock = truthy(opts.value("mlock", json(false)));
   std::string mmproj = entry.value("mmproj", json()).is_string() ? entry["mmproj"].get<std::string>() : "";
   std::string key = cat(S(exe), "|", path, "|", mmproj, "|", jdump(opts.value("n_ctx", json())), "|",
                         jdump(opts.value("n_threads", json())), "|", jdump(opts.value("n_batch", json())), "|", ngl, "|",
-                        device, "|", jdump(extra_env));
+                        device, "|", jdump(extra_env), "|", kv_ram, "|", mlock);
   std::lock_guard<std::recursive_mutex> lk(mu_);
   if (proc_ && proc_->running() && key_ == key) return;
   stop();
@@ -151,6 +188,8 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
     cmd.push_back("--device");
     cmd.push_back(device);
   }
+  if (kv_ram && ngl) cmd.push_back("--no-kv-offload");   // perfil de hardware: la cache KV en la RAM (mas capas en la VRAM)
+  if (mlock) cmd.push_back("--mlock");                    // perfil de hardware: el modelo fijo en la RAM
   cmd.push_back("-np");
   // un solo slot tambien con la variante de GPU forzada a CPU (-ngl 0): si no, cada slot se queda con medio contexto
   cmd.push_back(var == "cpu" || var == "system" || single || ngl == 0 ? "1" : "2");

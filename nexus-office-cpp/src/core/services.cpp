@@ -4,6 +4,7 @@
 #include <thread>
 
 #include "core/android_tune.h"
+#include "hardware/hw_profiles.h"
 
 #include "agents/agents.h"
 #include "coop/coop.h"
@@ -27,6 +28,7 @@ Services::Services(bool detect_hardware) : config(get_config()) {
   monitor = std::make_unique<hw::Monitor>(cfg.num("hardware.monitor_interval_s", 2.0));
   if (monitor->previous_unclean)
     L.warning("La sesion anterior no se cerro correctamente; se aplicara un perfil mas conservador");
+  hw::profiles::al_arrancar(cfg);   // GPU elegida antes de calcular el perfil
   if (detect_hardware) {
     auto st = hw::startup(cfg.str("hardware.profile_override", ""), truthy(cfg.get("hardware.adaptive_tuning", true)),
                           cfg.str("llm.ollama_url", "http://127.0.0.1:11434"), monitor->previous_unclean,
@@ -45,6 +47,7 @@ Services::Services(bool detect_hardware) : config(get_config()) {
     if (truthy(plan.value("note", json())))
       L.warning("Acelerador ", accel, ": ", jstr(plan, "note"));
   }
+  hw::profiles::aplicar_al_perfil(*this);
   json st = json::object();
   for (const char* k : {"n_ctx", "n_threads", "n_batch", "gpu_layers"}) st[k] = profile["llm"][k];
   monitor->settings = st;

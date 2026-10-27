@@ -16,6 +16,7 @@
 #include "gen/data.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
+#include "hardware/hw_profiles.h"
 #include "media/avatares.h"
 #include "media/media.h"
 #include "memory/memory.h"
@@ -296,6 +297,11 @@ void register_routes(App& app) {
                 {"pending_approvals", s.supervisor->list_pending().size()},
                 {"pending_proposals", s.proposals->list("pendiente").size()},
                 {"suggest_smaller_model", s.profile.value("llm", json::object()).value("suggest_smaller_model", false)},
+                {"perfil_hw", [&] {
+                   std::string a = s.config.str("hardware.perfil", "auto");
+                   json p = hw::profiles::get(s.config, a.empty() ? "auto" : a);
+                   return p.is_object() ? jstr(p, "nombre") : std::string();
+                 }()},
                 {"edition", "cpp"}};
   });
 
@@ -457,6 +463,49 @@ void register_routes(App& app) {
     } catch (const std::invalid_argument& e) {
       throw HttpErr(400, e.what());
     }
+    c.app.broadcast({{"type", "status_changed"}});
+    return res;
+  });
+
+  // perfiles de hardware (de serie y propios), el activo, las GPU que hay y los modelos de texto
+  app.get("/api/hw/perfiles", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    json modelos = json::array();
+    for (auto& m : s.models->catalog.list())
+      if (jstr(m, "kind") == "llm")
+        modelos.push_back({{"id", m["id"]}, {"name", m.value("name", m["id"])},
+                           {"size_gb", round_to(jnum(m.value("size", json(0))) / 1073741824.0, 1)}});
+    json activo = s.models->active()["llm"];
+    return json{{"perfiles", hw::profiles::lista(s.config)}, {"activo", s.config.get("hardware.perfil", "auto")},
+                {"gpu", s.config.get("hardware.gpu", "")}, {"gpus", hw::profiles::gpus(s)}, {"modelos", modelos},
+                {"modelo_activo", truthy(activo) ? activo : json("")},
+                {"llm", s.profile["llm"].value("perfil_hw", json::object())}, {"campos", hw::profiles::CAMPOS}};
+  });
+  app.put("/api/hw/perfiles/{pid}", [](Ctx& c) -> Out {
+    std::string pid = c.p("pid");
+    json perfil = c.body.is_object() ? c.body : json::object();
+    for (auto& d : hw::profiles::DE_SERIE)
+      if (jstr(d, "id") == pid && !truthy(perfil.value("nombre", json()))) perfil["nombre"] = pid;
+    perfil["id"] = pid;
+    return hw::profiles::guardar(c.app.S().config, perfil);
+  });
+  app.del("/api/hw/perfiles/{pid}", [](Ctx& c) -> Out {
+    if (!hw::profiles::borrar(c.app.S().config, c.p("pid"))) throw HttpErr(404, "perfil propio no encontrado");
+    return json{{"ok", true}};
+  });
+  app.post("/api/hw/perfiles/{pid}/activar", [](Ctx& c) -> Out {
+    json res;
+    try {
+      res = hw::profiles::activar(c.p("pid"), c.app.S().config, &c.app.S());
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(404, e.what());
+    }
+    c.app.broadcast({{"type", "status_changed"}});
+    return res;
+  });
+  // elige que GPU usar cuando hay varias (vacio = la mejor) y reinicia el modelo en ella
+  app.post("/api/hw/gpu", [](Ctx& c) -> Out {
+    json res = hw::profiles::elegir_gpu(c.app.S(), c.bs("gpu", ""));
     c.app.broadcast({{"type", "status_changed"}});
     return res;
   });
@@ -1275,7 +1324,7 @@ void register_routes(App& app) {
     std::string fuente = c.q("fuente", "osa");
     try {
       return avs(c).buscar(fuente, c.q("q"), c.qi("pagina", 1), c.qi("por_pagina", 24));
-    } catch (const http::HttpError& e) {
+    } catch (const std::runtime_error& e) {   // HttpError o una respuesta que no es JSON
       throw HttpErr(502, "No se pudo consultar " + fuente + ": " + e.what());
     }
   });

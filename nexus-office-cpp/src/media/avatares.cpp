@@ -251,7 +251,13 @@ json Avatares::sketchfab(const std::string& q, long long pagina, long long por_p
                                                {"sort_by", "-likeCount"}};
   http::Response r = get("https://api.sketchfab.com/v3/search?" + http::query_string(params));
   if (!r.ok()) throw http::HttpError(r.status, r.status ? "HTTP " + std::to_string(r.status) : r.error);
-  json d = r.json_body(), items = json::array();
+  json d, items = json::array();
+  try {
+    d = r.json_body();
+  } catch (const std::exception&) {   // Sketchfab responde vacio a algunas redes (centros de datos, proxies)
+    throw std::runtime_error("Sketchfab no ha devuelto resultados desde esta red (HTTP " + std::to_string(r.status) +
+                             "); prueba más tarde o usa Open Source Avatars");
+  }
   for (auto& m : d.value("results", json::array())) {
     json user = m.value("user", json::object());
     std::string nombre = jstr(m, "name");

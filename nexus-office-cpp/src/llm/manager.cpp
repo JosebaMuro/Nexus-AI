@@ -181,6 +181,8 @@ json LLMManager::options(const json& agent_opts) {
             {"gpu_layers", llm["gpu_layers"]},
             {"flash_attn", llm.value("flash_attn", json(false))},
             {"device", llm.value("device", json(""))},
+            {"kv_ram", llm.value("kv_ram", json(false))},
+            {"mlock", llm.value("mlock", json(false))},
             {"temperature", config_.get("llm.temperature", 0.7)},
             {"max_tokens", config_.get("llm.max_tokens", 1024)}};
   if (agent_opts.is_object())
