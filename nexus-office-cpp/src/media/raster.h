@@ -50,4 +50,11 @@ Image to_rgba(const Image& img);
 // primitivas (ya resueltas a pixeles por media::gimp::resolve)
 Image apply(Image img, const json& prim, std::optional<std::pair<double, double>>& dpi);
 
+// texto sobre un lienzo en escala de grises (1 byte por pixel), como ImageDraw.text de Pillow con el ancla en la
+// esquina superior izquierda del ascendente; font son los bytes de una TrueType (load_font)
+std::string load_font(const std::string& name = "");   // name o la primera fuente del sistema (lanza Error si no hay)
+double text_length(const std::string& font, const std::string& text, int size);
+void text_gray(std::vector<uint8_t>& canvas, int w, int h, int x, int y, const std::string& font, const std::string& text,
+               int size, uint8_t ink);
+
 }  // namespace nx::raster

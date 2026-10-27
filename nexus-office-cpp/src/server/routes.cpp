@@ -22,6 +22,8 @@
 #include "models/runtimes.h"
 #include "office/bolsa.h"
 #include "office/bolsa_agente.h"
+#include "devices/devices.h"
+#include "agents/activity.h"
 #include "memory/kg.h"
 #include "memory/kg_jobs.h"
 #include "rag/web.h"
@@ -1475,6 +1477,89 @@ void register_routes(App& app) {
     if (truthy(c.b("ciclo", false))) B([&](bolsa::Bolsa&) { return ag.ciclo(); });
     return ag.estado();
   });
+
+  // ------------------------------------------------------------------ dispositivos: luces, reloj y avatar Pico W
+  auto H = [](Ctx& c) -> devices::Hub& { return devices::hub(c.app.ready() ? &c.app.S() : nullptr); };
+  auto D = [](auto fn) -> Out {
+    try {
+      return fn();
+    } catch (const std::out_of_range& e) {
+      throw HttpErr(404, e.what());
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
+  };
+  auto first = [](const json& a, const json& b) { return truthy(a) ? a : b; };
+  app.get("/api/dispositivos", [H](Ctx& c) -> Out {
+    auto& h = H(c);
+    return json{{"estado", h.snapshot()}, {"leds", h.leds.list()}, {"modos", h.modos()}, {"modo", h.modo_actual()},
+                {"clientes", h.clientes_recientes()}};
+  });
+  app.get("/api/dispositivos/estado", [H](Ctx& c) -> Out {   // estado ligero para el reloj y el Pico W (cada 1-2 s)
+    auto& h = H(c);
+    std::string tipo = c.q("tipo");
+    h.visto(c.q("cliente"), tipo.empty() ? "web" : tipo, {{"ip", c.host}});
+    return h.snapshot();
+  });
+  app.post("/api/dispositivos/estado", [H, first](Ctx& c) -> Out {
+    json st = first(c.b("estado", nullptr), first(c.b("state", nullptr), "idle"));
+    return H(c).set_state(Ctx::as_str(st), c.b("nivel", nullptr), c.b("texto", nullptr),
+                          truthy(c.b("origen", nullptr)) ? c.bs("origen") : "");
+  });
+  app.get("/api/dispositivos/reloj", [H](Ctx& c) -> Out {
+    auto& h = H(c);
+    std::string cl = c.q("cliente");
+    h.visto(cl.empty() ? c.host : cl, "reloj", {{"ip", c.host}});
+    return h.resumen_reloj();
+  });
+  app.post("/api/dispositivos/modo", [H, D](Ctx& c) -> Out {
+    return D([&] { return H(c).aplicar_modo(c.bs("modo", ""), truthy(c.b("origen", nullptr)) ? c.bs("origen") : ""); });
+  });
+  app.get("/api/dispositivos/pico/manifiesto", [H](Ctx& c) -> Out { return H(c).pico_manifiesto(); });
+  app.get("/api/dispositivos/pico/{estado}.bin", [H](Ctx& c) -> Out {
+    return Raw{200, H(c).pico_buffer(c.p("estado")), "application/octet-stream"};
+  });
+  app.get("/api/dispositivos/pico/{estado}.png", [H](Ctx& c) -> Out {
+    return Raw{200, H(c).pico_png(c.p("estado")), "image/png"};
+  });
+  app.get("/api/dispositivos/leds/buscar", [H](Ctx& c) -> Out {
+    std::vector<std::string> hosts;
+    for (auto& x : split(c.q("ip"), ","))
+      if (!trim(x).empty()) hosts.push_back(trim(x));
+    return json{{"encontrados", H(c).leds.discover(1.5, hosts)}};
+  });
+  app.post("/api/dispositivos/leds", [H](Ctx& c) -> Out {
+    std::string host = trim(c.bs("host", ""));
+    if (host.empty()) throw HttpErr(400, "falta la IP del dispositivo");
+    json port = c.b("port", nullptr);
+    return H(c).leds.add(c.bs("host"), truthy(port) ? (int)jnum(port.is_string() ? json(std::stod(port.get<std::string>())) : port) : 80,
+                         truthy(c.b("name", nullptr)) ? c.bs("name") : "", truthy(c.b("token", nullptr)) ? c.bs("token") : "",
+                         truthy(c.b("id", nullptr)) ? c.bs("id") : "");
+  });
+  app.put("/api/dispositivos/leds/{did}", [H, D](Ctx& c) -> Out {
+    json kw = json::object();
+    for (auto k : {"name", "enabled", "follow_state", "token"}) kw[k] = c.b(k, nullptr);
+    return D([&] { return H(c).leds.update(c.p("did"), kw); });
+  });
+  app.del("/api/dispositivos/leds/{did}", [H](Ctx& c) -> Out {
+    H(c).leds.remove(c.p("did"));
+    return json{{"ok", true}};
+  });
+  // pasarela a la API del NexusLED (efectos, paletas, presets, brillo...) para la app y el movil
+  for (std::string method : {"GET", "POST", "DELETE"})
+    app.route(method, "/api/dispositivos/leds/{did}/api/{ruta:path}", [H, method](Ctx& c) -> Out {
+      json body = method == "GET" || !c.body.is_object() ? json(nullptr) : c.body;
+      try {
+        return H(c).leds.call(c.p("did"), method, "/api/" + c.p("ruta"), body);
+      } catch (const std::out_of_range& e) {
+        throw HttpErr(404, e.what());
+      } catch (const std::invalid_argument& e) {
+        throw HttpErr(400, e.what());
+      } catch (const std::exception& e) {
+        throw HttpErr(502, std::string("el dispositivo no responde: ") + e.what());
+      }
+    });
+  app.get("/api/agentes/actividad", [](Ctx&) -> Out { return agents::activity().all(); });
 
   // ------------------------------------------------------------------ herramientas
   app.get("/api/tools", [](Ctx& c) -> Out {

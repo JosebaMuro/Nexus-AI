@@ -10,6 +10,7 @@ namespace nx {
 
 std::string sha256(std::string_view data);                 // binario (32 bytes)
 std::string sha256_hex(std::string_view data);
+std::string sha1_hex(std::string_view data);   // solo para claves de cache e identificadores (no para seguridad)
 std::string hmac_sha256(std::string_view key, std::string_view msg);
 std::string pbkdf2_sha256(std::string_view password, std::string_view salt, int iterations, size_t dklen = 32);
 std::string to_hex(std::string_view bin);
