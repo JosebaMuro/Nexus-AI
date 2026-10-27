@@ -12,6 +12,9 @@
   `nexus-office firmware drivers --instalar`) lo instala sin preguntar: pnputil en Windows con los drivers del paquete,
   el instalador en macOS y, en Linux, módulo del kernel, regla udev, grupo `dialout` y `brltty` apartado.
 - Orden nueva `nexus-office firmware` para ver placas, puertos y drivers y grabar desde la terminal.
+- Grabador nativo **nexus-flash** dentro de Nexus-Office: habla directamente con la ROM de Espressif, verifica por MD5
+  y reinicia la placa. Ya no hace falta esptool ni Python (`NEXUS_GRABADOR=esptool` lo sigue usando si se quiere).
+- ESP8266 con imagen por tamaño de flash: 1 MB (ESP-01S y mayores), 4 MB y 512 KB (ESP-01 antiguo).
 
 ## Nexus-Office 2.1.0-cpp
 

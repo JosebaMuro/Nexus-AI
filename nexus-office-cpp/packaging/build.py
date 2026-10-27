@@ -92,7 +92,7 @@ def stage(target: str) -> Path:
         shutil.copy2(ROOT / name, dest / name)
     # ejemplos para importar: el grafo multicapa de la Wikipedia en espanol y el resumen del proyecto para la biblioteca
     shutil.copytree(ROOT / "ejemplos", dest / "ejemplos")
-    # firmware de las luces NexusLED, el reloj NexusWatch y el Pico W (binarios ya compilados) y esptool para grabarlos
+    # firmware de las luces NexusLED, el reloj NexusWatch y el Pico W (binarios ya compilados) (se graban con nexus-flash, dentro de Nexus-Office)
     fw = REPO / "firmware"
     if (fw / "bin").is_dir():
         (dest / "firmware").mkdir()
@@ -100,17 +100,13 @@ def stage(target: str) -> Path:
         shutil.copytree(fw / "nexuspico", dest / "firmware" / "nexuspico", ignore=shutil.ignore_patterns("__pycache__"))
         for name in ("README.md", "flash.py"):
             shutil.copy2(fw / name, dest / "firmware" / name)
-        esp = CACHE / "esptool" / target
-        if esp.is_dir() and any(esp.glob("esptool*")):
-            shutil.copytree(esp, dest / "firmware" / "tools")
         # drivers USB-serie de los puentes de las placas (Windows y macOS; Linux los trae en el kernel)
         drv = CACHE / "drivers" / target
         so = "windows" if target.startswith("windows") else "macos" if target.startswith("macos") else ""
         if so and drv.is_dir() and any(drv.iterdir()):
             shutil.copytree(drv, dest / "firmware" / "drivers" / so)
             log(f"{target}: drivers {', '.join(sorted(p.name for p in drv.iterdir()))}")
-        log(f"{target}: firmware {', '.join(sorted(p.name for p in (fw / 'bin').iterdir()))}"
-            f"{' + esptool' if (dest / 'firmware' / 'tools').is_dir() else ''}")
+        log(f"{target}: firmware {', '.join(sorted(p.name for p in (fw / 'bin').iterdir()))}")
     shutil.copy2(PY_EDITION / "LICENSE", dest / "LICENSE")
     for rt in RUNTIMES:
         r = CACHE / "desktop-runtimes" / target / rt

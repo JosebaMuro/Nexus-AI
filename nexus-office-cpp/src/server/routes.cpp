@@ -1690,6 +1690,12 @@ void register_routes(App& app) {
     json familia = json::array();
     for (auto f : fw::FAMILIA) {   // copia: se le anade si el paquete trae el binario de las luces
       f["binario"] = !fw::carpeta().empty() && is_file(fw::carpeta() / "bin" / ("nexusled-" + jstr(f, "chip") + ".bin"));
+      if (jstr(f, "chip") == "esp8266") {   // una imagen por tamano de flash
+        json vs = json::array();
+        for (auto& v : fw::VARIANTES_ESP8266)
+          if (!fw::carpeta().empty() && is_file(fw::carpeta() / "bin" / ("nexusled-" + jstr(v, "modelo") + ".bin"))) vs.push_back(v);
+        f["variantes"] = vs;
+      }
       familia.push_back(f);
     }
     info["familia"] = familia;

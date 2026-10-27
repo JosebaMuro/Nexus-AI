@@ -59,7 +59,7 @@ La 2.0 beta C dejaba fuera varias funciones. Desde la 2.1 están todas, con las 
 | Gráficos en vivo de las órdenes (`/api/bolsa/serie`, `/api/bolsa/orden/{id}/grafico`) | `src/office/bolsa.cpp`: velas reales y histórico guardado para trabajar sin red |
 | Lo que hace cada agente (despachos, reloj y salón: `/api/agentes/actividad`) | `src/agents/activity.cpp` |
 | Luces NexusLED, modos, reloj NexusWatch y Pico W (`/api/dispositivos`) | `src/devices/devices.cpp`: UDP y HTTP del firmware e imágenes de tinta hechas en C++ |
-| Grabar el firmware de las luces, el reloj y el Pico W (`/api/firmware`) | `src/devices/firmware.cpp`: puertos serie nativos, esptool para los ESP32 y copia del .uf2 al Pico |
+| Grabar el firmware de las luces, el reloj y el Pico W (`/api/firmware`) | `src/devices/firmware.cpp`: puertos serie nativos, grabador nativo nexus-flash (`firmware/flasher/nexus_flash.h`) para toda la familia ESP y copia del .uf2 al Pico |
 | Toda la familia ESP y drivers USB-serie (`/api/firmware/drivers`, `nexus-office firmware`) | `src/devices/drivers.cpp`: CH340/CH9102, CP210x y FTDI por VID:PID; pnputil en Windows, instalador en macOS, módulo, udev y brltty en Linux |
 | Avatares 3D gratuitos (Open Source Avatars, muestras y Sketchfab: `/api/avatares`) | `src/media/avatares.cpp`: pasarelas IPFS de respaldo y solo URLs del catálogo |
 | Perfiles de hardware y elección de una GPU (`/api/hw/perfiles`, `/api/hw/gpu`) | `src/hardware/hw_profiles.cpp` y `gpu_devices.cpp`: `--device` solo si hay varias, vuelta a la CPU si la GPU no arranca |
@@ -136,7 +136,7 @@ build/nexus-office run
   comprando, poniendo el stop, vendiendo en el objetivo y aprendiendo. Con `NEXUS_ONLINE_TESTS=1` (en `cpp.yml`)
   pide precios reales del catálogo con la pila TLS de cada sistema.
 - `nexus-tests dispositivos`: luces contra el emulador del firmware NexusLED (`firmware/emulator`, se compila con las
-  pruebas), modos, reloj, imágenes del Pico W y grabado del reloj con un esptool falso y un puerto serie simulado.
+  pruebas), modos, reloj, imágenes del Pico W y grabado del reloj con un esptool falso y un puerto serie simulado, y de un ESP8266 con nexus-flash contra una ROM de Espressif simulada.
   El código real del Pico W (`firmware/nexuspico/nexuspico.py`) descarga las imágenes del servidor C++ y su giro
   coincide byte a byte.
 - `tests/ui_smoke.js`: abre la interfaz en Chromium, pregunta «¿Cuánto es 12*7?», espera «84», recorre las vistas y

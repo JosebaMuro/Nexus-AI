@@ -14,6 +14,7 @@
 #include "util/fs.h"
 #include "util/net.h"
 #include "util/proc.h"
+#include "util/text.h"
 
 using namespace nx;
 
@@ -161,7 +162,7 @@ TEST("dispositivos: luces NexusLED contra el emulador del firmware") {
 
 #include "devices/firmware.h"
 
-TEST("dispositivos: grabar el firmware del reloj con esptool y configurarlo por el puerto serie") {
+TEST("dispositivos: grabar el firmware del reloj con esptool (NEXUS_GRABADOR=esptool) y configurarlo por el puerto serie") {
   // carpeta firmware/ falsa: un binario del reloj y un esptool que responde como un ESP32-C3
   auto fwdir = std::filesystem::temp_directory_path() /
                ("nexus-fw-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -172,6 +173,7 @@ TEST("dispositivos: grabar el firmware del reloj con esptool y configurarlo por 
   write_file(fwdir / "tools" / "esptool", "#!/bin/sh\necho \"esptool v5 $*\"\necho \"Chip type: ESP32-C3 (QFN32)\"\nexit 0\n");
   std::filesystem::permissions(fwdir / "tools" / "esptool", std::filesystem::perms::owner_all);
   set_env("NEXUS_FIRMWARE", S(fwdir));
+  set_env("NEXUS_GRABADOR", "esptool");   // el grabador nativo se prueba abajo con la ROM falsa
   // el reloj por el puerto serie: un pseudo-terminal que contesta a la linea JSON de configuracion
   int master = posix_openpt(O_RDWR | O_NOCTTY);
   CHECK(master >= 0 && grantpt(master) == 0 && unlockpt(master) == 0);
@@ -237,5 +239,88 @@ TEST("dispositivos: grabar el firmware del reloj con esptool y configurarlo por 
   auto bad = c.Post("/api/firmware/grabar", R"({"tipo": "tostadora"})", "application/json");
   CHECK(bad && bad->status == 400);
   set_env("NEXUS_FIRMWARE", "");
+  set_env("NEXUS_GRABADOR", "");
 }
+
+#ifdef ROM_FALSA
+#include <signal.h>
+#include <sys/wait.h>
+
+namespace {
+// lanza la ROM de Espressif falsa de firmware/flasher/tests sobre un pty enlazado en `tty`
+pid_t rom_falsa(const std::string& chip, const fs::path& tty, const fs::path& volcado) {
+  pid_t pid = fork();
+  if (pid == 0) {
+    int dn = ::open("/dev/null", O_WRONLY);
+    dup2(dn, 2);
+    execl(ROM_FALSA, ROM_FALSA, chip.c_str(), S(tty).c_str(), S(volcado).c_str(), (char*)nullptr);
+    _exit(127);
+  }
+  for (int i = 0; i < 100 && !std::filesystem::exists(tty); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  return pid;
+}
+void parar(pid_t pid) {
+  kill(pid, SIGTERM);
+  int st = 0;
+  waitpid(pid, &st, 0);
+}
+json esperar(httplib::Client& c, const json& j) {
+  json r;
+  for (int i = 0; i < 600; ++i) {
+    r = body(c.Get("/api/firmware/trabajo/" + jstr(j, "id")));
+    if (jstr(r, "estado") != "en_curso") break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
+  return r;
+}
+}  // namespace
+
+TEST("dispositivos: grabar un ESP8266 con nexus-flash (sin esptool) y configurarlo") {
+  auto fwdir = std::filesystem::temp_directory_path() /
+               ("nexus-nf-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::create_directories(fwdir / "bin");
+  write_file(fwdir / "bin" / "firmware.json", R"({"archivos": {}})");
+  std::string imagen;
+  for (int i = 0; i < 70001; ++i) imagen += (char)((i * 131 + 7) & 0xFF);   // no cae en bloques de 1 KB justos
+  write_file(fwdir / "bin" / "nexusled-esp8266.bin", std::string(4096, '\x11'));
+  write_file(fwdir / "bin" / "nexusled-esp8266-4m.bin", imagen);
+  set_env("NEXUS_FIRMWARE", S(fwdir));
+  set_env("NEXUS_GRABADOR", "");
+  DevServer srv("nexusflash");
+  httplib::Client c("127.0.0.1", srv.port);
+  json info = body(c.Get("/api/firmware"));
+  CHECK(info["falta"].empty());
+  CHECK(starts_with(jstr(info, "grabador"), "nexus-flash"));
+  json variantes;
+  for (auto& f : info["familia"])
+    if (f["chip"] == "esp8266") variantes = f["variantes"];
+  CHECK_EQ(variantes.size(), (size_t)2);   // 1 MB y 4 MB; no hay la de 512 KB
+
+  // graba la imagen de 4 MB y manda la configuracion de las luces
+  fs::path tty = fwdir / "tty", volcado = fwdir / "volcado";
+  pid_t rom = rom_falsa("esp8266", tty, volcado);
+  json r = esperar(c, post(c, "/api/firmware/grabar",
+                           {{"tipo", "luces"}, {"puerto", S(tty)}, {"modelo", "esp8266-4m"}, {"config", {{"leds", 30}}}}));
+  parar(rom);
+  CHECK_EQ(jstr(r, "estado"), std::string("hecho"));
+  CHECK_EQ(jstr(r["resultado"], "chip"), std::string("esp8266"));
+  CHECK_EQ(jstr(r["resultado"], "archivo"), std::string("nexusled-esp8266-4m.bin"));
+  CHECK(r["resultado"]["config"]["ok"] == true);
+  std::string flash = read_text(volcado);
+  CHECK(flash.size() >= imagen.size() && flash.compare(0, imagen.size(), imagen) == 0);
+  bool nativo = false;
+  for (auto& l : r["log"]) nativo |= l.get<std::string>().find("con nexus-flash") != std::string::npos;
+  CHECK(nativo);
+
+  // firmware de otro chip: no se graba
+  rom = rom_falsa("esp32c3", tty, volcado);
+  r = esperar(c, post(c, "/api/firmware/grabar", {{"tipo", "luces"}, {"puerto", S(tty)}, {"modelo", "esp8266"}}));
+  parar(rom);
+  CHECK_EQ(jstr(r, "estado"), std::string("error"));
+  CHECK(jstr(r["resultado"], "error").find("esp32c3") != std::string::npos);
+  set_env("NEXUS_FIRMWARE", "");
+  std::error_code ec;
+  std::filesystem::remove_all(fwdir, ec);
+}
+#endif
 #endif

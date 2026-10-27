@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cstring>
+#include <memory>
 #include <thread>
 
 #ifdef _WIN32
@@ -14,6 +15,7 @@
 #endif
 
 #include "devices/drivers.h"
+#include "nexus_flash.h"
 #include "util/crypto.h"
 #include "util/log.h"
 #include "util/proc.h"
@@ -24,6 +26,12 @@ namespace nx::devices::firmware {
 
 const std::vector<std::string> MODELOS_LUCES = {"esp8266", "esp32",   "esp32s2", "esp32s3",
                                                 "esp32c2", "esp32c3", "esp32c5", "esp32c6"};
+// imagenes del ESP8266 por tamano de flash: la de 1 MB vale para el ESP-01S y cualquier placa mayor
+const json VARIANTES_ESP8266 = jparse(R"J([
+  {"modelo": "esp8266", "nombre": "ESP8266 1 MB (ESP-01S, ESP-12, NodeMCU, Wemos D1 mini)"},
+  {"modelo": "esp8266-4m", "nombre": "ESP8266 4 MB (NodeMCU, Wemos D1 mini; mas espacio)"},
+  {"modelo": "esp8266-512k", "nombre": "ESP8266 512 KB (ESP-01 antiguo, azul)"}
+])J");
 
 // toda la familia ESP que se puede grabar desde Nexus (con Wi-Fi: luces; sin Wi-Fi solo se reconocen)
 const json FAMILIA = jparse(R"J([
@@ -195,6 +203,20 @@ fs::path binario(const std::string& tipo, const std::string& modelo = "") {
   throw std::invalid_argument("tipo desconocido: " + tipo);
 }
 
+// el grabador nativo (nexus-flash) es el de siempre; NEXUS_GRABADOR=esptool usa esptool si esta instalado
+bool usar_esptool() { return lower(env("NEXUS_GRABADOR")) == "esptool"; }
+
+// avance de nexus-flash al registro: cada fase nueva y cada 10 %
+nexusflash::Avance avance(const Log& log) {
+  auto ultimo = std::make_shared<std::pair<std::string, int>>("", -100);
+  return [log, ultimo](const std::string& fase, int pct, const std::string& texto) {
+    if (fase == ultimo->first && pct < 100 && pct - ultimo->second < 10) return;
+    ultimo->first = fase;
+    ultimo->second = pct;
+    log(fase == "grabar" || fase == "copiar" ? texto + " (" + std::to_string(pct) + " %)" : texto);
+  };
+}
+
 std::string esptool(const std::vector<std::string>& args, const Log& log) {
   auto cmd = esptool_cmd();
   if (cmd.empty()) throw std::runtime_error("falta esptool: copia el ejecutable esptool en firmware/tools o instala Python con esptool");
@@ -249,6 +271,7 @@ std::string chip_de_texto(const std::string& out) {
 namespace {
 
 std::string detectar_chip(const std::string& puerto, const Log& log) {
+  if (!usar_esptool()) return nexusflash::detectar(puerto, avance(log), 20);   // ya avisa del GPIO0 del ESP-01
   std::string out;
   try {
     out = esptool({"--port", puerto, "chip_id"}, log);
@@ -293,8 +316,10 @@ std::vector<std::string> esptool_cmd() {
 
 json disponible() {
   json falta = json::array();
-  if (esptool_cmd().empty()) falta.push_back("esptool");
-  return {{"carpeta", carpeta().empty() ? "" : S(carpeta())}, {"falta", falta}};
+  bool et = usar_esptool();
+  if (et && esptool_cmd().empty()) falta.push_back("esptool");
+  return {{"carpeta", carpeta().empty() ? "" : S(carpeta())}, {"falta", falta},
+          {"grabador", et ? "esptool" : std::string("nexus-flash ") + NEXUSFLASH_VERSION}};
 }
 
 json binarios() {
@@ -424,21 +449,54 @@ json puertos() {
 
 json flashear_esp32(const std::string& tipo, std::string puerto, std::string modelo, const Log& log) {
   if (puerto.empty()) puerto = puerto_auto("esp32");
-  std::string chip = detectar_chip(puerto, log);
-  if (tipo == "reloj" && chip != "esp32c3")
-    throw std::runtime_error("el reloj ESP32-2424S012C lleva un ESP32-C3 y este es un " + chip);
-  if (modelo.empty()) modelo = chip;
-  if (tipo == "luces" && std::find(MODELOS_LUCES.begin(), MODELOS_LUCES.end(), modelo) == MODELOS_LUCES.end())
-    throw std::runtime_error("no hay NexusLED para " + modelo + " (hay: " + join(MODELOS_LUCES, ", ") + ")");
-  fs::path fw = binario(tipo, modelo);
-  if (!is_file(fw)) throw std::runtime_error("falta " + S(fw.filename()) + " en firmware/bin");
-  std::vector<std::string> args = {"--chip", modelo, "--port", puerto, "--baud", modelo == "esp8266" ? "115200" : "460800",
-                                   "write_flash"};
-  if (modelo == "esp8266") args.insert(args.end(), {"--flash_size", "detect"});   // ESP-01 con 512 KB o 1 MB
-  args.insert(args.end(), {"0x0", S(fw)});
-  esptool(args, log);
-  log(S(fw.filename()) + " grabado en " + puerto);
-  return {{"ok", true}, {"puerto", puerto}, {"chip", chip}, {"archivo", S(fw.filename())}};
+  // una sola conexion con la ROM: detectar, comprobar y grabar (en las placas con USB nativo, reiniciar entre medias
+  // haria desaparecer el puerto un momento)
+  std::unique_ptr<nexusflash::Grabador> g;
+  std::string chip;
+  if (usar_esptool()) {
+    chip = detectar_chip(puerto, log);
+  } else {
+    g = std::make_unique<nexusflash::Grabador>(puerto, avance(log));
+    chip = g->conectar(20).nombre;
+  }
+  try {
+    if (tipo == "reloj" && chip != "esp32c3")
+      throw std::runtime_error("el reloj ESP32-2424S012C lleva un ESP32-C3 y este es un " + chip);
+    if (modelo.empty()) modelo = chip;
+    std::string base = starts_with(modelo, "esp8266") ? "esp8266" : modelo;   // esp8266-4m, esp8266-512k
+    bool conocido = std::find(MODELOS_LUCES.begin(), MODELOS_LUCES.end(), modelo) != MODELOS_LUCES.end();
+    for (auto& v : VARIANTES_ESP8266) conocido |= jstr(v, "modelo") == modelo;
+    if (tipo == "luces" && !conocido)
+      throw std::runtime_error("no hay NexusLED para " + modelo + " (hay: " + join(MODELOS_LUCES, ", ") + ")");
+    if (tipo == "luces" && base != chip)
+      throw std::runtime_error("la placa conectada es un " + chip + " y el firmware elegido es para " + modelo);
+    fs::path fw = binario(tipo, modelo);
+    if (!is_file(fw)) throw std::runtime_error("falta " + S(fw.filename()) + " en firmware/bin");
+    if (g) {
+      log("grabando " + S(fw.filename()) + " en " + puerto + " con nexus-flash");
+      // borra, graba, verifica por MD5 (menos el ESP8266, cuya ROM no lo tiene) y reinicia
+      nexusflash::Opciones op;
+      op.chip = chip;
+      g->grabar(nexusflash::leer_archivo(S(fw)), 0x0, op);
+      g.reset();   // suelta el puerto para la configuracion
+    } else {
+      std::vector<std::string> args = {"--chip", base, "--port", puerto, "--baud", base == "esp8266" ? "115200" : "460800",
+                                       "write_flash"};
+      if (base == "esp8266") args.insert(args.end(), {"--flash_size", "detect"});   // ESP-01 con 512 KB o 1 MB
+      args.insert(args.end(), {"0x0", S(fw)});
+      esptool(args, log);
+    }
+    log(S(fw.filename()) + " grabado en " + puerto);
+    return {{"ok", true}, {"puerto", puerto}, {"chip", chip}, {"archivo", S(fw.filename())}};
+  } catch (...) {
+    if (g) {
+      try {
+        g->reiniciar();   // que vuelva a arrancar su firmware
+      } catch (...) {
+      }
+    }
+    throw;
+  }
 }
 
 json configurar_esp32(const std::string& tipo, std::string puerto, const json& cfg, const Log& log, double espera_s) {

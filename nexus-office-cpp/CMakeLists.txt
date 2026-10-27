@@ -26,6 +26,11 @@ set(NEXUS_MBEDTLS_URL "https://github.com/Mbed-TLS/mbedtls/releases/download/mbe
 set(NEXUS_MBEDTLS_SHA256 "4a11f1777bb95bf4ad96721cac945a26e04bf19f57d905f241fe77ebeddf46d8" CACHE STRING "")
 
 set(TP "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
+# grabador nativo de la familia ESP y el Pico W (una cabecera, compartida con la herramienta nexus-flash)
+set(NEXUS_FLASHER "${CMAKE_CURRENT_SOURCE_DIR}/../firmware/flasher" CACHE PATH "Carpeta con nexus_flash.h")
+if(NOT EXISTS "${NEXUS_FLASHER}/nexus_flash.h")
+  message(FATAL_ERROR "falta ${NEXUS_FLASHER}/nexus_flash.h (carpeta firmware/flasher del repositorio)")
+endif()
 
 # ------------------------------------------------------------------ dependencias incluidas (third_party)
 add_library(nx_sqlite3 STATIC ${TP}/sqlite3/sqlite3.c)
@@ -91,6 +96,7 @@ file(GLOB_RECURSE NEXUS_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.
 list(FILTER NEXUS_SRC EXCLUDE REGEX "/src/main\\.cpp$")
 add_library(nexus_core STATIC ${NEXUS_SRC})
 target_include_directories(nexus_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${TP}/httplib ${TP}/json ${TP}/ryml ${TP}/stb)
+target_include_directories(nexus_core PRIVATE ${NEXUS_FLASHER})
 target_compile_definitions(nexus_core PUBLIC NEXUS_VERSION="${NEXUS_VERSION}" CPPHTTPLIB_THREAD_POOL_COUNT=16
                            ${NX_TLS_DEFS})
 target_link_libraries(nexus_core PUBLIC nx_sqlite3 nx_miniz nx_pcre2 nx_bz2 nx_xz nx_webp ${NX_TLS_LIBS} Threads::Threads)
@@ -181,5 +187,13 @@ if(NEXUS_BUILD_TESTS)
     set_target_properties(nexusled-emu PROPERTIES CXX_STANDARD 17)
     add_dependencies(nexus-tests nexusled-emu)
     target_compile_definitions(nexus-tests PRIVATE NEXUSLED_EMU="$<TARGET_FILE:nexusled-emu>")
+  endif()
+  # ROM de Espressif falsa sobre un pseudoterminal: grabar con nexus-flash sin placas
+  set(ROM_FALSA_SRC ${NEXUS_FLASHER}/tests/rom_falsa.cpp)
+  if(NOT WIN32 AND NOT ANDROID AND EXISTS ${ROM_FALSA_SRC})
+    add_executable(rom_falsa ${ROM_FALSA_SRC})
+    set_target_properties(rom_falsa PROPERTIES CXX_STANDARD 17)
+    add_dependencies(nexus-tests rom_falsa)
+    target_compile_definitions(nexus-tests PRIVATE ROM_FALSA="$<TARGET_FILE:rom_falsa>")
   endif()
 endif()

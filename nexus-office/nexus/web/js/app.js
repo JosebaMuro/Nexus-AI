@@ -1067,7 +1067,7 @@
     const puertos = (f.puertos || []).map((p) => `<option value="${esc(p.puerto)}">${esc(p.puerto)} · ${esc(p.tipo || "?")} · ${esc(p.descripcion)}</option>`).join("");
     const bins = (f.binarios || []).map((b) => `<span class="tag" title="${esc(b.sha256 || "")}">${esc(b.archivo)}${b.version ? " v" + esc(b.version) : ""}</span>`).join(" ") || '<span class="muted">sin binarios en firmware/bin</span>';
     // toda la familia ESP: las de Wi-Fi con binario se pueden elegir; drivers USB-serie que falten
-    const modelos = f.familia ? f.familia.filter((m) => m.wifi && m.binario).map((m) => [m.chip, m.nombre]) : (f.modelos_luces || []).map((m) => [m, m]);
+    const modelos = f.familia ? f.familia.filter((m) => m.wifi && m.binario).flatMap((m) => (m.variantes && m.variantes.length ? m.variantes.map((v) => [v.modelo, v.nombre]) : [[m.chip, m.nombre]])) : (f.modelos_luces || []).map((m) => [m, m]);
     const drv = f.drivers || {};
     const drvRows = (drv.dispositivos || []).map((d) => `<span class="tag ${d.instalado && !d.problema ? "ok" : "warn"}" title="${esc(d.vid + ":" + d.pid)}">${esc(d.chip)}${d.puerto ? " · " + esc(d.puerto) : ""}${d.problema ? " · " + esc(d.problema) : ""}</span>`).join(" ");
     box.innerHTML = `${f.falta && f.falta.length ? `<p class="tag warn">Falta ${esc(f.falta.join(", "))}: instálalo con pip</p>` : ""}
