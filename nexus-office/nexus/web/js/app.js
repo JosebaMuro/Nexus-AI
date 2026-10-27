@@ -303,6 +303,7 @@
       case "approval_required": showApproval(e.approval); break;
       case "approval_resolved": $(`#ap-${e.id}`)?.remove(); break;
       case "lounge": onLounge(e.message); break;
+      case "agent_activity": if (offices) offices.onActivity(e.activity); break;
       case "coop": onCoop(e.event); break;
       case "remote": if (e.event === "paired") { toast(`Dispositivo emparejado: ${e.device.name}`); if (S.view === "net") remoteBox(); } break;
     }
@@ -793,8 +794,23 @@
     const a = S.agents.find((x) => x.id === m.agent), color = m.agent === "usuario" || m.agent === "admin" ? "#ffffff" : (a?.color || "#00f0ff");
     return `<div class="lm ${m.kind}" style="--c:${color}"><span class="k">${kindLabel[m.kind] || m.kind} · ${ago(m.ts)}</span><b>${esc(a?.name || m.agent).toUpperCase()}</b>${esc(m.content).replace(/\n/g, "<br>")}</div>`;
   }
+  // despachos: cada agente en su despacho haciendo lo que hace de verdad (offices.js)
+  let offices = null, ltab = (() => { try { return localStorage.getItem("nexus_lounge_tab") || "salon"; } catch { return "salon"; } })();
+  function loungeTab(tab) {
+    ltab = tab; try { localStorage.setItem("nexus_lounge_tab", tab); } catch {}
+    $$("[data-ltab]").forEach((b) => b.classList.toggle("on", b.dataset.ltab === tab));
+    $("#lounge-stage").classList.toggle("hidden", tab !== "salon"); $("#offices-stage").classList.toggle("hidden", tab !== "despachos");
+    if (tab === "despachos" && !offices && window.OfficeRoom) {
+      window.__offices = offices = new OfficeRoom($("#offices-canvas"));
+      if (room) offices.setAgents(room.agents);
+      api("/api/agentes/actividad").then((a) => offices.setActivity(a)).catch(() => {});
+    }
+  }
+  $$("[data-ltab]").forEach((b) => (b.onclick = () => loungeTab(b.dataset.ltab)));
+  loungeTab(ltab);
   function onLounge(m) {
     if (room) room.say(m);
+    if (offices) offices.say(m);
     if (m.meta && m.meta.event === "meeting_start") meetBusy(true);
     if (m.meta && m.meta.event === "meeting_end") meetBusy(false);
     const log = $("#lounge-log");
@@ -806,7 +822,8 @@
     $("#badge-lounge").classList.add("hidden"); $("#badge-lounge").textContent = "";
     const d = await api("/api/lounge");
     if (!room) window.__lounge = room = new LoungeRoom($("#lounge-canvas"));
-    room.setAgents(d.agents);
+    room.setAgents(d.agents); room.setUser({ sexo: S.cfg.sexo || "", name: S.cfg.user_name || "Tú" });
+    if (offices) { offices.setAgents(d.agents); api("/api/agentes/actividad").then((a) => offices.setActivity(a)).catch(() => {}); }
     $("#lounge-log").innerHTML = d.messages.map(loungeLine).join("") || `<div class="muted">El salón está tranquilo. Convoca una reunión.</div>`;
     $("#lounge-log").scrollTop = 1e9; $("#lounge-count").textContent = `${d.messages.length} mensajes`; meetBusy(!!d.busy);
     d.messages.filter((m) => m.kind !== "task").slice(-4).forEach((m) => room.say(m));
@@ -1288,7 +1305,7 @@
       <div class="row" style="margin-top:8px">${a.keywords.slice(0, 6).map((k) => `<span class="tag accent">${esc(k)}</span>`).join("")}</div>
       <div class="row admin-only" style="margin-top:12px"><button class="btn sm" data-edit="${a.id}">EDITAR</button></div></div>`).join("");
     $$("[data-edit]").forEach((b) => (b.onclick = () => editAgent(S.agents.find((a) => a.id === b.dataset.edit), tools)));
-    $("#agent-new").onclick = () => editAgent({ id: "", name: "", description: "", system_prompt: "Eres un agente especialista de {assistant_name}.", model: "default", temperature: 0.7, max_tokens: null, tools: [], memory: true, can_delegate_to: [], keywords: [], specialty: "", color: "#00f0ff", icon: "◆", enabled: true }, tools);
+    $("#agent-new").onclick = () => editAgent({ id: "", name: "", description: "", system_prompt: "Eres un agente especialista de {assistant_name}.", model: "default", temperature: 0.7, max_tokens: null, tools: [], memory: true, can_delegate_to: [], keywords: [], specialty: "", color: "#00f0ff", icon: "◆", enabled: true, sexo: "" }, tools);
   };
   function editAgent(a, tools) {
     const ed = $("#agent-editor"); ed.classList.remove("hidden");
@@ -1299,6 +1316,7 @@
       <label class="field">Temperatura<input class="input" name="temperature" type="number" step="0.1" min="0" max="2" value="${a.temperature ?? ""}"></label>
       <label class="field">Máx. tokens<input class="input" name="max_tokens" type="number" value="${a.max_tokens ?? ""}"></label>
       <label class="field">Icono / color<div class="row"><input class="input" name="icon" value="${esc(a.icon)}" style="width:70px"><input type="color" name="color" value="${esc(a.color)}"></div></label>
+      <label class="field">Aspecto en el salón y su despacho<select class="input" name="sexo">${[["", "Al azar"], ["mujer", "Mujer"], ["hombre", "Hombre"]].map(([v, l]) => `<option value="${v}" ${(a.sexo || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
     </div>
     <label class="field" style="margin-top:10px">Descripción<input class="input" name="description" value="${esc(a.description)}"></label>
     <label class="field" style="margin-top:10px">Prompt de sistema<textarea class="input" name="system_prompt" rows="5">${esc(a.system_prompt)}</textarea></label>
@@ -1316,7 +1334,7 @@
       await api("/api/agents", { method: "PUT", body: { id: v("id").value, name: v("name").value, description: v("description").value, system_prompt: v("system_prompt").value,
         model: v("model").value || "default", temperature: v("temperature").value === "" ? null : +v("temperature").value, max_tokens: v("max_tokens").value === "" ? null : +v("max_tokens").value,
         tools: $$("[name=tool]:checked", ed).map((c) => c.value), memory: v("memory").checked, enabled: v("enabled").checked,
-        keywords: list(v("keywords").value), specialty: v("specialty").value.trim(), can_delegate_to: list(v("can_delegate_to").value), color: v("color").value, icon: v("icon").value || "◆" } });
+        keywords: list(v("keywords").value), specialty: v("specialty").value.trim(), can_delegate_to: list(v("can_delegate_to").value), color: v("color").value, icon: v("icon").value || "◆", sexo: v("sexo").value } });
       toast("Agente guardado"); ed.classList.add("hidden"); loaders.agents();
     });
     $("#ag-del") && ($("#ag-del").onclick = guard(async () => { if (!confirm("¿Borrar agente?")) return; await api(`/api/agents/${a.id}`, { method: "DELETE" }); ed.classList.add("hidden"); loaders.agents(); }));
@@ -1764,6 +1782,7 @@
     $("#user-settings").innerHTML = row("Nombre del asistente", "", `<input class="input" data-u="assistant_name" value="${esc(u.assistant_name)}" style="width:180px">`) +
       row("Idioma", "", `<select class="input" data-u="language" style="width:auto">${[["es", "Español"], ["en", "English"], ["ca", "Català"], ["eu", "Euskara"], ["gl", "Galego"], ["fr", "Français"], ["pt", "Português"], ["de", "Deutsch"], ["it", "Italiano"]].map(([v, n]) => `<option value="${v}" ${u.language === v ? "selected" : ""}>${n}</option>`).join("")}</select>`) +
       row("Estilo de respuesta", "", `<select class="input" data-u="response_style" style="width:auto">${["breve", "equilibrado", "detallado"].map((v) => `<option ${u.response_style === v ? "selected" : ""}>${v}</option>`).join("")}</select>`) +
+      row("Tu personaje", "Cómo te ves en el salón y en los despachos", `<select class="input" data-u="sexo" style="width:auto">${[["", "Al azar"], ["mujer", "Mujer"], ["hombre", "Hombre"]].map(([v, n]) => `<option value="${v}" ${(u.sexo || "") === v ? "selected" : ""}>${n}</option>`).join("")}</select>`) +
       row("Agente por defecto", "", `<select class="input" data-u="default_agent" style="width:auto"><option value="auto">automático</option>${S.agents.map((a) => `<option value="${a.id}" ${u.default_agent === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>`) +
       row("Memoria a largo plazo", "Aprender de las conversaciones", sw("memory_enabled")) + row("Voz", "Entrada y salida por voz", sw("voice_enabled")) +
       row("Leer respuestas automáticamente", "", sw("auto_speak")) +
@@ -1800,6 +1819,7 @@
     $$("[data-u]").forEach((el) => (el.onchange = guard(async () => {
       const v = el.type === "checkbox" ? el.checked : el.type === "range" ? +el.value : el.value;
       await api("/api/config", { method: "PUT", body: { ["user." + el.dataset.u]: v } });
+      if (el.dataset.u === "sexo" && window.__lounge) window.__lounge.setUser({ sexo: v });
       if (el.dataset.u === "auto_speak") { S.speak = v; local.set("nexus_speak", v); $("#btn-speak").classList.toggle("on", v); }
       await loadConfig(); toast("Guardado");
     })));

@@ -110,9 +110,11 @@
     <!-- ================= SALON VIRTUAL ================= -->
     <section class="view" id="view-lounge">
       <div class="view-title">SALÓN VIRTUAL DE AGENTES</div>
+      <div class="seg lounge-tabs" id="lounge-tabs"><button data-ltab="salon" class="on">SALÓN</button><button data-ltab="despachos">DESPACHOS</button></div>
       <div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr)">
         <div class="panel" style="padding:0;overflow:hidden">
           <div class="lounge-stage" id="lounge-stage"><canvas id="lounge-canvas"></canvas></div>
+          <div class="offices-stage hidden" id="offices-stage"><canvas id="offices-canvas"></canvas></div>
           <div class="row lounge-meetbar" style="padding:12px 14px;border-top:1px solid var(--line)">
             <input class="input" id="lounge-topic" placeholder="Tema para la reunión (opcional)" style="flex:1">
             <button class="btn primary" id="lounge-meet">CONVOCAR REUNIÓN</button>
@@ -494,6 +496,7 @@
 <script src="/static/js/avatar.js"></script>
 <script type="module" src="/static/js/avatar3d.js"></script>
 <script src="/static/js/lounge.js"></script>
+<script src="/static/js/offices.js"></script>
 <script src="/static/js/app.js"></script>
 <script src="/static/js/kgadmin.js"></script>
 </body>

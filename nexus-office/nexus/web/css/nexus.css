@@ -349,6 +349,11 @@ dialog h2 { margin: 0 0 6px; font: 700 15px var(--font-hud); letter-spacing: .22
 
 /* ---------- salon virtual ---------- */
 .lounge-stage { position: relative; height: 470px; background: radial-gradient(ellipse at 50% 60%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%); }
+.offices-stage { position: relative; min-height: 232px; overflow: hidden; }
+.offices-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lounge-tabs { display: inline-flex; gap: 4px; margin: 0 0 10px; }
+.lounge-tabs button { background: var(--shade); border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 6px 14px; font: 600 11px var(--font-mono); letter-spacing: .08em; cursor: pointer; }
+.lounge-tabs button.on { border-color: var(--accent); color: var(--text); }
 .lounge-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .lounge-log { height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 7px; padding-right: 4px; }
 .lounge-log .lm { font-size: 13.5px; padding: 6px 10px; border-left: 2px solid var(--c, var(--line)); background: var(--shade); border-radius: 0 8px 8px 0; animation: msgin .3s; }
