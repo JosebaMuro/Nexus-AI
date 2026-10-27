@@ -22,6 +22,7 @@
 #include "core/config.h"
 #include "core/services.h"
 #include "rag/rag.h"
+#include "rag/browser.h"
 #include "rag/web.h"
 #include "util/crypto.h"
 #include "util/http.h"
@@ -247,7 +248,11 @@ Fetcher http_fetcher() {
       ctype = r.header("content-type");
       if (data.size() > cap) data.resize(cap);
       bool is_doc = !contains(lower(ctype), "html") && !doc_suffix(url, ctype).empty();
-      return {r.status, ctype, is_doc ? data : decode_body(data, ctype), url};
+      if (is_doc) return {r.status, ctype, data, url};
+      std::string body = decode_body(data, ctype);
+      if (r.status == 200 && contains(lower(ctype), "html"))
+        body = browser::maybe_render(url, body).first;   // paginas que se pintan con JavaScript
+      return {r.status, ctype, body, url};
     }
     throw std::runtime_error("demasiadas redirecciones");
   };

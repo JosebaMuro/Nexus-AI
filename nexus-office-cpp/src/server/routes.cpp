@@ -18,6 +18,7 @@
 #include "llm/llm.h"
 #include "hardware/hw_profiles.h"
 #include "media/avatares.h"
+#include "rag/browser.h"
 #include "media/media.h"
 #include "memory/memory.h"
 #include "models/models.h"
@@ -466,6 +467,9 @@ void register_routes(App& app) {
     c.app.broadcast({{"type", "status_changed"}});
     return res;
   });
+
+  // lectura de webs con JavaScript: modo (auto, siempre, nunca) y navegador encontrado en el equipo
+  app.get("/api/rag/navegador", [](Ctx&) -> Out { return rag::browser::info(); });
 
   // perfiles de hardware (de serie y propios), el activo, las GPU que hay y los modelos de texto
   app.get("/api/hw/perfiles", [](Ctx& c) -> Out {

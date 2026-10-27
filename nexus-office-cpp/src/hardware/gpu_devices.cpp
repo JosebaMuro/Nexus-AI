@@ -69,7 +69,7 @@ json list_devices(const fs::path& exe, const std::map<std::string, std::string>&
   std::error_code ec;
   auto mtime = std::filesystem::last_write_time(exe, ec);
   if (ec) return json::array();
-  std::string key = S(exe) + "|" + std::to_string(mtime.time_since_epoch().count());
+  std::string key = S(exe) + "|" + std::to_string(static_cast<long long>(mtime.time_since_epoch().count()));
   {
     std::lock_guard<std::mutex> lk(g_mu);
     if (auto it = g_cache.find(key); it != g_cache.end()) return it->second;

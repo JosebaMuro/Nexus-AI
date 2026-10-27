@@ -56,6 +56,19 @@
   referencia (VRM Consortium, Khronos, three.js) y modelos CC de Sketchfab. Si una pasarela IPFS falla prueba otra, solo
   descarga URLs del catálogo y lo descargado sirve sin conexión (`/api/avatares`).
 
+### RAG que lee páginas como un navegador
+
+- Las webs que se pintan con JavaScript (React, Vue, Angular, tiendas...) se leen con Chrome, Edge, Chromium o Brave sin
+  interfaz si hay uno en el equipo; si no, todo sigue con la descarga normal. Lo usan el rastreador, «URL a PDF» y la
+  herramienta web de los agentes (`rag.browser`: auto, siempre o nunca; `rag.browser_path` para elegir uno).
+- El navegador sale por un proxy local que solo deja direcciones públicas (salvo `rag.allow_private_urls`), con un
+  perfil propio limpio en cada lectura. API nueva `GET /api/rag/navegador`.
+
+### Personajes con sexo elegible
+
+- Cada agente (`sexo` en su ficha) y el propio usuario (`user.sexo`) pueden ser mujer u hombre; despachos y sala de
+  descanso lo respetan.
+
 ### Ejemplos para importar
 - **Grafo multicapa de la Wikipedia en español** (`ejemplos/grafo-wikipedia-es`): 2.251 nodos y 7.007 relaciones en
   cuatro capas (temas, artículos, enlaces entre artículos y hechos de Wikidata), en GraphML y JSON. Se importa con
