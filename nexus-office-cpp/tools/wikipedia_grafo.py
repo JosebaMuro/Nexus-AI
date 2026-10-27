@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 import urllib.parse
@@ -78,6 +79,12 @@ def query_all(params: dict, limite: int = 100000):
             return
         cont = data["continue"]
         time.sleep(0.1)
+
+
+def limpiar(texto: str) -> str:
+    """Resumen de una introducción: sin restos de fórmulas ({\\displaystyle ...}) y con los espacios normales."""
+    texto = re.sub(r"\{\\displaystyle[^{}]*(\{[^{}]*\}[^{}]*)*\}", "", texto or "")
+    return re.sub(r"\s+", " ", texto).strip()
 
 
 def lotes(items: list, n: int):
@@ -160,7 +167,7 @@ def detalles(g: Grafo, articulos: list[str]) -> dict[str, str]:
                     (f"art:{o}" for o, d in alias.items() if d == t and f"art:{o}" in g.nodos), None)
                 if not nid:
                     continue
-                g.nodo(nid, t, "articulo", "2-articulos", resumen=(p.get("extract") or "").strip()[:900],
+                g.nodo(nid, t, "articulo", "2-articulos", resumen=limpiar(p.get("extract", ""))[:900],
                        descripcion=p.get("description", ""))
                 q_id = p.get("pageprops", {}).get("wikibase_item")
                 if q_id:
