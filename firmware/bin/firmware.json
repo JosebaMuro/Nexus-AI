@@ -1,5 +1,5 @@
 {
-  "commit": "de5265a50cdecc04e10616439c0bd1c2612b0dfd",
+  "commit": "521430b9e83aab211b011a7d512a94c044af2968",
   "nucleo_esp32": "3.1.1",
   "nucleo_esp32_nuevo": "3.3.0",
   "nucleo_esp8266": "3.1.2",
@@ -7,48 +7,48 @@
   "archivos": {
     "nexusled-esp32.bin": {
       "version": "1.0.0",
-      "sha256": "2e731c35fd332e5285282b4752c5d7e4b46d2a1086fb2b91e2f4abe80ca40a29",
-      "grabar": "esptool write_flash 0x0"
+      "sha256": "14dc7cb13be18649f76dbd70739d29484b86fa91e738e1cd967f902d57ebbec2",
+      "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32c3.bin": {
       "version": "1.0.0",
-      "sha256": "8e5ebfc368bd22deed9891cbdd5df93cedfc0a265c149e23fceba163c699f810",
-      "grabar": "esptool write_flash 0x0"
+      "sha256": "be2f6a905594d1bc99af1b42c56cd201fe0f046e3388101bb3761d6ef0ff5828",
+      "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32c5.bin": {
       "version": "1.0.0",
-      "sha256": "294cd8e4706c531ab8023f75b00058befa5360d209f7e116d12b4838a1b4c961",
-      "grabar": "esptool write_flash 0x0"
+      "sha256": "f2872da9f42c113ad4d34f92ac9243ca195ac343b2c2d07e4fe383a258b5270d",
+      "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32c6.bin": {
       "version": "1.0.0",
-      "sha256": "926c043e82f86740da9595565bb69920047e3afcb53e5cc7f72a8a93ff52ebd7",
-      "grabar": "esptool write_flash 0x0"
+      "sha256": "ba158f328a1a96f99844fbe9bf0a7ce6d09773d2f88250b44f8116871ca43c47",
+      "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32s2.bin": {
       "version": "1.0.0",
-      "sha256": "b38b8201c6d2eb25fce9abf7a60c3284c07cec1f42b0f62ae6e080b7a5302216",
-      "grabar": "esptool write_flash 0x0"
+      "sha256": "326f80b7a621e06ce811a808d393a790b45bf77ddda4fd0b5e26f17899ed4493",
+      "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32s3.bin": {
       "version": "1.0.0",
-      "sha256": "63b5172451d2b2ddc69c600cb520dc6809914c3f1c9ccafce55996adebf581b1",
-      "grabar": "esptool write_flash 0x0"
+      "sha256": "6384384d36a972a3ae5656de2fb0b78b33ecb22dc5db6fb144e24fe7fe41ef4c",
+      "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp8266-4m.bin": {
       "version": "1.0.0",
       "sha256": "cf875210a5ca9c958074071b9764a8af1355263cc8f1c170abd0466cfc6a4b8d",
-      "grabar": "esptool write_flash 0x0"
+      "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp8266-512k.bin": {
       "version": "1.0.0",
       "sha256": "ff900fd545acb931d74d1078306f362cfb9315d322e5a6a95cc1849d0b37ef47",
-      "grabar": "esptool write_flash 0x0"
+      "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp8266.bin": {
       "version": "1.0.0",
       "sha256": "90564ecfc45ba20f6287e00a18af77c10741cc539678017196c35d0c115ee757",
-      "grabar": "esptool write_flash 0x0"
+      "grabar": "nexus-flash grabar (0x0)"
     },
     "nexuspico-picow.uf2": {
       "version": "1.0.0",
@@ -57,8 +57,8 @@
     },
     "nexuswatch-esp32c3.bin": {
       "version": "1.0.0",
-      "sha256": "f4921d260cd016068ba51664e3c66615f4f4f818467579600456eb7334f5a6a3",
-      "grabar": "esptool write_flash 0x0"
+      "sha256": "e71bf16b6570ae9e3bd24195f1167e4935edc9e60c216fccb8f728d89567309e",
+      "grabar": "nexus-flash grabar (0x0)"
     }
   }
 }
