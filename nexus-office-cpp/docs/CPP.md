@@ -60,6 +60,10 @@ La 2.0 beta C dejaba fuera varias funciones. Desde la 2.1 están todas, con las 
 | Lo que hace cada agente (despachos, reloj y salón: `/api/agentes/actividad`) | `src/agents/activity.cpp` |
 | Luces NexusLED, modos, reloj NexusWatch y Pico W (`/api/dispositivos`) | `src/devices/devices.cpp`: UDP y HTTP del firmware e imágenes de tinta hechas en C++ |
 | Grabar el firmware de las luces, el reloj y el Pico W (`/api/firmware`) | `src/devices/firmware.cpp`: puertos serie nativos, esptool para los ESP32 y copia del .uf2 al Pico |
+| Avatares 3D gratuitos (Open Source Avatars, muestras y Sketchfab: `/api/avatares`) | `src/media/avatares.cpp`: pasarelas IPFS de respaldo y solo URLs del catálogo |
+| Perfiles de hardware y elección de una GPU (`/api/hw/perfiles`, `/api/hw/gpu`) | `src/hardware/hw_profiles.cpp` y `gpu_devices.cpp`: `--device` solo si hay varias, vuelta a la CPU si la GPU no arranca |
+| Leer webs con JavaScript como un navegador (`rag.browser`, `/api/rag/navegador`) | `src/rag/browser.cpp`: Chrome, Edge, Chromium o Brave sin interfaz, proxy propio que solo deja direcciones públicas y, si el navegador no responde en el equipo, lectura normal |
+| Sexo elegible de cada personaje y del usuario (`sexo` en el agente, `user.sexo`) | `src/agents/spec.cpp` y la configuración |
 | Órdenes `grafo`, `bolsa`, `setup`, `wheels` y `cleanup` | `src/main.cpp` |
 
 `/api/tools` lista las mismas herramientas en las dos ediciones. Quedan dos diferencias que no aplican a C++:
