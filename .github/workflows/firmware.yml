@@ -59,7 +59,7 @@ jobs:
           - { sketch: nexusled, modelo: esp32c6, fqbn: "esp32:esp32:esp32c6:PartitionScheme=min_spiffs,CDCOnBoot=cdc" }
           - { sketch: nexuswatch, modelo: esp32c3, fqbn: "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio" }
           # en prueba: si no compilan, el resto de binarios se sube igual
-          - { sketch: nexusled, modelo: esp32c2, fqbn: "esp32:esp32:esp32c2:PartitionScheme=min_spiffs", nuevo: true }
+          - { sketch: nexusled, modelo: esp32c2, fqbn: "esp32:esp32:esp32c2:PartitionScheme=min_spiffs,FlashMode=dio", nuevo: true }
           - { sketch: nexusled, modelo: esp32c5, fqbn: "esp32:esp32:esp32c5:PartitionScheme=min_spiffs,CDCOnBoot=cdc", nuevo: true }
     continue-on-error: ${{ matrix.nuevo == true }}
     env:
@@ -98,6 +98,8 @@ jobs:
           - { modelo: esp8266, fqbn: "esp8266:esp8266:generic:eesz=1M64,FlashMode=dout,ResetMethod=nodemcu" }
           # 4 MB (NodeMCU, Wemos D1 mini, ESP-12E/F): mas espacio para guardar ajustes
           - { modelo: esp8266-4m, fqbn: "esp8266:esp8266:nodemcuv2:eesz=4M1M" }
+          # 512 KB (ESP-01 azul antiguo): cabe el firmware pero no hay sitio para actualizarlo por Wi-Fi
+          - { modelo: esp8266-512k, fqbn: "esp8266:esp8266:generic:eesz=512K32,FlashMode=dout,ResetMethod=nodemcu" }
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-arduino-cli@v2

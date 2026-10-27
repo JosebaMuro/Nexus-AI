@@ -380,8 +380,12 @@ static void handleAny() {
 }
 
 static void setupHttp() {
+#if defined(ESP8266)
+  server.collectHeaders("X-Nexus-Token");
+#else
   static const char* headers[] = {"X-Nexus-Token"};
   server.collectHeaders(headers, 1);
+#endif
   server.on("/", HTTP_GET, []() { server.send_P(200, "text/html", NL_UI_HTML); });
   // actualizacion de firmware desde el navegador (.bin de Arduino: Programa > Exportar binario compilado)
   server.on(
