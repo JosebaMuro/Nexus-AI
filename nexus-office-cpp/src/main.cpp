@@ -30,6 +30,8 @@
 #include "core/service.h"
 #include "core/services.h"
 #include "core/system.h"
+#include "devices/drivers.h"
+#include "devices/firmware.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
 #include "memory/kg.h"
@@ -689,6 +691,73 @@ bool ask(const std::string& q, bool def) {
 }
 
 // cleanup: quita del paquete offline las variantes de runtime (GPU o CPU) que este equipo no usa
+// grabar las placas sin abrir la web: estado, drivers USB-serie y grabado de luces, reloj o Pico W
+int cmd_firmware(const Args& a) {
+  log::setup();
+  namespace fw = devices::firmware;
+  namespace dr = devices::drivers;
+  std::string sub = a.pos.empty() ? "estado" : a.pos[0];
+  if (sub == "estado") {
+    json st = dr::estado();
+    std::printf("Carpeta de firmware: %s\n", fw::carpeta().empty() ? "(no esta)" : S(fw::carpeta()).c_str());
+    std::printf("Placas ESP que se pueden grabar:\n");
+    for (auto& f : fw::FAMILIA) {
+      bool bin = !fw::carpeta().empty() && is_file(fw::carpeta() / "bin" / ("nexusled-" + jstr(f, "chip") + ".bin"));
+      std::printf("  %-28s %s%s\n", jstr(f, "nombre").c_str(), truthy(f["wifi"]) ? (bin ? "luces listas" : "sin binario aun") : "solo se reconoce",
+                  f.contains("nota") ? ("  (" + jstr(f, "nota") + ")").c_str() : "");
+    }
+    std::printf("Puertos:\n");
+    for (auto& p : fw::puertos())
+      std::printf("  %-22s %-8s %s\n", jstr(p, "puerto").c_str(), jstr(p, "tipo").c_str(), jstr(p, "descripcion").c_str());
+    std::printf("USB-serie enchufados:\n");
+    for (auto& d : st["dispositivos"])
+      std::printf("  %s:%s %-12s %s %s\n", jstr(d, "vid").c_str(), jstr(d, "pid").c_str(), jstr(d, "chip").c_str(),
+                  truthy(d["instalado"]) ? "driver OK" : "SIN DRIVER", jstr(d, "problema").c_str());
+    if (!st["faltan"].empty()) std::printf("Falta: %s  (nexus-office firmware drivers --instalar)\n", jdump(st["faltan"]).c_str());
+    return 0;
+  }
+  if (sub == "drivers") {
+    if (!a.has("instalar") && !a.has("simular")) {
+      std::printf("%s\n", jdump(dr::estado(), 2).c_str());
+      return 0;
+    }
+    std::vector<std::string> pedidos(a.pos.begin() + 1, a.pos.end());
+    json r = dr::instalar(pedidos, a.has("simular"));
+    std::printf("%s\n", jstr(r, "mensaje").c_str());
+    for (auto& c : r["comandos"]) std::printf("  $ %s\n", c.get<std::string>().c_str());
+    return truthy(r["ok"]) ? 0 : 1;
+  }
+  if (sub == "grabar") {
+    if (a.pos.size() < 2) die("uso: nexus-office firmware grabar luces|reloj|pico [--puerto P] [--modelo esp32c3] "
+                              "[--wifi RED --clave CLAVE] [--nexus IP:PUERTO]", 2);
+    std::string tipo = a.pos[1], puerto = a.get("puerto"), modelo = a.get("modelo");
+    auto log_ = [](const std::string& l) { std::printf("%s\n", l.c_str()); };
+    json cfg = json::object();
+    if (!a.get("wifi").empty()) cfg["wifi"] = {{"ssid", a.get("wifi")}, {"password", a.get("clave")}};
+    if (!a.get("nexus").empty() && tipo != "luces") cfg["nexus"] = {{"host", a.get("nexus")}};
+    if (!a.has("sin-drivers")) {   // primero, lo que falte para ver la placa
+      json st = dr::estado();
+      if (!st["faltan"].empty()) std::printf("%s\n", jstr(dr::instalar(), "mensaje").c_str());
+    }
+    try {
+      json res;
+      if (tipo == "pico") {
+        res = fw::flashear_pico(puerto, log_);
+        if (!cfg.empty()) res = fw::configurar_pico(jstr(res, "puerto"), cfg, log_);
+      } else {
+        res = fw::flashear_esp32(tipo, puerto, modelo, log_);
+        if (!cfg.empty()) res["config"] = fw::configurar_esp32(tipo, jstr(res, "puerto"), cfg, log_);
+      }
+      std::printf("Listo: %s\n", jdump(res).c_str());
+      return 0;
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "Error: %s\n", e.what());
+      return 1;
+    }
+  }
+  die("uso: nexus-office firmware [estado | drivers [--instalar|--simular] [driver...] | grabar luces|reloj|pico ...]", 2);
+}
+
 int cmd_cleanup(const Args& a) {
   log::setup();
   fs::path root = paths::root(), bundled = root / "bundled" / "runtimes";
@@ -740,6 +809,9 @@ const char* HELP =
     "                     [--formato json|graphml|csv]\n"
     "  nexus-office setup                       comprueba los runtimes de este equipo en el paquete\n"
     "  nexus-office cleanup [--yes] [--dry-run] quita las variantes de runtime que este equipo no usa\n"
+    "  nexus-office firmware [estado]           placas ESP y Pico W, puertos y drivers USB-serie\n"
+    "  nexus-office firmware drivers [--instalar|--simular]   instala los drivers CH340/CP210x/FTDI que falten\n"
+    "  nexus-office firmware grabar luces|reloj|pico [--puerto P] [--modelo esp8266|esp32c3...] [--wifi RED --clave C]\n"
     "  nexus-office --version\n";
 
 }  // namespace
@@ -772,6 +844,7 @@ int run_main(std::vector<std::string> argv) {
   if (cmd == "setup") return cmd_setup(parse(argv, {}));
   if (cmd == "wheels") return cmd_wheels(parse(argv, {}));
   if (cmd == "cleanup") return cmd_cleanup(parse(argv, {}));
+  if (cmd == "firmware") return cmd_firmware(parse(argv, {"puerto", "modelo", "wifi", "clave", "nexus"}));
   std::fprintf(stderr, "orden desconocida: %s\n\n%s", cmd.c_str(), HELP);
   return 2;
 }

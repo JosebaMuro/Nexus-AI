@@ -97,7 +97,7 @@ target_link_libraries(nexus_core PUBLIC nx_sqlite3 nx_miniz nx_pcre2 nx_bz2 nx_x
 if(WIN32)
   target_compile_definitions(nexus_core PUBLIC _WIN32_WINNT=0x0A00 NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE
                              _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS)
-  target_link_libraries(nexus_core PUBLIC ws2_32 crypt32 bcrypt iphlpapi shell32 advapi32)
+  target_link_libraries(nexus_core PUBLIC ws2_32 crypt32 bcrypt iphlpapi shell32 advapi32 cfgmgr32)
   if(MSVC)
     target_compile_options(nexus_core PUBLIC /utf-8 /bigobj /Zc:__cplusplus)
   else()

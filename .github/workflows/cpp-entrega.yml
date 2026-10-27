@@ -169,6 +169,34 @@ jobs:
           else
             echo "::warning::sin esptool $EV para $A: el firmware de los ESP32 se grabara con python -m esptool"
           fi
+      - name: Drivers USB-serie (CH340/CH9102, CP210x, FTDI) para grabar las placas ESP sin internet
+        if: startsWith(matrix.target, 'windows') || startsWith(matrix.target, 'macos')
+        run: |
+          T=${{ matrix.target }}; D=nexus-office-cpp/.cache/drivers/$T; mkdir -p "$D"
+          # baja el primer zip que responda y comprueba que trae lo que hace falta (.inf en Windows, .pkg/.dmg en macOS)
+          bajar() {
+            local dir=$1 patron=$2; shift 2
+            for u in "$@"; do
+              rm -rf tmpdrv && mkdir tmpdrv
+              if curl -fsSL --max-time 120 -A "Mozilla/5.0" -o tmpdrv/d.zip "$u" && (cd tmpdrv && unzip -q -o d.zip >/dev/null 2>&1; true) \
+                 && [ -n "$(find tmpdrv -iname "$patron" | head -1)" ]; then
+                rm -f tmpdrv/d.zip; mkdir -p "$D/$dir"; cp -r tmpdrv/. "$D/$dir/"; echo "driver $dir: $u"; return 0
+              fi
+            done
+            echo "::warning::sin driver $dir para $T: Nexus-Office dira de donde bajarlo"
+          }
+          case $T in
+            windows-*)
+              bajar cp210x '*.inf' https://www.silabs.com/documents/public/software/CP210x_Universal_Windows_Driver.zip
+              bajar ftdi '*.inf' https://ftdichip.com/wp-content/uploads/2025/03/CDM-v2.12.36.20-WHQL-Certified.zip \
+                https://ftdichip.com/wp-content/uploads/2023/09/CDM-v2.12.36.4-WHQL-Certified.zip
+              bajar ch34x '*.inf' https://www.wch.cn/download/file?id=5 https://www.wch-ic.com/download/file?id=5
+              bajar ch343 '*.inf' https://www.wch.cn/download/file?id=314 https://www.wch-ic.com/download/file?id=314 ;;
+            macos-*)
+              bajar cp210x '*.dmg' https://www.silabs.com/documents/public/software/Mac_OSX_VCP_Driver.zip
+              bajar ch34x '*.pkg' https://www.wch.cn/download/file?id=178 https://www.wch-ic.com/download/file?id=178 ;;
+          esac
+          rm -rf tmpdrv; find "$D" -maxdepth 3 | head -40
       - name: Construir
         run: cd nexus-office-cpp && python packaging/build.py --targets ${{ matrix.target }}
       - name: Lista

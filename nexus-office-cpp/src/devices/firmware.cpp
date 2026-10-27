@@ -13,6 +13,7 @@
 #include <unistd.h>
 #endif
 
+#include "devices/drivers.h"
 #include "util/crypto.h"
 #include "util/log.h"
 #include "util/proc.h"
@@ -21,7 +22,29 @@
 
 namespace nx::devices::firmware {
 
-const std::vector<std::string> MODELOS_LUCES = {"esp32", "esp32s2", "esp32s3", "esp32c3", "esp32c6"};
+const std::vector<std::string> MODELOS_LUCES = {"esp8266", "esp32",   "esp32s2", "esp32s3",
+                                                "esp32c2", "esp32c3", "esp32c5", "esp32c6"};
+
+// toda la familia ESP que se puede grabar desde Nexus (con Wi-Fi: luces; sin Wi-Fi solo se reconocen)
+const json FAMILIA = jparse(R"J([
+  {"chip": "esp8266", "nombre": "ESP8266", "wifi": true, "usb_nativo": false,
+   "placas": ["ESP-01", "ESP-01S", "ESP-12E/F", "NodeMCU", "Wemos D1 mini"],
+   "nota": "ESP-01: une GPIO0 a GND al enchufarlo para entrar en modo de grabacion"},
+  {"chip": "esp32", "nombre": "ESP32", "wifi": true, "usb_nativo": false,
+   "placas": ["ESP32 DevKitC", "ESP32-WROOM-32", "ESP32-WROVER", "ESP32-CAM", "ESP32-PICO"]},
+  {"chip": "esp32s2", "nombre": "ESP32-S2", "wifi": true, "usb_nativo": true, "placas": ["ESP32-S2 Mini", "Saola"]},
+  {"chip": "esp32s3", "nombre": "ESP32-S3", "wifi": true, "usb_nativo": true,
+   "placas": ["ESP32-S3 DevKitC-1", "XIAO ESP32S3", "T-Display S3"]},
+  {"chip": "esp32c2", "nombre": "ESP32-C2 (ESP8684)", "wifi": true, "usb_nativo": false, "placas": ["ESP8684 DevKitM"]},
+  {"chip": "esp32c3", "nombre": "ESP32-C3", "wifi": true, "usb_nativo": true,
+   "placas": ["ESP32-C3 SuperMini", "XIAO ESP32C3", "ESP32-2424S012C (reloj)"]},
+  {"chip": "esp32c5", "nombre": "ESP32-C5 (Wi-Fi 2,4 y 5 GHz)", "wifi": true, "usb_nativo": true, "placas": ["ESP32-C5 DevKitC-1"]},
+  {"chip": "esp32c6", "nombre": "ESP32-C6", "wifi": true, "usb_nativo": true, "placas": ["ESP32-C6 DevKitC-1", "XIAO ESP32C6"]},
+  {"chip": "esp32h2", "nombre": "ESP32-H2", "wifi": false, "usb_nativo": true, "placas": ["ESP32-H2 DevKitM-1"],
+   "nota": "sin Wi-Fi (Thread y Zigbee): no puede hablar con Nexus"},
+  {"chip": "esp32p4", "nombre": "ESP32-P4", "wifi": false, "usb_nativo": true, "placas": ["ESP32-P4 Function EV"],
+   "nota": "sin Wi-Fi propio (va con un ESP32-C6 de acompanante)"}
+])J");
 
 namespace {
 
@@ -157,6 +180,10 @@ std::string narrow(const std::wstring& w) {
 std::string puerto_auto(const std::string& tipo) {
   for (auto& p : puertos())
     if (jstr(p, "tipo") == tipo) return jstr(p, "puerto");
+  json st = drivers::estado();
+  if (!st["faltan"].empty())
+    throw std::runtime_error("la placa esta enchufada pero falta el driver USB-serie (" + join(st["faltan"].get<std::vector<std::string>>(), ", ") +
+                             "): instalalo en Grabar firmware > Drivers o con nexus-office firmware drivers --instalar");
   throw std::runtime_error("no encuentro el dispositivo: conectalo por USB (o indica el puerto)");
 }
 
@@ -204,16 +231,34 @@ std::string esptool(const std::vector<std::string>& args, const Log& log) {
   return all;
 }
 
-std::string detectar_chip(const std::string& puerto, const Log& log) {
-  static const Rx R(R"((?:Chip is|Chip type:)\s*(ESP32(?:-[A-Z0-9]+)?))");
-  std::string out = esptool({"--port", puerto, "chip_id"}, log);
+}  // namespace
+
+std::string chip_de_texto(const std::string& out) {
+  static const Rx R(R"((?:Chip is|Chip type:|Detecting chip type\.\.\.)\s*(ESP8266\w*|ESP32(?:-[A-Z0-9]+)?|ESP8684))");
   auto m = R.search(out);
-  if (!m) throw std::runtime_error("no se reconoce el chip");
+  if (!m) return "";
   std::string chip = replace_all(lower(m->str(1)), "-", "");
+  if (starts_with(chip, "esp8266")) return "esp8266";
+  if (chip == "esp8684") return "esp32c2";
   // el ESP32 clasico aparece como ESP32-D0WD-V3, ESP32-PICO-D4...
-  for (auto c : {"esp32s2", "esp32s3", "esp32c2", "esp32c3", "esp32c6", "esp32h2", "esp32p4"})
-    if (chip == c) return chip;
+  for (auto c : {"esp32s2", "esp32s3", "esp32c2", "esp32c3", "esp32c5", "esp32c61", "esp32c6", "esp32h2", "esp32p4"})
+    if (starts_with(chip, c)) return c;
   return "esp32";
+}
+
+namespace {
+
+std::string detectar_chip(const std::string& puerto, const Log& log) {
+  std::string out;
+  try {
+    out = esptool({"--port", puerto, "chip_id"}, log);
+  } catch (const std::runtime_error& e) {
+    throw std::runtime_error(std::string(e.what()) +
+                             "\nSi es un ESP-01 o una placa sin boton BOOT: une GPIO0 a GND al enchufarla y vuelve a probar.");
+  }
+  std::string chip = chip_de_texto(out);
+  if (chip.empty()) throw std::runtime_error("no se reconoce el chip");
+  return chip;
 }
 
 }  // namespace
@@ -387,7 +432,11 @@ json flashear_esp32(const std::string& tipo, std::string puerto, std::string mod
     throw std::runtime_error("no hay NexusLED para " + modelo + " (hay: " + join(MODELOS_LUCES, ", ") + ")");
   fs::path fw = binario(tipo, modelo);
   if (!is_file(fw)) throw std::runtime_error("falta " + S(fw.filename()) + " en firmware/bin");
-  esptool({"--chip", modelo, "--port", puerto, "--baud", "460800", "write_flash", "0x0", S(fw)}, log);
+  std::vector<std::string> args = {"--chip", modelo, "--port", puerto, "--baud", modelo == "esp8266" ? "115200" : "460800",
+                                   "write_flash"};
+  if (modelo == "esp8266") args.insert(args.end(), {"--flash_size", "detect"});   // ESP-01 con 512 KB o 1 MB
+  args.insert(args.end(), {"0x0", S(fw)});
+  esptool(args, log);
   log(S(fw.filename()) + " grabado en " + puerto);
   return {{"ok", true}, {"puerto", puerto}, {"chip", chip}, {"archivo", S(fw.filename())}};
 }

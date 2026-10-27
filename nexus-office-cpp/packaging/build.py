@@ -103,6 +103,12 @@ def stage(target: str) -> Path:
         esp = CACHE / "esptool" / target
         if esp.is_dir() and any(esp.glob("esptool*")):
             shutil.copytree(esp, dest / "firmware" / "tools")
+        # drivers USB-serie de los puentes de las placas (Windows y macOS; Linux los trae en el kernel)
+        drv = CACHE / "drivers" / target
+        so = "windows" if target.startswith("windows") else "macos" if target.startswith("macos") else ""
+        if so and drv.is_dir() and any(drv.iterdir()):
+            shutil.copytree(drv, dest / "firmware" / "drivers" / so)
+            log(f"{target}: drivers {', '.join(sorted(p.name for p in drv.iterdir()))}")
         log(f"{target}: firmware {', '.join(sorted(p.name for p in (fw / 'bin').iterdir()))}"
             f"{' + esptool' if (dest / 'firmware' / 'tools').is_dir() else ''}")
     shutil.copy2(PY_EDITION / "LICENSE", dest / "LICENSE")

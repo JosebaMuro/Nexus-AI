@@ -1,5 +1,18 @@
 # Cambios
 
+## Nexus-Office 2.2.0-cpp
+
+### Todo en C++
+- Desde esta versión todo lo nuevo de Nexus-Office se hace en la edición C++.
+
+### Toda la familia ESP y drivers USB-serie
+- *Dispositivos > Grabar firmware* reconoce y graba toda la familia ESP con Wi-Fi: ESP8266 (ESP-01, NodeMCU, Wemos
+  D1 mini), ESP32, S2, S3, C2, C3, C5 y C6. El H2 y el P4 se reconocen, aunque no tienen Wi-Fi propio.
+- Detecta los puentes CH340/CH9102, CP210x y FTDI y si les falta driver; **INSTALAR DRIVERS** (o
+  `nexus-office firmware drivers --instalar`) lo instala sin preguntar: pnputil en Windows con los drivers del paquete,
+  el instalador en macOS y, en Linux, módulo del kernel, regla udev, grupo `dialout` y `brltty` apartado.
+- Orden nueva `nexus-office firmware` para ver placas, puertos y drivers y grabar desde la terminal.
+
 ## Nexus-Office 2.1.0-cpp
 
 ### La edición C++, completa

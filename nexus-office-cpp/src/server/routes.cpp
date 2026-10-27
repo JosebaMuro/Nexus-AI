@@ -26,6 +26,7 @@
 #include "office/bolsa.h"
 #include "office/bolsa_agente.h"
 #include "devices/devices.h"
+#include "devices/drivers.h"
 #include "devices/firmware.h"
 #include "agents/activity.h"
 #include "memory/kg.h"
@@ -1686,6 +1687,13 @@ void register_routes(App& app) {
       info["puertos"] = fw::puertos();
       info["modelos_luces"] = fw::MODELOS_LUCES;
     }
+    json familia = json::array();
+    for (auto f : fw::FAMILIA) {   // copia: se le anade si el paquete trae el binario de las luces
+      f["binario"] = !fw::carpeta().empty() && is_file(fw::carpeta() / "bin" / ("nexusled-" + jstr(f, "chip") + ".bin"));
+      familia.push_back(f);
+    }
+    info["familia"] = familia;
+    info["drivers"] = devices::drivers::estado();
     info["nexus"] = nexus_para_dispositivos(c);
     return info;
   });
@@ -1706,6 +1714,20 @@ void register_routes(App& app) {
     } catch (const std::invalid_argument& e) {
       throw HttpErr(400, e.what());
     }
+  });
+  // drivers USB-serie (CH340/CH9102, CP210x, FTDI): que hay enchufado, que falta e instalarlo sin preguntar
+  app.get("/api/firmware/drivers", [solo_local](Ctx& c) -> Out {
+    solo_local(c);
+    return devices::drivers::estado();
+  });
+  app.post("/api/firmware/drivers", [solo_local](Ctx& c) -> Out {
+    solo_local(c);
+    std::vector<std::string> pedidos;
+    json d = c.b("drivers", nullptr);
+    if (d.is_array())
+      for (auto& x : d)
+        if (x.is_string()) pedidos.push_back(x.get<std::string>());
+    return devices::drivers::instalar(pedidos, c.bb("simular", false));
   });
   app.get("/api/firmware/trabajo/{tid}", [solo_local](Ctx& c) -> Out {
     solo_local(c);

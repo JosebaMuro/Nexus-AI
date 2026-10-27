@@ -17,6 +17,8 @@
 namespace nx::devices::firmware {
 
 extern const std::vector<std::string> MODELOS_LUCES;
+extern const json FAMILIA;   // toda la familia ESP: [{chip, nombre, wifi, usb_nativo, placas, nota?}]
+std::string chip_de_texto(const std::string& salida_esptool);   // "esp32c3", "esp8266"...; "" si no se reconoce
 using Log = std::function<void(const std::string&)>;
 
 fs::path carpeta();   // firmware/ (con bin/); vacio si no esta

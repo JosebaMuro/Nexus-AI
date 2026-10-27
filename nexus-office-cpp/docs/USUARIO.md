@@ -264,6 +264,26 @@ El agente **Profesor** enseña y resuelve dudas. Si un administrador pone en *Aj
 ### Dispositivos: luces, reloj y Pico W
 Nexus-Office reparte su estado (escuchando, pensando, hablando...) a las **luces NexusLED** (ESP32 con tiras WS2812/SK6812), al **reloj NexusWatch** (ESP32-2424S012C) y al **avatar de bolsillo NexusPico** (Pico W con pantalla de tinta). En *Dispositivos* buscas las luces de tu red, eliges efectos y brillo, y cambias de **modo** (Normal, Manos libres, Silencio, Concentración, Rendimiento, Ahorro, Noche) desde el ordenador, el móvil o el reloj. El reloj muestra qué hace cada agente. Desde *Dispositivos > Grabar firmware* se graba el firmware por USB sin internet: los binarios y esptool vienen en la carpeta `firmware/` del paquete, y Nexus le pone la Wi-Fi y su dirección.
 
+**Placas ESP que se pueden grabar**: toda la familia ESP con Wi-Fi, ESP8266 (ESP-01, ESP-01S, ESP-12, NodeMCU,
+Wemos D1 mini), ESP32 (DevKitC, WROOM, WROVER, ESP32-CAM), ESP32-S2, ESP32-S3, ESP32-C2, ESP32-C3, ESP32-C5 y
+ESP32-C6. Nexus detecta el chip solo. El ESP32-H2 y el ESP32-P4 se reconocen, pero no tienen Wi-Fi propio y no
+pueden hablar con Nexus. El **ESP-01** no tiene botón de arranque: une GPIO0 a GND al enchufarlo.
+
+**Drivers USB-serie**: muchas placas usan un puente CH340/CH9102, CP210x o FTDI. Si falta su driver, *Grabar
+firmware* lo avisa y el botón **INSTALAR DRIVERS** lo pone sin más preguntas: en Windows con los drivers que vienen
+en el paquete (pide permiso de administrador una vez), en macOS abre su instalador y en Linux carga el módulo del
+kernel, da permiso a tu usuario sobre el puerto y aparta `brltty`, que en Ubuntu se queda con los CH340. Las
+placas con USB nativo (S2, S3, C3, C5, C6...) y el Pico W no necesitan driver.
+
+Desde la terminal:
+
+```
+nexus-office firmware                      # placas, puertos y drivers
+nexus-office firmware drivers --instalar   # instala los drivers que falten
+nexus-office firmware grabar luces --wifi MIRED --clave MICLAVE
+nexus-office firmware grabar luces --modelo esp8266 --puerto COM5
+```
+
 ### Motor y acelerador
 Al abrir Nexus-Office puedes elegir el motor de IA y si usa la CPU, la GPU o la NPU, probarlo y ver dónde ha quedado el modelo de verdad. Ver [ACELERADOR.md](ACELERADOR.md).
 

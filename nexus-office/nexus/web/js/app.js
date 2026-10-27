@@ -1066,11 +1066,17 @@
     box.dataset.ready = "1";
     const puertos = (f.puertos || []).map((p) => `<option value="${esc(p.puerto)}">${esc(p.puerto)} · ${esc(p.tipo || "?")} · ${esc(p.descripcion)}</option>`).join("");
     const bins = (f.binarios || []).map((b) => `<span class="tag" title="${esc(b.sha256 || "")}">${esc(b.archivo)}${b.version ? " v" + esc(b.version) : ""}</span>`).join(" ") || '<span class="muted">sin binarios en firmware/bin</span>';
+    // toda la familia ESP: las de Wi-Fi con binario se pueden elegir; drivers USB-serie que falten
+    const modelos = f.familia ? f.familia.filter((m) => m.wifi && m.binario).map((m) => [m.chip, m.nombre]) : (f.modelos_luces || []).map((m) => [m, m]);
+    const drv = f.drivers || {};
+    const drvRows = (drv.dispositivos || []).map((d) => `<span class="tag ${d.instalado && !d.problema ? "ok" : "warn"}" title="${esc(d.vid + ":" + d.pid)}">${esc(d.chip)}${d.puerto ? " · " + esc(d.puerto) : ""}${d.problema ? " · " + esc(d.problema) : ""}</span>`).join(" ");
     box.innerHTML = `${f.falta && f.falta.length ? `<p class="tag warn">Falta ${esc(f.falta.join(", "))}: instálalo con pip</p>` : ""}
+      ${drv.faltan && drv.faltan.length ? `<div class="row"><span class="tag warn">Falta el driver USB-serie: ${esc(drv.faltan.join(", "))}</span><button class="btn sm primary" id="fw-drv">INSTALAR DRIVERS</button></div>` : ""}
+      ${drvRows ? `<div class="row" style="flex-wrap:wrap;gap:4px">${drvRows}</div>` : ""}
       ${f.nexus && !f.nexus.escucha_red ? '<p class="tag warn">Nexus solo escucha en este equipo: actívalo en Red COOP › Conectar dispositivos para que el reloj y el Pico lo vean.</p>' : ""}
       <div class="col" style="gap:8px">
-        <div class="row"><select class="input" id="fw-tipo" style="width:auto"><option value="luces">Luces NexusLED (ESP32)</option><option value="reloj">Reloj ESP32-2424S012C</option><option value="pico">Avatar Pico W (pwnagotchi)</option></select>
-          <select class="input" id="fw-modelo" style="width:auto"><option value="">modelo: detectar</option>${(f.modelos_luces || []).map((m) => `<option>${m}</option>`).join("")}</select></div>
+        <div class="row"><select class="input" id="fw-tipo" style="width:auto"><option value="luces">Luces NexusLED (ESP8266 / ESP32)</option><option value="reloj">Reloj ESP32-2424S012C</option><option value="pico">Avatar Pico W (pwnagotchi)</option></select>
+          <select class="input" id="fw-modelo" style="width:auto"><option value="">modelo: detectar</option>${modelos.map(([c, n]) => `<option value="${esc(c)}">${esc(n)}</option>`).join("")}</select></div>
         <div class="row"><select class="input" id="fw-puerto" style="flex:1;min-width:0"><option value="">puerto: automático</option>${puertos}</select><button class="btn sm" id="fw-refresh">↻</button></div>
         <div class="row"><input class="input" id="fw-ssid" placeholder="Wi-Fi (red)" style="flex:1;min-width:0"><input class="input" id="fw-pass" type="password" placeholder="clave Wi-Fi" style="flex:1;min-width:0"></div>
         <div class="row" id="fw-leds-row"><input class="input" id="fw-leds" type="number" min="1" max="1500" placeholder="nº de LED" style="width:110px"><input class="input" id="fw-pin" type="number" min="0" max="48" placeholder="GPIO (16)" style="width:110px"></div>
@@ -1081,6 +1087,13 @@
     const sync = () => { const t = $("#fw-tipo").value; $("#fw-modelo").style.display = t === "luces" ? "" : "none"; $("#fw-leds-row").style.display = t === "luces" ? "" : "none"; };
     $("#fw-tipo").onchange = sync; sync();
     $("#fw-refresh").onclick = () => { delete box.dataset.ready; fwPanel(); };
+    if ($("#fw-drv")) $("#fw-drv").onclick = guard(async () => {
+      $("#fw-log").textContent = "Instalando drivers…";
+      const r = await api("/api/firmware/drivers", { body: {} });
+      $("#fw-log").textContent = [r.mensaje].concat((r.comandos || []).map((c) => "$ " + c)).join("\n");
+      toast(r.ok ? "Drivers instalados" : r.mensaje);
+      if (r.ok) { delete box.dataset.ready; fwPanel(); }
+    });
     const go = (solo) => guard(async () => {
       const tipo = $("#fw-tipo").value, config = {};
       if ($("#fw-ssid").value.trim()) config.wifi = { ssid: $("#fw-ssid").value.trim(), pass: $("#fw-pass").value };
