@@ -248,7 +248,9 @@ def _render(url: str, exe: str, budget_ms: int, allow_private: bool) -> str:
             "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--mute-audio", "--disable-extensions",
             "--disable-background-networking", "--disable-component-update", "--disable-sync", "--hide-scrollbars",
             "--blink-settings=imagesEnabled=false", f"--user-data-dir={prof}", f"--virtual-time-budget={int(budget_ms)}",
-            "--window-size=1280,2000", "--lang=es-ES", "--dump-dom"]
+            "--window-size=1280,2000", "--lang=es-ES", "--dump-dom",
+            # sin Llavero de macOS ni almacen de claves del escritorio: sin ellos se queda esperando y agota el tiempo
+            "--use-mock-keychain", "--password-store=basic"]
         if proxy:
             # todo pasa por el proxy, incluso localhost (<-loopback quita la excepcion por defecto de Chromium)
             cmd += [f"--proxy-server=http://127.0.0.1:{proxy.port}", "--proxy-bypass-list=<-loopback>"]
