@@ -82,9 +82,24 @@ def query_all(params: dict, limite: int = 100000):
 
 
 def limpiar(texto: str) -> str:
-    """Resumen de una introducción: sin restos de fórmulas ({\\displaystyle ...}) y con los espacios normales."""
-    texto = re.sub(r"\{\\displaystyle[^{}]*(\{[^{}]*\}[^{}]*)*\}", "", texto or "")
-    return re.sub(r"\s+", " ", texto).strip()
+    """Resumen de una introducción: sin las fórmulas en TeX ({\\displaystyle ...}, con llaves anidadas) y con los
+    espacios normales. La versión legible de la fórmula, que la Wikipedia pone justo antes, se queda."""
+    out, i = [], 0
+    texto = texto or ""
+    while True:
+        j = texto.find("{\\displaystyle", i)
+        if j < 0:
+            out.append(texto[i:])
+            break
+        out.append(texto[i:j])
+        depth, k = 0, j
+        while k < len(texto):
+            depth += {"{": 1, "}": -1}.get(texto[k], 0)
+            k += 1
+            if depth == 0:
+                break
+        i = k
+    return re.sub(r"\s+", " ", "".join(out)).strip()
 
 
 def lotes(items: list, n: int):
