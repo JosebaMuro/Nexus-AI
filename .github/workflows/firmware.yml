@@ -124,6 +124,46 @@ jobs:
           name: fw-nexusled-${{ matrix.modelo }}
           path: bin/
 
+  grabador:
+    # nexus-flash (firmware/flasher): se compila en cada sistema y se prueba contra la ROM falsa de cada chip
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, nombre: linux-x64 }
+          - { os: macos-14, nombre: macos-arm64 }
+          - { os: windows-2022, nombre: windows-x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pruebas con la ROM falsa
+        if: runner.os != 'Windows'
+        run: OUT=$PWD/out sh firmware/flasher/tests/prueba.sh
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - name: Compilar con MSVC
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          mkdir out
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /Feout\nexus-flash.exe firmware\flasher\nexus_flash_cli.cpp advapi32.lib || exit /b 1
+          out\nexus-flash.exe chips || exit /b 1
+          out\nexus-flash.exe puertos
+      - name: Compilar para Android (NDK)
+        if: runner.os == 'Linux'
+        run: |
+          NDK=${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}
+          $NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++ -std=c++17 -O2 -Wall -Wextra -static-libstdc++ \
+            -o out/nexus-flash-android-arm64 firmware/flasher/nexus_flash_cli.cpp
+          file out/nexus-flash-android-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-flash-${{ matrix.nombre }}
+          path: |
+            out/nexus-flash
+            out/nexus-flash.exe
+            out/nexus-flash-android-arm64
+
   pico:
     runs-on: ubuntu-22.04
     steps:
