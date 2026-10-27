@@ -7,6 +7,7 @@ name: Instaladores de Nexus-Office (construir y probar)
 # como artefactos de esta ejecucion; publicar.yml los junta con las APK y publica la Release.
 # El .exe de x64 pasa de 3 GB sin comprimir: build.py usa entonces LZMA no solida (la solida de makensis no llega).
 # Junto a llama-cpp-python van Jinja2 y MarkupSafe (se instala con --no-deps).
+# Desde 2.2 cada paquete lleva tambien firmware/ (luces, reloj y Pico W) y los ejemplos para importar.
 on:
   workflow_dispatch:
   push:

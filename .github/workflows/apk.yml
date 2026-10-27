@@ -3,7 +3,8 @@ name: APK de Nexus-Office (sin la firma definitiva)
 # Compila la app Android «VPN» y la «autonoma» con el SDK de Android del runner. El runtime ARM64 (Python, llama.cpp
 # con CPU, GPU y NPU) se toma de la APK autonoma de la Release anterior (BASE). Se firman con una clave temporal: la
 # firma definitiva se pone fuera de GitHub (la clave nunca entra en el repositorio). Las APK quedan, en trozos, en
-# la rama «apk-sin-firmar» (se rehacen cuando cambia el codigo de la app).
+# la rama «apk-sin-firmar» (se rehacen cuando cambia el codigo de la app). Desde 2.2 la autonoma lleva tambien el
+# cliente del ordenador y la VPN WireGuard.
 on:
   workflow_dispatch:
   push:
