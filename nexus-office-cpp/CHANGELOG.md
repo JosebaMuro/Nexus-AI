@@ -5,6 +5,18 @@
 ### Todo en C++
 - Desde esta versión todo lo nuevo de Nexus-Office se hace en la edición C++.
 
+### Comprobación y autorreparación al arrancar
+- En cada arranque se revisan la configuración, la base de datos, los modelos, el motor de IA, el puerto, las carpetas,
+  el disco, los registros y los drivers de las placas, y se arregla solo lo que se pueda: configuración desde la última
+  buena, base de datos rescatada tabla a tabla con la copia diaria (`data/copias`, las tres últimas), GGUF dañados
+  apartados, llama-server con permiso de ejecución, sin cuarentena en macOS y de la GPU a la CPU si la GPU no arranca, y
+  el siguiente puerto libre si el 8775 está ocupado.
+- Panel en *Sistema → Comprobación y autorreparación*, `/api/salud` y orden `nexus-office comprobar`.
+
+### Más rápido y más pequeño
+- Optimización en el enlace (LTO) en Windows, Linux y macOS: el ejecutable ocupa un 19 % menos.
+- La revisión completa de la base de datos solo tras un cierre brusco y una vez al día; el resto de arranques, la rápida.
+
 ### Toda la familia ESP y drivers USB-serie
 - *Dispositivos > Grabar firmware* reconoce y graba toda la familia ESP con Wi-Fi: ESP8266 (ESP-01, NodeMCU, Wemos
   D1 mini), ESP32, S2, S3, C3, C5 y C6. El C2 se reconoce y graba cualquier .bin, pero aún no hay NexusLED para él;

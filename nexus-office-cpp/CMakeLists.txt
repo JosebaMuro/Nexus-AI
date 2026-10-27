@@ -26,6 +26,19 @@ set(NEXUS_MBEDTLS_URL "https://github.com/Mbed-TLS/mbedtls/releases/download/mbe
 set(NEXUS_MBEDTLS_SHA256 "4a11f1777bb95bf4ad96721cac945a26e04bf19f57d905f241fe77ebeddf46d8" CACHE STRING "")
 
 set(TP "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
+# optimizacion en el enlace (LTO): el servidor y sus bibliotecas se optimizan juntos (mas pequeno y rapido). En Android
+# no: el servidor va sin AdvSIMD y la IA en llama-server, que ya viene optimizado
+option(NEXUS_LTO "Optimizacion en el enlace (LTO) en Release" ON)
+if(NEXUS_LTO AND NOT ANDROID AND (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_CONFIGURATION_TYPES))
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT NX_IPO OUTPUT NX_IPO_MSG LANGUAGES C CXX)
+  if(NX_IPO)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+    message(STATUS "LTO activado")
+  else()
+    message(STATUS "LTO no disponible: ${NX_IPO_MSG}")
+  endif()
+endif()
 # grabador nativo de la familia ESP y el Pico W (una cabecera, compartida con la herramienta nexus-flash)
 set(NEXUS_FLASHER "${CMAKE_CURRENT_SOURCE_DIR}/../firmware/flasher" CACHE PATH "Carpeta con nexus_flash.h")
 if(NOT EXISTS "${NEXUS_FLASHER}/nexus_flash.h")

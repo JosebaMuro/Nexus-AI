@@ -193,6 +193,28 @@ lo recomendable en el PC de la oficina, para que los móviles y los demás equip
 
 Detalles por sistema, comandos y problemas frecuentes: [Servicio](SERVICIO.md).
 
+## Comprobación y autorreparación al arrancar
+
+Cada vez que arranca, Nexus-Office revisa la instalación y tus datos y arregla solo lo que pueda, sin preguntar:
+
+- **Configuración**: si `config.yaml` está dañada (un apagón a mitad de guardar), vuelve a la última buena; si no hay
+  ninguna, usa los valores por defecto. La dañada se guarda aparte por si la quieres revisar.
+- **Base de datos**: comprueba su integridad (completa tras un cierre brusco y una vez al día; rápida el resto de veces).
+  Si está dañada, rescata todas las tablas que se puedan leer y lo que falte lo saca de la **copia diaria** que
+  Nexus-Office guarda en `data/copias` (las tres últimas). La original se guarda aparte.
+- **Modelos**: aparta a `models/danados` los GGUF vacíos o cortados, para que no fallen al cargarlos.
+- **Motor de IA**: prueba que llama-server arranca de verdad en este equipo. Le pone el permiso de ejecución que le
+  falte, quita la cuarentena de macOS y, si la variante de GPU no funciona (driver ausente) o la CPU no tiene AVX2,
+  pasa a la que sí funcione.
+- **Puerto**: si otro programa ocupa el 8775, usa el siguiente libre en esa sesión.
+- **Carpetas, ficheros del programa, espacio en disco, registros y temporales**: permisos de escritura, recursos que
+  falten, aviso si queda poco disco, registros que crecen sin límite y restos de descargas viejas.
+- **Drivers USB-serie** de las placas ESP: avisa si falta alguno.
+
+El resultado está en **Sistema → Comprobación y autorreparación**, con el botón **COMPROBAR AHORA**. Desde la terminal:
+`nexus-office comprobar` (añade `--sin-reparar` para solo mirar, o `--json`). Para arrancar sin la comprobación:
+`nexus-office run --sin-comprobar`.
+
 ## Descargar los instaladores desde el móvil
 
 El PC de la oficina puede repartir los instaladores a los demás equipos y móviles de la red, sin cables ni memorias

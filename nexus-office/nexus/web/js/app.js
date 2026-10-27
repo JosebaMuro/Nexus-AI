@@ -1729,7 +1729,7 @@
           : `<button class="btn sm ${i === 0 ? "primary" : "admin-only"}" data-rt="${k}" data-v="${v}">INSTALAR ${v}${i === 0 ? " ★" : ""}</button>`; }).join("")}</div></div>`).join("");
     $$("[data-rt]").forEach((b) => (b.onclick = guard(async () => { await api("/api/runtimes/install", { body: { runtime: b.dataset.rt, variant: b.dataset.v } }); toast("Instalando runtime…"); setTimeout(loaders.system, 1500); })));
     if (Object.values(rt.progress).some((p) => !["instalado", "error"].includes(p.status))) setTimeout(() => S.view === "system" && loaders.system(), 2000);
-    serviceBox(); downloadsBox();
+    serviceBox(); downloadsBox(); saludBox();
     api("/api/drivers").then((dr) => {
       $("#drivers-box").innerHTML = dr.gpus.map((g) => `<div class="item"><div class="row"><b style="flex:1">${esc(g.name)}</b>
         <span class="tag ${g.status === "ok" ? "ok" : g.status === "actualizar" ? "warn" : ""}">${g.status === "ok" ? "al día" : g.status}</span></div>
@@ -1756,6 +1756,18 @@
       const tags = (f.platform === d.host ? '<span class="tag ok">anfitrión</span> ' : "") + (f.platform === mine || (mine === "macos-arm64" && f.platform.startsWith("macos")) ? '<span class="tag warn">este dispositivo</span> ' : "");
       return `<div class="item row"><span style="flex:1"><b>${esc(f.label)}</b> · <span class="mono">${esc(f.name)}</span> ${tags}</span><span class="muted mono">${mb(f.size)}</span>
         <a class="btn sm primary" href="/descargas/${f.path.split("/").map(encodeURIComponent).join("/")}" download="${esc(f.name)}">DESCARGAR</a></div>`; }).join("");
+  }
+  async function saludBox(r) {
+    const box = $("#salud-box");
+    const d = r || await api("/api/salud").catch(() => null);
+    if (!d || !d.comprobaciones) { box.innerHTML = '<span class="muted">No disponible en esta edición.</span>'; return; }
+    const tag = { ok: ["ok", "bien"], reparado: ["warn", "reparado"], aviso: ["warn", "aviso"], error: ["bad", "error"] }, res = d.resumen || {};
+    box.innerHTML = `<div class="row" style="margin-bottom:6px"><span style="flex:1" class="muted">${d.fin ? "Última revisión: " + new Date(d.fin * 1000).toLocaleString() : "Revisando…"} · ${res.ok || 0} bien · ${res.reparado || 0} reparadas · ${res.aviso || 0} avisos · ${res.error || 0} errores</span>
+      <button class="btn sm" id="salud-run">COMPROBAR AHORA</button></div>` +
+      d.comprobaciones.map((c) => { const [cls, txt] = tag[c.estado] || ["", c.estado];
+        return `<div class="item row"><span class="tag ${cls}" style="min-width:74px;text-align:center">${txt}</span><span style="flex:1"><b>${esc(c.nombre)}</b> <span class="muted">${esc(c.detalle)}</span></span></div>`; }).join("");
+    $("#salud-run").onclick = guard(async () => { const b = $("#salud-run"); b.disabled = true; b.textContent = "COMPROBANDO…";
+      try { const n = await api("/api/salud", { body: { reparar: true } }); saludBox(n); toast("Comprobación terminada"); } finally { b.disabled = false; } });
   }
   async function serviceBox() {
     const box = $("#service-box");

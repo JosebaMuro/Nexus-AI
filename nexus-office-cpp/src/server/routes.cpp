@@ -26,6 +26,7 @@
 #include "office/bolsa.h"
 #include "office/bolsa_agente.h"
 #include "devices/devices.h"
+#include "core/salud.h"
 #include "devices/drivers.h"
 #include "devices/firmware.h"
 #include "agents/activity.h"
@@ -1720,6 +1721,14 @@ void register_routes(App& app) {
     } catch (const std::invalid_argument& e) {
       throw HttpErr(400, e.what());
     }
+  });
+  // comprobacion y autorreparacion: lo que se reviso al arrancar y volver a revisar ahora
+  app.get("/api/salud", [](Ctx&) -> Out { return salud::informe(); });
+  app.post("/api/salud", [solo_local](Ctx& c) -> Out {
+    solo_local(c);
+    Services& s = c.app.S();
+    salud::previa(false);   // con todo abierto no se mueve nada: solo se mira
+    return salud::completa(s, c.bb("reparar", true));
   });
   // drivers USB-serie (CH340/CH9102, CP210x, FTDI): que hay enchufado, que falta e instalarlo sin preguntar
   app.get("/api/firmware/drivers", [solo_local](Ctx& c) -> Out {

@@ -65,7 +65,8 @@ La 2.0 beta C dejaba fuera varias funciones. Desde la 2.1 están todas, con las 
 | Perfiles de hardware y elección de una GPU (`/api/hw/perfiles`, `/api/hw/gpu`) | `src/hardware/hw_profiles.cpp` y `gpu_devices.cpp`: `--device` solo si hay varias, vuelta a la CPU si la GPU no arranca |
 | Leer webs con JavaScript como un navegador (`rag.browser`, `/api/rag/navegador`) | `src/rag/browser.cpp`: Chrome, Edge, Chromium o Brave sin interfaz, proxy propio que solo deja direcciones públicas y, si el navegador no responde en el equipo, lectura normal |
 | Sexo elegible de cada personaje y del usuario (`sexo` en el agente, `user.sexo`) | `src/agents/spec.cpp` y la configuración |
-| Órdenes `grafo`, `bolsa`, `setup`, `wheels` y `cleanup` | `src/main.cpp` |
+| Comprobación y autorreparación al arrancar (`/api/salud`, `nexus-office comprobar`) | `src/core/salud.cpp`: config.yaml de la última buena, rescate de la base de datos con copia diaria (VACUUM INTO), GGUF dañados, llama-server que arranca (permisos, cuarentena de macOS, GPU → CPU), puerto ocupado |
+| Órdenes `grafo`, `bolsa`, `setup`, `wheels`, `cleanup` y `comprobar` | `src/main.cpp` |
 
 `/api/tools` lista las mismas herramientas en las dos ediciones. Quedan dos diferencias que no aplican a C++:
 
@@ -136,7 +137,7 @@ build/nexus-office run
   comprando, poniendo el stop, vendiendo en el objetivo y aprendiendo. Con `NEXUS_ONLINE_TESTS=1` (en `cpp.yml`)
   pide precios reales del catálogo con la pila TLS de cada sistema.
 - `nexus-tests dispositivos`: luces contra el emulador del firmware NexusLED (`firmware/emulator`, se compila con las
-  pruebas), modos, reloj, imágenes del Pico W y grabado del reloj con un esptool falso y un puerto serie simulado, y de un ESP8266 con nexus-flash contra una ROM de Espressif simulada.
+  pruebas), modos, reloj, imágenes del Pico W y grabado del reloj con un esptool falso y un puerto serie simulado, y de un ESP8266 con nexus-flash contra una ROM de Espressif simulada; autorreparación de una configuración y una base de datos dañadas y de un puerto ocupado.
   El código real del Pico W (`firmware/nexuspico/nexuspico.py`) descarga las imágenes del servidor C++ y su giro
   coincide byte a byte.
 - `tests/ui_smoke.js`: abre la interfaz en Chromium, pregunta «¿Cuánto es 12*7?», espera «84», recorre las vistas y

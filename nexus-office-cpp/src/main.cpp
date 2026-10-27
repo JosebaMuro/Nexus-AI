@@ -30,6 +30,7 @@
 #include "core/service.h"
 #include "core/services.h"
 #include "core/system.h"
+#include "core/salud.h"
 #include "devices/drivers.h"
 #include "devices/firmware.h"
 #include "hardware/hardware.h"
@@ -104,6 +105,14 @@ hw::HardwareInfo cached_hardware() {
 }
 
 int cmd_run(const Args& a) {
+  // antes de leer la configuracion y abrir la base de datos: que un fichero danado no impida arrancar
+  if (!a.has("sin-comprobar")) {
+    json inf = salud::previa(true);
+    for (auto& c : inf["comprobaciones"])
+      if (jstr(c, "estado") == "reparado" || jstr(c, "estado") == "error")
+        std::printf("  %s %s: %s\n", jstr(c, "estado") == "error" ? "[!]" : "[reparado]", jstr(c, "nombre").c_str(),
+                    jstr(c, "detalle").c_str());
+  }
   Config& cfg = get_config();
   if (hw::android() && !cfg.flag("android.configured", false)) {
     // valores pensados para un movil (android_main.py); despues el usuario los cambia en Ajustes
@@ -138,6 +147,15 @@ int cmd_run(const Args& a) {
     if (!a.has("no-browser")) sys2::open_url(url);
     return 0;
   }
+  if (!a.opt.count("port")) {   // puerto ocupado por otro programa: el siguiente libre en vez de no arrancar
+    int libre = salud::puerto(host, port);
+    if (libre != port) {
+      std::printf("  El puerto %d esta ocupado por otro programa: se usa el %d\n", port, libre);
+      port = libre;
+      url = "http://" + std::string(host == "0.0.0.0" || host == "::" ? "127.0.0.1" : host) + ":" + std::to_string(port);
+      cfg.set("server.port_efectivo", port, false);
+    }
+  }
   std::printf("\n  Nexus-Office %s (C++)  ->  %s\n\n", NEXUS_VERSION, url.c_str());
   std::fflush(stdout);
   std::signal(SIGINT, on_signal);
@@ -152,6 +170,17 @@ int cmd_run(const Args& a) {
     listeners->push_back([&app](const json& e) { app.broadcast(e); });
   app.on_shutdown_request = [] { g_stop = true; };
   s.start();
+  // modelos, motor de IA y drivers: en segundo plano para no retrasar la interfaz; si todo va bien, copias de seguridad
+  std::thread salud_t;
+  if (!a.has("sin-comprobar"))
+    salud_t = std::thread([&s] {
+      try {
+        json inf = salud::completa(s, true);
+        if (inf["resumen"].value("error", 0) == 0) salud::guardar_copias();
+      } catch (const std::exception& e) {
+        log::get("salud").warning("comprobacion al arrancar: ", e.what());
+      }
+    });
   // siguen solos los rastreos de dominio completo que se cortaron (cierre, apagado)
   rag::crawl_jobs::resume_interrupted(s, [&app](const json& e) { app.broadcast(e); });
   // el agente de bolsa autonomo trabaja solo, siempre en simulacion (con precios reales si hay conexion)
@@ -204,6 +233,7 @@ int cmd_run(const Args& a) {
   watcher.join();
   if (remote_thread.joinable()) remote_thread.join();
   if (!ok && !app.stopping) std::fprintf(stderr, "  No se pudo abrir el puerto %d en %s (¿ya esta en uso?)\n", port, host.c_str());
+  if (salud_t.joinable()) salud_t.join();
   bolsa::reset_agentes();
   s.shutdown();
   proc::cleanup();
@@ -758,6 +788,31 @@ int cmd_firmware(const Args& a) {
   die("uso: nexus-office firmware [estado | drivers [--instalar|--simular] [driver...] | grabar luces|reloj|pico ...]", 2);
 }
 
+int cmd_comprobar(const Args& a) {
+  bool reparar = !a.has("sin-reparar");
+  json inf = salud::previa(reparar);
+  if (!a.has("rapido")) {
+    Services s(false);
+    inf = salud::completa(s, reparar);
+    if (reparar && inf["resumen"].value("error", 0) == 0) salud::guardar_copias();
+    s.shutdown();
+  }
+  if (a.has("json")) {
+    std::printf("%s\n", jdump(inf, 2).c_str());
+  } else {
+    std::printf("\n  Comprobacion de Nexus-Office %s\n\n", NEXUS_VERSION);
+    for (auto& c : inf["comprobaciones"]) {
+      std::string e = jstr(c, "estado");
+      std::printf("  %-10s %-38s %s\n", e == "ok" ? "[ok]" : ("[" + e + "]").c_str(), jstr(c, "nombre").c_str(), jstr(c, "detalle").c_str());
+    }
+    json r = inf["resumen"];
+    std::printf("\n  %d bien, %d reparadas, %d avisos, %d errores\n\n", r.value("ok", 0), r.value("reparado", 0), r.value("aviso", 0),
+                r.value("error", 0));
+  }
+  proc::cleanup();
+  return inf["resumen"].value("error", 0) ? 1 : 0;
+}
+
 int cmd_cleanup(const Args& a) {
   log::setup();
   fs::path root = paths::root(), bundled = root / "bundled" / "runtimes";
@@ -796,6 +851,7 @@ int cmd_cleanup(const Args& a) {
 const char* HELP =
     "Nexus-Office " NEXUS_VERSION " - oficina de IA local para pymes (edicion C++)\n\n"
     "  nexus-office run [--host H] [--port P] [--no-browser] [--motor auto|llamaserver] [--acelerador auto|cpu|gpu|npu]\n"
+    "                   [--sin-comprobar]   (al arrancar comprueba y repara ficheros, base de datos, modelos y motor)\n"
     "  nexus-office detect                      detecta el hardware y muestra el perfil\n"
     "  nexus-office pull <id|auto>              descarga un modelo recomendado\n"
     "  nexus-office modelos [--descargar] [--todos]   elige (y descarga) el modelo de IA de cada tipo\n"
@@ -812,6 +868,7 @@ const char* HELP =
     "  nexus-office firmware [estado]           placas ESP y Pico W, puertos y drivers USB-serie\n"
     "  nexus-office firmware drivers [--instalar|--simular]   instala los drivers CH340/CP210x/FTDI que falten\n"
     "  nexus-office firmware grabar luces|reloj|pico [--puerto P] [--modelo esp8266|esp32c3...] [--wifi RED --clave C]\n"
+    "  nexus-office comprobar [--sin-reparar] [--rapido] [--json]   comprueba y repara la instalacion y los datos\n"
     "  nexus-office --version\n";
 
 }  // namespace
@@ -844,6 +901,7 @@ int run_main(std::vector<std::string> argv) {
   if (cmd == "setup") return cmd_setup(parse(argv, {}));
   if (cmd == "wheels") return cmd_wheels(parse(argv, {}));
   if (cmd == "cleanup") return cmd_cleanup(parse(argv, {}));
+  if (cmd == "comprobar") return cmd_comprobar(parse(argv, {}));
   if (cmd == "firmware") return cmd_firmware(parse(argv, {"puerto", "modelo", "wifi", "clave", "nexus"}));
   std::fprintf(stderr, "orden desconocida: %s\n\n%s", cmd.c_str(), HELP);
   return 2;

@@ -186,7 +186,7 @@ std::optional<Found> RuntimeManager::exe(const std::string& runtime, const json&
   for (auto& v : installed().value(runtime, json::array())) order.push_back(v.get<std::string>());
   for (auto& v : order) {
     if (auto p = find_exe(runtime, v)) return Found{*p, v};
-    if (!starts_with(v, "cpu"))
+    if (!starts_with(v, "cpu") || v == preferred)   // cpu-compat elegida a mano (CPU sin AVX2 mal detectada)
       if (auto p = bundled_exe(runtime, v)) return Found{*p, v};
   }
   for (auto& v : bundled_variants(runtime))
