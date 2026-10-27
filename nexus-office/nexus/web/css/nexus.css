@@ -563,3 +563,17 @@ body.flat .panel::before, body.flat .panel::after { display: none; }
 .icon-btn.live-btn.on { color: var(--accent); border-color: var(--accent); box-shadow: var(--glow); }
 [data-layout="phone"] .live-orb { width: 110px; height: 110px; }
 [data-layout="phone"] .live-heard { font-size: 16px; }
+
+/* bolsa: graficos en vivo y diario del agente */
+.live-chart { width: 100%; height: 190px; display: block; border-radius: 10px; background: rgba(0, 240, 255, .03); border: 1px solid var(--line, rgba(0,240,255,.12)); }
+.live-card { padding: 12px; }
+.live-card .row { gap: 8px; }
+.live-card .px { font-size: 1.15rem; font-weight: 600; }
+.ba-diario { max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.ba-diario .e { border-left: 3px solid var(--muted); padding: 4px 8px; background: rgba(255,255,255,.02); border-radius: 0 6px 6px 0; }
+.ba-diario .e.compra { border-color: var(--ok); } .ba-diario .e.venta { border-color: var(--accent); }
+.ba-diario .e.stop { border-color: var(--warn, #fb0); } .ba-diario .e.error { border-color: var(--bad); }
+.ba-diario .t { font-size: .75rem; color: var(--muted); font-family: var(--mono, monospace); }
+.live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: livepulse 1.6s infinite; }
+.live-dot.off { background: var(--muted); box-shadow: none; animation: none; }
+@keyframes livepulse { 50% { opacity: .35; } }

@@ -224,6 +224,26 @@
         </div>
         <div class="panel"><h3>Mercados <span class="sub">hora local de cada bolsa</span></h3><div id="bolsa-mercados" style="overflow-x:auto"></div></div>
       </div>
+      <div class="panel" style="margin-top:16px" id="bolsa-agente"><h3>Agente autónomo <span class="sub" id="ba-sub">opera solo en su cartera simulada con datos reales</span></h3>
+        <div class="row" style="margin-bottom:10px"><span id="ba-state"></span><span id="ba-datos"></span><span class="spacer"></span>
+          <button class="btn sm" id="ba-toggle">PAUSAR</button><button class="btn sm" id="ba-cycle">ANALIZAR AHORA</button><button class="btn sm" id="ba-view">VER SU CARTERA</button></div>
+        <div class="grid g4" id="ba-stats"></div>
+        <div class="grid g2" style="margin-top:12px">
+          <div><div class="muted" style="margin-bottom:4px">Patrimonio de la cartera del agente</div><canvas id="ba-curve" class="live-chart" style="height:170px"></canvas>
+            <div class="muted" style="margin:10px 0 4px">Lo que ve ahora (mejores puntuaciones)</div><div id="ba-rank" style="overflow-x:auto"></div></div>
+          <div><div class="muted" style="margin-bottom:4px">Diario de decisiones</div><div id="ba-diario" class="ba-diario"></div></div>
+        </div>
+        <details style="margin-top:10px"><summary class="muted">Ajustes del agente</summary>
+          <div class="row" style="margin-top:8px">
+            <label class="muted">Riesgo por operación (%) <input class="input" id="ba-riesgo" type="number" step="0.1" min="0.1" max="5" style="width:90px"></label>
+            <label class="muted">Máx. posiciones <input class="input" id="ba-maxpos" type="number" min="1" max="30" style="width:80px"></label>
+            <label class="muted">Peso máx. por valor (%) <input class="input" id="ba-peso" type="number" min="1" max="100" style="width:80px"></label>
+            <label class="muted">Liquidez de reserva (%) <input class="input" id="ba-reserva" type="number" min="0" max="90" style="width:80px"></label>
+            <label class="muted">Cada (s) <input class="input" id="ba-int" type="number" min="15" style="width:80px"></label></div>
+          <div class="row" style="margin-top:8px"><input class="input" id="ba-universo" placeholder="Universo: símbolos separados por comas (vacío = todo el catálogo)" style="flex:1 1 300px;min-width:0"><button class="btn sm primary" id="ba-save">GUARDAR</button></div>
+        </details>
+      </div>
+      <div class="panel" style="margin-top:16px"><h3>Órdenes activas en tiempo real <span class="sub" id="bl-sub"></span></h3><div class="grid g2" id="bolsa-live"></div></div>
       <div class="panel" style="margin-top:16px"><h3>Posiciones</h3><div id="bolsa-pos" style="overflow-x:auto"></div></div>
       <div class="panel" style="margin-top:16px"><h3>Órdenes</h3><div id="bolsa-ord" style="overflow-x:auto"></div></div>
       <div class="panel" style="margin-top:16px"><h3>Operaciones <span class="sub">gastos y ganancia realizada (FIFO)</span></h3><div id="bolsa-ops" style="overflow-x:auto"></div></div>

@@ -62,7 +62,15 @@ def create_app(services: Services | None = None) -> FastAPI:
         if services is None:     # servidor real (no en pruebas): siguen los rastreos de dominio que se cortaron
             from ..rag import crawl_jobs
             crawl_jobs.resume_interrupted(s, hub.broadcast)
+            if s.config.get("bolsa.agente.activo", True):   # el agente de bolsa autonomo trabaja solo
+                from ..office import bolsa_agente
+                ag = bolsa_agente.get()
+                ag.listeners.append(hub.broadcast)
+                ag.start()
         yield
+        if services is None:
+            from ..office import bolsa_agente
+            bolsa_agente.reset()
         await asyncio.to_thread(s.shutdown)
 
     app = FastAPI(title="Nexus-Office", version=__version__, lifespan=lifespan)
@@ -1176,6 +1184,69 @@ def create_app(services: Services | None = None) -> FastAPI:
         from ..office import bolsa
         return _bolsa(bolsa.get().registrar_ejecucion, oid, data.get("precio", 0), data.get("comision_eur") or 0,
                       data.get("impuestos_eur"), data.get("fx") or None)
+
+    @app.get("/api/bolsa/serie/{simbolo}")
+    def bolsa_series(simbolo: str, rango: str = "1d"):
+        """Serie real (o simulada sin conexion) para los graficos en vivo."""
+        from ..office import bolsa
+        return _bolsa(bolsa.get().serie, simbolo, rango)
+
+    @app.get("/api/bolsa/orden/{oid}/grafico")
+    def bolsa_order_chart(oid: int, rango: str = "1d"):
+        """Seguimiento en vivo de una orden: precio actual, serie y niveles (limite, stop, ejecucion, objetivo)."""
+        from ..office import bolsa, bolsa_agente
+        b = bolsa.get()
+        o = _bolsa(b.orden, oid)
+        b.procesar(oid) if o["estado"] == "pendiente" else None
+        o = b.orden(oid)
+        q = _bolsa(b.precio, o["simbolo"])
+        niveles = []
+        if o.get("limite"):
+            niveles.append({"tipo": "limite", "precio": o["limite"], "texto": "Límite"})
+        if o.get("stop"):
+            niveles.append({"tipo": "stop", "precio": o["stop"], "texto": "Stop" + (" (activado)" if o["activada"] else "")})
+        if o.get("precio_ejec"):
+            niveles.append({"tipo": "ejecucion", "precio": o["precio_ejec"], "texto": "Ejecutada", "ts": o["ejecutada"]})
+        g = b._one("SELECT entrada, objetivo FROM agente_posiciones WHERE simbolo=? AND (orden_stop=? OR "
+                   "orden_entrada=?)", (o["simbolo"], oid, oid)) if b._one(
+            "SELECT name FROM sqlite_master WHERE name='agente_posiciones'") else None
+        if g:
+            niveles += [{"tipo": "entrada", "precio": g["entrada"], "texto": "Entrada del agente"},
+                        {"tipo": "objetivo", "precio": g["objetivo"], "texto": "Objetivo del agente"}]
+        s = b.serie(o["simbolo"], rango)
+        return {"orden": o, "cotizacion": q, "niveles": niveles, "puntos": s["puntos"], "real": s["real"],
+                "agente": o.get("origen") == bolsa_agente.ORIGEN}
+
+    @app.get("/api/bolsa/agente")
+    def bolsa_agent_state():
+        from ..office import bolsa_agente
+        return bolsa_agente.get().estado()
+
+    @app.post("/api/bolsa/agente")
+    def bolsa_agent_config(data: dict = Body(...)):
+        """Ajustes del agente autonomo (activo, intervalo_s, riesgo_pct, max_posiciones, max_peso_pct, reserva_pct,
+        universo). Siempre opera en simulacion."""
+        from ..office import bolsa_agente
+        s = state["s"]
+        allowed = {"activo": bool, "intervalo_s": float, "riesgo_pct": float, "max_posiciones": int,
+                   "max_peso_pct": float, "reserva_pct": float, "universo": list, "capital": float}
+        for k, typ in allowed.items():
+            if k in data:
+                try:
+                    v = typ(data[k]) if typ is not list else [str(x).upper() for x in data[k] if str(x).strip()]
+                except (TypeError, ValueError) as e:
+                    raise HTTPException(400, f"{k}: valor no valido") from e
+                s.config.set(f"bolsa.agente.{k}", v)
+        ag = bolsa_agente.get()
+        if data.get("activo") is True and services is None:
+            if hub.broadcast not in ag.listeners:
+                ag.listeners.append(hub.broadcast)
+            ag.start()
+        if data.get("activo") is False:
+            ag.stop()
+        if data.get("ciclo"):
+            _bolsa(ag.ciclo)
+        return ag.estado()
 
     @app.post("/api/bolsa/cartera")
     def bolsa_portfolio(data: dict = Body(...), admin: bool = Depends(admin_flag)):

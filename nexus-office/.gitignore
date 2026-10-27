@@ -6,3 +6,4 @@ runtime/
 wheelhouse/
 bundled/
 .pytest_cache/
+!tests/data/

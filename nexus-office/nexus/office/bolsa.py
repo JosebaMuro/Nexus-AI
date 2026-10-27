@@ -37,8 +37,10 @@ from .. import log, paths
 
 L = log.get("bolsa")
 
-AVISO = ("Simulación con precios ficticios: no son cotizaciones reales ni asesoramiento financiero. Invertir conlleva "
-         "riesgo de perder dinero; antes de operar con dinero real consulta a un asesor registrado en la CNMV.")
+AVISO = ("Simulación: nunca se usa dinero ni se envían órdenes reales. Con conexión, los precios son cotizaciones reales "
+         "(Yahoo Finance, con el retraso de cada bolsa); sin conexión siguen simulados desde el último precio real. "
+         "No es asesoramiento financiero. Invertir conlleva riesgo de perder dinero; antes de operar con dinero real "
+         "consulta a un asesor registrado en la CNMV.")
 CONFIRMACION = "CONFIRMO"
 UTC = dt.timezone.utc
 
@@ -292,6 +294,7 @@ class Bolsa:
         self.path = Path(path) if path else paths.sub("bolsa") / "bolsa.db"
         self.rng = random.Random(seed)
         self.clock = clock or (lambda: dt.datetime.now(UTC))
+        self.datos = None   # proveedor de cotizaciones reales (bolsa_datos.DatosMercado); None = solo simulacion
         self._lock = threading.RLock()
         self.con = sqlite3.connect(str(self.path), check_same_thread=False)
         self.con.row_factory = sqlite3.Row
@@ -390,9 +393,13 @@ class Bolsa:
         """Cotizacion simulada al momento (avanza el precio con el tiempo de mercado transcurrido)."""
         inst = self.instrumento(simbolo)
         sym, t = inst["simbolo"], self.now()
+        real = self._real_quote(sym)
         with self._lock, self.con:
             st = self._one("SELECT * FROM precios WHERE simbolo=?", (sym,))
-            if not st:
+            if real:
+                st = {"precio": real["precio"], "ts": t.timestamp(), "cierre_ant": real["cierre_anterior"] or real["precio"],
+                      "apertura": (st or {}).get("apertura") or real["precio"]}
+            elif not st:
                 h = self._hist_last(sym)
                 p0 = h["cierre"] if h else inst["precio_ref"]
                 st = {"precio": p0, "ts": t.timestamp(), "cierre_ant": p0, "apertura": p0}
@@ -408,7 +415,7 @@ class Bolsa:
             self.con.execute("INSERT OR REPLACE INTO precios VALUES (?,?,?,?,?)",
                              (sym, st["precio"], st["ts"], st["cierre_ant"], st["apertura"]))
             last = self._one("SELECT ts FROM ticks WHERE simbolo=? ORDER BY ts DESC LIMIT 1", (sym,))
-            if not last or st["ts"] - last["ts"] >= 30:
+            if not last or st["ts"] - last["ts"] >= (10 if real else 30):
                 self.con.execute("INSERT INTO ticks VALUES (?,?,?)", (sym, st["ts"], st["precio"]))
                 self.con.execute("DELETE FROM ticks WHERE simbolo=? AND ts < (SELECT ts FROM ticks WHERE simbolo=? "
                                  "ORDER BY ts DESC LIMIT 1 OFFSET 499)", (sym, sym))
@@ -419,7 +426,56 @@ class Bolsa:
                 "tipo": inst["tipo"], "precio": round(p, dec), "compra": round(p - half, dec),
                 "venta": round(p + half, dec), "variacion_pct": round((p / st["cierre_ant"] - 1) * 100, 2),
                 "cierre_anterior": round(st["cierre_ant"], dec), "abierto": is_open(inst["mercado"], t),
-                "hora": t.isoformat(timespec="seconds"), "fuente": "simulado"}
+                "hora": t.isoformat(timespec="seconds"), "fuente": real["fuente"] if real else "simulado",
+                "retraso": real.get("retraso", "") if real else "", "real": bool(real)}
+
+    def _real_quote(self, sym: str) -> dict | None:
+        """Cotizacion real del proveedor (si lo hay y responde) con la divisa del catalogo."""
+        if not self.datos:
+            return None
+        try:
+            q = self.datos.quote(sym)
+        except Exception as e:   # noqa: BLE001 - sin conexion: sigue la simulacion
+            L.debug("cotizacion real de %s no disponible: %s", sym, e)
+            return None
+        if not q or not q.get("precio"):
+            return None
+        if q.get("divisa") in ("GBp", "GBX"):   # Londres cotiza en peniques: el catalogo va en libras
+            q = {**q, "precio": q["precio"] / 100, "cierre_anterior": (q.get("cierre_anterior") or 0) / 100,
+                 "puntos": [{**p, "precio": p["precio"] / 100} for p in q.get("puntos") or []]}
+        return q
+
+    def serie(self, simbolo: str, rango: str = "1d") -> dict:
+        """Serie de precios para graficos: real si hay conexion (velas de Yahoo), si no los ticks guardados."""
+        sym = self.instrumento(simbolo)["simbolo"]
+        pts: list[dict] = []
+        if self.datos:
+            try:
+                pts = self.datos.serie(sym, rango)
+            except Exception:   # noqa: BLE001
+                pts = []
+            inst = self.instrumento(sym)
+            if pts and inst["divisa"] == "GBP" and pts[-1]["precio"] > 50 * (inst["precio_ref"] or 1):
+                pts = [{**p, "precio": p["precio"] / 100} for p in pts]
+        if pts:
+            if rango in ("6mo", "1y", "5y"):
+                self.guardar_historico(sym, pts)
+            return {"simbolo": sym, "rango": rango, "real": True, "puntos": pts}
+        if rango in ("6mo", "1y", "5y"):
+            rows = self._q("SELECT fecha, cierre FROM historico WHERE simbolo=? ORDER BY fecha", (sym,))
+            pts = [{"ts": dt.datetime.fromisoformat(r["fecha"]).replace(tzinfo=UTC).timestamp(), "precio": r["cierre"]}
+                   for r in rows]
+            if pts:
+                return {"simbolo": sym, "rango": rango, "real": True, "puntos": pts, "guardado": True}
+        return {"simbolo": sym, "rango": rango, "real": False,
+                "puntos": [{"ts": r["ts"], "precio": r["precio"]} for r in self.ticks(sym, 400)]}
+
+    def guardar_historico(self, sym: str, pts: list[dict]) -> int:
+        """Guarda cierres diarios reales para analizar sin conexion."""
+        rows = [(sym, dt.datetime.fromtimestamp(p["ts"], UTC).date().isoformat(), p["precio"]) for p in pts]
+        with self._lock, self.con:
+            self.con.executemany("INSERT OR REPLACE INTO historico VALUES (?,?,?)", rows)
+        return len(rows)
 
     def ticks(self, simbolo: str, n: int = 200) -> list[dict]:
         sym = self.instrumento(simbolo)["simbolo"]
@@ -431,10 +487,18 @@ class Bolsa:
         if divisa == "EUR":
             return 1.0
         t = self.now()
+        real = None
+        if self.datos:
+            try:
+                real = self.datos.fx(divisa)
+            except Exception:   # noqa: BLE001
+                real = None
         with self._lock, self.con:
             r = self._one("SELECT * FROM fx WHERE divisa=?", (divisa,))
             rate = r["tasa"] if r else FX_REF[divisa]
-            if r:
+            if real:
+                rate = real
+            elif r:
                 tau = max(0.0, t.timestamp() - r["ts"]) / (365 * 86400)
                 rate *= math.exp(FX_VOL * math.sqrt(min(tau, 1.0)) * self.rng.gauss(0, 1))
             self.con.execute("INSERT OR REPLACE INTO fx VALUES (?,?,?)", (divisa, rate, t.timestamp()))
@@ -850,8 +914,24 @@ def get() -> Bolsa:
     path = str(paths.sub("bolsa") / "bolsa.db")
     with _ILOCK:
         if path not in _INSTANCES:
-            _INSTANCES[path] = Bolsa(path)
+            b = Bolsa(path)
+            b.datos = _proveedor_configurado()
+            _INSTANCES[path] = b
         return _INSTANCES[path]
+
+
+def _proveedor_configurado():
+    """Cotizaciones reales salvo que la configuracion diga ``bolsa.datos: simulados`` (o NEXUS_BOLSA_OFFLINE=1)."""
+    import os
+
+    from ..config import get_config
+    modo = str(get_config().get("bolsa.datos", "reales") or "reales")
+    if modo == "simulados" or os.environ.get("NEXUS_BOLSA_OFFLINE") == "1":
+        return None
+    from . import bolsa_datos
+    prov = bolsa_datos.proveedor()
+    prov.ttl = float(get_config().get("bolsa.refresco_s", 20) or 20)
+    return prov
 
 
 def reset_instances() -> None:

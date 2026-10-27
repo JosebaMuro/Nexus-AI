@@ -13,6 +13,7 @@ def data_dir(tmp_path, monkeypatch):
     """Cada test usa un directorio de datos aislado."""
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("NEXUS_NO_KNOWLEDGE_PACKS", "1")   # el manual de GIMP se prueba en test_gimp.py
+    monkeypatch.setenv("NEXUS_BOLSA_OFFLINE", "1")         # la mesa no pide cotizaciones reales en las pruebas
     from nexus import config
     config.reset_config()
     yield tmp_path / "data"

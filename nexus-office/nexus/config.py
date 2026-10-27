@@ -128,6 +128,12 @@ DEFAULTS: dict[str, Any] = {
     "performance": {"workers": 0, "crawl_connections": 0},
     # rastreo web por lotes (0 = automatico segun la RAM) y acceso a webs de la red local (intranet, wiki interna)
     "rag": {"crawl_batch_pages": 0, "allow_private_urls": False},
+    # mesa de bolsa: SIEMPRE simulada (sin dinero ni ordenes reales); precios reales con conexion
+    "bolsa": {"datos": "reales",            # reales (con conexion; sin ella, simulados) | simulados
+              "refresco_s": 20,             # cada cuanto se piden cotizaciones reales
+              # agente autonomo: gestiona su propia cartera simulada con los datos que recopila
+              "agente": {"activo": True, "intervalo_s": 60, "capital": 10000.0, "riesgo_pct": 1.0,
+                         "max_posiciones": 8, "max_peso_pct": 20.0, "reserva_pct": 10.0, "universo": []}},
     # IA online para el agente Profesor: nada sale a internet hasta que un administrador pone una clave
     "nube": {"proveedor": "", "modelo": "", "base_url": "", "esfuerzo": "medium",
              "clave_gemini": "",
