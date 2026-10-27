@@ -144,7 +144,7 @@ class Hub:
     def pico_version(self) -> str:
         name = self._cfg().get("user.assistant_name", "Nexus-Office") or "Nexus-Office"
         style = self._cfg().get("dispositivos.pico.estilo", "avatar")
-        return hashlib.sha1(f"{name}|{style}|3".encode()).hexdigest()[:10]
+        return hashlib.sha1(f"{name}|{style}|4".encode()).hexdigest()[:10]
 
     def pico_imagen(self, state: str, ancho: int = 250, alto: int = 122) -> "Image.Image":   # noqa: F821
         """Imagen en blanco y negro del estado: el avatar tramado a la izquierda y el estado a la derecha."""
@@ -212,6 +212,7 @@ class Hub:
             for x in range(w):
                 if px[x, y]:
                     out[y * wb + x // 8] |= 0x80 >> (x % 8)
+            out[y * wb + wb - 1] |= (1 << (wb * 8 - w)) - 1   # los bits de relleno de cada linea, en blanco
         return bytes(out)
 
     def pico_png(self, state: str) -> bytes:

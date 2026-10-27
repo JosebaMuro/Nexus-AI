@@ -28,7 +28,8 @@ from nexus.runtimes import RUNTIMES, candidates  # noqa: E402
 # ---------------------------------------------------------------- dependencias pip (minimo compatible)
 BASE = [("fastapi", "0.110"), ("uvicorn", "0.29"), ("websockets", "12"), ("pydantic", "2.5"), ("httpx", "0.27"), ("anthropic", "1.0"),
         ("psutil", "5.9"), ("numpy", "1.26"), ("pyyaml", "6.0"), ("pillow", "10.0"), ("python-multipart", "0.0.9"),
-        ("cryptography", "42"), ("fpdf2", "2.7"), ("pypdf", "4.0"), ("pytest", "8.0")]
+        ("cryptography", "42"), ("fpdf2", "2.7"), ("pypdf", "4.0"), ("pyserial", "3.5"), ("esptool", "4.7"),
+        ("pytest", "8.0")]
 EXTRAS = [("piper-tts", "voz neuronal offline (Piper)"), ("faster-whisper", "voz a texto (Whisper sobre CTranslate2)"),
           ("pyttsx3", "voz del sistema de respaldo (SAPI / espeak)"), ("openvino", "NPU / iGPU Intel"),
           ("onnxruntime", "NPU AMD (Ryzen AI) y modelos ONNX"), ("onnxruntime-qnn", "NPU Qualcomm (Snapdragon X)"),

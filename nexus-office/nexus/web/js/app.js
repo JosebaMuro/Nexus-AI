@@ -975,7 +975,52 @@
     $$("[data-led-follow]").forEach((c) => (c.onchange = guard(() => api(`/api/dispositivos/leds/${encodeURIComponent(c.dataset.ledFollow)}`, { method: "PUT", body: { follow_state: c.checked } }))));
     $("#dv-clients").innerHTML = d.clientes.length ? `<table class="tbl"><tr><th>Dispositivo</th><th>Tipo</th><th>IP</th><th>Visto</th></tr>${d.clientes.map((c) => `<tr><td>${esc(c.id)}</td><td>${esc(c.tipo)}</td><td class="mono">${esc(c.ip || "")}</td><td class="mono muted">hace ${Math.round(Date.now() / 1000 - c.visto)} s</td></tr>`).join("")}</table>` : '<p class="muted">Ningún reloj ni Pico W conectado ahora. Al grabarlos se les configura la Wi-Fi y la dirección de este equipo.</p>';
     if (!$("#dv-pico").childElementCount) $("#dv-pico").innerHTML = ["idle", "listening", "thinking", "tool", "speaking", "error"].map((s) => `<figure style="margin:0;text-align:center"><img src="/api/dispositivos/pico/${s}.png" alt="${s}" style="width:150px;image-rendering:pixelated;border:1px solid var(--line);border-radius:4px;background:#fff"><figcaption class="muted" style="font-size:.75rem">${NOMBRE_ESTADO[s]}</figcaption></figure>`).join("");
-    if (window.NexusFirmware) NexusFirmware.render($("#dv-fw")); else $("#dv-fw").innerHTML = '<p class="muted">El firmware y su código fuente están en la carpeta <code>firmware/</code> de la instalación.</p>';
+    fwPanel();
+  };
+  // grabar firmware por USB (solo desde el propio equipo)
+  let fwTimer = null;
+  const fwPanel = async () => {
+    const box = $("#dv-fw");
+    if (box.dataset.ready) return;
+    let f;
+    try { f = await api("/api/firmware"); } catch (e) {
+      box.innerHTML = '<p class="muted">El firmware se graba desde el equipo donde corre Nexus (con el dispositivo conectado por USB). Su código fuente y los binarios están en la carpeta <code>firmware/</code>.</p>';
+      return;
+    }
+    box.dataset.ready = "1";
+    const puertos = (f.puertos || []).map((p) => `<option value="${esc(p.puerto)}">${esc(p.puerto)} · ${esc(p.tipo || "?")} · ${esc(p.descripcion)}</option>`).join("");
+    const bins = (f.binarios || []).map((b) => `<span class="tag" title="${esc(b.sha256 || "")}">${esc(b.archivo)}${b.version ? " v" + esc(b.version) : ""}</span>`).join(" ") || '<span class="muted">sin binarios en firmware/bin</span>';
+    box.innerHTML = `${f.falta && f.falta.length ? `<p class="tag warn">Falta ${esc(f.falta.join(", "))}: instálalo con pip</p>` : ""}
+      ${f.nexus && !f.nexus.escucha_red ? '<p class="tag warn">Nexus solo escucha en este equipo: actívalo en Red COOP › Conectar dispositivos para que el reloj y el Pico lo vean.</p>' : ""}
+      <div class="col" style="gap:8px">
+        <div class="row"><select class="input" id="fw-tipo" style="width:auto"><option value="luces">Luces NexusLED (ESP32)</option><option value="reloj">Reloj ESP32-2424S012C</option><option value="pico">Avatar Pico W (pwnagotchi)</option></select>
+          <select class="input" id="fw-modelo" style="width:auto"><option value="">modelo: detectar</option>${(f.modelos_luces || []).map((m) => `<option>${m}</option>`).join("")}</select></div>
+        <div class="row"><select class="input" id="fw-puerto" style="flex:1;min-width:0"><option value="">puerto: automático</option>${puertos}</select><button class="btn sm" id="fw-refresh">↻</button></div>
+        <div class="row"><input class="input" id="fw-ssid" placeholder="Wi-Fi (red)" style="flex:1;min-width:0"><input class="input" id="fw-pass" type="password" placeholder="clave Wi-Fi" style="flex:1;min-width:0"></div>
+        <div class="row" id="fw-leds-row"><input class="input" id="fw-leds" type="number" min="1" max="1500" placeholder="nº de LED" style="width:110px"><input class="input" id="fw-pin" type="number" min="0" max="48" placeholder="GPIO (16)" style="width:110px"></div>
+        <div class="muted" style="font-size:.8rem">Se conectará a Nexus en <code>${esc((f.nexus && f.nexus.host) || "—")}</code>. Pico W: conéctalo con BOOTSEL pulsado.</div>
+        <div class="row"><button class="btn primary" id="fw-go">GRABAR</button><button class="btn" id="fw-cfg">SOLO CONFIGURAR</button></div>
+        <div>${bins}</div>
+        <pre class="mono" id="fw-log" style="max-height:180px;overflow:auto;font-size:.75rem;white-space:pre-wrap;margin:0"></pre></div>`;
+    const sync = () => { const t = $("#fw-tipo").value; $("#fw-modelo").style.display = t === "luces" ? "" : "none"; $("#fw-leds-row").style.display = t === "luces" ? "" : "none"; };
+    $("#fw-tipo").onchange = sync; sync();
+    $("#fw-refresh").onclick = () => { delete box.dataset.ready; fwPanel(); };
+    const go = (solo) => guard(async () => {
+      const tipo = $("#fw-tipo").value, config = {};
+      if ($("#fw-ssid").value.trim()) config.wifi = { ssid: $("#fw-ssid").value.trim(), pass: $("#fw-pass").value };
+      if (tipo === "luces" && +$("#fw-leds").value) config.outputs = [{ pin: +$("#fw-pin").value || 16, count: +$("#fw-leds").value }];
+      const j = await api("/api/firmware/grabar", { body: { tipo, puerto: $("#fw-puerto").value, modelo: $("#fw-modelo").value, config, solo_config: solo } });
+      const log = $("#fw-log");
+      clearInterval(fwTimer);
+      fwTimer = setInterval(async () => {
+        const r = await api(`/api/firmware/trabajo/${j.id}`).catch(() => null);
+        if (!r) return;
+        log.textContent = r.log.join("\n"); log.scrollTop = log.scrollHeight;
+        if (r.estado !== "en_curso") { clearInterval(fwTimer); toast(r.estado === "hecho" ? "Firmware listo" : "Error: " + (r.resultado && r.resultado.error)); }
+      }, 700);
+    });
+    $("#fw-go").onclick = go(false);
+    $("#fw-cfg").onclick = go(true);
   };
   $("#dv-scan").onclick = guard(async () => {
     $("#dv-found").innerHTML = '<span class="chip"><span class="spin"></span>Buscando…</span>';

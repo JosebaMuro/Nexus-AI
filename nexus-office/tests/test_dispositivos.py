@@ -117,3 +117,64 @@ def test_actividad_de_los_agentes_en_el_chat(services):
     services.agents.run("nexus", "Hola", "s1", emit=events.append)
     st = ACTIVITY.get("nexus")
     assert st["estado"] == "idle" and st["tareas"] >= 1 and st["tarea"] == "Hola"
+
+
+def test_firmware_del_pico_contra_el_servidor(client, tmp_path):
+    """El codigo del Pico W (firmware/nexuspico/nexuspico.py) en el PC: descarga las imagenes, cambia con el estado
+    y vuelve a descargarlas si cambia la version."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("nexuspico", FW / "nexuspico" / "nexuspico.py")
+    np_ = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(np_)
+    pintado = []
+
+    def get(ruta):
+        r = client.get(ruta)
+        return r.status_code, r.content
+
+    n = np_.Nucleo(get, lambda buf, motivo: pintado.append((motivo, buf)), "pico-test", str(tmp_path / "img"))
+    assert n.paso() == "idle" and n.version and len(pintado[-1][1]) == 4000
+    assert (tmp_path / "img" / "thinking.bin").stat().st_size == 4000
+    assert client.get("/api/dispositivos/pico/idle.bin").content == pintado[-1][1]
+    assert n.paso() == "idle" and len(pintado) == 1          # sin cambios no repinta (la tinta es lenta)
+    client.post("/api/dispositivos/estado", json={"estado": "thinking"})
+    assert n.paso() == "thinking" and pintado[-1][0] == "thinking"
+    assert any(c["id"] == "pico-test" for c in client.get("/api/dispositivos").json()["clientes"])
+    # sin conexion: al tercer fallo avisa en la pantalla, y despues se recupera
+    caido = np_.Nucleo(lambda r: (_ for _ in ()).throw(OSError("caido")), lambda b, m: pintado.append((m, b)),
+                       "pico-test", str(tmp_path / "img"))
+    for _ in range(3):
+        assert caido.paso() is None
+    assert pintado[-1][1] is None and "sin conexion" in pintado[-1][0]
+    # el giro del propio Pico coincide con el de Nexus
+    from nexus.devices import hub
+    img = hub.get().pico_imagen("speaking")
+    w, h = img.size
+    land = bytearray(((w + 7) // 8) * h)
+    px = img.load()
+    for y in range(h):
+        for x in range(w):
+            if px[x, y]:
+                land[y * ((w + 7) // 8) + x // 8] |= 0x80 >> (x % 8)
+    assert bytes(np_.girar(land, w, h)) == client.get("/api/dispositivos/pico/speaking.bin").content
+
+
+def test_grabar_firmware_desde_nexus(client, monkeypatch):
+    from nexus.devices import firmware as fw
+    info = client.get("/api/firmware").json()
+    assert info["carpeta"] and "esp32s3" in info["modelos_luces"] and info["nexus"]["key"]
+    f = fw.script()
+    hecho = {}
+    monkeypatch.setattr(f, "flashear_esp32", lambda tipo, puerto, modelo, log: (log("grabando"), hecho.update(tipo=tipo))
+                        and {"ok": True, "puerto": "/dev/ttyFAKE", "chip": "esp32c3"})
+    monkeypatch.setattr(f, "configurar_esp32", lambda tipo, puerto, cfg, log: hecho.update(cfg=cfg, puerto=puerto) or {"ok": True})
+    j = client.post("/api/firmware/grabar", json={"tipo": "reloj", "config": {"wifi": {"ssid": "casa", "pass": "x"}}}).json()
+    for _ in range(50):
+        r = client.get(f"/api/firmware/trabajo/{j['id']}").json()
+        if r["estado"] != "en_curso":
+            break
+        time.sleep(0.05)
+    assert r["estado"] == "hecho", r
+    assert hecho["tipo"] == "reloj" and hecho["puerto"] == "/dev/ttyFAKE"
+    assert hecho["cfg"]["wifi"]["ssid"] == "casa" and "key" in hecho["cfg"].get("nexus", {"key": ""})
+    assert client.post("/api/firmware/grabar", json={"tipo": "tostadora"}).status_code == 400
