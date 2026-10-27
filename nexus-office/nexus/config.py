@@ -23,6 +23,7 @@ from . import paths
 DEFAULTS: dict[str, Any] = {
     "user": {
         "assistant_name": "Nexus-Office",
+        "sexo": "",                     # tu personaje en el salon y los despachos: mujer | hombre | "" (al azar)
         "language": "es",
         "response_style": "equilibrado",   # breve | equilibrado | detallado
         "voice_enabled": True,

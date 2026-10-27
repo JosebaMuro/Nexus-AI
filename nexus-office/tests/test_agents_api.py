@@ -70,3 +70,9 @@ def test_api_modes_and_endpoints(services):
                     done = e
                     break
             assert done and "42" in done["text"]
+
+
+def test_agentes_de_serie_tienen_sexo_y_se_conserva():
+    from nexus.agents.manager import AgentSpec
+    s = AgentSpec.from_dict({"id": "x", "name": "X", "sexo": "mujer"})
+    assert s.sexo == "mujer" and AgentSpec.from_dict({"id": "y", "name": "Y"}).sexo == ""

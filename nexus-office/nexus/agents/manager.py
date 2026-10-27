@@ -52,6 +52,7 @@ class AgentSpec:
     color: str = "#00f0ff"
     icon: str = "◆"
     enabled: bool = True
+    sexo: str = ""   # aspecto en el salon y los despachos: mujer | hombre | "" (al azar segun su id)
 
     @staticmethod
     def from_dict(d: dict) -> "AgentSpec":

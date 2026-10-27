@@ -14,6 +14,13 @@
   const HAIR = ["#2a1c14", "#5b3620", "#9a5b2a", "#d8b060", "#1d1d24", "#8c2f1e", "#bdb7af", "#4a3466", "#d9773a"];
   const PANTS = ["#3b4a6b", "#2f3542", "#5c4a3a", "#44544a", "#5d4f6e", "#283a52"];
   const GREEN = "#3fd65a", AMBER = "#ffb020";
+  // peinados (ver _drawHead): 0 corto · 1 media melena · 2 mono/flequillo · 3 de punta · 4 melena larga · 5 rizado
+  const STYLES = { mujer: [1, 4, 4, 5, 2, 1], hombre: [0, 3, 0, 2, 5, 3] };
+  function sexOf(a) {
+    const sx = String(a.sexo || "").toLowerCase();
+    if (sx === "mujer" || sx === "hombre") return sx;
+    return hash(a.id + "#sexo") % 2 ? "mujer" : "hombre";   // sin elegir: estable para cada id
+  }
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -202,11 +209,24 @@
       b.setTransform(d * this.sc, 0, 0, d * this.sc, d * this.ox, d * this.oy); paintRoom(b);
     }
     _makeChar(a) {
-      const r = rng(hash(a.id));
-      return { a, seed: r() * 100, skin: pick(r, SKIN), hair: pick(r, HAIR), style: Math.floor(r() * 6), pants: pick(r, PANTS), laptop: r() < 0.5,
+      const r = rng(hash(a.id)), sexo = sexOf(a);
+      const ch = { a, sexo, seed: r() * 100, skin: pick(r, SKIN), hair: pick(r, HAIR), style: Math.floor(r() * 6), pants: pick(r, PANTS), laptop: r() < 0.5,
                x: DOOR.x, y: DOOR.y, seat: null, path: null, hidden: true, walking: false, sit: 0, walkPh: 0, s: 1.08,
                look: 0, talk: 0, gest: 0, sip: 0, type: 0, nod: 0, alert: 0, act: null, actEnd: 0, actLook: 0, nextAct: 3 + r() * 6,
                blinkAt: -1, nextBlink: 1 + r() * 3, P: null };
+      ch.style = pick(rng(hash(a.id) ^ 0x2f9), STYLES[sexo]);   // peinado segun el sexo elegido
+      return ch;
+    }
+    /* sexo de un personaje (agente o usuario): si cambia, se rehace su aspecto */
+    _resex(ch) {
+      const sx = sexOf(ch.a);
+      if (sx === ch.sexo) return;
+      const fresh = this._makeChar(ch.a);
+      Object.assign(ch, { sexo: fresh.sexo, style: fresh.style, L: null });
+    }
+    setUser(u) {
+      Object.assign(this.user.a, u || {});
+      this._resex(this.user);
     }
     setAgents(list) {
       const first = this.chars.size === 0, ids = new Set(list.map((a) => a.id));
@@ -214,7 +234,7 @@
       let k = 0;
       for (const a of list) {
         const ch = this.chars.get(a.id);
-        if (ch) ch.a = a; else { const n = this._makeChar(a); n.enterDelay = first ? 0.2 + k++ * 0.45 : 0; this.chars.set(a.id, n); }
+        if (ch) { ch.a = a; this._resex(ch); } else { const n = this._makeChar(a); n.enterDelay = first ? 0.2 + k++ * 0.45 : 0; this.chars.set(a.id, n); }
       }
       this.agents = list; this._layout();
     }
@@ -330,15 +350,16 @@
       const col = ch.a.color || "#00f0ff";
       if (ch.L && ch.L.of === col) return ch.L;
       const r = rng(hash(ch.a.id) ^ 0x51ed27), ctx = this.ctx, low = document.documentElement.hasAttribute("data-lowpower");
-      const outfit = ch.isUser ? 1 : Math.floor(r() * 6), build = Math.floor(r() * 3);
+      const fem = ch.sexo === "mujer";
+      const outfit = ch.isUser ? 1 : Math.floor(r() * 6), build = fem ? Math.floor(r() * 2) : 1 + Math.floor(r() * 2);
       const main = mix(col, "#8d93a0", 0.28), blazer = mix(col, "#2b2f3a", 0.62);
       const top = outfit === 2 ? blazer : main;
       const short = outfit === 0 || outfit === 5;
       const L = { of: col, low, outfit, top, inner: outfit === 2 ? (r() < 0.5 ? "#eef1f5" : tone(col, 0.72)) : null, tie: outfit === 2 && r() < 0.55,
-                  W: [12.4, 13.8, 15.2][build], w: [9.2, 10.4, 11.8][build], short,
+                  W: [12.4, 13.8, 15.2][build] * (fem ? 0.93 : 1), w: [9.2, 10.4, 11.8][build] * (fem ? 0.9 : 1), short, fem,
                   eye: pick(r, ["#5a3a22", "#3d6d9a", "#4f7a46", "#7a5a2e", "#6b7680", "#2e2018"]),
-                  lip: mix(ch.skin, "#b5485a", 0.42), glasses: r() < 0.2, beard: [0, 2, 3, 5].includes(ch.style) && r() < 0.3,
-                  earring: [1, 4].includes(ch.style) && r() < 0.6, strands: [] };
+                  lip: mix(ch.skin, fem ? "#c23a58" : "#b5485a", fem ? 0.62 : 0.36), glasses: r() < 0.2, beard: !fem && r() < 0.32,
+                  earring: fem ? r() < 0.7 : r() < 0.08, strands: [] };
       const tg = ctx.createLinearGradient(-L.W - 1, 0, L.W + 1, 0);
       tg.addColorStop(0, tone(top, 0.2)); tg.addColorStop(0.45, top); tg.addColorStop(1, tone(top, -0.3));
       L.torso = tg;
@@ -421,7 +442,7 @@
           ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.beginPath(); ctx.ellipse(foot.x + sd * 0.6 - 1.4, foot.y + 1.6, 2, 0.8, 0, 0, 7); ctx.fill();
         }
       }
-      if (!back && [1, 4, 5].includes(ch.style)) {
+      if (!back && [1, 4, 5].includes(ch.style)) {   // melenas detras del cuerpo
         ctx.save(); ctx.translate(P.headX, P.headY); ctx.rotate(P.tilt); this._backHair(ctx, ch, L); ctx.restore();
       }
       // capucha por detras del cuello
@@ -534,6 +555,7 @@
           ctx.fillStyle = "#140e10"; ctx.beginPath(); ctx.arc(ex + gaze, ey + 0.05, 0.58, 0, 7); ctx.fill();
           ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(ex + gaze + 0.45, ey - 0.45, 0.36, 0, 7); ctx.fill();
           ctx.strokeStyle = "#2a1c1c"; ctx.lineWidth = 0.85; ctx.beginPath(); ctx.moveTo(ex - 2.3, ey + 0.2); ctx.quadraticCurveTo(ex, ey - 2, ex + 2.3, ey + 0.1); ctx.stroke();
+          if (L.fem) { ctx.lineWidth = 0.5; ctx.beginPath(); for (const k of [0.25, 0.6, 0.95]) { const lx = ex + sd * (2.3 * k), ly = ey - 1.5 * (1 - Math.abs(k - 0.5)); ctx.moveTo(lx, ly); ctx.lineTo(lx + sd * 0.8, ly - 0.9); } ctx.stroke(); }
           if (!L.low) { ctx.strokeStyle = "rgba(80,40,30,.22)"; ctx.lineWidth = 0.45; ctx.beginPath(); ctx.moveTo(ex - 1.6, ey + 1.4); ctx.quadraticCurveTo(ex, ey + 2, ex + 1.6, ey + 1.4); ctx.stroke(); }
         }
         // ceja con grosor variable que sube al hablar
@@ -758,5 +780,6 @@
       this._drawBubbles(ctx, dt);
     }
   }
+  LoungeRoom.util = { clamp, lerp, lerpP, smooth, damp, wob, hash, rng, pick, mix, tone, rgba, wrap, backOut, FONT, GREEN, AMBER, drawPlumbob, headTop, sexOf };
   window.LoungeRoom = LoungeRoom;
 })();
