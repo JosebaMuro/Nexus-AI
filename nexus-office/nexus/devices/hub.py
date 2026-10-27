@@ -106,7 +106,7 @@ class Hub:
         if modo.get("perfil_hw"):
             try:
                 from ..hardware import hw_profiles
-                hw_profiles.activar(modo["perfil_hw"], cfg)
+                hw_profiles.activar(modo["perfil_hw"], cfg, services=self.s)
             except Exception as e:   # noqa: BLE001
                 L.warning("Modo %s: no se pudo aplicar el perfil de hardware %s: %s", mid, modo["perfil_hw"], e)
         cfg.set("dispositivos.modo", mid)

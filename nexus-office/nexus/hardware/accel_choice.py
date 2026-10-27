@@ -101,8 +101,12 @@ def options(services) -> dict:
         label = {"auto": "Automático", "cpu": "CPU", "gpu": f"GPU{' · ' + gpu.name if gpu else ''}",
                  "npu": f"NPU{' · ' + hw.npus[0].name if hw.npus else ''}"}[a]
         accels.append({"id": a, "label": label, "available": p["ok"], "note": p["note"]})
-    eff = getattr(llm.backends.get("llamaserver"), "effective", None) or {}
-    return {"engine": cfg.get("llm.engine", "auto"), "accel": cfg.get("hardware.accel", "auto"),
+    ls = llm.backends.get("llamaserver")
+    eff = getattr(ls, "effective", None) or {}
+    from . import hw_profiles
+    return {"gpu_llama": getattr(ls, "gpu", {}) or {}, "gpu_error": getattr(ls, "gpu_error", ""),
+            "gpus": hw_profiles.gpus(services), "perfil_hw": cfg.get("hardware.perfil", "auto"),
+            "engine": cfg.get("llm.engine", "auto"), "accel": cfg.get("hardware.accel", "auto"),
             "ask": bool(cfg.get("startup.ask_accel", True)), "engines": engines, "accels": accels,
             "hardware": {"cpu": hw.cpu_name, "cores": hw.cores_physical, "ram_gb": hw.ram_gb,
                          "gpus": [g.name for g in hw.gpus], "npus": [n.name for n in hw.npus or []],

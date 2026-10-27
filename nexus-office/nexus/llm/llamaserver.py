@@ -48,6 +48,8 @@ class LlamaServerBackend(OpenAICompatBackend):
         self.effective: dict = {}      # donde ha quedado el modelo de verdad (leido del registro al arrancar)
         self._lock = threading.Lock()
         self.port = 0
+        self.gpu: dict = {}            # GPU de llama.cpp elegida (cuando hay varias)
+        self.gpu_error = ""
 
     def available(self) -> bool:
         return self.runtimes.exe("llama", self.profile_getter(), self.variant_getter()) is not None and self.resolve("") is not None
@@ -66,6 +68,11 @@ class LlamaServerBackend(OpenAICompatBackend):
             try:
                 return self._ensure(model, opts)
             except _GpuFailed as e:
+                if not os.environ.get("NEXUS_RUNTIME_LLAMA_CPU"):   # escritorio: la GPU elegida no arranca -> CPU
+                    L.warning("%s: se sigue en la CPU", e)
+                    self.gpu_error = str(e)[:300]
+                    opts = {**opts, "gpu_layers": 0, "device": ""}
+                    continue
                 opts = {**opts, **self._gpu_failed(str(e), opts.get("device") or "")}
 
     def _ensure(self, model: str, opts: dict) -> None:
@@ -98,8 +105,21 @@ class LlamaServerBackend(OpenAICompatBackend):
             from ..runtimes import lib_env
             env = lib_env(exe, env)
         single = bool(self.profile_getter().get("llm", {}).get("single_slot"))
+        if ngl and not device and variant not in ("cpu", "embedded"):
+            # escritorio: con varias GPU (o una real y llvmpipe en Linux) se fija UNA, la elegida o la mejor
+            from ..hardware import gpu_devices
+            devs = gpu_devices.list_devices(exe, env)
+            sel = gpu_devices.pick(devs, str(self.profile_getter().get("llm", {}).get("gpu_select") or ""))
+            if devs and sel is None:
+                L.warning("llama.cpp solo ve renderizadores por software (%s): se usa la CPU",
+                          ", ".join(d["name"] for d in devs))
+                ngl = 0
+            elif sel and gpu_devices.needs_device_flag(devs):
+                device = sel["id"]
+            self.gpu = sel or {}
+        kv_ram, mlock = bool(opts.get("kv_ram")), bool(opts.get("mlock"))
         key = (str(exe), path, entry.get("mmproj"), opts.get("n_ctx"), opts.get("n_threads"), opts.get("n_batch"), ngl, device,
-               tuple(sorted(extra_env.items())))
+               tuple(sorted(extra_env.items())), kv_ram, mlock)
         with self._lock:
             if self.proc and self.proc.poll() is None and self.key == key:
                 return
@@ -112,6 +132,10 @@ class LlamaServerBackend(OpenAICompatBackend):
                 cmd += ["-t", str(opts["n_threads"])]
             if device:
                 cmd += ["--device", device]
+            if kv_ram and ngl:     # perfil de hardware: la cache KV en la RAM (deja la VRAM para mas capas del modelo)
+                cmd += ["--no-kv-offload"]
+            if mlock:              # perfil de hardware: el modelo fijo en la RAM (sin paginar a disco)
+                cmd += ["--mlock"]
             # en CPU un solo slot: las peticiones se encolan en vez de repartirse los pocos nucleos;
             # cache-reuse reaprovecha el KV del prompt de sistema entre turnos
             cmd += ["-np", "1" if variant in ("cpu", "system") or single else "2"]

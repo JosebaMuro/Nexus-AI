@@ -31,6 +31,8 @@ class Services:
         self.monitor = hardware.Monitor(cfg.get("hardware.monitor_interval_s", 2.0))
         if self.monitor.previous_unclean:
             L.warning("La sesion anterior no se cerro correctamente; se aplicara un perfil mas conservador")
+        from .hardware import hw_profiles
+        hw_profiles.al_arrancar(cfg)   # GPU elegida antes de calcular el perfil
         if detect_hardware:
             self.hw, self.profile, self.tuning_reasons = hardware.startup(
                 cfg.get("hardware.profile_override", ""), cfg.get("hardware.adaptive_tuning", True),
@@ -43,6 +45,7 @@ class Services:
             self.profile, _plan = build_for(self.hw, cfg.get("hardware.accel"))
             if _plan["note"]:
                 L.warning("Acelerador %s: %s", cfg.get("hardware.accel"), _plan["note"])
+        hw_profiles.aplicar_al_perfil(self)
         self.monitor.settings = {k: self.profile["llm"][k] for k in ("n_ctx", "n_threads", "n_batch", "gpu_layers")}
         self.runtimes = RuntimeManager()
         self.db = DB()

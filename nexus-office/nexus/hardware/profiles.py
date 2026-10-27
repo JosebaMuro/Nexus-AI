@@ -15,11 +15,45 @@ MODEL_TIERS = [0.5, 1.5, 3, 4, 8, 14, 32, 70]
 GB_PER_B_Q4 = 0.65   # GGUF Q4_K_M ~0.6 GB por B de parametros + overhead
 
 
+# GPU elegida a mano (config ``hardware.gpu``: su nombre o el dispositivo de llama.cpp, p. ej. «Vulkan1»)
+SELECTED = {"gpu": ""}
+
+
+def select_gpu(name: str) -> None:
+    SELECTED["gpu"] = name or ""
+
+
+def _words(text: str) -> list[str]:
+    import re
+    return [w for w in re.split(r"[^a-z0-9]+", text.lower())
+            if w and w not in ("nvidia", "amd", "intel", "geforce", "radeon", "r", "tm", "corporation")]
+
+
+def _matches(g: GPU, want: str) -> bool:
+    """La GPU es la elegida: las palabras de lo elegido estan en su nombre o al reves (llama.cpp anade «(ADL-S GT1)»)."""
+    a, b = _words(want), _words(g.name)
+    return bool(a) and bool(b) and (all(w in g.name.lower() for w in a) or all(w in want.lower() for w in b))
+
+
 def _best_gpu(hw: HardwareInfo) -> GPU | None:
     if not hw.gpus:
         return None
+    want = SELECTED["gpu"]
+    if want:
+        dev = next((d for d in (hw.runtimes or {}).get("llama_devices", []) if d.get("id", "").lower() == want.lower()), None)
+        name = dev["name"] if dev else want
+        for g in hw.gpus:
+            if _matches(g, name):
+                return g
     rank = {"nvidia": 4, "amd": 3, "intel": 2, "apple": 3, "qualcomm": 1}
     return max(hw.gpus, key=lambda g: (not g.integrated, rank.get(g.vendor, 0), g.vram_gb))
+
+
+def _vulkan_ok(hw: HardwareInfo, gpu: GPU) -> bool:
+    """El llama-server de Vulkan incluido ve esta GPU (no solo llvmpipe)."""
+    devs = [d for d in (hw.runtimes or {}).get("llama_devices", []) if not d.get("software")]
+    return any(_matches(gpu, d.get("name", "")) or _matches(GPU(gpu.vendor, d.get("name", "")), gpu.name) for d in devs) \
+        or (len(devs) == 1 and not gpu.integrated)
 
 
 def choose_accelerator(hw: HardwareInfo, override: str = "") -> tuple[str, GPU | None]:
@@ -33,8 +67,11 @@ def choose_accelerator(hw: HardwareInfo, override: str = "") -> tuple[str, GPU |
         # movil: la GPU solo si llama-server con GPU la ha visto (Adreno por OpenCL, el resto por Vulkan)
         return (rt.get("android_accel", {}).get("gpu_backend") or "cpu"), gpu
     if gpu.vendor == "nvidia":
-        # VRAM 0 = tarjeta vista en Linux sin nvidia-smi (nouveau o driver sin instalar): CUDA no funcionaria
-        return ("cuda" if gpu.vram_gb > 0 else "cpu"), gpu
+        # VRAM 0 = tarjeta vista en Linux sin nvidia-smi (nouveau/NVK o driver sin instalar): CUDA no funcionaria,
+        # pero Vulkan si si el llama-server de Vulkan la ve (Mesa NVK)
+        if gpu.vram_gb > 0:
+            return "cuda", gpu
+        return ("vulkan" if _vulkan_ok(hw, gpu) else "cpu"), gpu
     if gpu.vendor == "apple":
         return "metal", gpu
     if gpu.integrated:
@@ -64,8 +101,13 @@ def build_profile(hw: HardwareInfo, override: str = "") -> dict:
     gpu_offload = acc in ("cuda", "rocm", "vulkan", "metal", "xpu", "opencl", "hexagon") and gpu is not None
     ram = hw.ram_gb
     cpu_budget = max(0.5, min(ram * 0.5, ram - 3.0))
+    vram_gpu = gpu.vram_gb if gpu else 0.0
+    if gpu and not vram_gpu:   # sin nvidia-smi ni sysfs: la memoria que dice llama.cpp de esa GPU
+        dev = next((d for d in (hw.runtimes or {}).get("llama_devices", []) if not d.get("software")
+                    and _matches(gpu, d.get("name", ""))), None)
+        vram_gpu = round(dev["mem_mb"] / 1024, 2) if dev else 0.0
     if gpu_offload and gpu and not gpu.integrated and not android():
-        budget = gpu.vram_gb * 0.85
+        budget = vram_gpu * 0.85
     elif acc == "metal":
         budget = ram * 0.65
     else:
@@ -91,7 +133,7 @@ def build_profile(hw: HardwareInfo, override: str = "") -> dict:
     if android():   # en el movil el prompt se procesa despacio: contextos moderados
         n_ctx, max_ctx = min(n_ctx, 4096), min(max_ctx, 8192)
 
-    vram = gpu.vram_gb if gpu else 0.0
+    vram = vram_gpu
     torch_device = {"cuda": "cuda", "rocm": "cuda", "metal": "mps", "xpu": "xpu"}.get(acc, "cpu")
     if sys.platform == "win32" and gpu and gpu.vendor in ("amd", "intel") and not gpu.integrated:
         torch_device = "dml"
@@ -123,6 +165,8 @@ def build_profile(hw: HardwareInfo, override: str = "") -> dict:
             "n_threads": layout["fast"] if android() else phys,   # movil: los nucleos rapidos; los pequenos frenan
             "n_batch": 512 if gpu_offload or ram >= 16 else 256,
             "gpu_layers": -1 if gpu_offload else 0,
+            # con varias GPU, llama-server usa solo esta (nexus/hardware/gpu_devices.py)
+            "gpu_select": (SELECTED["gpu"] or gpu.name) if gpu_offload and gpu and not android() else "",
             # Android: dispositivo de llama.cpp (HTP0, GPUOpenCL, Vulkan0) para no repartir el modelo entre dos backends
             **({"device": (hw.runtimes or {}).get("android_accel", {}).get("gpu_device", "") if gpu_offload else ""}
                if android() else {}),

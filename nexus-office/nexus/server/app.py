@@ -367,6 +367,49 @@ def create_app(services: Services | None = None) -> FastAPI:
         hub.broadcast({"type": "status_changed"})
         return res
 
+    @app.get("/api/hw/perfiles")
+    def hw_perfiles():
+        """Perfiles de hardware (de serie y propios), el activo, las GPU que hay y los modelos de texto."""
+        from ..hardware import hw_profiles
+        s = S()
+        modelos = [{"id": m["id"], "name": m.get("name", m["id"]), "size_gb": round((m.get("size") or 0) / 2**30, 1)}
+                   for m in s.models.catalog.list() if m.get("kind") == "llm"]
+        return {"perfiles": hw_profiles.lista(s.config), "activo": s.config.get("hardware.perfil", "auto"),
+                "gpu": s.config.get("hardware.gpu", ""), "gpus": hw_profiles.gpus(s), "modelos": modelos,
+                "campos": hw_profiles.CAMPOS}
+
+    @app.put("/api/hw/perfiles/{pid}")
+    def hw_perfil_guardar(pid: str, perfil: dict = Body(...)):
+        from ..hardware import hw_profiles
+        if any(p["id"] == pid for p in hw_profiles.DE_SERIE) and not perfil.get("nombre"):
+            perfil["nombre"] = pid
+        return hw_profiles.guardar(S().config, {**perfil, "id": pid})
+
+    @app.delete("/api/hw/perfiles/{pid}")
+    def hw_perfil_borrar(pid: str):
+        from ..hardware import hw_profiles
+        if not hw_profiles.borrar(S().config, pid):
+            raise HTTPException(404, "perfil propio no encontrado")
+        return {"ok": True}
+
+    @app.post("/api/hw/perfiles/{pid}/activar")
+    async def hw_perfil_activar(pid: str):
+        from ..hardware import hw_profiles
+        try:
+            res = await asyncio.to_thread(hw_profiles.activar, pid, None, S())
+        except ValueError as e:
+            raise HTTPException(404, str(e)) from e
+        hub.broadcast({"type": "status_changed"})
+        return res
+
+    @app.post("/api/hw/gpu")
+    async def hw_gpu(gpu: str = Body("", embed=True)):
+        """Elige que GPU usar cuando hay varias (vacio = la mejor) y reinicia el modelo en ella."""
+        from ..hardware import hw_profiles
+        res = await asyncio.to_thread(hw_profiles.elegir_gpu, S(), gpu)
+        hub.broadcast({"type": "status_changed"})
+        return res
+
     @app.post("/api/accel/test")
     async def accel_test():
         """Carga el modelo con la eleccion actual, genera unas palabras y dice donde se ha ejecutado y a que velocidad."""

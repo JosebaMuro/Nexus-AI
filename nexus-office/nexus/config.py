@@ -82,6 +82,9 @@ DEFAULTS: dict[str, Any] = {
         "llama_variant": "",            # binario de llama.cpp preferido (lo fija el selector: cpu, cuda, vulkan...)
         "adaptive_tuning": True,
         "monitor_interval_s": 2.0,
+        "perfil": "auto",               # perfil de hardware activo (hw_profiles: auto, rendimiento, ahorro... o propios)
+        "perfiles": [],                 # perfiles de hardware creados por el usuario
+        "gpu": "",                      # GPU elegida si hay varias (nombre o dispositivo de llama.cpp); vacio = la mejor
     },
     "models": {
         "huggingface_token": "",

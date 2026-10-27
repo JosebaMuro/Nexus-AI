@@ -518,7 +518,25 @@ def detect(ollama_url: str = "http://127.0.0.1:11434", probe_runtimes: bool = Tr
         # OpenVINO puede ver una NPU Intel que la enumeracion PnP no nombra
         if "NPU" in info.runtimes.get("openvino_devices", []) and not any(n.vendor == "intel" for n in info.npus):
             info.npus.append(NPU(vendor="intel", name="Intel NPU (OpenVINO)", runtime_hint="openvino", source="openvino"))
+        if info.gpus and not _is_android():
+            try:
+                info.runtimes["llama_devices"] = _llama_gpu_devices()
+            except Exception as e:  # noqa: BLE001
+                L.warning("Sonda de dispositivos de llama.cpp fallo: %s", e)
     return info
+
+
+def _llama_gpu_devices() -> list[dict]:
+    """GPU que ve de verdad el llama-server de GPU incluido (Vulkan/CUDA/ROCm): cuales funcionan con su driver."""
+    from .. import runtimes as rt
+    from .gpu_devices import list_devices
+    for variant in ("cuda", "vulkan", "rocm"):
+        exe = rt.RuntimeManager().find_exe("llama", variant) or rt.bundled_exe("llama", variant)
+        if exe:
+            devs = list_devices(exe, rt.lib_env(exe))
+            if devs:
+                return [{**d, "variant": variant} for d in devs]
+    return []
 
 
 def save(info: HardwareInfo) -> None:

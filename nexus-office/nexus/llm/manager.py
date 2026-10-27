@@ -147,6 +147,7 @@ class LLMManager:
         llm = self.profile["llm"]
         opts = {"n_ctx": llm["n_ctx"], "n_threads": llm["n_threads"], "n_batch": llm["n_batch"],
                 "gpu_layers": llm["gpu_layers"], "flash_attn": llm.get("flash_attn", False), "device": llm.get("device", ""),
+                "kv_ram": llm.get("kv_ram", False), "mlock": llm.get("mlock", False),
                 "temperature": self.config.get("llm.temperature", 0.7), "max_tokens": self.config.get("llm.max_tokens", 1024)}
         opts.update({k: v for k, v in (agent_opts or {}).items() if v is not None})
         return opts
