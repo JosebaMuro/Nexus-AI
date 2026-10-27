@@ -188,6 +188,7 @@ def create_app(services: Services | None = None) -> FastAPI:
     # ------------------------------------------------------------------ estado general
     @app.get("/api/status")
     def status(admin: bool = Depends(admin_flag)):
+        from ..hardware import hw_profiles
         s = S()
         mem = s.memory.stats()
         return {"version": __version__, "name": s.config.get("user.assistant_name"), "admin": admin,
@@ -198,7 +199,8 @@ def create_app(services: Services | None = None) -> FastAPI:
                 "coop": {"running": s.coop.running, "peers": len(s.coop.peers), "vip": s.coop.vip},
                 "pending_approvals": len(s.supervisor.list_pending()),
                 "pending_proposals": len(s.proposals.list("pendiente")),
-                "suggest_smaller_model": s.profile["llm"].get("suggest_smaller_model", False)}
+                "suggest_smaller_model": s.profile["llm"].get("suggest_smaller_model", False),
+                "perfil_hw": (hw_profiles.get(s.config, s.config.get("hardware.perfil", "auto") or "auto") or {}).get("nombre", "")}
 
     # ------------------------------------------------------------------ admin
     @app.post("/api/admin/setup")
@@ -376,6 +378,7 @@ def create_app(services: Services | None = None) -> FastAPI:
                    for m in s.models.catalog.list() if m.get("kind") == "llm"]
         return {"perfiles": hw_profiles.lista(s.config), "activo": s.config.get("hardware.perfil", "auto"),
                 "gpu": s.config.get("hardware.gpu", ""), "gpus": hw_profiles.gpus(s), "modelos": modelos,
+                "modelo_activo": s.models.active()["llm"] or "", "llm": s.profile["llm"].get("perfil_hw") or {},
                 "campos": hw_profiles.CAMPOS}
 
     @app.put("/api/hw/perfiles/{pid}")

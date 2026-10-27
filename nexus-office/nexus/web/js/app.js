@@ -736,7 +736,7 @@
     $("#ver").textContent = "v" + s.version;
     $("#pill-llm").textContent = `${s.llm.backend}${s.llm.model ? " · " + s.llm.model : ""}`;
     $("#chat-model").textContent = `${s.llm.backend} · ${s.llm.model || "—"}`;
-    $("#pill-profile").textContent = `${s.profile.tier} · ${s.profile.accelerator}`;
+    $("#pill-profile").textContent = `${s.perfil_hw && s.perfil_hw !== "Automático" ? s.perfil_hw + " · " : s.profile.tier + " · "}${s.profile.accelerator}`;
     const mem = Object.values(s.memory.by_kind).reduce((a, b) => a + b, 0);
     $("#pill-mem").textContent = `${mem} recuerdos · ${s.graph.entities} nodos · ${s.rag.documents} docs`; $("#dot-mem").className = "dot ok";
     $("#pill-net").textContent = s.coop.running ? `${s.coop.vip} · ${s.coop.peers} nodos` : "off"; $("#dot-net").className = "dot " + (s.coop.running ? "ok live" : "");
@@ -1901,6 +1901,196 @@
     finally { b.disabled = false; }
   });
   $("#accel-open").onclick = guard(() => Accel.open(true));
+
+  /* ================================================================ barra superior: desplegables IA · PERFIL · MEMORIA · RED */
+  // Cada pastilla abre su menu con lo que de verdad hay en este equipo (motores, modelos, perfiles, GPU...). En el movil
+  // solo se ve la primera pastilla, asi que el menu lleva pestanas para llegar a las cuatro.
+  const PMenu = {
+    el: null, tab: "ia", anchor: null,
+    TABS: [["ia", "IA"], ["perfil", "PERFIL"], ["memoria", "MEMORIA"], ["red", "RED"]],
+    opt(on, label, sub, data, extra = "", disabled = false) {
+      return `<button type="button" class="opt ${on ? "on" : ""}" ${data} ${disabled ? "disabled" : ""}><i class="rd"></i><span>${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ""}</span>${extra ? `<em>${esc(extra)}</em>` : ""}</button>`;
+    },
+    async open(tab, anchor) {
+      if (this.el && this.tab === tab && this.anchor === anchor) return this.close();
+      this.close();
+      this.tab = tab; this.anchor = anchor;
+      const el = this.el = document.createElement("div"); el.className = "pmenu"; el.setAttribute("role", "menu");
+      document.body.appendChild(el); anchor.classList.add("open");
+      this.place(); await this.render();
+    },
+    place() {
+      if (!this.el || !this.anchor) return;
+      const r = this.anchor.getBoundingClientRect(), w = this.el.offsetWidth;
+      this.el.style.top = (r.bottom + 6) + "px";
+      this.el.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + "px";
+    },
+    close() {
+      if (this.el) this.el.remove();
+      this.el = null; if (this.anchor) this.anchor.classList.remove("open"); this.anchor = null;
+    },
+    async render() {
+      const el = this.el; if (!el) return;
+      const tabs = `<div class="ptabs">${this.TABS.map(([id, l]) => `<button type="button" data-ptab="${id}" class="${id === this.tab ? "on" : ""}">${l}</button>`).join("")}</div>`;
+      el.innerHTML = tabs + `<div class="pinfo"><span class="spin"></span> Cargando…</div>`;
+      let body = "";
+      try { body = await this[this.tab](); } catch (e) { body = `<div class="pinfo err">${esc(e.message)}</div>`; }
+      if (this.el !== el) return;
+      el.innerHTML = tabs + body;
+      $$("[data-ptab]", el).forEach((b) => (b.onclick = () => { this.tab = b.dataset.ptab; this.render(); }));
+      $$("[data-act]", el).forEach((b) => (b.onclick = async () => { await this.act(b); if (this.el === el) this.render(); }));
+      this.place();
+    },
+    act: guard(async function (b) {
+      const d = b.dataset, self = PMenu;
+      const busy = (msg) => { if (self.el) $$(".opt,.btn", self.el).forEach((x) => (x.disabled = true)); toast(msg); };
+      if (d.act === "engine" || d.act === "accel") {
+        const cur = await api("/api/accel");
+        busy("Aplicando… (se reinicia el modelo)");
+        await api("/api/accel", { body: { engine: d.act === "engine" ? d.v : cur.engine, accel: d.act === "accel" ? d.v : cur.accel, remember: true } });
+      } else if (d.act === "model") {
+        busy("Cargando el modelo…"); await api(`/api/models/activate/${encodeURIComponent(d.v)}`, { body: {} });
+      } else if (d.act === "hwp") {
+        busy("Aplicando el perfil de hardware…");
+        const r = await api(`/api/hw/perfiles/${encodeURIComponent(d.v)}/activar`, { body: {} });
+        if (r.nota) toast(r.nota, true);
+      } else if (d.act === "gpu") {
+        busy("Cambiando de GPU…"); const r = await api("/api/hw/gpu", { body: { gpu: d.v } });
+        toast(`Ahora: ${r.dispositivo}`);
+      } else if (d.act === "embed") {
+        busy("Cambiando el modelo de embeddings (se recalcula en segundo plano)…");
+        await api("/api/kg/embeddings/model", { body: { model: d.v } });
+      } else if (d.act === "coop") {
+        await api(`/api/coop/${d.v}`, { body: {} });
+      } else if (d.act === "lan") {
+        const r = await api("/api/lan/enable", { body: { enabled: d.v === "1" } });
+        if (r.restart_required) toast("Reinicia Nexus para aplicar el cambio de red local");
+      } else if (d.act === "test") {
+        busy("Probando el modelo…"); const r = await api("/api/accel/test", { body: {} });
+        toast(r.ok ? `${r.backend}: ${r.tokens_s ?? "?"} tok/s en ${r.effective?.device || r.profile?.device || "?"}` : "La prueba ha fallado: " + (r.error || ""), !r.ok);
+      } else if (d.act === "go") { self.close(); go(d.v); return; }
+      else if (d.act === "hwedit") { self.close(); HwProfiles.open(); return; }
+      else if (d.act === "accel-dlg") { self.close(); Accel.open(true); return; }
+      await loadStatus();
+    }),
+    async ia() {
+      const [a, h] = await Promise.all([api("/api/accel"), api("/api/hw/perfiles")]);
+      const st = S.status || {};
+      let out = `<h4>Motor</h4>` + a.engines.map((e) => this.opt(e.id === a.engine, e.label, e.available ? (e.id === a.selected ? "en uso" : "") : e.note,
+        `data-act="engine" data-v="${e.id}"`, "", !e.available && e.id !== "auto")).join("");
+      out += `<h4>Modelo de texto</h4>` + (h.modelos.length ? h.modelos.map((m) => this.opt(m.id === h.modelo_activo || m.id === st.llm?.model, m.name,
+        "", `data-act="model" data-v="${esc(m.id)}"`, m.size_gb ? m.size_gb + " GB" : "")).join("") : `<div class="pinfo">No hay modelos de texto instalados: descárgalos en Modelos.</div>`);
+      const eff = a.effective || {};
+      if (eff.device) out += `<div class="pinfo">El modelo está en <b>${esc(eff.device)}</b>${eff.offloaded ? ` (${esc(eff.offloaded)} capas)` : ""}</div>`;
+      return out + `<div class="pacts"><button class="btn sm" data-act="test">PROBAR VELOCIDAD</button><button class="btn sm" data-act="go" data-v="models">MODELOS</button></div>`;
+    },
+    async perfil() {
+      const [a, h] = await Promise.all([api("/api/accel"), api("/api/hw/perfiles")]);
+      let out = `<h4>Perfil de hardware</h4>` + h.perfiles.map((p) => this.opt(p.id === h.activo, p.nombre, p.descripcion, `data-act="hwp" data-v="${esc(p.id)}"`, p.de_serie ? "" : "propio")).join("");
+      out += `<h4>Acelerador</h4>` + a.accels.map((x) => this.opt(x.id === a.accel, x.label, x.available ? "" : x.note, `data-act="accel" data-v="${x.id}"`, "", !x.available && x.id !== "auto")).join("");
+      const real = h.gpus.filter((g) => !g.software), soft = h.gpus.filter((g) => g.software);
+      if (real.length) {
+        out += `<h4>GPU${real.length > 1 ? " (hay varias: elige una)" : ""}</h4>` + this.opt(!h.gpu, "Automática", "la dedicada con más memoria", `data-act="gpu" data-v=""`);
+        out += real.map((g) => this.opt(g.elegida || (!!h.gpu && (h.gpu === g.llama || h.gpu === g.nombre)), g.nombre,
+          [g.integrada ? "integrada" : "dedicada", g.llama ? `llama.cpp: ${g.llama}${g.variante ? " · " + g.variante : ""}` : ""].filter(Boolean).join(" · "),
+          `data-act="gpu" data-v="${esc(g.llama || g.nombre)}"`, g.vram_gb ? g.vram_gb + " GB" : "")).join("");
+      }
+      if (soft.length) out += `<div class="pinfo">${soft.map((g) => esc(g.nombre)).join(", ")}: renderizador por software, no se usa (va más lento que la CPU).</div>`;
+      if (a.gpu_llama?.name) out += `<div class="pinfo">llama.cpp usa <b>${esc(a.gpu_llama.id)} · ${esc(a.gpu_llama.name)}</b></div>`;
+      if (a.gpu_error) out += `<div class="pinfo err">La GPU falló y se pasó a la CPU: ${esc(a.gpu_error)}</div>`;
+      return out + `<div class="pacts"><button class="btn sm" data-act="hwedit">EDITAR PERFILES</button><button class="btn sm" data-act="accel-dlg">PROBAR ACELERADOR</button><button class="btn sm" data-act="go" data-v="system">SISTEMA</button></div>`;
+    },
+    async memoria() {
+      const st = S.status || {}, k = await api("/api/kg/overview");
+      const by = Object.entries(st.memory?.by_kind || {}).map(([n, c]) => `${c} ${n}`).join(" · ");
+      let out = `<h4>Contenido</h4><div class="pinfo">${esc(by || "sin recuerdos")}<br>${st.graph?.entities ?? 0} nodos del grafo · ${st.rag?.documents ?? 0} documentos</div>`;
+      const em = k.embeddings || {};
+      out += `<h4>Embeddings (búsqueda semántica)</h4>` + this.opt(!k.embed_active, "Sin modelo (hashing)", "rápido, sin semántica", `data-act="embed" data-v=""`, "", !S.token) +
+        k.embed_models.map((m) => this.opt(m.id === k.embed_active, m.name || m.id, "", `data-act="embed" data-v="${esc(m.id)}"`, "", !S.token)).join("");
+      if (!S.token) out += `<div class="pinfo">Cambiar el modelo de embeddings requiere el modo administrador.</div>`;
+      if (em.running) out += `<div class="pinfo">Recalculando: ${esc(String(em.done ?? ""))}/${esc(String(em.total ?? ""))}</div>`;
+      return out + `<div class="pacts"><button class="btn sm" data-act="go" data-v="memory">NÚCLEO</button><button class="btn sm" data-act="go" data-v="models">MODELOS</button></div>`;
+    },
+    async red() {
+      const c = await api("/api/coop"); let out = `<h4>Red COOP</h4>`;
+      out += this.opt(c.running, c.running ? `Activa · ${c.vip || ""}` : "Apagada", c.running ? `${(c.peers || []).length ?? 0} nodos conectados` : "comparte agentes y modelos con otros equipos",
+        `data-act="coop" data-v="${c.running ? "stop" : "start"}"`, c.running ? "APAGAR" : "ENCENDER");
+      try {
+        const l = await api("/api/lan");
+        out += `<h4>Red local (móvil, tablet)</h4>` + this.opt(l.listening_lan, l.listening_lan ? "Abierta a la red local" : "Solo este equipo", l.listening_lan ? (l.urls[0] || "") : "la app del móvil no puede conectar",
+          `data-act="lan" data-v="${l.listening_lan ? "0" : "1"}"`, l.listening_lan ? "CERRAR" : "ABRIR", !S.token);
+      } catch { /* solo desde el propio equipo */ }
+      if (S.token) {
+        try {
+          const r = await api("/api/remote");
+          out += `<h4>Acceso remoto</h4><div class="pinfo">${r.enabled ? `Activo en el puerto ${r.port}${r.listening ? "" : " (sin escuchar)"}` : "Desactivado"}${r.behind_cgnat ? " · detrás de CGNAT: usa la VPN" : ""}</div>`;
+        } catch { /* sin permisos */ }
+      } else out += `<div class="pinfo">Red local y acceso remoto: entra en modo administrador para cambiarlos.</div>`;
+      return out + `<div class="pacts"><button class="btn sm" data-act="go" data-v="net">RED COOP</button><button class="btn sm" data-act="go" data-v="settings">AJUSTES</button></div>`;
+    },
+  };
+  $$(".pill-menu").forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); NexusDevice.haptic(); PMenu.open(b.dataset.menu, b); }));
+  document.addEventListener("pointerdown", (ev) => { if (PMenu.el && !PMenu.el.contains(ev.target) && !ev.target.closest(".pill-menu")) PMenu.close(); });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") PMenu.close(); });
+  addEventListener("resize", () => PMenu.place());
+
+  /* ---- editor de perfiles de hardware */
+  const HwProfiles = {
+    d: null, cur: null,
+    async open(pid) {
+      this.d = await api("/api/hw/perfiles");
+      this.pick(pid || this.d.activo);
+      const dlg = $("#hwp-dialog"); if (!dlg.open) dlg.showModal();
+    },
+    list() {
+      $("#hwp-list").innerHTML = this.d.perfiles.map((p) => `<button type="button" data-hwp="${esc(p.id)}" class="${this.cur && p.id === this.cur.id ? "on" : ""}">${esc(p.nombre)}${p.id === this.d.activo ? " ✓" : ""}<small>${p.de_serie ? "de serie" : "propio"}</small></button>`).join("");
+      $$("[data-hwp]").forEach((b) => (b.onclick = () => this.pick(b.dataset.hwp)));
+    },
+    pick(pid) {
+      const p = this.cur = this.d.perfiles.find((x) => x.id === pid) || { ...this.d.campos, id: "", nombre: "" };
+      const f = $("#hwp-form");
+      const gpus = this.d.gpus.filter((g) => !g.software);
+      f.gpu.innerHTML = `<option value="">Automática</option>` + gpus.map((g) => `<option value="${esc(g.llama || g.nombre)}">${esc(g.nombre)}${g.llama ? " · " + esc(g.llama) : ""}</option>`).join("");
+      f.modelo.innerHTML = `<option value="">El que haya</option>` + this.d.modelos.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("");
+      for (const k of ["nombre", "descripcion", "motor", "acelerador", "kv", "contexto", "hilos", "lote"]) f[k].value = p[k] ?? "";
+      if (p.gpu && ![...f.gpu.options].some((o) => o.value === p.gpu)) f.gpu.insertAdjacentHTML("beforeend", `<option value="${esc(p.gpu)}">${esc(p.gpu)} (no está)</option>`);
+      f.gpu.value = p.gpu || ""; f.modelo.value = p.modelo || "";
+      const n = typeof p.capas_gpu === "number";
+      f.capas_sel.value = n ? "n" : p.capas_gpu || "auto"; f.capas_n.value = n ? p.capas_gpu : 20;
+      f.capas_n.disabled = !n; f.mlock.checked = !!p.mlock;
+      $("#hwp-del").classList.toggle("hidden", !p.id || !!p.de_serie);
+      $("#hwp-note").textContent = p.de_serie ? "Perfil de serie: al guardarlo se crea una copia tuya con el mismo nombre (se puede borrar para volver al original)." : "";
+      this.list();
+    },
+    read() {
+      const f = $("#hwp-form");
+      const id = this.cur?.id || f.nombre.value.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9_-]+/g, "-").replace(/^-|-$/g, "");
+      return { id, nombre: f.nombre.value.trim(), descripcion: f.descripcion.value.trim(), motor: f.motor.value, acelerador: f.acelerador.value,
+        gpu: f.gpu.value, modelo: f.modelo.value, capas_gpu: f.capas_sel.value === "n" ? Math.max(1, +f.capas_n.value || 1) : f.capas_sel.value,
+        kv: f.kv.value, mlock: f.mlock.checked, contexto: +f.contexto.value || 0, hilos: +f.hilos.value || 0, lote: +f.lote.value || 0 };
+    },
+    async save() {
+      const p = this.read();
+      if (!p.nombre || !p.id) throw new Error("Pon un nombre al perfil");
+      const r = await api(`/api/hw/perfiles/${encodeURIComponent(p.id)}`, { method: "PUT", body: p });
+      this.d = await api("/api/hw/perfiles"); this.pick(r.id); return r;
+    },
+  };
+  $("#hwp-form").capas_sel.onchange = (e) => { $("#hwp-form").capas_n.disabled = e.target.value !== "n"; };
+  $("#hwp-new").onclick = () => HwProfiles.pick("");
+  $("#hwp-save").onclick = guard(async () => { await HwProfiles.save(); toast("Perfil guardado"); });
+  $("#hwp-use").onclick = guard(async () => {
+    const p = await HwProfiles.save(); toast("Aplicando el perfil…");
+    const r = await api(`/api/hw/perfiles/${encodeURIComponent(p.id)}/activar`, { body: {} });
+    if (r.nota) toast(r.nota, true); else toast(`Perfil «${p.nombre}» en uso`);
+    HwProfiles.d = await api("/api/hw/perfiles"); HwProfiles.pick(p.id); loadStatus();
+  });
+  $("#hwp-del").onclick = guard(async () => {
+    if (!HwProfiles.cur?.id || !confirm(`¿Borrar el perfil «${HwProfiles.cur.nombre}»?`)) return;
+    await api(`/api/hw/perfiles/${encodeURIComponent(HwProfiles.cur.id)}`, { method: "DELETE" });
+    HwProfiles.d = await api("/api/hw/perfiles"); HwProfiles.pick(HwProfiles.d.activo); loadStatus();
+  });
+  $("#hwp-close").onclick = () => $("#hwp-dialog").close();
 
   /* ================================================================ arranque */
   (async function boot() {

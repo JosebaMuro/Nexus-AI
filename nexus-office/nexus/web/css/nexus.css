@@ -60,6 +60,41 @@ a { color: var(--accent); }
 .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px;
   font: 600 11px var(--font-mono); letter-spacing: .06em; color: var(--muted); white-space: nowrap; background: var(--shade); }
 .pill b { color: var(--text); font-weight: 600; }
+button.pill { cursor: pointer; font: 600 11px var(--font-mono); max-width: 34ch; }
+button.pill b { overflow: hidden; text-overflow: ellipsis; }
+button.pill i { font-style: normal; opacity: .6; font-size: 9px; }
+button.pill:hover, button.pill.open { border-color: var(--accent); color: var(--text); }
+.pmenu { position: fixed; z-index: 60; width: min(380px, calc(100vw - 16px)); max-height: min(72vh, 620px); overflow: auto;
+  background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.55);
+  padding: 8px; font-size: .86rem; }
+.pmenu .ptabs { display: flex; gap: 4px; position: sticky; top: -8px; background: inherit; padding: 4px 0 8px; margin-top: -4px; z-index: 1; }
+.pmenu .ptabs button { flex: 1; background: none; border: 1px solid var(--line); border-radius: 8px; color: var(--muted);
+  font: 600 10px var(--font-mono); letter-spacing: .06em; padding: 6px 2px; cursor: pointer; }
+.pmenu .ptabs button.on { border-color: var(--accent); color: var(--text); background: var(--shade); }
+.pmenu h4 { margin: 10px 4px 4px; font: 600 10px var(--font-mono); letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+.pmenu .opt { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: 0; color: var(--text);
+  padding: 7px 8px; border-radius: 8px; cursor: pointer; font: inherit; }
+.pmenu .opt:hover:not(:disabled) { background: var(--shade); }
+.pmenu .opt:disabled { opacity: .45; cursor: default; }
+.pmenu .opt .rd { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); flex: none; }
+.pmenu .opt.on .rd { border-color: var(--accent); background: radial-gradient(var(--accent) 45%, transparent 50%); }
+.pmenu .opt span { flex: 1; min-width: 0; }
+.pmenu .opt small { display: block; color: var(--muted); font-size: .74rem; overflow: hidden; text-overflow: ellipsis; }
+.pmenu .opt em { font-style: normal; font: 600 10px var(--font-mono); color: var(--muted); flex: none; }
+.pmenu .pinfo { color: var(--muted); font-size: .78rem; padding: 2px 8px 6px; }
+.pmenu .pinfo.err { color: var(--warn); }
+.pmenu .pacts { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 4px 2px; border-top: 1px solid var(--line); margin-top: 8px; }
+.hwp-dialog { width: min(900px, 96vw); max-height: 92vh; }
+.hwp-body { display: grid; grid-template-columns: 220px 1fr; gap: 14px; }
+.hwp-list { display: flex; flex-direction: column; gap: 4px; max-height: 60vh; overflow: auto; }
+.hwp-list button { text-align: left; background: var(--shade); border: 1px solid var(--line); border-radius: 10px; color: var(--text); padding: 8px 10px; cursor: pointer; font: inherit; }
+.hwp-list button.on { border-color: var(--accent); }
+.hwp-list button small { display: block; color: var(--muted); font-size: .74rem; }
+.hwp-form { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hwp-form label { display: flex; flex-direction: column; gap: 3px; font-size: .78rem; color: var(--muted); min-width: 0; }
+.hwp-form label.hwp-check { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
+.hwp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+@media (max-width: 640px) { .hwp-body { grid-template-columns: 1fr; } .hwp-list { flex-direction: row; overflow-x: auto; max-height: none; } .hwp-list button { flex: none; } }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); box-shadow: 0 0 8px currentColor; }
 .dot.ok { background: var(--ok); color: var(--ok); } .dot.warn { background: var(--warn); color: var(--warn); } .dot.bad { background: var(--bad); color: var(--bad); }
 .dot.live { animation: blink 1.4s infinite; }

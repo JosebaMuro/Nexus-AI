@@ -674,8 +674,14 @@ function relaxArms(model, gltf, deg = 68) {
     const re = side === "left" ? /^(mixamorig\d*:?)?leftarm$|left.?upper.?arm|upper.?arm.?l$|^l.?upperarm$|^arm\.l$/i : /^(mixamorig\d*:?)?rightarm$|right.?upper.?arm|upper.?arm.?r$|^r.?upperarm$|^arm\.r$/i;
     let f = null; model.traverse((o) => { if (!f && o.isBone && re.test(o.name.replace(/[\s_]/g, ""))) f = o; }); return f; })();
   for (const side of ["left", "right"]) {
-    const bone = find(side), child = bone && bone.children.find((c) => c.isBone || c.isObject3D);
-    if (!bone || !child) continue;
+    const bone = find(side);
+    if (!bone) continue;
+    // el antebrazo: el del humanoide VRM o, si no, el hijo con mas huesos debajo (no una manga ni un hueso de fisica)
+    const depth = (o) => { let n = 0; o.traverse(() => n++); return n; };
+    const lower = byNode((human[side + "LowerArm"] || vrm0[side + "LowerArm"] || {}).node);
+    const child = lower && lower.parent === bone ? lower
+      : bone.children.filter((c) => c.isBone || c.isObject3D).sort((x, y) => depth(y) - depth(x))[0];
+    if (!child) continue;
     const a = bone.getWorldPosition(new THREE.Vector3()), b = child.getWorldPosition(new THREE.Vector3());
     const d = b.sub(a); const len = d.length(); if (!len || Math.abs(d.y) > len * 0.35) continue;   // ya esta bajado
     const horiz = new THREE.Vector3(d.x, 0, d.z).normalize(), r = THREE.MathUtils.degToRad(deg);

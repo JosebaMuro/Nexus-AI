@@ -23,10 +23,10 @@
   <header class="topbar">
     <div class="logo" data-text="Nexus-Office">Nexus-Office<small id="ver">v1</small></div>
     <div class="pills">
-      <span class="pill"><span class="dot live" id="dot-llm"></span>IA <b id="pill-llm">…</b></span>
-      <span class="pill"><span class="dot ok"></span>PERFIL <b id="pill-profile">…</b></span>
-      <span class="pill"><span class="dot" id="dot-mem"></span>MEMORIA <b id="pill-mem">…</b></span>
-      <span class="pill"><span class="dot" id="dot-net"></span>RED <b id="pill-net">off</b></span>
+      <button class="pill pill-menu" data-menu="ia" title="Motor y modelo de IA"><span class="dot live" id="dot-llm"></span>IA <b id="pill-llm">…</b><i>▾</i></button>
+      <button class="pill pill-menu" data-menu="perfil" title="Perfil de hardware, acelerador y GPU"><span class="dot ok"></span>PERFIL <b id="pill-profile">…</b><i>▾</i></button>
+      <button class="pill pill-menu" data-menu="memoria" title="Memoria, conocimiento y embeddings"><span class="dot" id="dot-mem"></span>MEMORIA <b id="pill-mem">…</b><i>▾</i></button>
+      <button class="pill pill-menu" data-menu="red" title="Red COOP, red local y acceso remoto"><span class="dot" id="dot-net"></span>RED <b id="pill-net">off</b><i>▾</i></button>
       <span class="pill hidden" id="pill-tune"><span class="dot warn"></span><b id="pill-tune-t"></b></span>
     </div>
     <div class="mode-switch" role="group" aria-label="Nivel de acceso">
@@ -424,6 +424,35 @@
 <div id="approvals"></div>
 <div id="toasts"></div>
 
+<dialog id="hwp-dialog" class="hwp-dialog">
+  <h2>PERFILES DE HARDWARE</h2>
+  <p class="muted" style="margin:0 0 10px">Junta en un nombre el motor, el acelerador, la GPU, el modelo y dónde se carga cada cosa (VRAM o RAM).</p>
+  <div class="hwp-body">
+    <div class="hwp-list" id="hwp-list"></div>
+    <form class="hwp-form" id="hwp-form" onsubmit="return false">
+      <label>Nombre<input class="input" name="nombre" required maxlength="40"></label>
+      <label>Descripción<input class="input" name="descripcion" maxlength="120"></label>
+      <div class="hwp-grid">
+        <label>Motor<select class="input" name="motor"><option value="auto">Automático</option><option value="llamaserver">llama-server</option><option value="llamacpp">llama.cpp incluido</option></select></label>
+        <label>Acelerador<select class="input" name="acelerador"><option value="auto">Automático</option><option value="cpu">CPU</option><option value="gpu">GPU</option><option value="npu">NPU</option></select></label>
+        <label>GPU<select class="input" name="gpu"></select></label>
+        <label>Modelo de texto<select class="input" name="modelo"></select></label>
+        <label>Capas en la GPU<select class="input" name="capas_sel"><option value="auto">Automático (lo que quepa)</option><option value="todas">Todas: modelo entero en la VRAM</option><option value="ninguna">Ninguna: todo en la RAM</option><option value="n">Número de capas…</option></select></label>
+        <label>Número de capas<input class="input" name="capas_n" type="number" min="1" max="999" value="20"></label>
+        <label>Caché de contexto (KV)<select class="input" name="kv"><option value="auto">Automático</option><option value="vram">En la VRAM (más rápido)</option><option value="ram">En la RAM (deja VRAM para capas)</option></select></label>
+        <label>Contexto (tokens)<input class="input" name="contexto" type="number" min="-1" step="512" title="0 = automático · -1 = el máximo"></label>
+        <label>Hilos<input class="input" name="hilos" type="number" min="-100" max="256" title="0 = automático · negativo = porcentaje (-50 = la mitad)"></label>
+        <label>Lote<input class="input" name="lote" type="number" min="0" step="64" title="0 = automático"></label>
+      </div>
+      <label class="hwp-check"><input type="checkbox" name="mlock"> Fijar el modelo en la RAM (mlock: no se va al disco)</label>
+      <div class="muted" id="hwp-note" style="font-size:.8rem"></div>
+      <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn danger sm" id="hwp-del" type="button">BORRAR</button>
+        <button class="btn sm" id="hwp-new" type="button">NUEVO</button><button class="btn" id="hwp-save" type="button">GUARDAR</button>
+        <button class="btn primary" id="hwp-use" type="button">GUARDAR Y USAR</button></div>
+    </form>
+  </div>
+  <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="hwp-close">CERRAR</button></div>
+</dialog>
 <dialog id="avlib-dialog" class="avlib-dialog">
   <h2>AVATARES 3D GRATUITOS</h2>
   <p class="muted" style="margin:0 0 10px">Descárgalos una vez y úsalos siempre, también sin conexión. Respeta la licencia de cada uno.</p>
