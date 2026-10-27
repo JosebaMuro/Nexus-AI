@@ -259,6 +259,8 @@ def _render(url: str, exe: str, budget_ms: int, allow_private: bool) -> str:
         cmd.append(url)
         r = None
         for intento in range(2):   # Chrome a veces se queda colgado al arrancar (sobre todo con un perfil nuevo): un reintento
+            if intento:   # sin pantalla (Mac virtual) el tiempo virtual no avanza: el reintento espera en tiempo real
+                cmd = [f"--timeout={int(budget_ms)}" if c.startswith("--virtual-time-budget=") else c for c in cmd]
             try:
                 r = subprocess.run(cmd, capture_output=True, timeout=(20 if not intento else TIMEOUT_S) + budget_ms / 1000,
                                    errors="replace", text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

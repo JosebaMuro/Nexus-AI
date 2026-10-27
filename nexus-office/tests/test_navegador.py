@@ -84,3 +84,19 @@ def test_proxy_bloquea_direcciones_privadas():
         assert {"127.0.0.1", "192.168.1.1", "localhost"} <= set(p.blocked)
     finally:
         p.close()
+
+
+def test_reintento_en_tiempo_real(monkeypatch):
+    """Sin pantalla (Mac virtual) el tiempo virtual no avanza: el reintento cambia --virtual-time-budget por --timeout."""
+    import subprocess
+    llamadas = []
+
+    def run(cmd, **kw):
+        llamadas.append(cmd)
+        if len(llamadas) == 1:
+            raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+        return subprocess.CompletedProcess(cmd, 0, "<html><body>ok</body></html>", "")
+    monkeypatch.setattr(browser.subprocess, "run", run)
+    assert "ok" in browser._render("https://example.com/", "/no/chrome", 3000, allow_private=True)
+    assert "--virtual-time-budget=3000" in llamadas[0] and "--timeout=3000" not in llamadas[0]
+    assert "--timeout=3000" in llamadas[1] and not any(c.startswith("--virtual-time-budget") for c in llamadas[1])
