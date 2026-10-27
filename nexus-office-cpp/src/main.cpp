@@ -36,6 +36,7 @@
 #include "models/models.h"
 #include "models/runtimes.h"
 #include "office/bolsa.h"
+#include "office/bolsa_agente.h"
 #include "rag/web.h"
 #include "remote/remote.h"
 #include "office/office.h"
@@ -151,6 +152,16 @@ int cmd_run(const Args& a) {
   s.start();
   // siguen solos los rastreos de dominio completo que se cortaron (cierre, apagado)
   rag::crawl_jobs::resume_interrupted(s, [&app](const json& e) { app.broadcast(e); });
+  // el agente de bolsa autonomo trabaja solo, siempre en simulacion (con precios reales si hay conexion)
+  if (cfg.flag("bolsa.agente.activo", true)) {
+    try {
+      auto& ag = bolsa::agente();
+      ag.listeners.push_back([&app](const json& e) { app.broadcast(e); });
+      ag.start();
+    } catch (const std::exception& e) {
+      log::get("bolsa.agente").warning("no se pudo arrancar el agente de bolsa: ", e.what());
+    }
+  }
   // acceso remoto por internet: la misma aplicacion por HTTPS en su puerto, solo para dispositivos emparejados
   std::unique_ptr<server::App> remote_app;
   std::thread remote_thread;
@@ -191,6 +202,7 @@ int cmd_run(const Args& a) {
   watcher.join();
   if (remote_thread.joinable()) remote_thread.join();
   if (!ok && !app.stopping) std::fprintf(stderr, "  No se pudo abrir el puerto %d en %s (¿ya esta en uso?)\n", port, host.c_str());
+  bolsa::reset_agentes();
   s.shutdown();
   proc::cleanup();
   return ok || app.stopping ? 0 : 1;

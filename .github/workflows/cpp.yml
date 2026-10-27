@@ -45,6 +45,8 @@ jobs:
         run: cmake --build build --config Release --parallel 4
       - name: Pruebas
         shell: bash
+        env:
+          NEXUS_ONLINE_TESTS: "1"   # cotizaciones reales de la bolsa con la pila TLS de cada sistema
         run: ctest --test-dir build -C Release --output-on-failure --timeout 900
       - name: Instalar en una carpeta
         shell: bash

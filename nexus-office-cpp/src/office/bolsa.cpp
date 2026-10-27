@@ -1,11 +1,13 @@
 // Mesa de bolsa simulada (nexus/office/bolsa.py). Mismo esquema, mismas reglas y mismos JSON que la edicion Python.
 #include "office/bolsa.h"
+#include "office/bolsa_agente.h"
 
 #include <chrono>
 #include <cstdio>
 #include <cmath>
 #include <set>
 
+#include "core/config.h"
 #include "util/crypto.h"
 #include "util/fs.h"
 #include "util/log.h"
@@ -224,8 +226,10 @@ std::string fnum_fixed(double v, int d) {   // f"{v:.2f}"
 }  // namespace
 
 const char* AVISO =
-    "Simulación con precios ficticios: no son cotizaciones reales ni asesoramiento financiero. Invertir conlleva "
-    "riesgo de perder dinero; antes de operar con dinero real consulta a un asesor registrado en la CNMV.";
+    "Simulación: nunca se usa dinero ni se envían órdenes reales. Con conexión, los precios son cotizaciones reales "
+    "(Yahoo Finance, con el retraso de cada bolsa); sin conexión siguen simulados desde el último precio real. "
+    "No es asesoramiento financiero. Invertir conlleva riesgo de perder dinero; antes de operar con dinero real "
+    "consulta a un asesor registrado en la CNMV.";
 const char* CONFIRMACION = "CONFIRMO";
 const std::vector<std::string> ORDER_TYPES = {"mercado", "limitada", "stop", "stop_limitada"};
 
@@ -449,12 +453,18 @@ json Bolsa::precio(const std::string& simbolo) {
   json inst = instrumento(simbolo);
   std::string sym = jstr(inst, "simbolo"), mk = jstr(inst, "mercado");
   double t = now();
+  json real = real_quote(sym);
+  bool is_real = real.is_object();
   json st;
   {
     std::lock_guard<std::recursive_mutex> lk(mu_);
     db_.transaction([&] {
       auto cur = db_.one("SELECT * FROM precios WHERE simbolo=?", {sym});
-      if (!cur) {
+      if (is_real) {
+        double rp = jnum(real["precio"]), rc = jnum(real["cierre_anterior"]);
+        json ap = cur ? (*cur)["apertura"] : json();
+        st = {{"precio", rp}, {"ts", t}, {"cierre_ant", rc ? rc : rp}, {"apertura", truthy(ap) ? ap : json(rp)}};
+      } else if (!cur) {
         auto h = db_.one("SELECT fecha, cierre FROM historico WHERE simbolo=? ORDER BY fecha DESC LIMIT 1", {sym});
         double p0 = h ? fget(*h, "cierre") : fget(inst, "precio_ref");
         st = {{"precio", p0}, {"ts", t}, {"cierre_ant", p0}, {"apertura", p0}};
@@ -473,7 +483,7 @@ json Bolsa::precio(const std::string& simbolo) {
       db_.execute("INSERT OR REPLACE INTO precios VALUES (?,?,?,?,?)",
                   {sym, st["precio"], st["ts"], st["cierre_ant"], st["apertura"]});
       auto last = db_.one("SELECT ts FROM ticks WHERE simbolo=? ORDER BY ts DESC LIMIT 1", {sym});
-      if (!last || fget(st, "ts") - fget(*last, "ts") >= 30) {
+      if (!last || fget(st, "ts") - fget(*last, "ts") >= (is_real ? 10 : 30)) {
         db_.execute("INSERT INTO ticks VALUES (?,?,?)", {sym, st["ts"], st["precio"]});
         db_.execute("DELETE FROM ticks WHERE simbolo=? AND ts < (SELECT ts FROM ticks WHERE simbolo=? "
                     "ORDER BY ts DESC LIMIT 1 OFFSET 499)",
@@ -496,7 +506,74 @@ json Bolsa::precio(const std::string& simbolo) {
           {"cierre_anterior", rnd(fget(st, "cierre_ant"), dec)},
           {"abierto", is_open(mk, t)},
           {"hora", iso_utc(t)},
-          {"fuente", "simulado"}};
+          {"fuente", is_real ? real["fuente"] : json("simulado")},
+          {"retraso", is_real ? json(jstr(real, "retraso")) : json("")},
+          {"real", is_real}};
+}
+
+json Bolsa::real_quote(const std::string& sym) {
+  if (!datos) return nullptr;
+  json q;
+  try {
+    if (!datos->tiene_mercado(sym)) datos->set_mercado(sym, jstr(instrumento(sym), "mercado"));
+    q = datos->quote(sym);
+  } catch (const std::exception& e) {   // sin conexion: sigue la simulacion
+    L.debug("cotizacion real de " + sym + " no disponible: " + e.what());
+    return nullptr;
+  }
+  if (!q.is_object() || !truthy(q.value("precio", json()))) return nullptr;
+  std::string d = jstr(q, "divisa");
+  if (d == "GBp" || d == "GBX") {   // Londres cotiza en peniques: el catalogo va en libras
+    q["precio"] = jnum(q["precio"]) / 100;
+    q["cierre_anterior"] = jnum(q.value("cierre_anterior", json(0))) / 100;
+    if (q.contains("puntos") && q["puntos"].is_array())
+      for (auto& p : q["puntos"]) p["precio"] = jnum(p["precio"]) / 100;
+  }
+  return q;
+}
+
+json Bolsa::serie(const std::string& simbolo, const std::string& rango) {
+  json inst = instrumento(simbolo);
+  std::string sym = jstr(inst, "simbolo");
+  bool diario = rango == "6mo" || rango == "1y" || rango == "5y";
+  json pts = json::array();
+  if (datos) {
+    try {
+      pts = datos->serie(sym, rango);
+    } catch (const std::exception&) {
+      pts = json::array();
+    }
+    if (!pts.is_array()) pts = json::array();
+    double ref = fget(inst, "precio_ref");
+    if (!pts.empty() && jstr(inst, "divisa") == "GBP" && jnum(pts.back()["precio"]) > 50 * (ref ? ref : 1))
+      for (auto& p : pts) p["precio"] = jnum(p["precio"]) / 100;
+  }
+  if (!pts.empty()) {
+    if (diario) guardar_historico(sym, pts);
+    return {{"simbolo", sym}, {"rango", rango}, {"real", true}, {"puntos", pts}};
+  }
+  if (diario) {
+    auto rows = db_.query("SELECT fecha, cierre FROM historico WHERE simbolo=? ORDER BY fecha", {sym});
+    for (auto& r : rows) {
+      std::string f = jstr(r, "fecha");
+      int y = 0;
+      unsigned m = 0, d = 0;
+      if (std::sscanf(f.c_str(), "%d-%u-%u", &y, &m, &d) != 3) continue;
+      pts.push_back({{"ts", days(y, m, d) * 86400.0}, {"precio", r["cierre"]}});
+    }
+    if (!pts.empty()) return {{"simbolo", sym}, {"rango", rango}, {"real", true}, {"puntos", pts}, {"guardado", true}};
+  }
+  json out = json::array();
+  for (auto& r : ticks(sym, 400)) out.push_back({{"ts", r["ts"]}, {"precio", r["precio"]}});
+  return {{"simbolo", sym}, {"rango", rango}, {"real", false}, {"puntos", out}};
+}
+
+int Bolsa::guardar_historico(const std::string& sym, const json& pts) {
+  std::vector<Params> rows;
+  for (auto& p : pts) rows.push_back({sym, ymd(day_of(jnum(p["ts"]))), p["precio"]});
+  std::lock_guard<std::recursive_mutex> lk(mu_);
+  db_.executemany("INSERT OR REPLACE INTO historico VALUES (?,?,?)", rows);
+  return (int)rows.size();
 }
 
 json Bolsa::ticks(const std::string& simbolo, int n) {
@@ -510,10 +587,20 @@ json Bolsa::ticks(const std::string& simbolo, int n) {
 double Bolsa::fx(const std::string& divisa) {
   if (divisa == "EUR") return 1.0;
   double t = now();
+  double real = 0;
+  if (datos) {
+    try {
+      real = datos->fx(divisa);
+    } catch (const std::exception&) {
+      real = 0;
+    }
+  }
   std::lock_guard<std::recursive_mutex> lk(mu_);
   auto r = db_.one("SELECT * FROM fx WHERE divisa=?", {divisa});
   double rate = r ? fget(*r, "tasa") : fx_ref(divisa);
-  if (r) {
+  if (real > 0) {
+    rate = real;
+  } else if (r) {
     double tau = std::max(0.0, t - fget(*r, "ts")) / (365 * 86400.0);
     rate *= std::exp(FX_VOL * std::sqrt(std::min(tau, 1.0)) * gauss(0, 1));
   }
@@ -1030,15 +1117,32 @@ std::mutex g_mu;
 std::map<std::string, std::unique_ptr<Bolsa>> g_inst;
 }  // namespace
 
+// cotizaciones reales salvo que la configuracion diga bolsa.datos: simulados (o NEXUS_BOLSA_OFFLINE=1)
+Proveedor* proveedor_configurado() {
+  auto& cfg = get_config();
+  std::string modo = cfg.str("bolsa.datos", "reales");
+  if (modo == "simulados" || env("NEXUS_BOLSA_OFFLINE") == "1") return nullptr;
+  auto& prov = proveedor();
+  if (auto* dm = dynamic_cast<DatosMercado*>(&prov)) {
+    double r = cfg.num("bolsa.refresco_s", 20);
+    dm->ttl = r > 0 ? r : 20;
+  }
+  return &prov;
+}
+
 Bolsa& get() {
   std::string path = (paths::sub({"bolsa"}) / "bolsa.db").string();
   std::lock_guard<std::mutex> lk(g_mu);
   auto& p = g_inst[path];
-  if (!p) p = std::make_unique<Bolsa>(path);
+  if (!p) {
+    p = std::make_unique<Bolsa>(path);
+    p->datos = proveedor_configurado();
+  }
   return *p;
 }
 
 void reset_instances() {
+  reset_agentes();   // los agentes usan la mesa: se paran antes de cerrarla
   std::lock_guard<std::mutex> lk(g_mu);
   g_inst.clear();
 }

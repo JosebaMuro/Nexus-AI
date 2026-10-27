@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "core/db.h"
+#include "office/bolsa_datos.h"
 #include "util/json.h"
 
 namespace nx::bolsa {
@@ -50,6 +51,9 @@ class Bolsa {
                           const json& impuesto_pct = 0.0);
   json precio(const std::string& simbolo);
   json ticks(const std::string& simbolo, int n = 200);
+  // serie para graficos: real si hay conexion (velas de Yahoo), si no el historico guardado o los ticks
+  json serie(const std::string& simbolo, const std::string& rango = "1d");
+  int guardar_historico(const std::string& sym, const json& pts);   // cierres diarios reales para trabajar offline
   double fx(const std::string& divisa);
   json importar_csv(const std::string& simbolo, const std::string& texto);
 
@@ -76,7 +80,13 @@ class Bolsa {
   json registrar_ejecucion(long long oid, const json& precio, const json& comision_eur = 0.0,
                            const json& impuestos_eur = nullptr, const json& fx = nullptr);
 
+ // proveedor de cotizaciones reales (bolsa_datos); nullptr = solo simulacion. No es propiedad de la mesa.
+  Proveedor* datos = nullptr;
+  DB& db() { return db_; }
+  std::recursive_mutex& mutex() { return mu_; }
+
  private:
+  json real_quote(const std::string& sym);
   DB db_;
   std::mt19937_64 rng_;
   std::function<double()> clock_;

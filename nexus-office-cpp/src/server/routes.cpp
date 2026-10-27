@@ -21,6 +21,7 @@
 #include "models/models.h"
 #include "models/runtimes.h"
 #include "office/bolsa.h"
+#include "office/bolsa_agente.h"
 #include "memory/kg.h"
 #include "memory/kg_jobs.h"
 #include "rag/web.h"
@@ -1403,6 +1404,76 @@ void register_routes(App& app) {
       long long cid = c.qi("cartera", 0), anio = c.qi("anio", 0);
       return b.informe_fiscal(cid ? json(cid) : json(nullptr), anio ? json(anio) : json(nullptr));
     });
+  });
+  app.get("/api/bolsa/serie/{simbolo}", [B](Ctx& c) -> Out {   // serie real (o simulada sin conexion) para graficos
+    return B([&](bolsa::Bolsa& b) { return b.serie(c.p("simbolo"), c.q("rango", "1d")); });
+  });
+  // seguimiento en vivo de una orden: precio actual, serie y niveles (limite, stop, ejecucion, objetivo)
+  app.get("/api/bolsa/orden/{oid}/grafico", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      long long oid = c.pi("oid");
+      json o = b.orden(oid);
+      if (jstr(o, "estado") == "pendiente") b.procesar(oid);
+      o = b.orden(oid);
+      json q = b.precio(jstr(o, "simbolo"));
+      json niveles = json::array();
+      if (truthy(o.value("limite", json()))) niveles.push_back({{"tipo", "limite"}, {"precio", o["limite"]}, {"texto", "Límite"}});
+      if (truthy(o.value("stop", json())))
+        niveles.push_back({{"tipo", "stop"}, {"precio", o["stop"]},
+                           {"texto", std::string("Stop") + (truthy(o.value("activada", json())) ? " (activado)" : "")}});
+      if (truthy(o.value("precio_ejec", json())))
+        niveles.push_back({{"tipo", "ejecucion"}, {"precio", o["precio_ejec"]}, {"texto", "Ejecutada"}, {"ts", o["ejecutada"]}});
+      if (b.db().one("SELECT name FROM sqlite_master WHERE name='agente_posiciones'"))
+        if (auto g = b.db().one("SELECT entrada, objetivo FROM agente_posiciones WHERE simbolo=? AND (orden_stop=? OR "
+                                "orden_entrada=?)",
+                                {o["simbolo"], oid, oid})) {
+          niveles.push_back({{"tipo", "entrada"}, {"precio", (*g)["entrada"]}, {"texto", "Entrada del agente"}});
+          niveles.push_back({{"tipo", "objetivo"}, {"precio", (*g)["objetivo"]}, {"texto", "Objetivo del agente"}});
+        }
+      json s = b.serie(jstr(o, "simbolo"), c.q("rango", "1d"));
+      return json{{"orden", o}, {"cotizacion", q}, {"niveles", niveles}, {"puntos", s["puntos"]}, {"real", s["real"]},
+                  {"agente", jstr(o, "origen") == bolsa::ORIGEN_AGENTE}};
+    });
+  });
+  app.get("/api/bolsa/agente", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa&) { return bolsa::agente().estado(); });
+  });
+  // ajustes del agente autonomo (activo, intervalo_s, riesgo_pct, max_posiciones, max_peso_pct, reserva_pct,
+  // universo, capital). Siempre opera en simulacion.
+  app.post("/api/bolsa/agente", [B](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    static const std::vector<std::pair<std::string, char>> allowed = {
+        {"activo", 'b'}, {"intervalo_s", 'f'}, {"riesgo_pct", 'f'}, {"max_posiciones", 'i'}, {"max_peso_pct", 'f'},
+        {"reserva_pct", 'f'}, {"universo", 'l'}, {"capital", 'f'}};
+    for (auto& [k, typ] : allowed) {
+      if (!c.has_b(k)) continue;
+      json v = c.body[k];
+      json out;
+      try {
+        if (typ == 'b') out = truthy(v);
+        else if (typ == 'f') out = v.is_string() ? std::stod(v.get<std::string>()) : v.get<double>();
+        else if (typ == 'i') out = (long long)(v.is_string() ? std::stod(v.get<std::string>()) : v.get<double>());
+        else {
+          if (!v.is_array()) throw std::invalid_argument("lista");
+          out = json::array();
+          for (auto& x : v) {
+            std::string t = trim(x.is_string() ? x.get<std::string>() : jdump(x));
+            if (!t.empty()) out.push_back(upper(t));
+          }
+        }
+      } catch (const std::exception&) {
+        throw HttpErr(400, k + ": valor no valido");
+      }
+      s.config.set("bolsa.agente." + k, out);
+    }
+    auto& ag = bolsa::agente();
+    if (c.has_b("activo") && c.body["activo"] == true) {
+      if (ag.listeners.empty()) ag.listeners.push_back([&app = c.app](const json& e) { app.broadcast(e); });
+      ag.start();
+    }
+    if (c.has_b("activo") && c.body["activo"] == false) ag.stop();
+    if (truthy(c.b("ciclo", false))) B([&](bolsa::Bolsa&) { return ag.ciclo(); });
+    return ag.estado();
   });
 
   // ------------------------------------------------------------------ herramientas
