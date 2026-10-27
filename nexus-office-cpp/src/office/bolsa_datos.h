@@ -1,7 +1,7 @@
 // Cotizaciones reales para la mesa de bolsa (nexus/office/bolsa_datos.py). La mesa sigue siendo SIEMPRE una
 // simulacion: nunca hay dinero ni ordenes reales; lo real son los precios.
 //
-// Fuentes, por orden, sin clave ni registro: Yahoo Finance (/v8/finance/chart), Google Finance (data-last-price),
+// Fuentes, por orden, sin clave ni registro: Yahoo Finance (/v8/finance/chart), CNBC (cuando Yahoo limita), Google Finance,
 // Stooq (CSV), Coinbase y Kraken para cripto y el BCE para el tipo de cambio. Sin internet quote() devuelve null y la
 // mesa sigue con su simulacion anclada al ultimo precio real. Cada fuente que falla se aparta un rato (backoff).
 #pragma once
@@ -72,6 +72,7 @@ class DatosMercado : public Proveedor {
   json yahoo_chart(const std::string& sym, const std::string& rango, const std::string& intervalo);
   json quote_yahoo(const std::string& sym);
   json quote_stooq(const std::string& sym);
+  json quote_cnbc(const std::string& sym);
   json quote_google(const std::string& sym);
   json quote_crypto(const std::string& sym);
   std::string google_symbol(const std::string& sym);

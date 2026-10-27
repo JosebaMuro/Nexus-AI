@@ -54,7 +54,7 @@ La 2.0 beta C dejaba fuera varias funciones. Desde la 2.1 están todas, con las 
 | Agente Profesor con IA online (`/api/nube`, `consultar_profesor`) | `src/llm/cloud.cpp`: API compatible con OpenAI y Messages API de Anthropic en streaming |
 | APK autónoma con GPU (Vulkan, OpenCL) y NPU Hexagon | `src/hardware/android_accel.cpp`: sonda de llama-server-gpu y respaldo NPU → GPU → CPU |
 | Autoajuste en vivo en Android (`/api/android/autoajuste`) | `src/core/android_tune.cpp`: hilos medidos, temperatura, batería, GPU frente a CPU y consejo de modelo |
-| Bolsa con cotizaciones reales (Yahoo Finance, Google Finance, Stooq, Coinbase, Kraken y BCE) | `src/office/bolsa_datos.cpp`: caché, fuentes apartadas un rato si fallan y simulación sin conexión |
+| Bolsa con cotizaciones reales (Yahoo Finance, CNBC, Google Finance, Stooq, Coinbase, Kraken y BCE) | `src/office/bolsa_datos.cpp`: caché, fuentes apartadas un rato si fallan y simulación sin conexión |
 | Agente de bolsa autónomo que opera siempre en simulación (`/api/bolsa/agente`) | `src/office/bolsa_agente.cpp`: medias, RSI, momento, ATR, pesos aprendidos, stops vivos y diario |
 | Gráficos en vivo de las órdenes (`/api/bolsa/serie`, `/api/bolsa/orden/{id}/grafico`) | `src/office/bolsa.cpp`: velas reales y histórico guardado para trabajar sin red |
 | Lo que hace cada agente (despachos, reloj y salón: `/api/agentes/actividad`) | `src/agents/activity.cpp` |

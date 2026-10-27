@@ -28,7 +28,7 @@
 
 ### Bolsa con datos reales y agente autónomo
 - **Antes**: los precios de la mesa eran ficticios.
-- **Ahora**, con conexión, son cotizaciones reales (Yahoo Finance, con Google Finance, Stooq, Coinbase, Kraken y el BCE
+- **Ahora**, con conexión, son cotizaciones reales (Yahoo Finance, con CNBC, Google Finance, Stooq, Coinbase, Kraken y el BCE
   de respaldo) y el cambio de divisa es el real. Sin conexión la mesa sigue simulada desde el último precio real y con
   el histórico diario guardado. Sigue siendo siempre una simulación: nunca hay dinero ni órdenes reales.
 - Nuevo **agente de bolsa autónomo** con su propia cartera simulada: analiza, arriesga como mucho el 1 % por

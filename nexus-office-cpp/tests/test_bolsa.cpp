@@ -116,6 +116,23 @@ TEST("bolsa: cotizaciones reales de Yahoo, Stooq y Coinbase con cache y backoff"
   CHECK(d.estado()["fuentes"]["yahoo"]["fallos"].get<int>() >= 1);
 }
 
+TEST("bolsa: CNBC de respaldo cuando Yahoo limita") {
+  DatosMercado d([](const http::Request& r) {
+    if (r.url.find("yahoo") != std::string::npos) return resp(429);
+    if (r.url.find("cnbc") != std::string::npos) {
+      CHECK(r.url.find("symbols=SAN-ES") != std::string::npos);
+      return resp(200, R"({"FormattedQuoteResult": {"FormattedQuote": [{"symbol": "SAN-ES", "last": "7,512.5",
+                          "previous_day_closing": "7,400", "currencyCode": "EUR"}]}})");
+    }
+    return resp(404);
+  });
+  json q = d.quote("SAN.MC");
+  CHECK_EQ(jstr(q, "fuente"), std::string("CNBC"));
+  CHECK_EQ(jnum(q["precio"]), 7512.5);
+  CHECK_EQ(jnum(q["cierre_anterior"]), 7400.0);
+  CHECK_EQ(jstr(q, "divisa"), std::string("EUR"));
+}
+
 TEST("bolsa: la mesa usa el precio real, pasa peniques a libras y guarda el historico") {
   DatosMercado d([](const http::Request& r) {
     std::string sym = url_sym(r.url);

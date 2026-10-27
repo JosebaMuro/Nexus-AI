@@ -23,6 +23,9 @@ const std::vector<std::pair<std::string, std::string>> STOOQ_SUFFIX = {
     {".MC", ".es"}, {".DE", ".de"}, {".PA", ".fr"}, {".AS", ".nl"}, {".L", ".uk"}};
 const std::vector<std::pair<std::string, std::string>> GOOGLE_EXCHANGE = {
     {".MC", "BME"}, {".DE", "ETR"}, {".PA", "EPA"}, {".AS", "AMS"}, {".L", "LON"}, {".MI", "BIT"}, {".SW", "SWX"}};
+const std::vector<std::pair<std::string, std::string>> CNBC_SUFFIX = {
+    {".MC", "-ES"}, {".DE", "-DE"}, {".PA", "-FR"}, {".AS", "-NL"}, {".L", "-GB"}, {".MI", "-IT"}, {".SW", "-CH"}};
+const char* CNBC = "https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol";
 const std::map<std::string, std::string> KRAKEN_PAIR = {
     {"BTC-EUR", "XBTEUR"}, {"ETH-EUR", "ETHEUR"}, {"SOL-EUR", "SOLEUR"}, {"ADA-EUR", "ADAEUR"}};
 const std::map<std::string, std::pair<std::string, std::string>> RANGOS = {
@@ -83,7 +86,7 @@ json yahoo_points(const json& res) {
 DatosMercado::DatosMercado(Fetch fetch, double ttl_, double timeout)
     : ttl(ttl_), fetch_(fetch ? std::move(fetch) : Fetch([](const http::Request& r) { return http::send(r); })),
       timeout_(timeout) {
-  for (auto n : {"yahoo", "google", "stooq", "coinbase", "kraken", "bce"}) fuentes[n] = Fuente{n};
+  for (auto n : {"yahoo", "cnbc", "google", "stooq", "coinbase", "kraken", "bce"}) fuentes[n] = Fuente{n};
 }
 
 bool DatosMercado::disponible(const std::string& f) {
@@ -214,6 +217,45 @@ json DatosMercado::quote_stooq(const std::string& sym) {
           {"fuente", "Stooq"}, {"retraso", "≈15 min"}, {"puntos", json::array()}};
 }
 
+// CNBC (acciones y ETF de EE. UU. y Europa): responde tambien desde servidores donde Yahoo limita
+json DatosMercado::quote_cnbc(const std::string& sym) {
+  std::string u = upper(sym), cs = u;
+  for (auto& [suf, c] : CNBC_SUFFIX)
+    if (ends_with(u, suf)) {
+      cs = u.substr(0, u.size() - suf.size()) + c;
+      break;
+    }
+  auto r = get("cnbc", CNBC,
+               {{"symbols", cs}, {"requestMethod", "itv"}, {"noform", "1"}, {"partnerId", "2"}, {"fund", "1"},
+                {"exthrs", "1"}, {"output", "json"}});
+  json j = r.json_body();
+  json q = json::object();
+  if (j.is_object() && j.value("FormattedQuoteResult", json()).is_object()) {
+    json fq = j["FormattedQuoteResult"].value("FormattedQuote", json());
+    if (fq.is_array() && !fq.empty()) q = fq[0];
+    else if (fq.is_object()) q = fq;
+  }
+  auto num = [](const json& v) -> double {
+    std::string t = v.is_string() ? v.get<std::string>() : v.is_number() ? jdump(v) : "";
+    t.erase(std::remove_if(t.begin(), t.end(), [](char c) { return c == ',' || c == '%'; }), t.end());
+    try {
+      return to_d(trim(t));
+    } catch (...) {
+      return 0;
+    }
+  };
+  double px = num(q.value("last", json()));
+  if (!(px > 0)) throw Lookup("cnbc: sin precio para " + sym);
+  double prev = num(q.value("previous_day_closing", json()));
+  return {{"precio", px},
+          {"cierre_anterior", prev ? prev : px},
+          {"ts", now()},
+          {"divisa", jstr(q, "currencyCode")},
+          {"fuente", "CNBC"},
+          {"retraso", jstr(q, "realTime") == "true" ? "tiempo real" : "≈15 min"},
+          {"puntos", json::array()}};
+}
+
 std::string DatosMercado::google_symbol(const std::string& sym) {
   std::string u = upper(sym);
   for (auto& [suf, ex] : GOOGLE_EXCHANGE)
@@ -302,7 +344,7 @@ json DatosMercado::quote(const std::string& sym_in, double max_age) {
   if (is_crypto(sym))
     chain.push_back(&DatosMercado::quote_crypto);
   else
-    chain.insert(chain.end(), {&DatosMercado::quote_google, &DatosMercado::quote_stooq});
+    chain.insert(chain.end(), {&DatosMercado::quote_cnbc, &DatosMercado::quote_google, &DatosMercado::quote_stooq});
   for (auto fn : chain) {
     json q;
     try {
