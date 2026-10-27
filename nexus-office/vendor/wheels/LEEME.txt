@@ -8,3 +8,8 @@ pyyaml-6.0.3-py3-none-any.whl
     PYYAML_FORCE_LIBYAML=0 python -m pip wheel --no-deps pyyaml==6.0.3 --no-binary pyyaml -w vendor/wheels
 
 Los instaladores (install.sh, install.ps1), `nexus setup` y `nexus wheels` anaden esta carpeta con --find-links.
+
+esptool-5.6.0-py3-none-any.whl
+  esptool (grabar el firmware de las luces, el reloj y el Pico W) solo publica el sdist en PyPI, y la construccion
+  de los instaladores descarga solo wheels. Es puro Python. Generada desde el sdist oficial con:
+    python -m pip wheel --no-deps esptool==5.6.0 -w vendor/wheels
