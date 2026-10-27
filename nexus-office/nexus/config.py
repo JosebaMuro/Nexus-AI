@@ -129,6 +129,7 @@ DEFAULTS: dict[str, Any] = {
     # rastreo web por lotes (0 = automatico segun la RAM) y acceso a webs de la red local (intranet, wiki interna)
     "rag": {"crawl_batch_pages": 0, "allow_private_urls": False},
     # mesa de bolsa: SIEMPRE simulada (sin dinero ni ordenes reales); precios reales con conexion
+    "avatares": {"sketchfab_token": ""},  # clave de API de Sketchfab para descargar (buscar no la necesita)
     "bolsa": {"datos": "reales",            # reales (con conexion; sin ella, simulados) | simulados
               "refresco_s": 20,             # cada cuanto se piden cotizaciones reales
               # agente autonomo: gestiona su propia cartera simulada con los datos que recopila
@@ -149,9 +150,9 @@ DEFAULTS: dict[str, Any] = {
 }
 
 # claves editables en modo usuario (seccion.clave)
-USER_KEYS = {f"user.{k}" for k in DEFAULTS["user"]}
+USER_KEYS = {f"user.{k}" for k in DEFAULTS["user"]} | {"avatares.sketchfab_token"}
 SECRET_KEYS = {"admin.pin_hash", "admin.pin_salt", "llm.openai_api_key", "models.huggingface_token",
-               "models.civitai_token", "models.kaggle_key", "models.modelscope_token", "coop.passphrase", "server.lan_key",
+               "models.civitai_token", "avatares.sketchfab_token", "models.kaggle_key", "models.modelscope_token", "coop.passphrase", "server.lan_key",
                "nube.clave_gemini", "nube.clave_openai", "nube.clave_perplexity", "nube.clave_claude",
                "nube.clave_mistral", "nube.clave_deepseek", "nube.clave_groq", "nube.clave_openrouter", "nube.clave_compatible"}
 

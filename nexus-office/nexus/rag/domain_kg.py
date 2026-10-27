@@ -29,6 +29,7 @@ import threading
 import time
 import zipfile
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -106,11 +107,18 @@ class DomainGraph:
             CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
             """)
 
-    def _db(self) -> sqlite3.Connection:
+    @contextmanager
+    def _db(self):
+        """Conexion que confirma y SE CIERRA al salir (``with sqlite3.connect()`` solo confirma: en Windows el fichero
+        quedaba abierto y no se podia borrar el trabajo)."""
         db = sqlite3.connect(self.path, timeout=60)
-        db.execute("PRAGMA journal_mode=WAL")
-        db.execute("PRAGMA synchronous=NORMAL")
-        return db
+        try:
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("PRAGMA synchronous=NORMAL")
+            with db:
+                yield db
+        finally:
+            db.close()
 
     # ------------------------------------------------------------------ capas 1-4: por lotes, en disco
     def add_pages(self, pages: list[dict]) -> int:
