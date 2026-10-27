@@ -1,41 +1,41 @@
 {
-  "commit": "74401392cdf65a874a0b8f092cd68d15488a4e4e",
+  "commit": "9af59646ba32e975e9d28e7ba7f52b60489355d6",
   "nucleo_esp32": "3.1.1",
   "micropython": "v1.24.1",
   "archivos": {
     "nexusled-esp32.bin": {
       "version": "1.0.0",
-      "sha256": "c9ca436328bfdb514d1bd387bbedd95757f5dc5db3396429d9bd1090471df8d7",
+      "sha256": "b0d556a99d90b10f27d6ae912fbc0672c90321ffa1aced2b010ec12b69cd82bc",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32c3.bin": {
       "version": "1.0.0",
-      "sha256": "67f8cd6a326faf5a2100cb4375d6c290a279799167cdebf990a708f0dd7fa3bd",
+      "sha256": "93591f0470d0ad8aef79e75dea3778ede188cc9b487c6797d1cc177b6710f064",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32c6.bin": {
       "version": "1.0.0",
-      "sha256": "c646ec4a1f365259909d629fc90aee2cbda891a7ceb7f28ae76c7ed288b5d6af",
+      "sha256": "dad65577c5706ea2c8ea7020682f6f74260bf92b3901a4db53dc1f5c03cac92d",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32s2.bin": {
       "version": "1.0.0",
-      "sha256": "9cbd6e227105a2f2b58275034eb1d82be5a662b972873eba2a47d4791fc2cccb",
+      "sha256": "ee11430a3eefc389b5f9228a9a4f70dcd3d29d3029b1ffeea1f20b11d8189115",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32s3.bin": {
       "version": "1.0.0",
-      "sha256": "de0b1cb5e4d55c5095992fdf6b068a28e0a9d5399826bd376950ed57470319d5",
+      "sha256": "d6128361fdd92bfb102b3bdcba7cd50f0356d0cfc039a0bdd15874aa1e946ca3",
       "grabar": "esptool write_flash 0x0"
     },
     "nexuspico-picow.uf2": {
       "version": "1.0.0",
-      "sha256": "1acb6fa0abf8999568548e86b7f8702c582d809ec2a1a6cea1454b8350ceaa27",
+      "sha256": "cfbd0fdf38c8d96100abd02f5a1567d1ee56d91a26b8a0226a847c370e28d435",
       "grabar": "copiar a la unidad RPI-RP2"
     },
     "nexuswatch-esp32c3.bin": {
       "version": "1.0.0",
-      "sha256": "a1a349ca4b6c02b683a701ef43583a2d5fb9176818350a1618859477dc2f39f5",
+      "sha256": "c9f5b29009fecad473f5d76d944f5505399ba5281653cd99a1b9bf4af209349a",
       "grabar": "esptool write_flash 0x0"
     }
   }
