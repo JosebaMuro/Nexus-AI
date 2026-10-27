@@ -31,6 +31,7 @@ const char* const NAMES[] = {"chromium", "chromium-browser", "google-chrome", "g
 
 std::mutex found_mu;
 std::map<std::string, std::string> found;
+std::set<std::string> broken;   // navegadores que no llegan a leer nada en este equipo (p. ej. un Mac sin pantalla)
 
 // como mucho dos navegadores a la vez (un rastreo pide muchas paginas en paralelo); un perfil por hueco
 std::mutex slot_mu;
@@ -190,6 +191,12 @@ std::string render_now(const std::string& url, const std::string& exe, int budge
     if (intento) {
       std::string err = trim(r.err);
       if (err.size() > 300) err = err.substr(err.size() - 300);
+      {   // no funciona aqui: no se vuelve a intentar con el (cada pagina esperaria un minuto para nada)
+        std::lock_guard<std::mutex> lk(found_mu);
+        broken.insert(exe);
+        found.clear();
+      }
+      L.warning("El navegador " + exe + " no responde en este equipo; se leen las paginas sin el");
       throw std::runtime_error("el navegador ha tardado demasiado" + (err.empty() ? "" : " (" + err + ")"));
     }
     L.info("El navegador no respondio a tiempo; se reintenta (" + exe + ")");
@@ -225,7 +232,7 @@ std::string find(const std::string& preferred) {
   for (auto& c : candidates()) cs.push_back(c);
   std::string exe;
   for (auto& c : cs)
-    if (!c.empty() && executable(P(c))) {
+    if (!c.empty() && !broken.count(c) && executable(P(c))) {
       exe = c;
       break;
     }

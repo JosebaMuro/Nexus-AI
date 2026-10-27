@@ -2,6 +2,7 @@
 // Chromium y proxy de salida.
 #include <httplib.h>
 
+#include <cstdio>
 #include <thread>
 
 #include "check.h"
@@ -73,7 +74,20 @@ TEST("navegador: el proxy bloquea direcciones privadas") {
 TEST("navegador: lee el DOM tras el JavaScript y el proxy corta la red local") {
   if (rag::browser::find().empty()) return;   // no hay Chrome/Edge/Chromium en este equipo
   Sitio sitio;
-  std::string html = rag::browser::render(sitio.url(), "", rag::browser::BUDGET_MS, true);
+  std::string exe = rag::browser::find(), html;
+  try {
+    html = rag::browser::render(sitio.url(), "", rag::browser::BUDGET_MS, true);
+  } catch (const std::runtime_error& e) {
+    // un navegador que no responde en este equipo (macOS en una maquina virtual sin pantalla) se aparta y las
+    // paginas se siguen leyendo con la descarga normal
+    std::printf("    %s no funciona aqui: %s\n", exe.c_str(), e.what());
+    CHECK(contains(e.what(), "tardado demasiado") && rag::browser::find() != exe);
+    if (rag::browser::find().empty()) {
+      CHECK(rag::browser::maybe_render(sitio.url(), SPA, "siempre") == std::make_pair(SPA, false));
+      CHECK(rag::browser::info()["disponible"] == false);
+    }
+    return;
+  }
   CHECK(contains(html, "Catalogo de bicicletas") && contains(html, "modelo 39"));
   auto& cfg = get_config();
   json old = cfg.get("rag.allow_private_urls", false);
