@@ -153,3 +153,89 @@ TEST("dispositivos: luces NexusLED contra el emulador del firmware") {
   emu.wait(5);
 }
 #endif
+
+#ifndef _WIN32
+#include <fcntl.h>
+#include <termios.h>
+#include <unistd.h>
+
+#include "devices/firmware.h"
+
+TEST("dispositivos: grabar el firmware del reloj con esptool y configurarlo por el puerto serie") {
+  // carpeta firmware/ falsa: un binario del reloj y un esptool que responde como un ESP32-C3
+  auto fwdir = std::filesystem::temp_directory_path() /
+               ("nexus-fw-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::create_directories(fwdir / "bin");
+  std::filesystem::create_directories(fwdir / "tools");
+  write_file(fwdir / "bin" / "firmware.json", R"({"archivos": {"nexuswatch-esp32c3.bin": {"version": "1.0.0"}}})");
+  write_file(fwdir / "bin" / "nexuswatch-esp32c3.bin", std::string(64, '\x55'));
+  write_file(fwdir / "tools" / "esptool", "#!/bin/sh\necho \"esptool v5 $*\"\necho \"Chip type: ESP32-C3 (QFN32)\"\nexit 0\n");
+  std::filesystem::permissions(fwdir / "tools" / "esptool", std::filesystem::perms::owner_all);
+  set_env("NEXUS_FIRMWARE", S(fwdir));
+  // el reloj por el puerto serie: un pseudo-terminal que contesta a la linea JSON de configuracion
+  int master = posix_openpt(O_RDWR | O_NOCTTY);
+  CHECK(master >= 0 && grantpt(master) == 0 && unlockpt(master) == 0);
+  std::string slave = ptsname(master);
+  {
+    termios t{};
+    tcgetattr(master, &t);
+    cfmakeraw(&t);
+    tcsetattr(master, TCSANOW, &t);
+  }
+  std::string recibido;
+  std::thread reloj([&] {
+    std::string buf;
+    char ch;
+    auto end = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (std::chrono::steady_clock::now() < end) {
+      ssize_t n = ::read(master, &ch, 1);
+      if (n <= 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        continue;
+      }
+      buf += ch;
+      if (ch == '\n') {
+        recibido = buf;
+        std::string r = "{\"ok\": true, \"wifi\": \"conectado\"}\r\n";
+        (void)!::write(master, r.data(), r.size());
+        return;
+      }
+    }
+  });
+  int fl = fcntl(master, F_GETFL);
+  fcntl(master, F_SETFL, fl | O_NONBLOCK);
+
+  DevServer srv("firmware");
+  httplib::Client c("127.0.0.1", srv.port);
+  json info = body(c.Get("/api/firmware"));
+  CHECK_EQ(jstr(info, "carpeta"), S(fwdir));
+  CHECK(info["falta"].empty());
+  bool s3 = false;
+  for (auto& m : info["modelos_luces"]) s3 |= m == "esp32s3";
+  CHECK(s3);
+  CHECK(info["binarios"].size() == 1 && info["binarios"][0]["version"] == "1.0.0");
+  CHECK(info["nexus"].contains("key"));
+  json j = post(c, "/api/firmware/grabar",
+                {{"tipo", "reloj"}, {"puerto", slave}, {"config", {{"wifi", {{"ssid", "casa"}, {"pass", "x"}}}}}});
+  json r;
+  for (int i = 0; i < 200; ++i) {
+    r = body(c.Get("/api/firmware/trabajo/" + jstr(j, "id")));
+    if (jstr(r, "estado") != "en_curso") break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
+  reloj.join();
+  ::close(master);
+  CHECK_EQ(jstr(r, "estado"), std::string("hecho"));
+  CHECK_EQ(jstr(r["resultado"], "chip"), std::string("esp32c3"));
+  CHECK(r["resultado"]["config"]["ok"] == true);
+  json enviado = jparse(recibido);
+  CHECK(enviado["wifi"]["ssid"] == "casa");
+  CHECK(enviado.contains("nexus") || !truthy(info["nexus"]["host"]));
+  bool grabado = false;
+  for (auto& l : r["log"]) grabado |= l.get<std::string>().find("write_flash 0x0") != std::string::npos;
+  CHECK(grabado);
+  auto bad = c.Post("/api/firmware/grabar", R"({"tipo": "tostadora"})", "application/json");
+  CHECK(bad && bad->status == 400);
+  set_env("NEXUS_FIRMWARE", "");
+}
+#endif

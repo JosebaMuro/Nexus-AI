@@ -23,6 +23,7 @@
 #include "office/bolsa.h"
 #include "office/bolsa_agente.h"
 #include "devices/devices.h"
+#include "devices/firmware.h"
 #include "agents/activity.h"
 #include "memory/kg.h"
 #include "memory/kg_jobs.h"
@@ -1560,6 +1561,67 @@ void register_routes(App& app) {
       }
     });
   app.get("/api/agentes/actividad", [](Ctx&) -> Out { return agents::activity().all(); });
+
+  // ------------------------------------------------------------------ grabar firmware (solo desde el propio equipo)
+  auto solo_local = [](Ctx& c) {
+    if (!c.local()) throw HttpErr(403, "Solo desde el propio equipo");
+  };
+  auto nexus_para_dispositivos = [](Ctx& c) {
+    std::string port = Ctx::as_str(c.app.S().config.get("server.port", 8775));
+    std::vector<json> addrs;
+    for (auto& a : coop::overlay_addresses()) addrs.push_back(a);
+    std::stable_sort(addrs.begin(), addrs.end(),
+                     [](const json& a, const json& b) { return (jstr(a, "kind") != "lan") < (jstr(b, "kind") != "lan"); });
+    std::string host;
+    for (auto& a : addrs) {
+      std::string ip = jstr(a, "ip");
+      if (starts_with(ip, "169.254.") || starts_with(ip, "127.")) continue;
+      host = ip + ":" + port;
+      break;
+    }
+    std::string sh = c.app.S().config.str("server.host", "127.0.0.1");
+    return json{{"host", host}, {"key", c.app.lan_key()}, {"escucha_red", sh != "127.0.0.1" && sh != "localhost"}};
+  };
+  app.get("/api/firmware", [solo_local, nexus_para_dispositivos](Ctx& c) -> Out {
+    solo_local(c);
+    namespace fw = devices::firmware;
+    json info = fw::disponible();
+    if (fw::carpeta().empty()) {
+      info["binarios"] = json::array();
+      info["puertos"] = json::array();
+      info["error"] = "no encuentro la carpeta firmware/ (con flash.py)";
+    } else {
+      info["binarios"] = fw::binarios();
+      info["puertos"] = fw::puertos();
+      info["modelos_luces"] = fw::MODELOS_LUCES;
+    }
+    info["nexus"] = nexus_para_dispositivos(c);
+    return info;
+  });
+  app.post("/api/firmware/grabar", [solo_local, nexus_para_dispositivos](Ctx& c) -> Out {
+    solo_local(c);
+    json cfg = c.b("config", nullptr);
+    if (!cfg.is_object()) cfg = json::object();
+    std::string tipo = c.bs("tipo", "");
+    if (c.bb("conectar_nexus", true) && !cfg.contains("nexus") && (tipo == "reloj" || tipo == "pico")) {
+      json n = nexus_para_dispositivos(c);
+      if (truthy(n["host"])) cfg["nexus"] = {{"host", n["host"]}, {"key", n["key"]}};
+    }
+    if (tipo == "luces") cfg.erase("nexus");
+    try {
+      return devices::firmware::trabajos().lanzar(tipo, truthy(c.b("puerto", nullptr)) ? c.bs("puerto") : "",
+                                                  truthy(c.b("modelo", nullptr)) ? c.bs("modelo") : "",
+                                                  cfg.empty() ? json(nullptr) : cfg, c.bb("solo_config", false));
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
+  });
+  app.get("/api/firmware/trabajo/{tid}", [solo_local](Ctx& c) -> Out {
+    solo_local(c);
+    json j = devices::firmware::trabajos().get(c.p("tid"));
+    if (j.is_null()) throw HttpErr(404, "trabajo desconocido");
+    return j;
+  });
 
   // ------------------------------------------------------------------ herramientas
   app.get("/api/tools", [](Ctx& c) -> Out {

@@ -26,6 +26,22 @@
   hilos, usa menos con el móvil caliente o con poca batería, reduce el contexto si falta memoria y propone otro modelo
   si va lento o sobra velocidad. Tras cada arranque limpia temporales, optimiza la base de datos y precarga el modelo.
 
+### Bolsa con datos reales y agente autónomo
+- **Antes**: los precios de la mesa eran ficticios.
+- **Ahora**, con conexión, son cotizaciones reales (Yahoo Finance, con Google Finance, Stooq, Coinbase, Kraken y el BCE
+  de respaldo) y el cambio de divisa es el real. Sin conexión la mesa sigue simulada desde el último precio real y con
+  el histórico diario guardado. Sigue siendo siempre una simulación: nunca hay dinero ni órdenes reales.
+- Nuevo **agente de bolsa autónomo** con su propia cartera simulada: analiza, arriesga como mucho el 1 % por
+  operación, pone stops vivos que suben con el precio, vende en el objetivo y aprende de sus resultados. Diario, curva
+  de patrimonio y gráficos de cada orden en vivo.
+
+### Dispositivos
+- Luces NexusLED, reloj NexusWatch y avatar NexusPico para el Pico W: estado de Nexus en directo, efectos, brillo y
+  modos preconfigurados que se cambian desde el ordenador, el móvil o el reloj, que además muestra qué hace cada
+  agente. Las imágenes de tinta del Pico W se generan en C++.
+- Grabar el firmware por USB sin internet desde *Dispositivos > Grabar firmware*: los binarios y esptool vienen en el
+  paquete, con puertos serie nativos en Windows, Linux y macOS.
+
 ### Ejemplos para importar
 - **Grafo multicapa de la Wikipedia en español** (`ejemplos/grafo-wikipedia-es`): 2.251 nodos y 7.007 relaciones en
   cuatro capas (temas, artículos, enlaces entre artículos y hechos de Wikidata), en GraphML y JSON. Se importa con

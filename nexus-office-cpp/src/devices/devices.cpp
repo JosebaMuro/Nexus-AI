@@ -401,7 +401,7 @@ std::string Hub::pico_version() {
   std::string name = cfg.str("user.assistant_name", "Nexus-Office");
   if (name.empty()) name = "Nexus-Office";
   std::string style = cfg.str("dispositivos.pico.estilo", "avatar");
-  return sha1_hex(name + "|" + style + "|3").substr(0, 10);
+  return sha1_hex(name + "|" + style + "|4").substr(0, 10);
 }
 
 namespace {
@@ -582,6 +582,7 @@ std::string Hub::pico_buffer(const std::string& state) {
   for (int y = 0; y < h; ++y)
     for (int x = 0; x < w; ++x)
       if (img[(size_t)x * W + (W - 1 - y)]) out[(size_t)y * wb + x / 8] |= (char)(0x80 >> (x % 8));
+  for (int y = 0; y < h; ++y) out[(size_t)y * wb + wb - 1] |= (char)((1 << (wb * 8 - w)) - 1);   // relleno en blanco
   return out;
 }
 

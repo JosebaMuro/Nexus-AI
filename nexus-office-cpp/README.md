@@ -1,10 +1,11 @@
 # Nexus-Office 2.1 (edición C++)
 
 **La oficina de IA local para pymes, reescrita en C++ y con todas las funciones de la edición Python.** Misma interfaz,
-mismos agentes por gremio, misma memoria, biblioteca, voz, imagen y música, mesa de bolsa simulada, red COOP, VPN,
-importación de grafos, edición de imágenes como en GIMP y el agente Profesor con IA online, en un único programa
+mismos agentes por gremio, misma memoria, biblioteca, voz, imagen y música, mesa de bolsa simulada con cotizaciones
+reales y un agente de bolsa autónomo, luces, reloj y Pico W, red COOP, VPN, importación de grafos, edición de imágenes
+como en GIMP y el agente Profesor con IA online, en un único programa
 nativo sin Python: arranca en una décima de segundo y gasta menos memoria. Funciona entero en tu equipo, sin internet
-salvo para descargar los modelos (y, si lo activas, para el Profesor).
+salvo para descargar los modelos, las cotizaciones de la bolsa y, si lo activas, el Profesor.
 
 Se adapta a cada equipo: elige el modelo y los hilos según la CPU y la RAM, usa la GPU con CUDA, Vulkan o Metal y la
 NPU de Intel con OpenVINO, y en Android la NPU Hexagon de los Snapdragon recientes o la GPU (OpenCL en Adreno, Vulkan en

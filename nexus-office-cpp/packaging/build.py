@@ -92,6 +92,19 @@ def stage(target: str) -> Path:
         shutil.copy2(ROOT / name, dest / name)
     # ejemplos para importar: el grafo multicapa de la Wikipedia en espanol y el resumen del proyecto para la biblioteca
     shutil.copytree(ROOT / "ejemplos", dest / "ejemplos")
+    # firmware de las luces NexusLED, el reloj NexusWatch y el Pico W (binarios ya compilados) y esptool para grabarlos
+    fw = REPO / "firmware"
+    if (fw / "bin").is_dir():
+        (dest / "firmware").mkdir()
+        shutil.copytree(fw / "bin", dest / "firmware" / "bin")
+        shutil.copytree(fw / "nexuspico", dest / "firmware" / "nexuspico", ignore=shutil.ignore_patterns("__pycache__"))
+        for name in ("README.md", "flash.py"):
+            shutil.copy2(fw / name, dest / "firmware" / name)
+        esp = CACHE / "esptool" / target
+        if esp.is_dir() and any(esp.glob("esptool*")):
+            shutil.copytree(esp, dest / "firmware" / "tools")
+        log(f"{target}: firmware {', '.join(sorted(p.name for p in (fw / 'bin').iterdir()))}"
+            f"{' + esptool' if (dest / 'firmware' / 'tools').is_dir() else ''}")
     shutil.copy2(PY_EDITION / "LICENSE", dest / "LICENSE")
     for rt in RUNTIMES:
         r = CACHE / "desktop-runtimes" / target / rt
@@ -428,7 +441,7 @@ SOURCE_PARTS = ["nexus-office-cpp", "nexus-office/nexus/web", "nexus-office/nexu
                 "nexus-office/nexus/agents/defaults", "nexus-office/nexus/remote/pair.html", "nexus-office/LICENSE",
                 ".github/workflows/cpp.yml",
                 ".github/workflows/cpp-entrega.yml", ".github/workflows/cpp-publicar.yml",
-                ".github/workflows/wikipedia-grafo.yml"]
+                ".github/workflows/wikipedia-grafo.yml", "firmware"]
 SOURCE_SKIP = re.compile(r"(^|/)(build[^/]*|dist[^/]*|\.cache|__pycache__|node_modules|\.git)/|\.pyc$")   # carpetas
 SECRET_FILES = re.compile(r"\.(jks|keystore|pass|pem|key|p12|log)$|(^|/)(config\.ya?ml|\.env)$", re.I)
 SECRET_OK = {"nexus-office-cpp/third_party/certs/cacert.pem"}    # certificados raiz publicos (Mozilla)

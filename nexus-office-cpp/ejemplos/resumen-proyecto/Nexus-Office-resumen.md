@@ -192,6 +192,23 @@ meses). Una cartera marcada como *real* solo sirve para llevar a mano el seguimi
 bróker: nada se ejecuta sin que escriba `CONFIRMO` y Nexus-Office no se conecta a ningún bróker. Nada de esto es
 asesoramiento financiero.
 
+Con conexión los precios son **cotizaciones reales** (Yahoo Finance con el retraso de cada bolsa; Google Finance,
+Stooq, Coinbase, Kraken y el BCE de respaldo) y el cambio de divisa es el real; sin conexión la mesa sigue simulada
+desde el último precio real y con el histórico diario guardado. El **agente de bolsa autónomo** lleva su propia
+cartera simulada con esos datos: calcula medias de 20 y 50 sesiones, RSI, momento y ATR, arriesga como mucho el 1 %
+del patrimonio por operación, pone un stop de protección que sube con el precio, vende en el objetivo o si se rompe la
+tendencia y ajusta sus pesos con lo que acierta y falla. Su diario, la curva de patrimonio y los gráficos de cada
+orden se ven en vivo (`/api/bolsa/agente`, `/api/bolsa/orden/{id}/grafico`).
+
+## Dispositivos
+
+Nexus-Office manda su estado (escuchando, pensando, usando una herramienta, hablando) a las luces **NexusLED** (ESP32
+con tiras WS2812/SK6812, por UDP), al reloj **NexusWatch** (ESP32-2424S012C) y al avatar **NexusPico** (Pico W con
+pantalla de tinta de 2,13"). Hay modos preconfigurados (Normal, Manos libres, Silencio, Concentración, Rendimiento,
+Ahorro y Noche) que se cambian desde el ordenador, el móvil o el reloj; un modo nunca toca la seguridad ni la red. El
+reloj muestra qué hace cada agente en su despacho. El firmware se graba por USB sin internet desde *Dispositivos >
+Grabar firmware*.
+
 ## Perfiles de oficina
 
 Al instalar, o después con `nexus-office oficina <perfil>`, se configura la oficina de una pyme concreta: más de 130

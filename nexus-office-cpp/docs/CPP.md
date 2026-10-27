@@ -54,6 +54,12 @@ La 2.0 beta C dejaba fuera varias funciones. Desde la 2.1 están todas, con las 
 | Agente Profesor con IA online (`/api/nube`, `consultar_profesor`) | `src/llm/cloud.cpp`: API compatible con OpenAI y Messages API de Anthropic en streaming |
 | APK autónoma con GPU (Vulkan, OpenCL) y NPU Hexagon | `src/hardware/android_accel.cpp`: sonda de llama-server-gpu y respaldo NPU → GPU → CPU |
 | Autoajuste en vivo en Android (`/api/android/autoajuste`) | `src/core/android_tune.cpp`: hilos medidos, temperatura, batería, GPU frente a CPU y consejo de modelo |
+| Bolsa con cotizaciones reales (Yahoo Finance, Google Finance, Stooq, Coinbase, Kraken y BCE) | `src/office/bolsa_datos.cpp`: caché, fuentes apartadas un rato si fallan y simulación sin conexión |
+| Agente de bolsa autónomo que opera siempre en simulación (`/api/bolsa/agente`) | `src/office/bolsa_agente.cpp`: medias, RSI, momento, ATR, pesos aprendidos, stops vivos y diario |
+| Gráficos en vivo de las órdenes (`/api/bolsa/serie`, `/api/bolsa/orden/{id}/grafico`) | `src/office/bolsa.cpp`: velas reales y histórico guardado para trabajar sin red |
+| Lo que hace cada agente (despachos, reloj y salón: `/api/agentes/actividad`) | `src/agents/activity.cpp` |
+| Luces NexusLED, modos, reloj NexusWatch y Pico W (`/api/dispositivos`) | `src/devices/devices.cpp`: UDP y HTTP del firmware e imágenes de tinta hechas en C++ |
+| Grabar el firmware de las luces, el reloj y el Pico W (`/api/firmware`) | `src/devices/firmware.cpp`: puertos serie nativos, esptool para los ESP32 y copia del .uf2 al Pico |
 | Órdenes `grafo`, `bolsa`, `setup`, `wheels` y `cleanup` | `src/main.cpp` |
 
 `/api/tools` lista las mismas herramientas en las dos ediciones. Quedan dos diferencias que no aplican a C++:
@@ -121,6 +127,13 @@ build/nexus-office run
   `tests/compare_gimp.py` compara 73 ediciones de imagen píxel a píxel.
 - `nexus-tests nube` y `nexus-tests android`: el Profesor contra un servidor falso de OpenAI y de Anthropic, y la sonda,
   el respaldo NPU → GPU → CPU y el autoajuste de Android con un llama-server falso.
+- `nexus-tests bolsa`: cotizaciones con fuentes falsas (caché, peniques a libras, sin conexión) y el agente autónomo
+  comprando, poniendo el stop, vendiendo en el objetivo y aprendiendo. Con `NEXUS_ONLINE_TESTS=1` (en `cpp.yml`)
+  pide precios reales del catálogo con la pila TLS de cada sistema.
+- `nexus-tests dispositivos`: luces contra el emulador del firmware NexusLED (`firmware/emulator`, se compila con las
+  pruebas), modos, reloj, imágenes del Pico W y grabado del reloj con un esptool falso y un puerto serie simulado.
+  El código real del Pico W (`firmware/nexuspico/nexuspico.py`) descarga las imágenes del servidor C++ y su giro
+  coincide byte a byte.
 - `tests/ui_smoke.js`: abre la interfaz en Chromium, pregunta «¿Cuánto es 12*7?», espera «84», recorre las vistas y
   falla si hay errores de JavaScript o respuestas 5xx.
 - Revisión de memoria con AddressSanitizer y UndefinedBehaviorSanitizer recorriendo todas las pruebas anteriores: sin
