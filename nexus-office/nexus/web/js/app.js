@@ -146,7 +146,7 @@
   const graphAvatar = new NeuralAvatar($("#avatar"), { maxLabels: 9 });
   let avatarImpl = graphAvatar, avatarStyle = "grafo", lastGraph = null;
   const avatar = {
-    setState: (s) => avatarImpl.setState(s), setLevel: (v) => avatarImpl.setLevel(v),
+    setState: (s) => avatarImpl.setState(s), setLevel: (v) => { avatarImpl.setLevel(v); if (devSync.last === "speaking" || devSync.last === "listening") syncDevices(devSync.last, v); },
     update: (g) => { lastGraph = g; avatarImpl.update(g); }, setAccent: (c) => avatarImpl.setAccent(c),
     get level() { return avatarImpl.level || 0; },
   };
@@ -172,8 +172,15 @@
   }
   let explorer = null;
   const STATE_SUB = { idle: "núcleo cognitivo", thinking: "procesando", tool: "ejecutando", speaking: "síntesis de voz", listening: "captando audio" };
+  const devSync = { last: "", t: 0, timer: null };
+  function syncDevices(s, level) {   // las luces, el reloj y el Pico W siguen al avatar
+    const now = Date.now();
+    if (s === devSync.last && (level == null || now - devSync.t < 250)) return;
+    devSync.last = s; devSync.t = now;
+    fetch("/api/dispositivos/estado", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ estado: s, nivel: level ?? null, origen: "web" }) }).catch(() => {});
+  }
   function setState(s) {
-    avatar.setState(s); explorer && explorer.setState(s);
+    avatar.setState(s); explorer && explorer.setState(s); syncDevices(s);
     const map = { idle: "EN LÍNEA", thinking: "PENSANDO", tool: "HERRAMIENTA", speaking: "HABLANDO", listening: "ESCUCHANDO" };
     $("#avatar-state").textContent = map[s] || "EN LÍNEA"; $("#avatar-sub").textContent = STATE_SUB[s] || "";
   }
@@ -940,6 +947,44 @@
     } finally { setState("idle"); }
   });
 
+  /* ================================================================ vista: DISPOSITIVOS */
+  const NOMBRE_ESTADO = { idle: "En línea", listening: "Escuchando", thinking: "Pensando", tool: "Herramienta", speaking: "Hablando", success: "Hecho", error: "Error", alert: "Aviso" };
+  async function ledCard(d) {
+    let st = null, fx = [];
+    try { st = await api(`/api/dispositivos/leds/${encodeURIComponent(d.id)}/api/state`); const e = await api(`/api/dispositivos/leds/${encodeURIComponent(d.id)}/api/effects`); fx = Array.isArray(e) ? e : e.effects || []; } catch (e) { st = null; }
+    const id = esc(d.id), fxName = (f, i) => (typeof f === "string" ? f : f.name || f.id || "efecto " + i);
+    return `<div class="panel" data-led="${id}"><div class="row"><span class="live-dot ${st ? "" : "off"}"></span><b>${esc(d.name)}</b><span class="muted">${esc(d.host)}:${d.port} · ${d.leds || "?"} LED${d.version ? " · v" + esc(d.version) : ""}</span><span class="spacer"></span>
+      <button class="btn sm" data-led-del="${id}">QUITAR</button></div>
+      ${st ? `<div class="row" style="margin-top:8px"><button class="btn sm ${st.on ? "primary" : ""}" data-led-on="${id}" data-v="${st.on ? 0 : 1}">${st.on ? "ENCENDIDA" : "APAGADA"}</button>
+        <input type="range" min="1" max="255" value="${st.bri}" data-led-bri="${id}" style="flex:1 1 120px">
+        <select class="input" data-led-fx="${id}" style="flex:1 1 140px;min-width:0">${fx.map((f, i) => `<option value="${i}" ${st.fx === i || (st.seg && st.seg[0] && st.seg[0].fx === i) ? "selected" : ""}>${esc(fxName(f, i))}</option>`).join("")}</select>
+        <a class="btn sm" href="http://${esc(d.host)}:${d.port}/" target="_blank" rel="noopener">SU PÁGINA</a></div>
+        <label class="row muted" style="margin-top:6px"><input type="checkbox" data-led-follow="${id}" ${d.follow_state !== false ? "checked" : ""}> Mostrar el estado de Nexus (escucha, piensa, habla con vúmetro…)</label>` : '<p class="muted">No responde. Comprueba que está encendido y en la misma red.</p>'}</div>`;
+  }
+  loaders.devices = async () => {
+    const d = await api("/api/dispositivos");
+    $("#dv-modo").textContent = "activo: " + (d.modos.find((m) => m.id === d.modo)?.nombre || d.modo);
+    $("#dv-modos").innerHTML = d.modos.map((m) => `<button class="btn ${m.id === d.modo ? "primary" : ""}" data-modo="${esc(m.id)}" title="${esc(m.descripcion || "")}">${esc(m.icono || "")} ${esc(m.nombre)}</button>`).join("");
+    $$("[data-modo]").forEach((b) => (b.onclick = guard(async () => { await api("/api/dispositivos/modo", { body: { modo: b.dataset.modo, origen: "escritorio" } }); toast("Modo " + b.textContent.trim()); loaders.devices(); })));
+    $("#dv-leds").innerHTML = d.leds.length ? (await Promise.all(d.leds.map(ledCard))).join("") : '<p class="muted">Sin luces. Graba el firmware NexusLED en un ESP32 (panel Firmware), conéctalo a tu Wi-Fi y pulsa BUSCAR EN LA RED.</p>';
+    const L = (id) => `/api/dispositivos/leds/${encodeURIComponent(id)}/api/state`;
+    $$("[data-led-del]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/dispositivos/leds/${encodeURIComponent(b.dataset.ledDel)}`, { method: "DELETE" }); loaders.devices(); })));
+    $$("[data-led-on]").forEach((b) => (b.onclick = guard(async () => { await api(L(b.dataset.ledOn), { body: { on: b.dataset.v === "1" } }); loaders.devices(); })));
+    $$("[data-led-bri]").forEach((r) => (r.onchange = guard(() => api(L(r.dataset.ledBri), { body: { bri: Number(r.value) } }))));
+    $$("[data-led-fx]").forEach((r) => (r.onchange = guard(() => api(L(r.dataset.ledFx), { body: { fx: Number(r.value) } }))));
+    $$("[data-led-follow]").forEach((c) => (c.onchange = guard(() => api(`/api/dispositivos/leds/${encodeURIComponent(c.dataset.ledFollow)}`, { method: "PUT", body: { follow_state: c.checked } }))));
+    $("#dv-clients").innerHTML = d.clientes.length ? `<table class="tbl"><tr><th>Dispositivo</th><th>Tipo</th><th>IP</th><th>Visto</th></tr>${d.clientes.map((c) => `<tr><td>${esc(c.id)}</td><td>${esc(c.tipo)}</td><td class="mono">${esc(c.ip || "")}</td><td class="mono muted">hace ${Math.round(Date.now() / 1000 - c.visto)} s</td></tr>`).join("")}</table>` : '<p class="muted">Ningún reloj ni Pico W conectado ahora. Al grabarlos se les configura la Wi-Fi y la dirección de este equipo.</p>';
+    if (!$("#dv-pico").childElementCount) $("#dv-pico").innerHTML = ["idle", "listening", "thinking", "tool", "speaking", "error"].map((s) => `<figure style="margin:0;text-align:center"><img src="/api/dispositivos/pico/${s}.png" alt="${s}" style="width:150px;image-rendering:pixelated;border:1px solid var(--line);border-radius:4px;background:#fff"><figcaption class="muted" style="font-size:.75rem">${NOMBRE_ESTADO[s]}</figcaption></figure>`).join("");
+    if (window.NexusFirmware) NexusFirmware.render($("#dv-fw")); else $("#dv-fw").innerHTML = '<p class="muted">El firmware y su código fuente están en la carpeta <code>firmware/</code> de la instalación.</p>';
+  };
+  $("#dv-scan").onclick = guard(async () => {
+    $("#dv-found").innerHTML = '<span class="chip"><span class="spin"></span>Buscando…</span>';
+    const r = await api("/api/dispositivos/leds/buscar" + ($("#dv-ip").value.trim() ? "?ip=" + encodeURIComponent($("#dv-ip").value.trim()) : ""));
+    $("#dv-found").innerHTML = r.encontrados.length ? r.encontrados.map((f) => `<div class="row"><b>${esc(f.name)}</b><span class="muted">${esc(f.host)} · ${f.leds} LED · v${esc(f.version)}</span>${f.added ? '<span class="tag ok">añadido</span>' : `<button class="btn sm primary" data-found="${esc(f.host)}:${f.http_port || 80}">AÑADIR</button>`}</div>`).join("") : '<p class="muted">No se ha encontrado ningún NexusLED. Escribe su IP y pulsa AÑADIR.</p>';
+    $$("[data-found]").forEach((b) => (b.onclick = guard(async () => { await api("/api/dispositivos/leds", { body: { host: b.dataset.found } }); toast("Luces añadidas"); $("#dv-found").innerHTML = ""; loaders.devices(); })));
+  });
+  $("#dv-add").onclick = guard(async () => { const ip = $("#dv-ip").value.trim(); if (!ip) return; await api("/api/dispositivos/leds", { body: { host: ip } }); toast("Luces añadidas"); loaders.devices(); });
+
   /* ================================================================ vista: BOLSA (mesa simulada) */
   const eur = (x) => (x ?? 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
   const num = (x, d = 2) => (x ?? 0).toLocaleString("es-ES", { maximumFractionDigits: d });
@@ -984,6 +1029,8 @@
         <td>${o.estado === "por_confirmar" ? `<button class="btn sm primary admin-only" data-confirm="${o.id}">CONFIRMAR</button>` : ""}${o.estado === "confirmada" ? `<button class="btn sm admin-only" data-fill="${o.id}">REGISTRAR EJECUCIÓN</button>` : ""}${open ? `<button class="btn sm" data-cancel="${o.id}">CANCELAR</button>` : ""}</td></tr>`; }).join("")}</table>` : '<p class="muted">Sin órdenes.</p>';
     $("#bolsa-ops").innerHTML = d.operaciones.length ? `<table class="tbl"><tr><th>Fecha</th><th>Operación</th><th>Efectivo</th><th>Comisión</th><th>Impuestos</th><th>Cambio</th><th>Deslizam.</th><th>Total</th><th>Resultado</th></tr>${d.operaciones.map((o) =>
       `<tr><td class="mono muted">${esc(o.fecha.replace("T", " ").slice(0, 16))}</td><td>${o.lado === "compra" ? "Compra" : "Venta"} ${num(o.cantidad, 6)} <b>${esc(o.simbolo)}</b> a ${num(o.precio, 4)}${o.aviso ? `<div class="tag warn" title="${esc(o.aviso)}">regla 2 meses</div>` : ""}</td><td class="mono">${eur(o.efectivo_eur)}</td><td class="mono">${eur(o.comision_eur)}</td><td class="mono">${eur(o.impuestos_eur)}</td><td class="mono">${eur(o.cambio_eur)}</td><td class="mono">${eur(o.deslizamiento_eur)}</td><td class="mono">${eur(o.total_eur)}</td><td class="mono">${o.ganancia_eur == null ? "" : eur(o.ganancia_eur)}</td></tr>`).join("")}</table>` : '<p class="muted">Aún no hay operaciones.</p>';
+    await bolsaAgent().catch(() => {}); bolsaLive();
+    if (!liveState.timer) liveState.timer = setInterval(() => { guard(bolsaLive)(); if (Date.now() - liveState.agentT > 15000) { liveState.agentT = Date.now(); guard(bolsaAgent)(); } }, 5000);
     if (!$("#bo-syms").childElementCount) $("#bo-syms").innerHTML = (await api("/api/bolsa/instrumentos")).map((i) => `<option value="${esc(i.simbolo)}">${esc(i.nombre)} · ${esc(i.mercado)}</option>`).join("");
     $$("[data-sell]").forEach((b) => (b.onclick = () => { $("#bo-sym").value = b.dataset.sell; $("#bo-lado").value = "venta"; $("#bo-qty").value = b.dataset.q; bolsaQuote().catch(() => {}); $("#bo-sym").scrollIntoView({ behavior: "smooth", block: "center" }); }));
     $$("[data-cancel]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/bolsa/orden/${b.dataset.cancel}/cancelar`, { body: {} }); loaders.bolsa(); })));
@@ -996,6 +1043,87 @@
       const com = prompt("Comisiones y gastos en € (0 si no hubo):", "0") ?? "0";
       await api(`/api/bolsa/orden/${b.dataset.fill}/ejecucion`, { body: { precio: Number(px.replace(",", ".")), comision_eur: Number(com.replace(",", ".")) } }); loaders.bolsa(); })));
   };
+  /* ---- graficos en vivo (canvas propio, sin librerias: funciona sin internet) */
+  const css = (v, f) => (getComputedStyle(document.documentElement).getPropertyValue(v) || "").trim() || f;
+  const LEVEL_COLORS = { limite: "--accent", stop: "--warn", ejecucion: "--ok", entrada: "--muted", objetivo: "--ok" };
+  function liveChart(canvas, pts, niveles = [], opt = {}) {
+    const dp = devicePixelRatio || 1, W = canvas.clientWidth || 300, H = canvas.clientHeight || 180;
+    canvas.width = W * dp; canvas.height = H * dp;
+    const ctx = canvas.getContext("2d"); ctx.scale(dp, dp); ctx.clearRect(0, 0, W, H);
+    const ps = pts.map((p) => p.precio).filter((p) => p != null);
+    if (ps.length < 2) { ctx.fillStyle = css("--muted", "#789"); ctx.font = "12px sans-serif"; ctx.fillText(opt.vacio || "Esperando datos…", 12, H / 2); return; }
+    const lv = niveles.map((n) => n.precio).filter((x) => x != null);
+    let lo = Math.min(...ps, ...lv), hi = Math.max(...ps, ...lv); const pad = (hi - lo) * 0.08 || hi * 0.01 || 1; lo -= pad; hi += pad;
+    const L = 6, R = 64, T = 8, B = 18, cw = W - L - R, ch = H - T - B;
+    const t0 = pts[0].ts, t1 = pts[pts.length - 1].ts, span = t1 - t0 || 1;
+    const X = (t) => L + ((t - t0) / span) * cw, Y = (p) => T + (1 - (p - lo) / (hi - lo)) * ch;
+    const dec = hi >= 100 ? 2 : hi >= 1 ? 3 : 5, f = (x) => x.toLocaleString("es-ES", { maximumFractionDigits: dec, minimumFractionDigits: Math.min(2, dec) });
+    ctx.strokeStyle = css("--line", "rgba(0,240,255,.15)"); ctx.lineWidth = 1; ctx.fillStyle = css("--muted", "#789"); ctx.font = "10px monospace";
+    for (let i = 0; i <= 4; i++) { const p = lo + ((hi - lo) * i) / 4, y = Y(p); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + cw, y); ctx.stroke(); ctx.fillText(f(p), L + cw + 4, y + 3); }
+    const tf = (t) => { const d = new Date(t * 1000); return span > 3 * 86400 ? d.toLocaleDateString("es-ES", { day: "2-digit", month: "short" }) : d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }); };
+    ctx.fillText(tf(t0), L, H - 4); const lt = tf(t1); ctx.fillText(lt, L + cw - ctx.measureText(lt).width, H - 4);
+    const up = ps[ps.length - 1] >= ps[0], col = css(up ? "--ok" : "--bad", up ? "#7f7" : "#f57");
+    const g = ctx.createLinearGradient(0, T, 0, T + ch); g.addColorStop(0, col + "55"); g.addColorStop(1, col + "00");
+    ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(X(p.ts), Y(p.precio)) : ctx.moveTo(X(p.ts), Y(p.precio))));
+    ctx.lineTo(X(t1), T + ch); ctx.lineTo(X(t0), T + ch); ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+    ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(X(p.ts), Y(p.precio)) : ctx.moveTo(X(p.ts), Y(p.precio)))); ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.stroke();
+    niveles.forEach((n) => {
+      if (n.precio == null) return; const y = Y(n.precio), c = css(LEVEL_COLORS[n.tipo] || "--accent", "#0ff");
+      ctx.setLineDash([5, 4]); ctx.strokeStyle = c; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + cw, y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = c; ctx.font = "10px sans-serif"; ctx.fillText(`${n.texto} ${f(n.precio)}`, L + 4, y - 3);
+      if (n.ts && n.ts >= t0 && n.ts <= t1) { ctx.beginPath(); ctx.arc(X(n.ts), y, 4, 0, 7); ctx.fill(); }
+    });
+    const last = ps[ps.length - 1], y = Y(last); ctx.fillStyle = col; ctx.fillRect(L + cw + 1, y - 8, R - 2, 16); ctx.fillStyle = "#000"; ctx.font = "bold 10px monospace"; ctx.fillText(f(last), L + cw + 4, y + 3);
+    ctx.beginPath(); ctx.arc(X(t1), y, 3.5, 0, 7); ctx.fillStyle = col; ctx.fill();
+  }
+  const liveState = { timer: null, agentT: 0, orders: [] };
+  async function bolsaLive() {
+    if (S.view !== "bolsa") { clearInterval(liveState.timer); liveState.timer = null; return; }
+    const d = bolsaState.data; if (!d) return;
+    const ag = liveState.agent, agOrders = ag && ag.cartera !== d.resumen.cartera ? (ag.ordenes_activas || []) : [];
+    const open = [...d.ordenes.filter((o) => ["pendiente", "por_confirmar", "confirmada"].includes(o.estado)), ...agOrders].slice(0, 12);
+    const box = $("#bolsa-live");
+    if (!open.length) { box.innerHTML = '<p class="muted">No hay órdenes activas. Las órdenes pendientes (limitadas, stop, las del agente) aparecen aquí con su gráfico en vivo.</p>'; $("#bl-sub").textContent = ""; return; }
+    const ids = open.map((o) => o.id).join(",");
+    if (box.dataset.ids !== ids) {
+      box.dataset.ids = ids;
+      box.innerHTML = open.map((o) => `<div class="panel live-card" data-live="${o.id}"><div class="row"><span class="live-dot"></span><b>${esc(o.simbolo)}</b><span class="muted">#${o.id} · ${o.lado} ${num(o.cantidad, 6)} · ${esc(o.tipo.replace("_", " "))}${o.origen === "agente-autonomo" ? " · agente" : ""}</span><span class="spacer"></span><span class="px mono"></span><span class="chg"></span></div><canvas class="live-chart"></canvas><div class="muted info" style="margin-top:4px"></div></div>`).join("");
+    }
+    let real = false;
+    await Promise.all(open.map(async (o) => {
+      const card = box.querySelector(`[data-live="${o.id}"]`); if (!card) return;
+      try {
+        const g = await api(`/api/bolsa/orden/${o.id}/grafico`), q = g.cotizacion; real ||= g.real;
+        card.querySelector(".px").textContent = `${num(q.precio, 4)} ${q.divisa}`; card.querySelector(".chg").innerHTML = pct(q.variacion_pct);
+        card.querySelector(".live-dot").classList.toggle("off", !q.abierto);
+        const dist = g.niveles.filter((n) => ["limite", "stop", "objetivo"].includes(n.tipo)).map((n) => `${n.texto}: ${num(n.precio, 4)} (${num(((n.precio / q.precio) - 1) * 100)} %)`).join(" · ");
+        card.querySelector(".info").textContent = `${q.real ? q.fuente + (q.retraso ? " · " + q.retraso : "") : "simulado (sin conexión)"} · ${q.abierto ? "mercado abierto" : "mercado cerrado"}${g.orden.estado !== "pendiente" ? " · " + g.orden.estado : ""}${dist ? " · " + dist : ""}`;
+        liveChart(card.querySelector("canvas"), g.puntos, g.niveles);
+      } catch (e) { card.querySelector(".info").textContent = String(e.message || e); }
+    }));
+    $("#bl-sub").innerHTML = real ? "datos reales · se actualiza cada 5 s" : "sin conexión: precios simulados";
+  }
+  async function bolsaAgent() {
+    const a = await api("/api/bolsa/agente"); liveState.agent = a; const r = a.resumen, st = a.estadisticas;
+    a.ordenes_activas = (bolsaState.data && a.cartera !== bolsaState.data.resumen.cartera) ? (await api(`/api/bolsa?cartera=${a.cartera}`)).ordenes.filter((o) => o.estado === "pendiente") : [];
+    $("#ba-state").innerHTML = a.activo ? '<span class="tag ok"><span class="live-dot"></span> TRABAJANDO</span>' : `<span class="tag">${a.configurado ? "ARRANCANDO" : "EN PAUSA"}</span>`;
+    $("#ba-datos").innerHTML = a.datos.en_linea ? `<span class="tag accent">datos reales · ${esc(a.datos.ultima_fuente || "")}</span>` : '<span class="tag warn">sin conexión · simulación</span>';
+    $("#ba-toggle").textContent = a.configurado ? "PAUSAR" : "ACTIVAR";
+    $("#ba-stats").innerHTML = [["Patrimonio", eur(r.total_eur)], ["Rentabilidad", pct(r.rentabilidad_pct)], ["Operaciones cerradas", `${st.cerradas} · ${st.cerradas ? Math.round((st.ganadoras / st.cerradas) * 100) : 0} % aciertos`], ["Posiciones", `${r.posiciones.length} · efectivo ${eur(r.efectivo_eur)}`]]
+      .map(([k, v]) => `<div class="panel stat"><span class="k">${k}</span><span class="v" style="font-size:1rem">${v}</span></div>`).join("");
+    liveChart($("#ba-curve"), a.curva.map((c) => ({ ts: c.ts, precio: c.total_eur })), [{ tipo: "entrada", precio: r.capital_inicial_eur, texto: "Capital inicial" }], { vacio: "La curva aparece tras los primeros ciclos" });
+    $("#ba-rank").innerHTML = a.ranking.length ? `<table class="tbl"><tr><th>Valor</th><th>Puntuación</th><th>Precio</th><th>RSI</th><th>20 sesiones</th></tr>${a.ranking.slice(0, 8).map((x) => `<tr><td><b>${esc(x.simbolo)}</b>${x.real ? "" : ' <span class="muted">sim.</span>'}</td><td class="mono">${num(x.puntuacion)}</td><td class="mono">${num(x.precio, 4)}</td><td class="mono">${x.rsi ?? "–"}</td><td>${pct(x.roc20_pct)}</td></tr>`).join("")}</table>` : '<p class="muted">Analizando el mercado…</p>';
+    $("#ba-diario").innerHTML = a.diario.length ? a.diario.map((e) => `<div class="e ${esc(e.tipo)}"><div class="t">${new Date(e.ts * 1000).toLocaleString("es-ES")} · ${esc(e.tipo)}${e.simbolo ? " · " + esc(e.simbolo) : ""}</div>${esc(e.texto)}</div>`).join("") : '<p class="muted">Todavía sin decisiones.</p>';
+    if (a.error) $("#ba-diario").insertAdjacentHTML("afterbegin", `<div class="e error">${esc(a.error)}</div>`);
+    const c = a.ajustes; $("#ba-riesgo").value = c.riesgo_pct; $("#ba-maxpos").value = c.max_posiciones; $("#ba-peso").value = c.max_peso_pct; $("#ba-reserva").value = c.reserva_pct; $("#ba-int").value = c.intervalo_s;
+    if (document.activeElement !== $("#ba-universo")) $("#ba-universo").value = (c.universo || []).join(", ");
+  }
+  $("#ba-toggle").onclick = guard(async () => { await api("/api/bolsa/agente", { body: { activo: !liveState.agent?.configurado } }); bolsaAgent(); });
+  $("#ba-cycle").onclick = guard(async () => { toast("El agente está analizando el mercado…"); await api("/api/bolsa/agente", { body: { ciclo: true } }); await loaders.bolsa(); });
+  $("#ba-view").onclick = () => { if (!liveState.agent) return; bolsaState.cartera = liveState.agent.cartera; local.set("nexus_bolsa_cartera", bolsaState.cartera); refreshView(); };
+  $("#ba-save").onclick = guard(async () => {
+    await api("/api/bolsa/agente", { body: { riesgo_pct: Number($("#ba-riesgo").value), max_posiciones: Number($("#ba-maxpos").value), max_peso_pct: Number($("#ba-peso").value), reserva_pct: Number($("#ba-reserva").value), intervalo_s: Number($("#ba-int").value), universo: $("#ba-universo").value.split(/[,\s]+/).filter(Boolean) } });
+    toast("Ajustes del agente guardados"); bolsaAgent(); });
   $("#bo-cartera").onchange = () => { bolsaState.cartera = Number($("#bo-cartera").value); local.set("nexus_bolsa_cartera", bolsaState.cartera); refreshView(); };
   $("#bo-quote").onclick = guard(bolsaQuote);
   $("#bo-sym").onchange = () => guard(bolsaQuote)();

@@ -17,6 +17,7 @@ import threading
 import time
 from collections import Counter
 
+from .activity import ACTIVITY
 from .. import log
 from ..memory.embeddings import tokens
 from ..memory.graph import KnowledgeGraph
@@ -206,6 +207,8 @@ class Lounge:
         try:
             self.tasks_since_meeting = 0
             agents = self.s.agents.list()
+            for a in agents:
+                ACTIVITY.set(a.id, "meeting", f"Reunión del salón{': ' + topic if topic else ''}")
             skills = self.skills()
             self.post("nexus", f"Abro la reunion del salon{': ' + topic if topic else ''}. "
                                f"Somos {len(agents)} agentes.", "system", {"event": "meeting_start"})
@@ -259,6 +262,8 @@ class Lounge:
                       {"event": "meeting_end", "proposals": len(proposals)})
             return {"proposals": proposals, "directory": directory}
         finally:
+            for a in self.s.agents.list():
+                ACTIVITY.set(a.id, "idle")
             self._meeting.release()
 
     def user_says(self, text: str) -> None:

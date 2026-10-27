@@ -1,0 +1,2 @@
+Ficheros RAR de prueba de tests/test_archives.py, tomados de la bateria de pruebas de rarfile 4.5
+(https://github.com/markokr/rarfile, test/files/), licencia ISC (c) Marko Kreen.

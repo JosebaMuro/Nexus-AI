@@ -44,6 +44,7 @@
     <button data-view="agents"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.3"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M14.5 14.5c3.5-.6 6.5 1.5 6.5 5"/></svg><span class="tip">AGENTES</span></button>
     <button data-view="models"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span class="tip">MODELOS</span></button>
     <button data-view="tools"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><span class="tip">HERRAMIENTAS</span><span class="badge hidden" id="badge-tools"></span></button>
+    <button data-view="devices"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span class="tip">DISPOSITIVOS</span></button>
     <button data-view="net"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span class="tip">RED COOP</span></button>
     <button data-view="system"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/><rect x="9.5" y="9.5" width="5" height="5"/></svg><span class="tip">SISTEMA</span></button>
     <button id="rail-more" class="more" aria-label="Más secciones"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span class="tip">MÁS</span><span class="badge hidden" id="badge-more"></span></button>
@@ -224,6 +225,26 @@
         </div>
         <div class="panel"><h3>Mercados <span class="sub">hora local de cada bolsa</span></h3><div id="bolsa-mercados" style="overflow-x:auto"></div></div>
       </div>
+      <div class="panel" style="margin-top:16px" id="bolsa-agente"><h3>Agente autónomo <span class="sub" id="ba-sub">opera solo en su cartera simulada con datos reales</span></h3>
+        <div class="row" style="margin-bottom:10px"><span id="ba-state"></span><span id="ba-datos"></span><span class="spacer"></span>
+          <button class="btn sm" id="ba-toggle">PAUSAR</button><button class="btn sm" id="ba-cycle">ANALIZAR AHORA</button><button class="btn sm" id="ba-view">VER SU CARTERA</button></div>
+        <div class="grid g4" id="ba-stats"></div>
+        <div class="grid g2" style="margin-top:12px">
+          <div><div class="muted" style="margin-bottom:4px">Patrimonio de la cartera del agente</div><canvas id="ba-curve" class="live-chart" style="height:170px"></canvas>
+            <div class="muted" style="margin:10px 0 4px">Lo que ve ahora (mejores puntuaciones)</div><div id="ba-rank" style="overflow-x:auto"></div></div>
+          <div><div class="muted" style="margin-bottom:4px">Diario de decisiones</div><div id="ba-diario" class="ba-diario"></div></div>
+        </div>
+        <details style="margin-top:10px"><summary class="muted">Ajustes del agente</summary>
+          <div class="row" style="margin-top:8px">
+            <label class="muted">Riesgo por operación (%) <input class="input" id="ba-riesgo" type="number" step="0.1" min="0.1" max="5" style="width:90px"></label>
+            <label class="muted">Máx. posiciones <input class="input" id="ba-maxpos" type="number" min="1" max="30" style="width:80px"></label>
+            <label class="muted">Peso máx. por valor (%) <input class="input" id="ba-peso" type="number" min="1" max="100" style="width:80px"></label>
+            <label class="muted">Liquidez de reserva (%) <input class="input" id="ba-reserva" type="number" min="0" max="90" style="width:80px"></label>
+            <label class="muted">Cada (s) <input class="input" id="ba-int" type="number" min="15" style="width:80px"></label></div>
+          <div class="row" style="margin-top:8px"><input class="input" id="ba-universo" placeholder="Universo: símbolos separados por comas (vacío = todo el catálogo)" style="flex:1 1 300px;min-width:0"><button class="btn sm primary" id="ba-save">GUARDAR</button></div>
+        </details>
+      </div>
+      <div class="panel" style="margin-top:16px"><h3>Órdenes activas en tiempo real <span class="sub" id="bl-sub"></span></h3><div class="grid g2" id="bolsa-live"></div></div>
       <div class="panel" style="margin-top:16px"><h3>Posiciones</h3><div id="bolsa-pos" style="overflow-x:auto"></div></div>
       <div class="panel" style="margin-top:16px"><h3>Órdenes</h3><div id="bolsa-ord" style="overflow-x:auto"></div></div>
       <div class="panel" style="margin-top:16px"><h3>Operaciones <span class="sub">gastos y ganancia realizada (FIFO)</span></h3><div id="bolsa-ops" style="overflow-x:auto"></div></div>
@@ -242,6 +263,22 @@
           <div class="row" style="margin-top:10px"><input class="input" id="bn-sym" placeholder="Nuevo valor" style="flex:1 1 100px;min-width:0"><input class="input" id="bn-name" placeholder="Nombre" style="flex:1 1 120px;min-width:0">
             <select class="input" id="bn-mkt" style="flex:1 1 120px;min-width:0"></select><input class="input" id="bn-px" type="number" step="any" placeholder="Precio" style="flex:1 1 90px;min-width:0"><button class="btn" id="bn-add">AÑADIR</button></div>
         </div>
+      </div>
+    </section>
+
+    <!-- ================= DISPOSITIVOS ================= -->
+    <section class="view" id="view-devices">
+      <div class="view-title">DISPOSITIVOS <span class="sub">luces LED, reloj y avatar de bolsillo siguen a Nexus</span></div>
+      <div class="panel"><h3>Modos <span class="sub" id="dv-modo"></span></h3><div class="row" id="dv-modos" style="flex-wrap:wrap"></div>
+        <p class="muted" style="margin-top:8px">Se pueden cambiar desde aquí, desde el móvil o desde el reloj indistintamente.</p></div>
+      <div class="panel" style="margin-top:16px"><h3>Luces LED <span class="sub">NexusLED en ESP32 con tiras WS2812/SK6812</span></h3>
+        <div class="row"><button class="btn primary" id="dv-scan">BUSCAR EN LA RED</button><input class="input" id="dv-ip" placeholder="IP del ESP32 (p. ej. 192.168.1.50)" style="flex:1 1 200px;min-width:0"><button class="btn" id="dv-add">AÑADIR</button></div>
+        <div id="dv-found" style="margin-top:8px"></div>
+        <div class="grid g2" id="dv-leds" style="margin-top:10px"></div></div>
+      <div class="grid g2" style="margin-top:16px">
+        <div class="panel"><h3>Reloj y avatar de bolsillo <span class="sub">conectados ahora</span></h3><div id="dv-clients"></div>
+          <div class="muted" style="margin:10px 0 4px">Imágenes que Nexus genera para la pantalla de tinta del Pico W:</div><div class="row" id="dv-pico" style="flex-wrap:wrap;gap:6px"></div></div>
+        <div class="panel"><h3>Firmware <span class="sub">grabar el ESP32 o el Pico W por USB</span></h3><div id="dv-fw"><span class="muted">Cargando…</span></div></div>
       </div>
     </section>
 
