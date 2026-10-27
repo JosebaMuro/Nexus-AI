@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 env:
-  BASE: v1.8.0
+  BASE: v2.0.0
   GH_TOKEN: ${{ github.token }}
 
 jobs:

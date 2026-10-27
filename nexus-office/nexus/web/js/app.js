@@ -2021,6 +2021,7 @@
       } else if (d.act === "test") {
         busy("Probando el modelo…"); const r = await api("/api/accel/test", { body: {} });
         toast(r.ok ? `${r.backend}: ${r.tokens_s ?? "?"} tok/s en ${r.effective?.device || r.profile?.device || "?"}` : "La prueba ha fallado: " + (r.error || ""), !r.ok);
+      } else if (d.act === "desktop") { self.close(); NexusApp.desktop(); return;
       } else if (d.act === "go") { self.close(); go(d.v); return; }
       else if (d.act === "hwedit") { self.close(); HwProfiles.open(); return; }
       else if (d.act === "accel-dlg") { self.close(); Accel.open(true); return; }
@@ -2069,7 +2070,10 @@
       return out + `<div class="pacts"><button class="btn sm" data-act="go" data-v="memory">NÚCLEO</button><button class="btn sm" data-act="go" data-v="models">MODELOS</button></div>`;
     },
     async red() {
-      const c = await api("/api/coop"); let out = `<h4>Red COOP</h4>`;
+      const c = await api("/api/coop"); let out = "";
+      if (window.NexusApp && typeof NexusApp.desktop === "function")   // APK autonoma: tambien se conecta al ordenador
+        out += `<h4>Mi ordenador</h4>` + this.opt(false, "Conectar a mi ordenador", "red local, internet o VPN cifrada", `data-act="desktop"`, "ABRIR");
+      out += `<h4>Red COOP</h4>`;
       out += this.opt(c.running, c.running ? `Activa · ${c.vip || ""}` : "Apagada", c.running ? `${(c.peers || []).length ?? 0} nodos conectados` : "comparte agentes y modelos con otros equipos",
         `data-act="coop" data-v="${c.running ? "stop" : "start"}"`, c.running ? "APAGAR" : "ENCENDER");
       try {

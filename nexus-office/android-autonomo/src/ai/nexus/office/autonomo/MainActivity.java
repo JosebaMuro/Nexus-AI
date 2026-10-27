@@ -635,6 +635,12 @@ public class MainActivity extends Activity {
         }
 
         /** En la app autonoma "cambiar de servidor" reinicia el Nexus-Office del movil. */
+        /** Conectar con el Nexus-Office del ordenador (red local, internet o VPN WireGuard). */
+        @JavascriptInterface
+        public void desktop() {
+            startActivity(new Intent(MainActivity.this, EscritorioActivity.class));
+        }
+
         @JavascriptInterface
         public void reset() {
             restart(NexusServerService.ACTION_RETRY);

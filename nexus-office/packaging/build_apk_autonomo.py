@@ -139,6 +139,11 @@ def build() -> Path:
         print(f"[apk] llama.cpp con GPU (Vulkan/OpenCL): {'si, ' + str(len(gpu)) + ' bibliotecas' if gpu else 'no (sin NDK)'}")
         for n in list(NATIVE) + gpu:
             z.write(RUNTIME / "lib" / n, f"lib/arm64-v8a/{n}")
+        # VPN WireGuard para «Conectar a mi ordenador» (la misma de la app VPN): solo ARM64, como el resto
+        wg = base.wireguard_libs()["arm64-v8a"]
+        z.writestr("lib/arm64-v8a/libwg-go.so", wg)
+        z.writestr("assets/LICENSES/WireGuard-Apache-2.0.txt",
+                   "libwg-go.so: WireGuard para Android (https://git.zx2c4.com/wireguard-android), Apache License 2.0.\n")
         # sin comprimir dentro de la APK: la app lo lee con openFd para saber su tamano y mostrar el progreso
         z.write(OUT / "runtime.zip", "assets/runtime.zip", compress_type=zipfile.ZIP_STORED)
         z.writestr("assets/runtime.json", json.dumps(meta))
