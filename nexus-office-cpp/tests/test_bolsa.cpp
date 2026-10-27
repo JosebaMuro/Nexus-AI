@@ -1,4 +1,5 @@
 // Cotizaciones reales con fuentes falsas y agente de bolsa autonomo (tests/test_bolsa_agente.py).
+#include <ctime>
 #include <chrono>
 #include <cmath>
 #include <map>
@@ -151,6 +152,29 @@ TEST("bolsa: velas de CNBC y cierre anterior deducido de la variacion") {
   CHECK(pts.size() == 2 && jnum(pts[0]["precio"]) == 7.1 && jnum(pts[1]["precio"]) == 7.3);
   CHECK(jnum(pts[0]["ts"]) == 1761523200 && jnum(pts[1]["maximo"]) == 7.4);
   CHECK_EQ(jnum(d.quote("AAPL")["cierre_anterior"]), 100.0);
+}
+
+TEST("bolsa: velas de cripto de Coinbase y, si falla, de Kraken") {
+  long long t = (long long)std::time(nullptr) - 600;
+  std::string ts = std::to_string(t), viejo = std::to_string(t - 3 * 86400);
+  DatosMercado d([=](const http::Request& r) {
+    if (r.url.find("yahoo") != std::string::npos) return resp(429);
+    if (r.url.find("products/BTC-EUR/candles") != std::string::npos)   // [ts, min, max, apertura, cierre, vol]
+      return resp(200, "[[" + ts + ", 90, 110, 95, 100, 3], [" + std::to_string(t - 300) + ", 80, 100, 85, 95, 2], [" +
+                           viejo + ", 1, 1, 1, 1, 1]]");
+    if (r.url.find("products/ETH-EUR/candles") != std::string::npos) return resp(500);
+    if (r.url.find("OHLC") != std::string::npos) {
+      CHECK(r.url.find("pair=ETHEUR") != std::string::npos && r.url.find("interval=5") != std::string::npos);
+      return resp(200, R"({"error": [], "result": {"XETHZEUR": [[)" + ts +
+                           R"(, "2000.0", "2100.0", "1990.0", "2050.5", "2040", "7.5", 12]], "last": 1}})");
+    }
+    return resp(404);
+  });
+  json btc = d.serie("BTC-EUR", "1d");
+  CHECK(btc.size() == 2 && jnum(btc[0]["precio"]) == 95 && jnum(btc[1]["precio"]) == 100);
+  CHECK(jnum(btc[1]["apertura"]) == 95 && jnum(btc[1]["maximo"]) == 110 && jnum(btc[1]["minimo"]) == 90);
+  json eth = d.serie("ETH-EUR", "1d");
+  CHECK(eth.size() == 1 && jnum(eth[0]["precio"]) == 2050.5 && jnum(eth[0]["volumen"]) == 7.5);
 }
 
 TEST("bolsa: la mesa usa el precio real, pasa peniques a libras y guarda el historico") {

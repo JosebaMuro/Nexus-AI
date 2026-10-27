@@ -76,6 +76,7 @@ class DatosMercado : public Proveedor {
   json cnbc_points(const std::string& sym, const std::string& rango);
   json quote_google(const std::string& sym);
   json quote_crypto(const std::string& sym);
+  json crypto_points(const std::string& sym, const std::string& rango);
   std::string google_symbol(const std::string& sym);
 };
 

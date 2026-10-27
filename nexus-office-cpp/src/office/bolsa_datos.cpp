@@ -293,6 +293,52 @@ json DatosMercado::cnbc_points(const std::string& sym, const std::string& rango)
   return out;
 }
 
+// velas de cripto de Coinbase o Kraken (respaldo de Yahoo, que limita mucho desde servidores)
+json DatosMercado::crypto_points(const std::string& sym, const std::string& rango) {
+  struct Velas {
+    int gran, interval;   // granularidad de Coinbase en s (0 = no sirve), intervalo de Kraken en min
+    double span;          // segundos que cubre
+  };
+  static const std::map<std::string, Velas> CRIPTO_VELAS = {
+      {"1d", {300, 5, 86400}},           {"5d", {3600, 30, 5 * 86400}},     {"1mo", {21600, 240, 30 * 86400}},
+      {"6mo", {86400, 1440, 182 * 86400}}, {"1y", {86400, 1440, 365 * 86400}}, {"5y", {0, 10080, 5 * 365 * 86400.0}}};
+  auto it = CRIPTO_VELAS.find(rango);
+  const Velas& v = it == CRIPTO_VELAS.end() ? CRIPTO_VELAS.at("1d") : it->second;
+  double desde = now() - v.span;
+  auto row = [](double t, json o, json h, json lo, json c, json vol) -> json {
+    return {{"ts", t}, {"precio", cnbc_num(c).value_or(0)}, {"apertura", cnbc_num(o).value_or(0)},
+            {"maximo", cnbc_num(h).value_or(0)}, {"minimo", cnbc_num(lo).value_or(0)}, {"volumen", cnbc_num(vol).value_or(0)}};
+  };
+  json out = json::array();
+  if (v.gran && v.span / v.gran <= 300) {   // Coinbase da como mucho 300 velas: [ts, min, max, apertura, cierre, vol]
+    try {
+      json j = get("coinbase", "https://api.exchange.coinbase.com/products/" + sym + "/candles",
+                   {{"granularity", std::to_string(v.gran)}}).json_body();
+      std::vector<json> rows;
+      if (j.is_array())
+        for (auto& c : j)
+          if (c.is_array() && c.size() >= 6 && c[0].is_number() && c[0].get<double>() >= desde) rows.push_back(c);
+      std::sort(rows.begin(), rows.end(), [](const json& a, const json& b) { return a[0].get<double>() < b[0].get<double>(); });
+      for (auto& c : rows) out.push_back(row(c[0].get<double>(), c[3], c[2], c[1], c[4], c[5]));
+      if (!out.empty()) return out;
+    } catch (const std::exception&) {   // Kraken
+    }
+  }
+  auto pair = KRAKEN_PAIR.find(sym);
+  if (pair == KRAKEN_PAIR.end()) return out;
+  json res = get("kraken", "https://api.kraken.com/0/public/OHLC",
+                 {{"pair", pair->second}, {"interval", std::to_string(v.interval)}}).json_body().value("result", json::object());
+  if (!res.is_object()) return out;
+  for (auto& [k, rows] : res.items()) {
+    if (k == "last" || !rows.is_array()) continue;
+    for (auto& c : rows)   // [ts, apertura, max, min, cierre, vwap, volumen, n]
+      if (c.is_array() && c.size() >= 7 && c[0].is_number() && c[0].get<double>() >= desde)
+        out.push_back(row(c[0].get<double>(), c[1], c[2], c[3], c[4], c[6]));
+    break;
+  }
+  return out;
+}
+
 std::string DatosMercado::google_symbol(const std::string& sym) {
   std::string u = upper(sym);
   for (auto& [suf, ex] : GOOGLE_EXCHANGE)
@@ -432,9 +478,9 @@ json DatosMercado::serie(const std::string& sym_in, const std::string& rango_in)
     pts = json::array();
   }
   static const Rx CRIPTO(R"(^[A-Z0-9]+-(EUR|USD)$)");
-  if (pts.empty() && !CRIPTO.match(sym)) {
-    try {   // respaldo: velas de CNBC (responde donde Yahoo limita)
-      pts = cnbc_points(sym, rango);
+  if (pts.empty()) {
+    try {   // respaldo: velas de Coinbase/Kraken para cripto y de CNBC para el resto (responden donde Yahoo limita)
+      pts = CRIPTO.match(sym) ? crypto_points(sym, rango) : cnbc_points(sym, rango);
     } catch (const std::exception&) {
       pts = json::array();
     }

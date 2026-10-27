@@ -49,7 +49,7 @@
 - Con varias GPU, llama-server usa solo una: la elegida (`POST /api/hw/gpu`) o la dedicada con más memoria. Se leen
   sus dispositivos con `--list-devices` y nunca se usa un renderizador por software (llvmpipe). Si la GPU elegida no
   arranca, el modelo sigue en la CPU y la causa se ve en `/api/accel`.
-- Bolsa: velas de CNBC cuando Yahoo limita y cierre anterior deducido de la variación si falta.
+- Bolsa: velas de CNBC (y de Coinbase o Kraken para cripto) cuando Yahoo limita, y cierre anterior deducido de la variación si falta.
 
 ### Avatares 3D gratuitos
 - Biblioteca de avatares en *Ajustes > Avatar*: busca y descarga avatares VRM de Open Source Avatars, modelos de
