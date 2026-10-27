@@ -155,7 +155,12 @@ std::string render_now(const std::string& url, const std::string& exe, int budge
                         "--disable-extensions", "--disable-background-networking", "--disable-component-update",
                         "--disable-sync", "--hide-scrollbars", "--blink-settings=imagesEnabled=false",
                         // sin llavero del sistema: en macOS Chrome puede quedarse esperando al Llavero sin interfaz
-                        "--use-mock-keychain", "--password-store=basic"})
+                        "--use-mock-keychain", "--password-store=basic",
+                        // sin buscar dispositivos de la red local (macOS pide permiso y Chrome se queda esperando) y
+                        // sin frenar la pagina por estar en segundo plano
+                        "--disable-features=MediaRouter,DialMediaRouteProvider,Translate,OptimizationHints",
+                        "--no-service-autorun", "--disable-background-timer-throttling",
+                        "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding"})
     cmd.push_back(f);
   cmd.push_back("--user-data-dir=" + S(prof));
   cmd.push_back("--virtual-time-budget=" + std::to_string(budget_ms));
@@ -178,7 +183,12 @@ std::string render_now(const std::string& url, const std::string& exe, int budge
     r = proc::run(cmd, (intento ? TIMEOUT_S : 20) + budget_ms / 1000.0, opt);
     if (!r.started) throw std::runtime_error("no se pudo abrir el navegador");
     if (!r.timed_out) break;
-    if (intento) throw std::runtime_error("el navegador ha tardado demasiado");
+    if (intento) {
+      std::string err = trim(r.err);
+      if (err.size() > 300) err = err.substr(err.size() - 300);
+      throw std::runtime_error("el navegador ha tardado demasiado" + (err.empty() ? "" : " (" + err + ")"));
+    }
+    L.info("El navegador no respondio a tiempo; se reintenta (" + exe + ")");
   }
   if (proxy) {
     auto blocked = proxy->blocked();
