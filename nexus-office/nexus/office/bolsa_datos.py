@@ -41,6 +41,9 @@ KRAKEN_PAIR = {"BTC-EUR": "XBTEUR", "ETH-EUR": "ETHEUR", "SOL-EUR": "SOLEUR", "A
 # rango -> (rango Yahoo, intervalo Yahoo)
 CNBC_CHART = "https://ts-api.cnbc.com/harmony/app/charts/{rango}.json"
 CNBC_RANGO = {"1d": "1D", "5d": "5D", "1mo": "1M", "6mo": "6M", "1y": "1Y", "5y": "5Y"}
+# rango -> (granularidad de Coinbase en s, intervalo de Kraken en min, segundos que cubre): velas de cripto
+CRIPTO_VELAS = {"1d": (300, 5, 86400), "5d": (3600, 30, 5 * 86400), "1mo": (21600, 240, 30 * 86400),
+                "6mo": (86400, 1440, 182 * 86400), "1y": (86400, 1440, 365 * 86400), "5y": (None, 10080, 5 * 365 * 86400)}
 RANGOS = {"1d": ("1d", "1m"), "5d": ("5d", "5m"), "1mo": ("1mo", "30m"), "6mo": ("6mo", "1d"), "1y": ("1y", "1d"),
           "5y": ("5y", "1wk")}
 
@@ -266,6 +269,30 @@ class DatosMercado:
             return {"precio": float(data["c"][0]), "cierre_anterior": float(data["o"]), "ts": time.time(),
                     "divisa": "EUR", "fuente": "Kraken", "retraso": "tiempo real", "puntos": []}
 
+    def _crypto_points(self, sym: str, rango: str) -> list[dict]:
+        """Velas de cripto de Coinbase o Kraken (respaldo de Yahoo, que limita mucho desde servidores)."""
+        gran, interval, span = CRIPTO_VELAS.get(rango, CRIPTO_VELAS["1d"])
+        desde = time.time() - span
+        if gran and span / gran <= 300:     # Coinbase da como mucho 300 velas: [ts, min, max, apertura, cierre, vol]
+            try:
+                r = self._get("coinbase", f"https://api.exchange.coinbase.com/products/{sym}/candles",
+                              params={"granularity": gran})
+                rows = sorted((v for v in r.json() if isinstance(v, list) and len(v) >= 6 and v[0] >= desde),
+                              key=lambda v: v[0])
+                if rows:
+                    return [{"ts": float(t), "precio": float(c), "apertura": float(o), "maximo": float(h),
+                             "minimo": float(lo), "volumen": float(vol)} for t, lo, h, o, c, vol, *_ in rows]
+            except Exception:   # noqa: BLE001 - Kraken
+                pass
+        pair = KRAKEN_PAIR.get(sym)
+        if not pair:
+            return []
+        r = self._get("kraken", "https://api.kraken.com/0/public/OHLC", params={"pair": pair, "interval": interval})
+        res = r.json().get("result") or {}
+        rows = next((v for k, v in res.items() if k != "last" and isinstance(v, list)), [])
+        return [{"ts": float(v[0]), "precio": float(v[4]), "apertura": float(v[1]), "maximo": float(v[2]),
+                 "minimo": float(v[3]), "volumen": float(v[6])} for v in rows if len(v) >= 7 and v[0] >= desde]
+
     # ------------------------------------------------------------ API publica
     def quote(self, sym: str, max_age: float | None = None) -> dict | None:
         """Ultima cotizacion real de ``sym`` (cache de ``ttl`` segundos) o ``None`` si no hay ninguna fuente."""
@@ -312,9 +339,10 @@ class DatosMercado:
             pts = self._yahoo_points(self._yahoo_chart(sym, *RANGOS[rango]))
         except Exception:   # noqa: BLE001
             pts = []
-        if not pts and not re.match(r"^[A-Z0-9]+-(EUR|USD)$", sym):
-            try:            # respaldo: velas de CNBC (responde donde Yahoo limita)
-                pts = self._cnbc_points(sym, rango)
+        if not pts:
+            crypto = bool(re.match(r"^[A-Z0-9]+-(EUR|USD)$", sym))
+            try:            # respaldo: velas de Coinbase/Kraken para cripto y de CNBC para el resto
+                pts = self._crypto_points(sym, rango) if crypto else self._cnbc_points(sym, rango)
             except Exception:   # noqa: BLE001
                 pts = []
         if not pts:

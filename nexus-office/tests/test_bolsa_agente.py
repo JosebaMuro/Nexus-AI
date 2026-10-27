@@ -245,3 +245,33 @@ def test_cnbc_velas_y_variacion_sin_cierre():
     pts = d.serie("SAN.MC", "6mo")
     assert [p["precio"] for p in pts] == [7.1, 7.3] and pts[0]["ts"] == 1761523200 and pts[1]["maximo"] == 7.4
     assert d.quote("AAPL")["cierre_anterior"] == 100
+
+
+def test_velas_cripto_de_coinbase_y_kraken():
+    import time
+
+    import httpx
+    from nexus.office import bolsa_datos as D
+    now = int(time.time())
+
+    def h(req):
+        u = str(req.url)
+        if "yahoo" in u:
+            return httpx.Response(429)
+        if "exchange.coinbase.com/products/BTC-EUR/candles" in u:
+            assert "granularity=300" in u   # mas reciente primero, como la API real
+            return httpx.Response(200, json=[[now - 60, 99, 102, 100, 101, 3], [now - 360, 98, 101, 99, 100, 2],
+                                             [now - 2 * 86400, 1, 1, 1, 1, 1]])
+        if "exchange.coinbase.com" in u:
+            return httpx.Response(503)
+        if "kraken.com/0/public/OHLC" in u:
+            assert "pair=ETHEUR" in u and "interval=5" in u
+            return httpx.Response(200, json={"error": [], "result": {"XETHZEUR": [
+                [now - 600, "10", "12", "9", "11", "10.5", "4", 3], [now - 300, "11", "13", "10", "12", "11", "5", 2]],
+                "last": now}})
+        return httpx.Response(404)
+    d = D.DatosMercado(httpx.Client(transport=httpx.MockTransport(h)))
+    btc = d.serie("BTC-EUR", "1d")
+    assert [p["precio"] for p in btc] == [100, 101] and btc[1]["maximo"] == 102 and btc[0]["apertura"] == 99
+    eth = d.serie("ETH-EUR", "1d")
+    assert [p["precio"] for p in eth] == [11, 12] and eth[0]["minimo"] == 9 and eth[1]["volumen"] == 5
