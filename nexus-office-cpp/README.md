@@ -22,20 +22,20 @@ elige el modelo de IA adecuado; lo descarga si hay conexión y, si no, lo deja r
 
 | Equipo | Fichero |
 |---|---|
-| Windows 10/11 x64 | `Nexus-Office-Setup-2.1.0-cpp-windows-x64.exe` |
-| Windows 11 ARM (Snapdragon X) | `Nexus-Office-Setup-2.1.0-cpp-windows-arm64.exe` |
-| Linux x86_64 | `Nexus-Office-2.1.0-cpp-linux-x86_64.run`, `.AppImage`, `.flatpak` o `nexus-office-c_2.1.0-cpp_amd64.deb` |
-| Linux ARM64, Raspberry Pi 4/5 (64 bits) | `Nexus-Office-2.1.0-cpp-linux-aarch64.run`, `.AppImage`, `.flatpak` o `nexus-office-c_2.1.0-cpp_arm64.deb` |
-| macOS Apple Silicon / Intel | `Nexus-Office-2.1.0-cpp-macos-arm64.tar.gz` / `-macos-x86_64.tar.gz` (abre `Nexus-Office.command`) |
-| Android, Nexus-Office dentro del móvil | `Nexus-Office-2.1.0-cpp-android-autonomo.apk` |
-| Android, cliente del PC de la oficina | `Nexus-Office-2.1.0-cpp-android-vpn.apk` |
-| Código fuente | `Nexus-Office-2.1.0-cpp-codigo-fuente.zip` |
-| Ejemplos | `Nexus-Office-2.1.0-cpp-grafo-wikipedia-es.zip`, `Nexus-Office-resumen.md` |
+| Windows 10/11 x64 | `Nexus-Office-Setup-2.2.0-cpp-windows-x64.exe` |
+| Windows 11 ARM (Snapdragon X) | `Nexus-Office-Setup-2.2.0-cpp-windows-arm64.exe` |
+| Linux x86_64 | `Nexus-Office-2.2.0-cpp-linux-x86_64.run`, `.AppImage`, `.flatpak` o `nexus-office-c_2.2.0-cpp_amd64.deb` |
+| Linux ARM64, Raspberry Pi 4/5 (64 bits) | `Nexus-Office-2.2.0-cpp-linux-aarch64.run`, `.AppImage`, `.flatpak` o `nexus-office-c_2.2.0-cpp_arm64.deb` |
+| macOS Apple Silicon / Intel | `Nexus-Office-2.2.0-cpp-macos-arm64.tar.gz` / `-macos-x86_64.tar.gz` (abre `Nexus-Office.command`) |
+| Android, Nexus-Office dentro del móvil | `Nexus-Office-2.2.0-cpp-android-autonomo.apk` |
+| Android, cliente del PC de la oficina | `Nexus-Office-2.2.0-cpp-android-vpn.apk` |
+| Código fuente | `Nexus-Office-2.2.0-cpp-codigo-fuente.zip` |
+| Ejemplos | `Nexus-Office-2.2.0-cpp-grafo-wikipedia-es.zip`, `Nexus-Office-resumen.md` |
 
 ```bash
-Nexus-Office-Setup-2.1.0-cpp-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED   # Windows, desatendido
-sh Nexus-Office-2.1.0-cpp-linux-x86_64.run --oficina=herreria --servicio --red      # Linux y Raspberry Pi
-sudo apt install ./nexus-office-c_2.1.0-cpp_amd64.deb && nexus-office-c              # Debian, Ubuntu, Raspberry Pi OS
+Nexus-Office-Setup-2.2.0-cpp-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED   # Windows, desatendido
+sh Nexus-Office-2.2.0-cpp-linux-x86_64.run --oficina=herreria --servicio --red      # Linux y Raspberry Pi
+sudo apt install ./nexus-office-c_2.2.0-cpp_amd64.deb && nexus-office-c              # Debian, Ubuntu, Raspberry Pi OS
 ```
 
 Se instala junto a la edición Python sin pisarla. Después, `nexus-office` (o el acceso directo) abre

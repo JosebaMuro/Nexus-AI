@@ -10,7 +10,7 @@ Entradas (en .cache/, las deja .github/workflows/cpp-entrega.yml):
   .cache/cpp/<target>/Nexus-Office/            carpeta instalada por «cmake --install» en cada sistema (cpp.yml)
   .cache/desktop-runtimes/<target>/llama|sd/   llama-server y sd-cli de la Release de la edicion Python
   .cache/desktop-runtimes/<target>/piper|whisper/   voz: piper (rhasspy/piper) y whisper-cli (whisper.cpp)
-Salida en dist/ (los nombres llevan la version, 2.1.0-cpp, y no chocan con los de la edicion Python):
+Salida en dist/ (los nombres llevan la version, 2.2.0-cpp, y no chocan con los de la edicion Python):
   windows/  Nexus-Office-Setup-<ver>-windows-x64.exe / -arm64.exe     instalador grafico (NSIS; makensis)
   linux/    Nexus-Office-<ver>-linux-<x86_64|aarch64>.run / .AppImage / .flatpak, nexus-office-c_<ver>_<amd64|arm64>.deb
   macos/    Nexus-Office-<ver>-macos-<arm64|x86_64>.tar.gz              abre «Nexus-Office.command»
@@ -47,9 +47,9 @@ def _version() -> str:
     return m.group(1)
 
 
-VERSION = _version()                                   # 2.1.0-cpp
+VERSION = _version()                                   # 2.2.0-cpp
 NUMVER = re.match(r"\d+\.\d+\.\d+", VERSION).group(0)  # 2.0.0 (NSIS y metadatos que solo admiten numeros)
-DEB_VERSION = VERSION.replace("-", "~", 1).replace("-", ".")   # 2.1.0~cpp: dpkg la ordena antes que la 2.1.0
+DEB_VERSION = VERSION.replace("-", "~", 1).replace("-", ".")   # 2.2.0~cpp: dpkg la ordena antes que la 2.2.0
 TARGETS = {
     "windows-x64": {"os": "windows"},
     "windows-arm64": {"os": "windows"},
