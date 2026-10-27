@@ -50,6 +50,9 @@ const json& config_defaults() {
   "vpn": {"enabled": false, "port": 51820, "subnet": "10.78.0.0/24", "endpoints": []},
   "performance": {"workers": 0, "crawl_connections": 0},
   "rag": {"crawl_batch_pages": 0, "allow_private_urls": false},
+  "nube": {"proveedor": "", "modelo": "", "base_url": "", "esfuerzo": "medium",
+           "clave_gemini": "", "clave_openai": "", "clave_perplexity": "", "clave_claude": "", "clave_mistral": "",
+           "clave_deepseek": "", "clave_groq": "", "clave_openrouter": "", "clave_compatible": ""},
   "admin": {"pin_hash": "", "pin_salt": ""}
 })JSON");
   return D;
@@ -68,7 +71,10 @@ const std::set<std::string>& user_keys() {
 const std::set<std::string>& secret_keys() {
   static const std::set<std::string> K = {"admin.pin_hash",        "admin.pin_salt",       "llm.openai_api_key",
                                           "models.huggingface_token", "models.civitai_token", "models.kaggle_key",
-                                          "models.modelscope_token", "coop.passphrase",      "server.lan_key"};
+                                          "models.modelscope_token", "coop.passphrase",      "server.lan_key",
+                                          "nube.clave_gemini", "nube.clave_openai", "nube.clave_perplexity",
+                                          "nube.clave_claude", "nube.clave_mistral", "nube.clave_deepseek",
+                                          "nube.clave_groq", "nube.clave_openrouter", "nube.clave_compatible"};
   return K;
 }
 
@@ -165,6 +171,7 @@ json Config::update(const json& changes, bool admin) {
     const std::string& key = it.key();
     if (starts_with(key, "admin.")) continue;
     if (!admin && !user_keys().count(key)) throw PermissionError("'" + key + "' requiere modo administrador");
+    if (secret_keys().count(key) && it.value() == "********") continue;   // la vista enmascarada: se conserva
     set(key, it.value(), false);
     applied[key] = it.value();
   }

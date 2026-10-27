@@ -194,6 +194,41 @@ class UnavailableBackend : public Backend {
   std::string n_;
 };
 
+// IA online para el agente Profesor (llm/cloud.py): Gemini, ChatGPT, Perplexity, Claude, Mistral... Solo con la
+// clave que pone un administrador y solo si un agente la pide ("nube:", "nube:<proveedor>[:<modelo>]").
+struct CloudProvider {
+  std::string id, nombre, estilo, base_url, modelo, clave_en;
+};
+const std::vector<CloudProvider>& cloud_providers();
+extern const std::vector<std::string> CLOUD_EFFORTS;
+
+class CloudError : public std::runtime_error {
+ public:
+  using std::runtime_error::runtime_error;
+};
+
+class CloudBackend : public Backend {
+ public:
+  explicit CloudBackend(Config& config, double timeout = 180) : config_(config), timeout_(timeout) {}
+  std::string name() const override { return "nube"; }
+  bool available() override { return ready(); }
+  std::vector<std::string> models() override;
+  void stream_chat(const json& messages, const std::string& model, const Opts& opts, const Sink& out) override;
+  std::pair<std::string, std::string> resolve(const std::string& spec = "") const;
+  bool ready(const std::string& spec = "") const;
+  std::string key(const std::string& prov) const;
+  std::string base_url(const std::string& prov) const;
+  json status() const;
+  json test(const std::string& spec = "");
+  static std::map<std::string, std::string>& base_override();   // pruebas: URL de un servidor falso
+
+ private:
+  Config& config_;
+  double timeout_;
+  void openai(const std::string& prov, const json& messages, const std::string& model, const Opts& opts, Pipe& pipe);
+  void anthropic(const json& messages, const std::string& model, const Opts& opts, Pipe& pipe);
+};
+
 // intenciones inequivocas que se resuelven con una herramienta sin esperar al LLM
 std::optional<std::pair<std::string, json>> detect_intent(const std::string& text, const std::set<std::string>& tools);
 

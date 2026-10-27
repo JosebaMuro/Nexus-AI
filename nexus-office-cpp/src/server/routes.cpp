@@ -361,6 +361,44 @@ void register_routes(App& app) {
     return json{{"applied", applied}};
   });
 
+  // ------------------------------------------------------------------ IA online (agente Profesor)
+  auto cloud = [](Ctx& c) { return std::static_pointer_cast<llm::CloudBackend>(c.app.S().llm->backend("nube")); };
+  app.get("/api/nube", [cloud](Ctx& c) -> Out { return cloud(c)->status(); });
+
+  app.put("/api/nube", [cloud](Ctx& c) -> Out {
+    Config& cfg = c.app.S().config;
+    if (!c.body.is_object()) throw HttpErr(422, "Se esperaba un objeto JSON");
+    auto known = [](const std::string& id) {
+      for (auto& p : llm::cloud_providers())
+        if (p.id == id) return true;
+      return false;
+    };
+    std::string prov = c.body.contains("proveedor") ? jstr(c.body, "proveedor") : cfg.str("nube.proveedor");
+    if (!prov.empty() && !known(prov)) {
+      std::vector<std::string> ids;
+      for (auto& p : llm::cloud_providers()) ids.push_back(p.id);
+      throw HttpErr(400, "proveedor desconocido: " + prov + ". Validos: " + join(ids, ", "));
+    }
+    if (c.body.contains("esfuerzo") &&
+        std::find(llm::CLOUD_EFFORTS.begin(), llm::CLOUD_EFFORTS.end(), jstr(c.body, "esfuerzo")) ==
+            llm::CLOUD_EFFORTS.end())
+      throw HttpErr(400, "esfuerzo no valido. Validos: " + join(llm::CLOUD_EFFORTS, ", "));
+    cfg.set("nube.proveedor", prov, false);
+    for (const char* k : {"modelo", "base_url", "esfuerzo"})
+      if (c.body.contains(k)) cfg.set(std::string("nube.") + k, trim(jstr(c.body, k)), false);
+    std::string clave = trim(jstr(c.body, "clave"));
+    if (!prov.empty() && !clave.empty() && clave != "********") cfg.set("nube.clave_" + prov, clave, false);
+    if (c.body.contains("borrar_claves") && c.body["borrar_claves"].is_array())
+      for (auto& p : c.body["borrar_claves"])
+        if (p.is_string() && known(p.get<std::string>())) cfg.set("nube.clave_" + p.get<std::string>(), "", false);
+    cfg.save();
+    return cloud(c)->status();
+  }, true);
+
+  app.post("/api/nube/probar", [cloud](Ctx& c) -> Out {
+    return cloud(c)->test(c.body.is_object() ? jstr(c.body, "proveedor") : "");
+  }, true);
+
   // ------------------------------------------------------------------ hardware / rendimiento
   app.get("/api/hardware", [](Ctx& c) -> Out {
     Services& s = c.app.S();

@@ -415,6 +415,28 @@ json delegate(const json& args, ToolContext& ctx) {
   return {{"agent", target}, {"answer", answer}};
 }
 
+// Pregunta al Profesor (IA online si hay clave, si no el modelo local) y aprende de su respuesta.
+json consultar_profesor(const json& args, ToolContext& ctx) {
+  if (ctx.agent == "profesor") return {{"error", "el Profesor no se consulta a si mismo"}};
+  if (ctx.depth >= 2) return {{"error", "profundidad maxima de delegacion alcanzada"}};
+  Services& s = *ctx.services;
+  auto& agents = *s.agents;
+  if (!agents.get("profesor")) return {{"error", "no hay agente Profesor (restauralo en Agentes)"}};
+  std::string pregunta = trim(jstr(args, "pregunta"));
+  if (pregunta.empty()) return {{"error", "falta la pregunta"}};
+  std::string tarea = pregunta;
+  if (truthy(args.value("contexto", json()))) tarea += "\n\nContexto: " + jstr(args, "contexto");
+  std::string answer = agents.run_subtask("profesor", tarea, ctx);
+  json out = {{"agent", "profesor"}, {"answer", answer}, {"online", s.llm->backend("nube")->available()}};
+  if (truthy(args.value("guardar", json(true))) && !trim(answer).empty()) {
+    // lo aprendido queda en la memoria y el conocimiento del agente que pregunto
+    std::string lesson = "Lección del Profesor sobre «" + uleft(pregunta, 160) + "»: " + uleft(trim(answer), 1200);
+    out["memoria"] = s.memory->remember(lesson, "leccion", 0.75, "agente:profesor", ctx.agent);
+    s.learner->learn_text(lesson, ctx.agent);
+  }
+  return out;
+}
+
 json propose_tool(const json& args, ToolContext& ctx) {
   Services& s = *ctx.services;
   if (!truthy(s.config.get("tools.allow_agent_proposals", true)))
@@ -439,7 +461,8 @@ json list_agents(const json&, ToolContext& ctx) {
 Register r1("calculator", calculator), r2("datetime_now", datetime_now), r3("memory_search", memory_search),
     r4("memory_save", memory_save), r5("knowledge_graph", knowledge_graph), r6("system_info", system_info),
     r10("graph_import", graph_import),
-    r7("delegate", delegate), r8("propose_tool", propose_tool), r9("list_agents", list_agents);
+    r7("delegate", delegate), r8("propose_tool", propose_tool), r9("list_agents", list_agents),
+    r11("consultar_profesor", consultar_profesor);
 
 }  // namespace
 
