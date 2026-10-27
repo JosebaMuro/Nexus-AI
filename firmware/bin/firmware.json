@@ -1,0 +1,42 @@
+{
+  "commit": "74401392cdf65a874a0b8f092cd68d15488a4e4e",
+  "nucleo_esp32": "3.1.1",
+  "micropython": "v1.24.1",
+  "archivos": {
+    "nexusled-esp32.bin": {
+      "version": "1.0.0",
+      "sha256": "c9ca436328bfdb514d1bd387bbedd95757f5dc5db3396429d9bd1090471df8d7",
+      "grabar": "esptool write_flash 0x0"
+    },
+    "nexusled-esp32c3.bin": {
+      "version": "1.0.0",
+      "sha256": "67f8cd6a326faf5a2100cb4375d6c290a279799167cdebf990a708f0dd7fa3bd",
+      "grabar": "esptool write_flash 0x0"
+    },
+    "nexusled-esp32c6.bin": {
+      "version": "1.0.0",
+      "sha256": "c646ec4a1f365259909d629fc90aee2cbda891a7ceb7f28ae76c7ed288b5d6af",
+      "grabar": "esptool write_flash 0x0"
+    },
+    "nexusled-esp32s2.bin": {
+      "version": "1.0.0",
+      "sha256": "9cbd6e227105a2f2b58275034eb1d82be5a662b972873eba2a47d4791fc2cccb",
+      "grabar": "esptool write_flash 0x0"
+    },
+    "nexusled-esp32s3.bin": {
+      "version": "1.0.0",
+      "sha256": "de0b1cb5e4d55c5095992fdf6b068a28e0a9d5399826bd376950ed57470319d5",
+      "grabar": "esptool write_flash 0x0"
+    },
+    "nexuspico-picow.uf2": {
+      "version": "1.0.0",
+      "sha256": "1acb6fa0abf8999568548e86b7f8702c582d809ec2a1a6cea1454b8350ceaa27",
+      "grabar": "copiar a la unidad RPI-RP2"
+    },
+    "nexuswatch-esp32c3.bin": {
+      "version": "1.0.0",
+      "sha256": "a1a349ca4b6c02b683a701ef43583a2d5fb9176818350a1618859477dc2f39f5",
+      "grabar": "esptool write_flash 0x0"
+    }
+  }
+}
