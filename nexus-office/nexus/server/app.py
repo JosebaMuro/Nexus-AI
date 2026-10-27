@@ -369,6 +369,12 @@ def create_app(services: Services | None = None) -> FastAPI:
         hub.broadcast({"type": "status_changed"})
         return res
 
+    @app.get("/api/rag/navegador")
+    def rag_navegador():
+        """Lectura de webs con JavaScript: modo (auto, siempre, nunca) y navegador encontrado en el equipo."""
+        from ..rag import browser
+        return browser.info()
+
     @app.get("/api/hw/perfiles")
     def hw_perfiles():
         """Perfiles de hardware (de serie y propios), el activo, las GPU que hay y los modelos de texto."""

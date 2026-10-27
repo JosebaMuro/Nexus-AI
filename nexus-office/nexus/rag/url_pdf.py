@@ -40,7 +40,11 @@ def fetch(url: str) -> tuple[str, str]:
             data += chunk
             if len(data) > 8_000_000:
                 break
-        return data.decode(r.encoding or "utf-8", errors="replace"), str(r.url)
+        raw, final = data.decode(r.encoding or "utf-8", errors="replace"), str(r.url)
+    if "html" in ctype:
+        from .browser import maybe_render
+        raw, _ = maybe_render(final, raw)   # webs que se pintan con JavaScript: se leen como en un navegador
+    return raw, final
 
 
 def extractive_summary(text: str, n: int = 4) -> tuple[str, list[str]]:
@@ -82,7 +86,9 @@ def process_url(services, url: str, emit=None, max_images: int = 8, agent: str =
     step("Extrayendo estructura")
     doc = extract_html(raw, final_url)
     if doc["words"] < 30:
-        raise ValueError("la pagina apenas contiene texto (puede requerir JavaScript o inicio de sesion)")
+        from .browser import find
+        raise ValueError("la pagina apenas contiene texto (puede requerir inicio de sesion)" if find() else
+                         "la pagina apenas contiene texto: necesita JavaScript e instala Chrome, Edge o Chromium para leerla")
     step("Resumiendo")
     summ = llm_summary(services, doc) or extractive_summary(doc["text"])
     summary, points = summ

@@ -1991,6 +1991,8 @@
       } else if (d.act === "embed") {
         busy("Cambiando el modelo de embeddings (se recalcula en segundo plano)…");
         await api("/api/kg/embeddings/model", { body: { model: d.v } });
+      } else if (d.act === "nav") {
+        await api("/api/config", { method: "PUT", body: { "rag.browser": d.v } });
       } else if (d.act === "coop") {
         await api(`/api/coop/${d.v}`, { body: {} });
       } else if (d.act === "lan") {
@@ -2040,6 +2042,10 @@
         k.embed_models.map((m) => this.opt(m.id === k.embed_active, m.name || m.id, "", `data-act="embed" data-v="${esc(m.id)}"`, "", !S.token)).join("");
       if (!S.token) out += `<div class="pinfo">Cambiar el modelo de embeddings requiere el modo administrador.</div>`;
       if (em.running) out += `<div class="pinfo">Recalculando: ${esc(String(em.done ?? ""))}/${esc(String(em.total ?? ""))}</div>`;
+      const nav = await api("/api/rag/navegador");
+      out += `<h4>Leer webs con JavaScript</h4>` + [["auto", "Automático", "solo si la página lo necesita"], ["siempre", "Siempre", "más lento, lo lee todo como un navegador"], ["nunca", "Nunca", "solo la descarga normal"]]
+        .map(([id, l, sub]) => this.opt(nav.modo === id, l, sub, `data-act="nav" data-v="${id}"`, "", !S.token || (!nav.disponible && id !== "nunca"))).join("");
+      out += `<div class="pinfo">${nav.disponible ? "Navegador: " + esc(nav.navegador.split(/[\\/]/).pop()) : "No hay Chrome, Edge ni Chromium: instala uno para leer webs hechas con JavaScript."}</div>`;
       return out + `<div class="pacts"><button class="btn sm" data-act="go" data-v="memory">NÚCLEO</button><button class="btn sm" data-act="go" data-v="models">MODELOS</button></div>`;
     },
     async red() {

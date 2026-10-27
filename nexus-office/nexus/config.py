@@ -130,7 +130,9 @@ DEFAULTS: dict[str, Any] = {
     # paralelismo de rastreo, importacion y embeddings (0 = automatico: todos los nucleos)
     "performance": {"workers": 0, "crawl_connections": 0},
     # rastreo web por lotes (0 = automatico segun la RAM) y acceso a webs de la red local (intranet, wiki interna)
-    "rag": {"crawl_batch_pages": 0, "allow_private_urls": False},
+    "rag": {"crawl_batch_pages": 0, "allow_private_urls": False,
+            "browser": "auto",          # leer con Chrome/Edge/Chromium sin interfaz: auto (si la web usa JavaScript) | siempre | nunca
+            "browser_path": ""},        # navegador concreto (vacio = el que se encuentre)
     # mesa de bolsa: SIEMPRE simulada (sin dinero ni ordenes reales); precios reales con conexion
     "avatares": {"sketchfab_token": ""},  # clave de API de Sketchfab para descargar (buscar no la necesita)
     "bolsa": {"datos": "reales",            # reales (con conexion; sin ella, simulados) | simulados
