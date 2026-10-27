@@ -1,7 +1,9 @@
-// NexusLED 1.0.0 - firmware para ESP32 y tiras WS2812/WS2812B/SK6812, controlable desde NEXUS AI.
+// NexusLED - firmware para ESP32 y ESP8266 y tiras WS2812/WS2812B/SK6812, controlable desde NEXUS AI.
 //
-// Requisitos: Arduino IDE 2.x (o arduino-cli / PlatformIO) con el nucleo "esp32" de Espressif 3.x.
-// No necesita librerias externas: los LED se manejan con el periferico RMT del propio ESP32.
+// Requisitos: Arduino IDE 2.x (o arduino-cli / PlatformIO) con el nucleo "esp32" de Espressif 3.x, o el nucleo
+// "esp8266" 3.x para ESP-01/01S, ESP-12, NodeMCU, Wemos D1 mini y demas ESP8266.
+// No necesita librerias externas: en el ESP32 los LED van por el periferico RMT; en el ESP8266, por un envio
+// temporizado con el contador de ciclos (como hacen las librerias de NeoPixel).
 //
 // Primer arranque: crea la red Wi-Fi "NexusLED-XXXXXX" (clave "nexusled"). Conectate y abre
 // http://192.168.4.1 para elegir tu Wi-Fi, los pines y el numero de LED. Despues, en NEXUS:
@@ -13,22 +15,64 @@
 
 #include <Arduino.h>
 #include <DNSServer.h>
+#include <WiFiUdp.h>
+
+#if defined(ESP8266)
+// ESP8266 (ESP-01/01S, ESP-12, NodeMCU, Wemos D1 mini...): GPIO2 por defecto (el unico libre en el ESP-01;
+// D4 en NodeMCU y Wemos) y como mucho 600 LED (80 KB de RAM y el envio para las interrupciones)
+#define NL_DEFAULT_PIN 2
+#define NL_MAX_LEDS 600
+#include <ESP8266WebServer.h>
+#include <ESP8266WiFi.h>
+#include <ESP8266mDNS.h>
+#include <LittleFS.h>
+#include <Updater.h>
+using WebServer = ESP8266WebServer;
+#else
 #include <ESPmDNS.h>
 #include <Preferences.h>
 #include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
-#include <WiFiUdp.h>
 #include <esp_mac.h>
-
 #if !defined(ESP_ARDUINO_VERSION_MAJOR) || ESP_ARDUINO_VERSION_MAJOR < 3
 #error "NexusLED necesita el nucleo esp32 de Arduino 3.x (Herramientas > Placa > Gestor de placas > esp32 de Espressif)"
+#endif
 #endif
 
 #include "nl_core.h"
 #include "nl_ui.h"
 
 using nl::Device;
+
+#if defined(ESP8266)
+// Preferences del ESP32 sobre ficheros de LittleFS (una clave = un fichero)
+struct Preferences {
+  bool begin(const char*, bool) { return LittleFS.begin() || (LittleFS.format() && LittleFS.begin()); }
+  static String path(const char* k) { return String("/") + k; }
+  size_t getBytesLength(const char* k) {
+    File f = LittleFS.open(path(k), "r");
+    size_t n = f ? f.size() : 0;
+    if (f) f.close();
+    return n;
+  }
+  size_t getBytes(const char* k, void* buf, size_t n) {
+    File f = LittleFS.open(path(k), "r");
+    if (!f) return 0;
+    size_t r = f.read((uint8_t*)buf, n);
+    f.close();
+    return r;
+  }
+  size_t putBytes(const char* k, const void* buf, size_t n) {
+    File f = LittleFS.open(path(k), "w");
+    if (!f) return 0;
+    size_t r = f.write((const uint8_t*)buf, n);
+    f.close();
+    return r;
+  }
+  bool clear() { return LittleFS.format(); }
+};
+#endif
 
 static Device dev;
 static WebServer server(80);
@@ -41,7 +85,79 @@ static uint32_t wifiStart = 0, lastFrame = 0, rebootAt = 0;
 static bool mdnsUp = false;
 static bool updateOk = false;
 
-// ------------------------------------------------------------------ salida a los LED (RMT)
+// ------------------------------------------------------------------ salida a los LED
+#if defined(ESP8266)
+// Envio temporizado con el contador de ciclos y las interrupciones paradas: WS2812 a 800 kHz
+// (0 = 0,4 us alto + 0,85 us bajo; 1 = 0,8 us alto + 0,45 us bajo). Vale para GPIO 0-5 y 12-15.
+struct HwOut {
+  int pin = -1;
+  bool ok = false;
+  std::vector<uint8_t> bytes;
+};
+static HwOut hw[nl::MAX_OUTPUTS];
+
+static void IRAM_ATTR ws2812Send(uint8_t pin, const uint8_t* p, size_t n) {
+  const uint32_t mask = 1u << pin;
+  const uint32_t mhz = ESP.getCpuFreqMHz();
+  const uint32_t t0h = mhz * 400 / 1000, t1h = mhz * 800 / 1000, period = mhz * 1250 / 1000;
+  uint32_t start = ESP.getCycleCount() - period;
+  uint32_t ps = xt_rsil(15);
+  for (size_t i = 0; i < n; i++) {
+    uint8_t b = p[i];
+    for (uint8_t m = 0x80; m; m >>= 1) {
+      uint32_t high = (b & m) ? t1h : t0h;
+      while (ESP.getCycleCount() - start < period) {
+      }
+      start = ESP.getCycleCount();
+      GPOS = mask;
+      while (ESP.getCycleCount() - start < high) {
+      }
+      GPOC = mask;
+    }
+  }
+  while (ESP.getCycleCount() - start < period) {
+  }
+  xt_wsr_ps(ps);
+}
+
+static void releaseOutputs() {
+  for (auto& h : hw) {
+    h.ok = false;
+    h.pin = -1;
+  }
+}
+
+static void setupOutputs() {
+  releaseOutputs();
+  for (size_t i = 0; i < dev.outputs.size() && i < nl::MAX_OUTPUTS; i++) {
+    int pin = dev.outputs[i].pin;
+    hw[i].pin = pin;
+    hw[i].ok = pin >= 0 && pin <= 15 && !(pin >= 6 && pin <= 11);   // 6-11 son la memoria flash; 16 no es rapido
+    if (hw[i].ok) {
+      pinMode(pin, OUTPUT);
+      digitalWrite(pin, LOW);
+    } else {
+      Serial.printf("[nexusled] el GPIO %d no vale para la tira %d en el ESP8266 (usa 0-5 o 12-15)\n", pin, (int)i + 1);
+    }
+  }
+  if (dev.relayPin >= 0) pinMode(dev.relayPin, OUTPUT);
+  if (dev.buttonPin >= 0) pinMode(dev.buttonPin, INPUT_PULLUP);
+}
+
+static void showOutputs() {
+  for (size_t i = 0; i < dev.outputs.size() && i < nl::MAX_OUTPUTS; i++) {
+    HwOut& h = hw[i];
+    if (!h.ok) continue;
+    dev.outputBytes((int)i, h.bytes);
+    ws2812Send((uint8_t)h.pin, h.bytes.data(), h.bytes.size());
+  }
+  if (dev.relayPin >= 0) {
+    bool lit = dev.powermA > dev.total() + 2;
+    digitalWrite(dev.relayPin, (lit ^ dev.relayInvert) ? HIGH : LOW);
+  }
+}
+#else
+// ESP32: periferico RMT
 struct HwOut {
   int pin = -1;
   bool ok = false;
@@ -98,6 +214,8 @@ static void showOutputs() {
     digitalWrite(dev.relayPin, (lit ^ dev.relayInvert) ? HIGH : LOW);
   }
 }
+
+#endif
 
 // ------------------------------------------------------------------ guardar y cargar
 static String readBlob(const char* key) {
@@ -165,13 +283,21 @@ static void stopAP() {
 
 static void startWifi() {
   WiFi.persistent(false);
+#if defined(ESP8266)
+  WiFi.hostname(hostName().c_str());
+#else
   WiFi.setHostname(hostName().c_str());
+#endif
   if (dev.ssid.empty()) {
     startAP();
     return;
   }
   WiFi.mode(WIFI_STA);
+#if defined(ESP8266)
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);  // menos latencia y menos parpadeos
+#else
   WiFi.setSleep(false);  // menos latencia y menos parpadeos
+#endif
   WiFi.begin(dev.ssid.c_str(), dev.pass.c_str());
   wifiStart = millis();
 }
@@ -199,6 +325,9 @@ static void wifiLoop(uint32_t now) {
   // con conexion estable, el punto de acceso se cierra a los 2 minutos
   if (up && apMode && now - wifiStart > 120000) stopAP();
   if (apMode) dns.processNextRequest();
+#if defined(ESP8266)
+  if (mdnsUp) MDNS.update();
+#endif
 }
 
 // ------------------------------------------------------------------ HTTP
@@ -272,7 +401,11 @@ static void setupHttp() {
             return;
           }
           updateOk = false;
+#if defined(ESP8266)
+          Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000);
+#else
           Update.begin(UPDATE_SIZE_UNKNOWN);
+#endif
         } else if (up.status == UPLOAD_FILE_WRITE) {
           if (Update.isRunning()) Update.write(up.buf, up.currentSize);
         } else if (up.status == UPLOAD_FILE_END) {
@@ -358,11 +491,19 @@ static void buttonLoop(uint32_t now) {
 void setup() {
   Serial.begin(115200);
   uint8_t mac[6];
+#if defined(ESP8266)
+  WiFi.macAddress(mac);
+#else
   esp_read_mac(mac, ESP_MAC_WIFI_STA);
+#endif
   char id[8];
   snprintf(id, sizeof id, "%02X%02X%02X", mac[3], mac[4], mac[5]);
   dev.deviceId = id;
+#if defined(ESP8266)
+  dev.rng.s = ESP.random() | 1;
+#else
   dev.rng.s = esp_random() | 1;
+#endif
   dev.clock = []() -> uint32_t { return millis(); };
   dev.extraInfo = [](nl::JWriter& w) {
     bool up = WiFi.status() == WL_CONNECTED;
@@ -371,7 +512,12 @@ void setup() {
     w.kv("rssi", up ? (int)WiFi.RSSI() : 0);
     w.kv("heap", (unsigned long)ESP.getFreeHeap());
     w.kv("uptime", (unsigned long)(millis() / 1000));
+#if defined(ESP8266)
+    w.kv("chip", "ESP8266");
+    w.kv("flash", (unsigned long)ESP.getFlashChipRealSize());
+#else
     w.kv("chip", ESP.getChipModel());
+#endif
     w.kv("mac", WiFi.macAddress().c_str());
   };
   loadAll();
