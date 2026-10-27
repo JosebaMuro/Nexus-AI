@@ -11,6 +11,7 @@
 #include "agents/agents.h"
 #include "core/config.h"
 #include "core/services.h"
+#include "hardware/hw_profiles.h"
 #include "media/raster.h"
 #include "util/crypto.h"
 #include "util/http.h"
@@ -338,9 +339,13 @@ json Hub::aplicar_modo(const std::string& mid, const std::string& origen) {
       if (sensible) continue;   // un modo nunca toca seguridad ni red
       cfg.set(k, it.value(), false);
     }
-  if (truthy(modo.value("perfil_hw", json())))
-    L.warning("Modo ", mid, ": no se pudo aplicar el perfil de hardware ", jstr(modo, "perfil_hw"),
-              ": los perfiles de hardware con nombre aun no existen");
+  if (truthy(modo.value("perfil_hw", json()))) {
+    try {
+      hw::profiles::activar(jstr(modo, "perfil_hw"), cfg, s);
+    } catch (const std::exception& e) {
+      L.warning("Modo ", mid, ": no se pudo aplicar el perfil de hardware ", jstr(modo, "perfil_hw"), ": ", e.what());
+    }
+  }
   cfg.set("dispositivos.modo", mid);
   json ledcfg = modo.value("leds", json());
   for (auto& d : leds.devices())

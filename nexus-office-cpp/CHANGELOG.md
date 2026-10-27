@@ -42,10 +42,32 @@
 - Grabar el firmware por USB sin internet desde *Dispositivos > Grabar firmware*: los binarios y esptool vienen en el
   paquete, con puertos serie nativos en Windows, Linux y macOS.
 
+### Perfiles de hardware y elección de GPU
+- Perfiles con nombre (Automático, Rendimiento, Equilibrado, Modelo grande, Ahorro, Solo CPU y los tuyos) que juntan
+  motor, acelerador, GPU, modelo, capas en la VRAM, caché de contexto en VRAM o RAM, `--mlock`, contexto, hilos y lote.
+  Se eligen en la barra superior, en Sistema o con los modos de los dispositivos (`/api/hw/perfiles`).
+- Con varias GPU, llama-server usa solo una: la elegida (`POST /api/hw/gpu`) o la dedicada con más memoria. Se leen
+  sus dispositivos con `--list-devices` y nunca se usa un renderizador por software (llvmpipe). Si la GPU elegida no
+  arranca, el modelo sigue en la CPU y la causa se ve en `/api/accel`.
+- Bolsa: velas de CNBC cuando Yahoo limita y cierre anterior deducido de la variación si falta.
+
 ### Avatares 3D gratuitos
 - Biblioteca de avatares en *Ajustes > Avatar*: busca y descarga avatares VRM de Open Source Avatars, modelos de
   referencia (VRM Consortium, Khronos, three.js) y modelos CC de Sketchfab. Si una pasarela IPFS falla prueba otra, solo
   descarga URLs del catálogo y lo descargado sirve sin conexión (`/api/avatares`).
+
+### RAG que lee páginas como un navegador
+
+- Las webs que se pintan con JavaScript (React, Vue, Angular, tiendas...) se leen con Chrome, Edge, Chromium o Brave sin
+  interfaz si hay uno en el equipo; si no, todo sigue con la descarga normal. Lo usan el rastreador, «URL a PDF» y la
+  herramienta web de los agentes (`rag.browser`: auto, siempre o nunca; `rag.browser_path` para elegir uno).
+- El navegador sale por un proxy local que solo deja direcciones públicas (salvo `rag.allow_private_urls`), con un
+  perfil propio limpio en cada lectura. API nueva `GET /api/rag/navegador`.
+
+### Personajes con sexo elegible
+
+- Cada agente (`sexo` en su ficha) y el propio usuario (`user.sexo`) pueden ser mujer u hombre; despachos y sala de
+  descanso lo respetan.
 
 ### Ejemplos para importar
 - **Grafo multicapa de la Wikipedia en español** (`ejemplos/grafo-wikipedia-es`): 2.251 nodos y 7.007 relaciones en

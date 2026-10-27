@@ -1,10 +1,12 @@
 #include "util/net.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <map>
+#include <mutex>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -128,6 +130,11 @@ std::vector<std::string> resolve(const std::string& host) {
   }
   freeaddrinfo(res);
   return out;
+}
+
+static bool starts_with_ff(const std::string& ip) {
+  in6_addr a{};
+  return inet_pton(AF_INET6, ip.c_str(), &a) == 1 && ((const unsigned char*)&a)[0] == 0xFF;   // ff00::/8
 }
 
 static bool parse_v4(const std::string& ip, unsigned char b[4]) {
@@ -391,6 +398,189 @@ std::optional<std::string> tcp_exchange(const std::string& host, int port, const
   }
   close_sock(s);
   return out;
+}
+
+}  // namespace nx::net
+
+// ------------------------------------------------------------------ proxy de salida que solo deja direcciones publicas
+namespace nx::net {
+
+bool public_host(const std::string& host) {
+  auto ips = resolve(host);
+  if (ips.empty()) return false;
+  for (auto& ip : ips) {
+    if (is_private_ip(ip)) return false;
+    unsigned char b[4];
+    if (parse_v4(ip, b) ? (b[0] >= 224 && b[0] <= 239) : starts_with_ff(ip)) return false;   // multicast
+  }
+  return true;
+}
+
+struct GuardProxy::State {
+  sock_t sock = BAD;
+  int port = 0;
+  double timeout = 40;
+  std::atomic<bool> stop{false};
+  mutable std::mutex mu;
+  std::vector<std::string> blocked;
+};
+
+namespace {
+
+void send_all(sock_t s, const char* p, size_t n) {
+  while (n) {
+    int k = (int)send(s, p, (int)std::min<size_t>(n, 1 << 20), 0);
+    if (k <= 0) return;
+    p += k;
+    n -= (size_t)k;
+  }
+}
+
+sock_t connect_to(const std::string& host, int port, int ms) {
+  addrinfo hints{};
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  addrinfo* res = nullptr;
+  if (getaddrinfo(host.c_str(), std::to_string(port).c_str(), &hints, &res) != 0) return BAD;
+  sock_t out = BAD;
+  for (auto* p = res; p && out == BAD; p = p->ai_next) {
+    sock_t s = socket(p->ai_family, SOCK_STREAM, 0);
+    if (s == BAD) continue;
+#ifdef _WIN32
+    DWORD tv = (DWORD)ms;
+#else
+    timeval tv{ms / 1000, (ms % 1000) * 1000};
+#endif
+    setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv, sizeof tv);
+    if (connect(s, p->ai_addr, (int)p->ai_addrlen) == 0)
+      out = s;
+    else
+      close_sock(s);
+  }
+  freeaddrinfo(res);
+  return out;
+}
+
+void pipe_socks(sock_t a, sock_t b, int ms) {
+  char buf[65536];
+  while (true) {
+#ifdef _WIN32
+    WSAPOLLFD p[2] = {{a, POLLRDNORM, 0}, {b, POLLRDNORM, 0}};
+    int n = WSAPoll(p, 2, ms);
+#else
+    pollfd p[2] = {{a, POLLIN, 0}, {b, POLLIN, 0}};
+    int n = poll(p, 2, ms);
+#endif
+    if (n <= 0) return;
+    for (int i = 0; i < 2; ++i) {
+      if (!p[i].revents) continue;
+      int k = (int)recv(p[i].fd, buf, sizeof buf, 0);
+      if (k <= 0) return;
+      send_all(i ? a : b, buf, (size_t)k);
+    }
+  }
+}
+
+void handle(std::shared_ptr<GuardProxy::State> st, sock_t c) {
+  int ms = (int)(st->timeout * 1000);
+  sock_t up = BAD;
+  std::string head;
+  char buf[4096];
+  while (head.find("\r\n\r\n") == std::string::npos && head.size() < 65536 && wait_readable(c, ms)) {
+    int k = (int)recv(c, buf, sizeof buf, 0);
+    if (k <= 0) break;
+    head.append(buf, (size_t)k);
+  }
+  size_t eoh = head.find("\r\n\r\n");
+  if (eoh != std::string::npos) {
+    std::string line = head.substr(0, head.find("\r\n"));
+    size_t s1 = line.find(' '), s2 = line.find(' ', s1 == std::string::npos ? 0 : s1 + 1);
+    std::string method = line.substr(0, s1);
+    std::string target = s1 == std::string::npos ? "" : line.substr(s1 + 1, s2 == std::string::npos ? std::string::npos : s2 - s1 - 1);
+    bool tunnel = method == "CONNECT";
+    std::string host, path = "/";
+    int port = tunnel ? 443 : 80;
+    std::string hostport = target;
+    if (!tunnel) {   // http://host[:puerto]/ruta
+      size_t sch = target.find("://");
+      std::string rest = sch == std::string::npos ? "" : target.substr(sch + 3);
+      size_t sl = rest.find('/');
+      hostport = rest.substr(0, sl);
+      if (sl != std::string::npos) path = rest.substr(sl);
+      if (auto at = hostport.rfind('@'); at != std::string::npos) hostport = hostport.substr(at + 1);
+    }
+    size_t colon = hostport.rfind(':');
+    if (colon != std::string::npos && hostport.find(']', colon) == std::string::npos) {
+      host = hostport.substr(0, colon);
+      try {
+        port = std::stoi(hostport.substr(colon + 1));
+      } catch (...) {
+      }
+    } else
+      host = hostport;
+    if (!host.empty() && host.front() == '[' && host.back() == ']') host = host.substr(1, host.size() - 2);
+    if (host.empty() || !public_host(host)) {
+      {
+        std::lock_guard<std::mutex> lk(st->mu);
+        st->blocked.push_back(host);
+      }
+      static const char NO[] = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+      send_all(c, NO, sizeof NO - 1);
+    } else if ((up = connect_to(host, port, ms)) != BAD) {
+      std::string rest;
+      if (tunnel) {
+        static const char OK[] = "HTTP/1.1 200 Connection established\r\n\r\n";
+        send_all(c, OK, sizeof OK - 1);
+        rest = head.substr(eoh + 4);
+      } else {   // peticion http: se reenvia con la ruta relativa
+        rest = head;
+        rest.replace(rest.find(target), target.size(), path);
+      }
+      if (!rest.empty()) send_all(up, rest.data(), rest.size());
+      pipe_socks(c, up, ms);
+    }
+  }
+  if (up != BAD) close_sock(up);
+  close_sock(c);
+}
+
+}  // namespace
+
+GuardProxy::GuardProxy(double timeout) : st_(std::make_shared<State>()) {
+  wsa();
+  st_->timeout = timeout;
+  st_->sock = socket(AF_INET, SOCK_STREAM, 0);
+  sockaddr_in a{};
+  a.sin_family = AF_INET;
+  inet_pton(AF_INET, "127.0.0.1", &a.sin_addr);
+  if (st_->sock == BAD || bind(st_->sock, (sockaddr*)&a, sizeof a) != 0 || listen(st_->sock, 64) != 0) return;
+  socklen_t len = sizeof a;
+  getsockname(st_->sock, (sockaddr*)&a, &len);
+  st_->port = ntohs(a.sin_port);
+  th_ = std::thread([st = st_] {
+    while (!st->stop) {
+      if (!wait_readable(st->sock, 200)) continue;
+      sock_t c = accept(st->sock, nullptr, nullptr);
+      if (c == BAD) continue;
+      std::thread(handle, st, c).detach();
+    }
+  });
+}
+
+GuardProxy::~GuardProxy() { close(); }
+
+int GuardProxy::port() const { return st_->port; }
+
+std::vector<std::string> GuardProxy::blocked() const {
+  std::lock_guard<std::mutex> lk(st_->mu);
+  return st_->blocked;
+}
+
+void GuardProxy::close() {
+  st_->stop = true;
+  if (th_.joinable()) th_.join();
+  if (st_->sock != BAD) close_sock(st_->sock);
+  st_->sock = BAD;
 }
 
 }  // namespace nx::net

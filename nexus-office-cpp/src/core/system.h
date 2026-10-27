@@ -14,7 +14,8 @@ class Services;
 namespace nx::sys2 {
 
 json accel_options(Services& s);
-json accel_apply(Services& s, const std::string& engine, const std::string& accel, bool remember);
+// remember: recordar la eleccion (no preguntar al arrancar); nullopt = no tocarlo
+json accel_apply(Services& s, const std::string& engine, const std::string& accel, std::optional<bool> remember);
 
 json downloads_listing();
 std::optional<fs::path> downloads_resolve(const std::string& rel);

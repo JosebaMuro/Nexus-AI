@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <future>
+#include <optional>
 
 #include "util/crypto.h"
 #include "util/csv.h"
@@ -218,16 +219,34 @@ json DatosMercado::quote_stooq(const std::string& sym) {
 }
 
 // CNBC (acciones y ETF de EE. UU. y Europa): responde tambien desde servidores donde Yahoo limita
-json DatosMercado::quote_cnbc(const std::string& sym) {
-  std::string u = upper(sym), cs = u;
+namespace {
+
+std::string cnbc_symbol(const std::string& sym) {
+  std::string u = upper(sym);
   for (auto& [suf, c] : CNBC_SUFFIX)
-    if (ends_with(u, suf)) {
-      cs = u.substr(0, u.size() - suf.size()) + c;
-      break;
-    }
+    if (ends_with(u, suf)) return u.substr(0, u.size() - suf.size()) + c;
+  return u;
+}
+
+// numero de CNBC («7,512.5», «-0.35%»); nullopt si falta
+std::optional<double> cnbc_num(const json& v) {
+  std::string t = v.is_string() ? v.get<std::string>() : v.is_number() ? jdump(v) : "";
+  t.erase(std::remove_if(t.begin(), t.end(), [](char c) { return c == ',' || c == '%'; }), t.end());
+  t = trim(t);
+  if (t.empty()) return std::nullopt;
+  try {
+    return to_d(t);
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+}  // namespace
+
+json DatosMercado::quote_cnbc(const std::string& sym) {
   auto r = get("cnbc", CNBC,
-               {{"symbols", cs}, {"requestMethod", "itv"}, {"noform", "1"}, {"partnerId", "2"}, {"fund", "1"},
-                {"exthrs", "1"}, {"output", "json"}});
+               {{"symbols", cnbc_symbol(sym)}, {"requestMethod", "itv"}, {"noform", "1"}, {"partnerId", "2"},
+                {"fund", "1"}, {"exthrs", "1"}, {"output", "json"}});
   json j = r.json_body();
   json q = json::object();
   if (j.is_object() && j.value("FormattedQuoteResult", json()).is_object()) {
@@ -235,25 +254,43 @@ json DatosMercado::quote_cnbc(const std::string& sym) {
     if (fq.is_array() && !fq.empty()) q = fq[0];
     else if (fq.is_object()) q = fq;
   }
-  auto num = [](const json& v) -> double {
-    std::string t = v.is_string() ? v.get<std::string>() : v.is_number() ? jdump(v) : "";
-    t.erase(std::remove_if(t.begin(), t.end(), [](char c) { return c == ',' || c == '%'; }), t.end());
-    try {
-      return to_d(trim(t));
-    } catch (...) {
-      return 0;
-    }
-  };
-  double px = num(q.value("last", json()));
+  double px = cnbc_num(q.value("last", json())).value_or(0);
   if (!(px > 0)) throw Lookup("cnbc: sin precio para " + sym);
-  double prev = num(q.value("previous_day_closing", json()));
+  double prev = cnbc_num(q.value("previous_day_closing", json())).value_or(0);
+  if (!prev) {   // sin cierre anterior: se deduce de la variacion
+    auto ch = cnbc_num(q.value("change", json())), pct = cnbc_num(q.value("change_pct", json()));
+    prev = ch ? px - *ch : pct && *pct != -100 ? px / (1 + *pct / 100) : px;
+  }
   return {{"precio", px},
-          {"cierre_anterior", prev ? prev : px},
+          {"cierre_anterior", prev},
           {"ts", now()},
           {"divisa", jstr(q, "currencyCode")},
           {"fuente", "CNBC"},
           {"retraso", jstr(q, "realTime") == "true" ? "tiempo real" : "≈15 min"},
           {"puntos", json::array()}};
+}
+
+// velas de CNBC: respaldo de las de Yahoo (responde donde Yahoo limita)
+json DatosMercado::cnbc_points(const std::string& sym, const std::string& rango) {
+  static const std::map<std::string, std::string> CNBC_RANGO = {{"1d", "1D"}, {"5d", "5D"}, {"1mo", "1M"},
+                                                                {"6mo", "6M"}, {"1y", "1Y"}, {"5y", "5Y"}};
+  auto it = CNBC_RANGO.find(rango);
+  auto r = get("cnbc", "https://ts-api.cnbc.com/harmony/app/charts/" + (it == CNBC_RANGO.end() ? "1D" : it->second) + ".json",
+               {{"symbol", cnbc_symbol(sym)}});
+  json j = r.json_body(), out = json::array();
+  json bd = j.is_object() ? j.value("barData", json::object()) : json::object();
+  json bars = bd.is_object() ? bd.value("priceBars", json::array()) : json::array();
+  if (!bars.is_array()) return out;
+  for (auto& b : bars) {
+    if (!b.is_object()) continue;
+    auto c = cnbc_num(b.value("close", json())), t = cnbc_num(b.value("tradeTimeinMills", json()));
+    if (!c || !*c || !t || !*t) continue;
+    json row = {{"ts", *t / 1000}, {"precio", *c}};
+    for (auto [k, name] : {std::pair{"open", "apertura"}, {"high", "maximo"}, {"low", "minimo"}, {"volume", "volumen"}})
+      if (auto v = cnbc_num(b.value(k, json()))) row[name] = *v;
+    out.push_back(row);
+  }
+  return out;
 }
 
 std::string DatosMercado::google_symbol(const std::string& sym) {
@@ -387,13 +424,22 @@ json DatosMercado::serie(const std::string& sym_in, const std::string& rango_in)
       hit = it->second.second;
     }
   }
-  json pts;
+  json pts = json::array();
   try {
     auto& [r, i] = RANGOS.at(rango);
     pts = yahoo_points(yahoo_chart(sym, r, i));
   } catch (const std::exception&) {
-    return hit.is_array() ? hit : json::array();
+    pts = json::array();
   }
+  static const Rx CRIPTO(R"(^[A-Z0-9]+-(EUR|USD)$)");
+  if (pts.empty() && !CRIPTO.match(sym)) {
+    try {   // respaldo: velas de CNBC (responde donde Yahoo limita)
+      pts = cnbc_points(sym, rango);
+    } catch (const std::exception&) {
+      pts = json::array();
+    }
+  }
+  if (pts.empty()) return hit.is_array() ? hit : json::array();
   std::lock_guard<std::mutex> lk(mu_);
   series_[key] = {now(), pts};
   return pts;

@@ -29,8 +29,64 @@ static json pynum(double v) {
 
 bool android() { return sys::is_android(); }
 
+// GPU elegida a mano (config hardware.gpu: su nombre o el dispositivo de llama.cpp, p. ej. «Vulkan1»)
+static std::mutex g_sel_mu;
+static std::string g_selected;
+
+void select_gpu(const std::string& name) {
+  std::lock_guard<std::mutex> lk(g_sel_mu);
+  g_selected = name;
+}
+
+std::string selected_gpu() {
+  std::lock_guard<std::mutex> lk(g_sel_mu);
+  return g_selected;
+}
+
+static std::vector<std::string> gpu_words(const std::string& text) {
+  static const std::set<std::string> SKIP = {"nvidia", "amd", "intel", "geforce", "radeon", "r", "tm", "corporation"};
+  std::vector<std::string> out;
+  std::string w;
+  for (unsigned char ch : lower(text) + " ") {
+    if (std::isalnum(ch)) {
+      w += char(ch);
+    } else if (!w.empty()) {
+      if (!SKIP.count(w)) out.push_back(w);
+      w.clear();
+    }
+  }
+  return out;
+}
+
+// la GPU es la elegida: las palabras de lo elegido estan en su nombre o al reves (llama.cpp anade «(ADL-S GT1)»)
+bool gpu_matches(const GPU& g, const std::string& want) {
+  auto a = gpu_words(want), b = gpu_words(g.name);
+  if (a.empty() || b.empty()) return false;
+  std::string name = lower(g.name), w = lower(want);
+  auto all_in = [](const std::vector<std::string>& ws, const std::string& s) {
+    return std::all_of(ws.begin(), ws.end(), [&](const std::string& x) { return contains(s, x); });
+  };
+  return all_in(a, name) || all_in(b, w);
+}
+
+static json llama_devices(const HardwareInfo& hw) {
+  json d = hw.runtimes.is_object() ? hw.runtimes.value("llama_devices", json::array()) : json::array();
+  return d.is_array() ? d : json::array();
+}
+
 const GPU* best_gpu(const HardwareInfo& hw) {
   if (hw.gpus.empty()) return nullptr;
+  std::string want = selected_gpu();
+  if (!want.empty()) {
+    std::string name = want;
+    for (auto& d : llama_devices(hw))
+      if (lower(jstr(d, "id")) == lower(want)) {
+        name = jstr(d, "name");
+        break;
+      }
+    for (auto& g : hw.gpus)
+      if (gpu_matches(g, name)) return &g;
+  }
   auto rank = [](const std::string& v) {
     if (v == "nvidia") return 4;
     if (v == "amd" || v == "apple") return 3;
@@ -44,6 +100,20 @@ const GPU* best_gpu(const HardwareInfo& hw) {
     if (key(g) > key(*best)) best = &g;
   }
   return best;
+}
+
+// el llama-server de Vulkan incluido ve esta GPU (no solo llvmpipe)
+static bool vulkan_ok(const HardwareInfo& hw, const GPU& gpu) {
+  json devs = json::array();
+  for (auto& d : llama_devices(hw))
+    if (!d.value("software", false)) devs.push_back(d);
+  for (auto& d : devs) {
+    GPU other;
+    other.vendor = gpu.vendor;
+    other.name = jstr(d, "name");
+    if (gpu_matches(gpu, jstr(d, "name")) || gpu_matches(other, gpu.name)) return true;
+  }
+  return devs.size() == 1 && !gpu.integrated;
 }
 
 static bool has_str(const json& arr, const std::string& s) {
@@ -62,7 +132,12 @@ std::pair<std::string, const GPU*> choose_accelerator(const HardwareInfo& hw, co
     std::string b = rt.contains("android_accel") ? jstr(rt["android_accel"], "gpu_backend") : "";
     return {b.empty() ? "cpu" : b, gpu};
   }
-  if (gpu->vendor == "nvidia") return {gpu->vram_gb > 0 ? "cuda" : "cpu", gpu};
+  if (gpu->vendor == "nvidia") {
+    // VRAM 0 = tarjeta vista en Linux sin nvidia-smi (nouveau/NVK o driver sin instalar): CUDA no funcionaria,
+    // pero Vulkan si si el llama-server de Vulkan la ve (Mesa NVK)
+    if (gpu->vram_gb > 0) return {"cuda", gpu};
+    return {vulkan_ok(hw, *gpu) ? "vulkan" : "cpu", gpu};
+  }
   if (gpu->vendor == "apple") return {"metal", gpu};
   if (gpu->integrated) {
     if (gpu->vendor == "intel" && has_str(rt.value("openvino_devices", json()), "GPU")) return {"openvino", gpu};
@@ -86,8 +161,15 @@ json build_profile(const HardwareInfo& hw, const std::string& ov) {
   bool gpu_offload = OFF.count(acc) && gpu != nullptr;
   double ram = hw.ram_gb;
   double cpu_budget = std::max(0.5, std::min(ram * 0.5, ram - 3.0));
+  double vram_gpu = gpu ? gpu->vram_gb : 0.0;
+  if (gpu && !vram_gpu)   // sin nvidia-smi ni sysfs: la memoria que dice llama.cpp de esa GPU
+    for (auto& d : llama_devices(hw))
+      if (!d.value("software", false) && gpu_matches(*gpu, jstr(d, "name"))) {
+        vram_gpu = std::round(jnum(d["mem_mb"]) / 1024 * 100) / 100;
+        break;
+      }
   double budget;
-  if (gpu_offload && gpu && !gpu->integrated && !android()) budget = gpu->vram_gb * 0.85;
+  if (gpu_offload && gpu && !gpu->integrated && !android()) budget = vram_gpu * 0.85;
   else if (acc == "metal") budget = ram * 0.65;
   else budget = cpu_budget;
   double max_b = tier_at_most(budget / GB_PER_B_Q4);
@@ -116,7 +198,7 @@ json build_profile(const HardwareInfo& hw, const std::string& ov) {
     n_ctx = std::min(n_ctx, 4096);
     max_ctx = std::min(max_ctx, 8192);
   }
-  double vram = gpu ? gpu->vram_gb : 0.0;
+  double vram = vram_gpu;
   std::string torch_device = acc == "cuda" || acc == "rocm" ? "cuda" : acc == "metal" ? "mps" : acc == "xpu" ? "xpu" : "cpu";
   if (sys::is_windows() && gpu && (gpu->vendor == "amd" || gpu->vendor == "intel") && !gpu->integrated)
     torch_device = "dml";
@@ -140,7 +222,9 @@ json build_profile(const HardwareInfo& hw, const std::string& ov) {
               {"max_ctx", max_ctx},
               {"n_threads", n_threads},
               {"n_batch", gpu_offload || ram >= 16 ? 512 : 256},
-              {"gpu_layers", gpu_offload ? -1 : 0}};
+              {"gpu_layers", gpu_offload ? -1 : 0},
+              // con varias GPU, llama-server usa solo esta (hardware/gpu_devices)
+              {"gpu_select", gpu_offload && gpu && !android() ? (selected_gpu().empty() ? gpu->name : selected_gpu()) : ""}};
   if (android())
     llm["device"] = gpu_offload && hw.runtimes.contains("android_accel") ? jstr(hw.runtimes["android_accel"], "gpu_device")
                                                                           : "";

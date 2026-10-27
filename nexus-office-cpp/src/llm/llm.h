@@ -156,6 +156,8 @@ class LlamaServerBackend : public OpenAICompatBackend {
   void stop();
   void stream_chat(const json& messages, const std::string& model, const Opts& opts, const Sink& out) override;
   json effective();
+  json gpu();                // GPU de llama.cpp elegida (cuando hay varias)
+  std::string gpu_error();   // por que la GPU elegida no arranco (y se sigue en la CPU)
   std::string variant;
   int port = 0;
   // Android: la NPU o la GPU no arrancan con el driver del movil; el gestor cambia gpu_layers/device del perfil
@@ -171,6 +173,8 @@ class LlamaServerBackend : public OpenAICompatBackend {
   std::unique_ptr<proc::Process> proc_;
   std::string key_, device_;
   json effective_ = json::object();
+  json gpu_ = json::object();
+  std::string gpu_error_;
   std::recursive_mutex mu_;
 };
 

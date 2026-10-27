@@ -13,6 +13,7 @@
 #include "core/services.h"
 #include "llm/llm.h"
 #include "memory/memory.h"
+#include "rag/browser.h"
 #include "rag/rag.h"
 #include "rag/web.h"
 #include "util/crypto.h"
@@ -192,10 +193,14 @@ json process_url(Services& s, const std::string& url, const Emit& emit, int max_
   if (!contains(lc, "html") && !contains(lc, "text") && !contains(lc, "xml"))
     throw std::invalid_argument("la URL no es una pagina web (" + (ctype.empty() ? std::string("tipo desconocido") : ctype) + ")");
   std::string raw = decode_body(body, ctype);
+  if (contains(lc, "html")) raw = browser::maybe_render(final_url, raw).first;   // webs que se pintan con JavaScript
   step("Extrayendo estructura");
   json doc = extract_html(raw, final_url);
   if (doc.value("words", 0) < 30)
-    throw std::invalid_argument("la pagina apenas contiene texto (puede requerir JavaScript o inicio de sesion)");
+    throw std::invalid_argument(!browser::find().empty()
+                                    ? "la pagina apenas contiene texto (puede requerir inicio de sesion)"
+                                    : "la pagina apenas contiene texto: necesita JavaScript e instala Chrome, Edge o "
+                                      "Chromium para leerla");
   step("Resumiendo");
   auto summ = llm_summary(s, doc);
   auto [summary, points] = summ ? *summ : extractive_summary(jstr(doc, "text"));

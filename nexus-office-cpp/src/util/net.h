@@ -1,7 +1,9 @@
 // Utilidades de red locales: puertos libres e IP de la LAN.
 #pragma once
+#include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace nx::net {
@@ -36,5 +38,28 @@ bool udp_send(const std::string& host, int port, const std::string& data);
 // TCP en claro: conecta, envia y lee hasta cerrar o max bytes. nullopt si no se pudo conectar
 std::optional<std::string> tcp_exchange(const std::string& host, int port, const std::string& data, double timeout,
                                         size_t max_bytes = 65536);
+
+// Todas las direcciones del nombre son publicas (ni privadas, ni loopback, ni enlace local, ni multicast); false si no
+// se resuelve
+bool public_host(const std::string& host);
+
+// Proxy HTTP minimo en 127.0.0.1 (CONNECT para https y GET absoluto para http) que solo conecta con direcciones
+// publicas: lo demas recibe 403 y queda en blocked(). Lo usa el navegador sin interfaz del RAG.
+class GuardProxy {
+ public:
+  explicit GuardProxy(double timeout = 40);
+  ~GuardProxy();
+  GuardProxy(const GuardProxy&) = delete;
+  GuardProxy& operator=(const GuardProxy&) = delete;
+  int port() const;
+  std::vector<std::string> blocked() const;
+  void close();
+
+  struct State;
+
+ private:
+  std::shared_ptr<State> st_;
+  std::thread th_;
+};
 
 }  // namespace nx::net

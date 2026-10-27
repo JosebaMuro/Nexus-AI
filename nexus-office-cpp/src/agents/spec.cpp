@@ -38,6 +38,7 @@ AgentSpec AgentSpec::from_json(const json& d) {
   s("specialty", a.specialty);
   s("color", a.color);
   s("icon", a.icon);
+  s("sexo", a.sexo);
   if (d.contains("temperature") && d["temperature"].is_number()) a.temperature = d["temperature"].get<double>();
   if (d.contains("max_tokens") && d["max_tokens"].is_number()) a.max_tokens = (int)d["max_tokens"].get<double>();
   if (d.contains("tools") && !d["tools"].is_null()) a.tools = as_list(d["tools"]);
@@ -65,6 +66,7 @@ json AgentSpec::to_json() const {
   j["color"] = color;
   j["icon"] = icon;
   j["enabled"] = enabled;
+  j["sexo"] = sexo;
   return j;
 }
 

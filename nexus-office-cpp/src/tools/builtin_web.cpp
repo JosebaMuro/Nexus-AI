@@ -1,6 +1,7 @@
 // Acceso a internet (tools/builtin/web_tools.py): riesgo medio, requiere aprobacion segun la politica.
 #include "core/services.h"
 #include "memory/memory.h"
+#include "rag/browser.h"
 #include "rag/rag.h"
 #include "rag/web.h"
 #include "tools/tools.h"
@@ -84,6 +85,9 @@ json web_fetch(const json& args, ToolContext&) {
   if (data.size() > MAX_FETCH_BYTES) data.resize(MAX_FETCH_BYTES);
   std::string ctype = r.header("content-type");
   std::string raw = decode(data, charset_of(ctype));
+  bool rendered = false;
+  if (r.status == 200 && contains(ctype, "html"))   // como un navegador: ejecuta el JavaScript si la pagina lo necesita
+    std::tie(raw, rendered) = rag::browser::maybe_render(url, raw);
   std::string head = lower(uleft(ltrim(raw), 15));
   std::string text = contains(ctype, "html") || starts_with(head, "<!doctype") || starts_with(head, "<html") ? html_to_text(raw) : raw;
   long limit = std::max(200L, (long)jnum(args.value("max_chars", json(4000)), 4000));
@@ -96,7 +100,8 @@ json web_fetch(const json& args, ToolContext&) {
               {"title", title ? html_unescape(trim(title->str(1))) : ""},
               {"text", usub(text, offset, offset + limit)},
               {"offset", offset},
-              {"total_chars", total}};
+              {"total_chars", total},
+              {"navegador", rendered}};
   if (offset + limit < total) out["next_offset"] = offset + limit;
   return out;
 }

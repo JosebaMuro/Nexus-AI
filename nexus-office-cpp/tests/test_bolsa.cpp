@@ -133,6 +133,26 @@ TEST("bolsa: CNBC de respaldo cuando Yahoo limita") {
   CHECK_EQ(jstr(q, "divisa"), std::string("EUR"));
 }
 
+TEST("bolsa: velas de CNBC y cierre anterior deducido de la variacion") {
+  DatosMercado d([](const http::Request& r) {
+    if (r.url.find("yahoo") != std::string::npos) return resp(429);
+    if (r.url.find("charts/6M.json") != std::string::npos) {
+      CHECK(r.url.find("symbol=SAN-ES") != std::string::npos);
+      return resp(200, R"({"barData": {"priceBars": [
+        {"open": "7.0", "high": "7.2", "low": "6.9", "close": "7.1", "volume": 10, "tradeTimeinMills": "1761523200000"},
+        {"open": "7.1", "high": "7.4", "low": "7.0", "close": "7.3", "volume": 12, "tradeTimeinMills": "1761609600000"}]}})");
+    }
+    if (r.url.find("restQuote") != std::string::npos)
+      return resp(200, R"({"FormattedQuoteResult": {"FormattedQuote": [{"symbol": "AAPL", "last": "110.00",
+                          "change": "+10.00", "change_pct": "+10.00%", "currencyCode": "USD"}]}})");
+    return resp(404);
+  });
+  json pts = d.serie("SAN.MC", "6mo");
+  CHECK(pts.size() == 2 && jnum(pts[0]["precio"]) == 7.1 && jnum(pts[1]["precio"]) == 7.3);
+  CHECK(jnum(pts[0]["ts"]) == 1761523200 && jnum(pts[1]["maximo"]) == 7.4);
+  CHECK_EQ(jnum(d.quote("AAPL")["cierre_anterior"]), 100.0);
+}
+
 TEST("bolsa: la mesa usa el precio real, pasa peniques a libras y guarda el historico") {
   DatosMercado d([](const http::Request& r) {
     std::string sym = url_sym(r.url);
