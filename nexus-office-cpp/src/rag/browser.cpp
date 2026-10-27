@@ -163,6 +163,7 @@ std::string render_now(const std::string& url, const std::string& exe, int budge
                         "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding"})
     cmd.push_back(f);
   cmd.push_back("--user-data-dir=" + S(prof));
+  size_t budget_arg = cmd.size();
   cmd.push_back("--virtual-time-budget=" + std::to_string(budget_ms));
   cmd.push_back("--window-size=1280,2000");
   cmd.push_back("--lang=es-ES");
@@ -183,6 +184,9 @@ std::string render_now(const std::string& url, const std::string& exe, int budge
     r = proc::run(cmd, (intento ? TIMEOUT_S : 20) + budget_ms / 1000.0, opt);
     if (!r.started) throw std::runtime_error("no se pudo abrir el navegador");
     if (!r.timed_out) break;
+    // el tiempo virtual depende de los fotogramas de la pantalla: en equipos sin pantalla (macOS en una maquina
+    // virtual, CVDisplayLink falla) no avanza nunca. El reintento espera en tiempo real.
+    cmd[budget_arg] = "--timeout=" + std::to_string(budget_ms);
     if (intento) {
       std::string err = trim(r.err);
       if (err.size() > 300) err = err.substr(err.size() - 300);
