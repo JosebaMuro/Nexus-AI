@@ -57,6 +57,9 @@ def create_app(services: Services | None = None) -> FastAPI:
         s.coop.listeners.append(hub.broadcast)
         s.lounge.listeners.append(hub.broadcast)
         s.kg_jobs.listeners.append(hub.broadcast)
+        from ..agents.activity import ACTIVITY
+        if hub.broadcast not in ACTIVITY.listeners:
+            ACTIVITY.listeners[:] = [hub.broadcast]   # un solo servidor por proceso
         s.remote.server = getattr(app.state, "remote_server", None)
         s.start()
         if services is None:     # servidor real (no en pruebas): siguen los rastreos de dominio que se cortaron
@@ -1216,6 +1219,102 @@ def create_app(services: Services | None = None) -> FastAPI:
         s = b.serie(o["simbolo"], rango)
         return {"orden": o, "cotizacion": q, "niveles": niveles, "puntos": s["puntos"], "real": s["real"],
                 "agente": o.get("origen") == bolsa_agente.ORIGEN}
+
+    # ------------------------------------------------------------------ dispositivos: luces, reloj y avatar Pico W
+    def _hub():
+        from ..devices import hub
+        return hub.get(S())
+
+    @app.get("/api/dispositivos")
+    def devices_state():
+        h = _hub()
+        now = time.time()
+        return {"estado": h.snapshot(), "leds": h.leds.list(), "modos": h.modos(), "modo": h.modo_actual(),
+                "clientes": [c for c in h.clientes.values() if now - c["visto"] < 120]}
+
+    @app.get("/api/dispositivos/estado")
+    def devices_now(request: Request, cliente: str = "", tipo: str = ""):
+        """Estado ligero para el reloj y el Pico W (lo consultan cada 1-2 s)."""
+        h = _hub()
+        h.visto(cliente, tipo or "web", {"ip": request.client.host if request.client else ""})
+        return h.snapshot()
+
+    @app.post("/api/dispositivos/estado")
+    def devices_set(data: dict = Body(...)):
+        return _hub().set_state(str(data.get("estado") or data.get("state") or "idle"), data.get("nivel"),
+                                data.get("texto"), str(data.get("origen") or ""))
+
+    @app.get("/api/dispositivos/reloj")
+    def devices_watch(request: Request, cliente: str = ""):
+        h = _hub()
+        h.visto(cliente or (request.client.host if request.client else "reloj"), "reloj",
+                {"ip": request.client.host if request.client else ""})
+        return h.resumen_reloj()
+
+    @app.post("/api/dispositivos/modo")
+    def devices_mode(data: dict = Body(...)):
+        try:
+            return _hub().aplicar_modo(str(data.get("modo", "")), str(data.get("origen") or ""))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/dispositivos/pico/manifiesto")
+    def pico_manifest():
+        return _hub().pico_manifiesto()
+
+    @app.get("/api/dispositivos/pico/{estado}.bin")
+    def pico_bin(estado: str):
+        return Response(_hub().pico_buffer(estado), media_type="application/octet-stream")
+
+    @app.get("/api/dispositivos/pico/{estado}.png")
+    def pico_png(estado: str):
+        return Response(_hub().pico_png(estado), media_type="image/png")
+
+    @app.get("/api/dispositivos/leds/buscar")
+    def leds_discover(ip: str = ""):
+        return {"encontrados": _hub().leds.discover(hosts=[x.strip() for x in ip.split(",") if x.strip()])}
+
+    @app.post("/api/dispositivos/leds")
+    def leds_add(data: dict = Body(...)):
+        if not str(data.get("host", "")).strip():
+            raise HTTPException(400, "falta la IP del dispositivo")
+        return _hub().leds.add(str(data["host"]), int(data.get("port") or 80), str(data.get("name") or ""),
+                               str(data.get("token") or ""), str(data.get("id") or ""))
+
+    @app.put("/api/dispositivos/leds/{did}")
+    def leds_update(did: str, data: dict = Body(...)):
+        try:
+            return _hub().leds.update(did, **{k: data.get(k) for k in ("name", "enabled", "follow_state", "token")})
+        except KeyError as e:
+            raise HTTPException(404, str(e)) from e
+
+    @app.delete("/api/dispositivos/leds/{did}")
+    def leds_delete(did: str):
+        _hub().leds.remove(did)
+        return {"ok": True}
+
+    @app.api_route("/api/dispositivos/leds/{did}/api/{ruta:path}", methods=["GET", "POST", "DELETE"])
+    async def leds_proxy(did: str, ruta: str, request: Request):
+        """Pasarela a la API del NexusLED (efectos, paletas, presets, brillo...) para la app y el movil."""
+        body = None
+        if request.method != "GET":
+            try:
+                body = await request.json()
+            except Exception:   # noqa: BLE001
+                body = None
+        try:
+            return await asyncio.to_thread(_hub().leds.call, did, request.method, "/api/" + ruta, body)
+        except KeyError as e:
+            raise HTTPException(404, str(e)) from e
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(502, f"el dispositivo no responde: {e}") from e
+
+    @app.get("/api/agentes/actividad")
+    def agents_activity():
+        from ..agents.activity import ACTIVITY
+        return ACTIVITY.all()
 
     @app.get("/api/bolsa/agente")
     def bolsa_agent_state():

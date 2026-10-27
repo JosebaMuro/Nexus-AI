@@ -434,6 +434,8 @@ class Bolsa:
         if not self.datos:
             return None
         try:
+            if hasattr(self.datos, "mercado_de") and sym not in self.datos.mercado_de:
+                self.datos.mercado_de[sym] = self.instrumento(sym)["mercado"]
             q = self.datos.quote(sym)
         except Exception as e:   # noqa: BLE001 - sin conexion: sigue la simulacion
             L.debug("cotizacion real de %s no disponible: %s", sym, e)

@@ -146,7 +146,7 @@
   const graphAvatar = new NeuralAvatar($("#avatar"), { maxLabels: 9 });
   let avatarImpl = graphAvatar, avatarStyle = "grafo", lastGraph = null;
   const avatar = {
-    setState: (s) => avatarImpl.setState(s), setLevel: (v) => avatarImpl.setLevel(v),
+    setState: (s) => avatarImpl.setState(s), setLevel: (v) => { avatarImpl.setLevel(v); if (devSync.last === "speaking" || devSync.last === "listening") syncDevices(devSync.last, v); },
     update: (g) => { lastGraph = g; avatarImpl.update(g); }, setAccent: (c) => avatarImpl.setAccent(c),
     get level() { return avatarImpl.level || 0; },
   };
@@ -172,8 +172,15 @@
   }
   let explorer = null;
   const STATE_SUB = { idle: "núcleo cognitivo", thinking: "procesando", tool: "ejecutando", speaking: "síntesis de voz", listening: "captando audio" };
+  const devSync = { last: "", t: 0, timer: null };
+  function syncDevices(s, level) {   // las luces, el reloj y el Pico W siguen al avatar
+    const now = Date.now();
+    if (s === devSync.last && (level == null || now - devSync.t < 250)) return;
+    devSync.last = s; devSync.t = now;
+    fetch("/api/dispositivos/estado", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ estado: s, nivel: level ?? null, origen: "web" }) }).catch(() => {});
+  }
   function setState(s) {
-    avatar.setState(s); explorer && explorer.setState(s);
+    avatar.setState(s); explorer && explorer.setState(s); syncDevices(s);
     const map = { idle: "EN LÍNEA", thinking: "PENSANDO", tool: "HERRAMIENTA", speaking: "HABLANDO", listening: "ESCUCHANDO" };
     $("#avatar-state").textContent = map[s] || "EN LÍNEA"; $("#avatar-sub").textContent = STATE_SUB[s] || "";
   }
@@ -939,6 +946,44 @@
         <div class="row" style="margin-top:6px">${r.stats.dominant_colors.map((c) => `<span class="tag" style="color:${c};border-color:${c}">${c}</span>`).join("")}<span class="muted mono">${esc(r.engine)}</span></div>`;
     } finally { setState("idle"); }
   });
+
+  /* ================================================================ vista: DISPOSITIVOS */
+  const NOMBRE_ESTADO = { idle: "En línea", listening: "Escuchando", thinking: "Pensando", tool: "Herramienta", speaking: "Hablando", success: "Hecho", error: "Error", alert: "Aviso" };
+  async function ledCard(d) {
+    let st = null, fx = [];
+    try { st = await api(`/api/dispositivos/leds/${encodeURIComponent(d.id)}/api/state`); const e = await api(`/api/dispositivos/leds/${encodeURIComponent(d.id)}/api/effects`); fx = Array.isArray(e) ? e : e.effects || []; } catch (e) { st = null; }
+    const id = esc(d.id), fxName = (f, i) => (typeof f === "string" ? f : f.name || f.id || "efecto " + i);
+    return `<div class="panel" data-led="${id}"><div class="row"><span class="live-dot ${st ? "" : "off"}"></span><b>${esc(d.name)}</b><span class="muted">${esc(d.host)}:${d.port} · ${d.leds || "?"} LED${d.version ? " · v" + esc(d.version) : ""}</span><span class="spacer"></span>
+      <button class="btn sm" data-led-del="${id}">QUITAR</button></div>
+      ${st ? `<div class="row" style="margin-top:8px"><button class="btn sm ${st.on ? "primary" : ""}" data-led-on="${id}" data-v="${st.on ? 0 : 1}">${st.on ? "ENCENDIDA" : "APAGADA"}</button>
+        <input type="range" min="1" max="255" value="${st.bri}" data-led-bri="${id}" style="flex:1 1 120px">
+        <select class="input" data-led-fx="${id}" style="flex:1 1 140px;min-width:0">${fx.map((f, i) => `<option value="${i}" ${st.fx === i || (st.seg && st.seg[0] && st.seg[0].fx === i) ? "selected" : ""}>${esc(fxName(f, i))}</option>`).join("")}</select>
+        <a class="btn sm" href="http://${esc(d.host)}:${d.port}/" target="_blank" rel="noopener">SU PÁGINA</a></div>
+        <label class="row muted" style="margin-top:6px"><input type="checkbox" data-led-follow="${id}" ${d.follow_state !== false ? "checked" : ""}> Mostrar el estado de Nexus (escucha, piensa, habla con vúmetro…)</label>` : '<p class="muted">No responde. Comprueba que está encendido y en la misma red.</p>'}</div>`;
+  }
+  loaders.devices = async () => {
+    const d = await api("/api/dispositivos");
+    $("#dv-modo").textContent = "activo: " + (d.modos.find((m) => m.id === d.modo)?.nombre || d.modo);
+    $("#dv-modos").innerHTML = d.modos.map((m) => `<button class="btn ${m.id === d.modo ? "primary" : ""}" data-modo="${esc(m.id)}" title="${esc(m.descripcion || "")}">${esc(m.icono || "")} ${esc(m.nombre)}</button>`).join("");
+    $$("[data-modo]").forEach((b) => (b.onclick = guard(async () => { await api("/api/dispositivos/modo", { body: { modo: b.dataset.modo, origen: "escritorio" } }); toast("Modo " + b.textContent.trim()); loaders.devices(); })));
+    $("#dv-leds").innerHTML = d.leds.length ? (await Promise.all(d.leds.map(ledCard))).join("") : '<p class="muted">Sin luces. Graba el firmware NexusLED en un ESP32 (panel Firmware), conéctalo a tu Wi-Fi y pulsa BUSCAR EN LA RED.</p>';
+    const L = (id) => `/api/dispositivos/leds/${encodeURIComponent(id)}/api/state`;
+    $$("[data-led-del]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/dispositivos/leds/${encodeURIComponent(b.dataset.ledDel)}`, { method: "DELETE" }); loaders.devices(); })));
+    $$("[data-led-on]").forEach((b) => (b.onclick = guard(async () => { await api(L(b.dataset.ledOn), { body: { on: b.dataset.v === "1" } }); loaders.devices(); })));
+    $$("[data-led-bri]").forEach((r) => (r.onchange = guard(() => api(L(r.dataset.ledBri), { body: { bri: Number(r.value) } }))));
+    $$("[data-led-fx]").forEach((r) => (r.onchange = guard(() => api(L(r.dataset.ledFx), { body: { fx: Number(r.value) } }))));
+    $$("[data-led-follow]").forEach((c) => (c.onchange = guard(() => api(`/api/dispositivos/leds/${encodeURIComponent(c.dataset.ledFollow)}`, { method: "PUT", body: { follow_state: c.checked } }))));
+    $("#dv-clients").innerHTML = d.clientes.length ? `<table class="tbl"><tr><th>Dispositivo</th><th>Tipo</th><th>IP</th><th>Visto</th></tr>${d.clientes.map((c) => `<tr><td>${esc(c.id)}</td><td>${esc(c.tipo)}</td><td class="mono">${esc(c.ip || "")}</td><td class="mono muted">hace ${Math.round(Date.now() / 1000 - c.visto)} s</td></tr>`).join("")}</table>` : '<p class="muted">Ningún reloj ni Pico W conectado ahora. Al grabarlos se les configura la Wi-Fi y la dirección de este equipo.</p>';
+    if (!$("#dv-pico").childElementCount) $("#dv-pico").innerHTML = ["idle", "listening", "thinking", "tool", "speaking", "error"].map((s) => `<figure style="margin:0;text-align:center"><img src="/api/dispositivos/pico/${s}.png" alt="${s}" style="width:150px;image-rendering:pixelated;border:1px solid var(--line);border-radius:4px;background:#fff"><figcaption class="muted" style="font-size:.75rem">${NOMBRE_ESTADO[s]}</figcaption></figure>`).join("");
+    if (window.NexusFirmware) NexusFirmware.render($("#dv-fw")); else $("#dv-fw").innerHTML = '<p class="muted">El firmware y su código fuente están en la carpeta <code>firmware/</code> de la instalación.</p>';
+  };
+  $("#dv-scan").onclick = guard(async () => {
+    $("#dv-found").innerHTML = '<span class="chip"><span class="spin"></span>Buscando…</span>';
+    const r = await api("/api/dispositivos/leds/buscar" + ($("#dv-ip").value.trim() ? "?ip=" + encodeURIComponent($("#dv-ip").value.trim()) : ""));
+    $("#dv-found").innerHTML = r.encontrados.length ? r.encontrados.map((f) => `<div class="row"><b>${esc(f.name)}</b><span class="muted">${esc(f.host)} · ${f.leds} LED · v${esc(f.version)}</span>${f.added ? '<span class="tag ok">añadido</span>' : `<button class="btn sm primary" data-found="${esc(f.host)}:${f.http_port || 80}">AÑADIR</button>`}</div>`).join("") : '<p class="muted">No se ha encontrado ningún NexusLED. Escribe su IP y pulsa AÑADIR.</p>';
+    $$("[data-found]").forEach((b) => (b.onclick = guard(async () => { await api("/api/dispositivos/leds", { body: { host: b.dataset.found } }); toast("Luces añadidas"); $("#dv-found").innerHTML = ""; loaders.devices(); })));
+  });
+  $("#dv-add").onclick = guard(async () => { const ip = $("#dv-ip").value.trim(); if (!ip) return; await api("/api/dispositivos/leds", { body: { host: ip } }); toast("Luces añadidas"); loaders.devices(); });
 
   /* ================================================================ vista: BOLSA (mesa simulada) */
   const eur = (x) => (x ?? 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });

@@ -18,6 +18,7 @@ from pathlib import Path
 
 import yaml
 
+from .activity import ACTIVITY
 from .. import log, paths
 from ..llm import format_result, parse_tool_call, tool_instructions
 from ..llm.backends import ToolsUnsupported
@@ -233,6 +234,13 @@ class AgentManager:
             agent_id = self.route(text, bool(images))
             routed_by = "auto"
         spec = self.get(agent_id) or self.get("nexus") or next(iter(self.agents.values()))
+        base_emit = emit
+
+        def emit(e: dict, _aid: str = spec.id) -> None:   # lo que hace cada agente: despachos, reloj y salon
+            if not remote:
+                ACTIVITY.on_event(_aid, e, text)
+            base_emit(e)
+
         emit({"type": "agent", "agent": spec.id, "name": spec.name, "color": spec.color, "icon": spec.icon})
         use_memory = spec.memory and s.config.get("user.memory_enabled", True)
         if save and use_memory and not remote:

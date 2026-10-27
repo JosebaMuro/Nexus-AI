@@ -5,7 +5,8 @@ Fuentes, por orden, sin clave ni registro:
 
 * Yahoo Finance (``/v8/finance/chart``): acciones, ETF, cripto y divisas con los mismos simbolos del catalogo
   (SAN.MC, AAPL, VWCE.DE, BTC-EUR, EURUSD=X). Retraso tipico de 15 min en bolsa y tiempo real en cripto.
-* Stooq (CSV): respaldo para acciones y ETF.
+* Google Finance (pagina de cotizacion, atributo ``data-last-price``): respaldo para acciones y ETF de todas las bolsas.
+* Stooq (CSV): otro respaldo para acciones y ETF.
 * Coinbase y Kraken: respaldo para cripto en euros.
 * BCE (``eurofxref-daily.xml``): respaldo para el tipo de cambio.
 
@@ -32,6 +33,8 @@ UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ch
       "Nexus-Office")
 YAHOO = ("https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com")
 STOOQ_SUFFIX = {".MC": ".es", ".DE": ".de", ".PA": ".fr", ".AS": ".nl", ".L": ".uk"}
+GOOGLE_EXCHANGE = {".MC": "BME", ".DE": "ETR", ".PA": "EPA", ".AS": "AMS", ".L": "LON", ".MI": "BIT", ".SW": "SWX"}
+US_EXCHANGE = {"NASDAQ": "NASDAQ", "NYSE": "NYSE"}
 KRAKEN_PAIR = {"BTC-EUR": "XBTEUR", "ETH-EUR": "ETHEUR", "SOL-EUR": "SOLEUR", "ADA-EUR": "ADAEUR"}
 # rango -> (rango Yahoo, intervalo Yahoo)
 RANGOS = {"1d": ("1d", "1m"), "5d": ("5d", "5m"), "1mo": ("1mo", "30m"), "6mo": ("6mo", "1d"), "1y": ("1y", "1d"),
@@ -67,9 +70,11 @@ class DatosMercado:
         self._quotes: dict[str, tuple[float, dict]] = {}
         self._series: dict[tuple[str, str], tuple[float, list]] = {}
         self._fx: dict[str, tuple[float, float]] = {}
-        self.fuentes = {n: Fuente(n) for n in ("yahoo", "stooq", "coinbase", "kraken", "bce")}
+        self.fuentes = {n: Fuente(n) for n in ("yahoo", "google", "stooq", "coinbase", "kraken", "bce")}
+        self.mercado_de: dict[str, str] = {}   # simbolo -> mercado del catalogo (para Google Finance en EE. UU.)
         self.ultima_fuente = ""
         self.ultimo_ok = 0.0
+        self.ultimo_http: dict[str, int] = {}
 
     # ------------------------------------------------------------ utilidades
     def estado(self) -> dict:
@@ -77,7 +82,7 @@ class DatosMercado:
         return {"fuentes": {n: {"disponible": f.disponible(), "fallos": f.fallos,
                                 "reintento_s": max(0, round(f.hasta - now))} for n, f in self.fuentes.items()},
                 "en_linea": now - self.ultimo_ok < 300,
-                "ultima_fuente": self.ultima_fuente, "cotizaciones": len(self._quotes)}
+                "ultima_fuente": self.ultima_fuente, "cotizaciones": len(self._quotes), "http": dict(self.ultimo_http)}
 
     def _get(self, fuente: str, url: str, **kw) -> httpx.Response:
         f = self.fuentes[fuente]
@@ -85,6 +90,7 @@ class DatosMercado:
             raise RuntimeError(f"{fuente} apartada")
         try:
             r = self.client.get(url, **kw)
+            self.ultimo_http[fuente] = r.status_code
             if r.status_code == 404:   # el simbolo no existe en esa fuente: la fuente esta bien
                 f.ok()
                 raise LookupError(f"{fuente}: simbolo desconocido")
@@ -168,6 +174,35 @@ class DatosMercado:
         return {"precio": px, "cierre_anterior": prev, "ts": time.time(), "divisa": "", "fuente": "Stooq",
                 "retraso": "≈15 min", "puntos": []}
 
+    def _google_symbol(self, sym: str) -> str:
+        for suf, ex in GOOGLE_EXCHANGE.items():
+            if sym.upper().endswith(suf):
+                return f"{sym[: -len(suf)].upper()}:{ex}"
+        if re.match(r"^[A-Z0-9]+-(EUR|USD)$", sym.upper()):
+            return sym.upper()
+        return f"{sym.upper()}:{US_EXCHANGE.get(self.mercado_de.get(sym.upper(), ''), 'NASDAQ')}"
+
+    def _quote_google(self, sym: str) -> dict:
+        gs = self._google_symbol(sym)
+        r = self._get("google", f"https://www.google.com/finance/quote/{gs}", params={"hl": "en"},
+                      cookies={"CONSENT": "YES+cb", "SOCS": "CAESEwgDEgk0ODE3Nzk3MjQaAmVuIAEaBgiA_LyaBg"})
+        m = re.search(r'data-last-price="([0-9.]+)"', r.text)
+        if not m and ":NASDAQ" in gs:   # puede ser de la NYSE
+            r = self._get("google", f"https://www.google.com/finance/quote/{gs.replace(':NASDAQ', ':NYSE')}",
+                          params={"hl": "en"}, cookies={"CONSENT": "YES+cb"})
+            m = re.search(r'data-last-price="([0-9.]+)"', r.text)
+        if not m:
+            raise LookupError(f"google: sin precio para {sym}")
+        px = float(m.group(1))
+        prev = re.search(r'Previous close</div>.*?<div[^>]*>[^0-9]*([0-9][0-9,]*\.?[0-9]*)', r.text, re.S)
+        cur = re.search(r'data-currency-code="([A-Z]{3})"', r.text)
+        try:
+            prevf = float(prev.group(1).replace(",", "")) if prev else px
+        except ValueError:
+            prevf = px
+        return {"precio": px, "cierre_anterior": prevf, "ts": time.time(), "divisa": cur.group(1) if cur else "",
+                "fuente": "Google Finance", "retraso": "≈15 min", "puntos": []}
+
     def _quote_crypto(self, sym: str) -> dict:
         try:
             r = self._get("coinbase", f"https://api.coinbase.com/v2/prices/{sym}/spot")
@@ -193,7 +228,7 @@ class DatosMercado:
         if hit and time.time() - hit[0] < age:
             return hit[1]
         crypto = bool(re.match(r"^[A-Z0-9]+-(EUR|USD)$", sym))
-        chain = [self._quote_yahoo] + ([self._quote_crypto] if crypto else [self._quote_stooq])
+        chain = [self._quote_yahoo] + ([self._quote_crypto] if crypto else [self._quote_google, self._quote_stooq])
         for fn in chain:
             try:
                 q = fn(sym)
