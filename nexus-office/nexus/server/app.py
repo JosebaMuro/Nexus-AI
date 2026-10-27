@@ -1270,6 +1270,58 @@ def create_app(services: Services | None = None) -> FastAPI:
     def pico_png(estado: str):
         return Response(_hub().pico_png(estado), media_type="image/png")
 
+    # grabar firmware (solo desde el propio equipo: usa los puertos USB)
+    def _solo_local(request: Request) -> None:
+        if (request.client.host if request.client else "") not in LOCAL:
+            raise HTTPException(403, "Solo desde el propio equipo")
+
+    def _nexus_para_dispositivos() -> dict:
+        from ..coop.node import overlay_addresses
+        port = S().config.get("server.port", 8775)
+        ips = [a["ip"] for a in sorted(overlay_addresses(), key=lambda a: a["kind"] != "lan")
+               if not a["ip"].startswith(("169.254.", "127."))]
+        return {"host": f"{ips[0]}:{port}" if ips else "", "key": lan_key(),
+                "escucha_red": S().config.get("server.host", "127.0.0.1") not in ("127.0.0.1", "localhost")}
+
+    @app.get("/api/firmware")
+    def firmware_info(request: Request):
+        _solo_local(request)
+        from ..devices import firmware as fw
+        info = fw.disponible()
+        try:
+            f = fw.script()
+            info.update(binarios=f.binarios(), puertos=f.puertos(), modelos_luces=list(f.MODELOS_LUCES))
+        except Exception as e:   # noqa: BLE001
+            info.update(binarios=[], puertos=[], error=str(e))
+        info["nexus"] = _nexus_para_dispositivos()
+        return info
+
+    @app.post("/api/firmware/grabar")
+    def firmware_flash(request: Request, data: dict = Body(...)):
+        _solo_local(request)
+        from ..devices import firmware as fw
+        cfg = dict(data.get("config") or {})
+        if data.get("conectar_nexus", True) and "nexus" not in cfg and data.get("tipo") in ("reloj", "pico"):
+            n = _nexus_para_dispositivos()
+            if n["host"]:
+                cfg["nexus"] = {"host": n["host"], "key": n["key"]}
+        if data.get("tipo") == "luces":
+            cfg.pop("nexus", None)
+        try:
+            return fw.TRABAJOS.lanzar(str(data.get("tipo", "")), str(data.get("puerto") or ""),
+                                      str(data.get("modelo") or ""), cfg or None, bool(data.get("solo_config")))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/firmware/trabajo/{tid}")
+    def firmware_job(request: Request, tid: str):
+        _solo_local(request)
+        from ..devices import firmware as fw
+        j = fw.TRABAJOS.get(tid)
+        if not j:
+            raise HTTPException(404, "trabajo desconocido")
+        return j
+
     @app.get("/api/dispositivos/leds/buscar")
     def leds_discover(ip: str = ""):
         return {"encontrados": _hub().leds.discover(hosts=[x.strip() for x in ip.split(",") if x.strip()])}

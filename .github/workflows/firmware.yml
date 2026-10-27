@@ -1,0 +1,148 @@
+name: Firmware (luces, reloj y Pico W)
+
+# Compila el firmware de los dispositivos y deja los binarios listos para grabar en firmware/bin:
+#   nexusled-<modelo>.bin   NexusLED para cada ESP32 (imagen completa, se graba en 0x0)
+#   nexuswatch-esp32c3.bin  NexusWatch para la ESP32-2424S012C (imagen completa, 0x0)
+#   nexuspico-picow.uf2     MicroPython con NexusPico congelado para el Pico W (se copia a la unidad RPI-RP2)
+# En un push a una rama, el ultimo paso sube los binarios a esa misma rama (firmware/bin y firmware.json).
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - firmware/**
+      - "!firmware/bin/**"
+      - .github/workflows/firmware.yml
+
+permissions:
+  contents: read
+
+env:
+  ESP32_CORE: "3.1.1"
+  MICROPYTHON: "v1.24.1"
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Nucleo de NexusLED (con sanitizers)
+        run: |
+          g++ -std=c++17 -O1 -fsanitize=address,undefined -o core_test firmware/tests/core_test.cpp
+          ./core_test
+      - name: Emuladores (NexusLED y NexusWatch)
+        run: |
+          make -C firmware/emulator
+          g++ -std=c++17 -O2 -Wall -o nw_emu firmware/nexuswatch/emulator/nw_emu.cpp
+          mkdir -p capturas
+          J=firmware/nexuswatch/emulator/ejemplo.json
+          ./nw_emu $J capturas/avatar.ppm
+          ./nw_emu $J capturas/agentes.ppm 1000 left
+          ./nw_emu $J capturas/modos.ppm 1000 left left
+          ./nw_emu offline capturas/sin-conexion.ppm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capturas-reloj
+          path: capturas/
+
+  esp32:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { sketch: nexusled, modelo: esp32, fqbn: "esp32:esp32:esp32:PartitionScheme=min_spiffs" }
+          - { sketch: nexusled, modelo: esp32s2, fqbn: "esp32:esp32:esp32s2:PartitionScheme=min_spiffs" }
+          - { sketch: nexusled, modelo: esp32s3, fqbn: "esp32:esp32:esp32s3:PartitionScheme=min_spiffs" }
+          - { sketch: nexusled, modelo: esp32c3, fqbn: "esp32:esp32:esp32c3:PartitionScheme=min_spiffs,CDCOnBoot=cdc" }
+          - { sketch: nexusled, modelo: esp32c6, fqbn: "esp32:esp32:esp32c6:PartitionScheme=min_spiffs,CDCOnBoot=cdc" }
+          - { sketch: nexuswatch, modelo: esp32c3, fqbn: "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - uses: actions/cache@v4
+        with:
+          path: ~/.arduino15
+          key: arduino-esp32-${{ env.ESP32_CORE }}
+      - name: Nucleo esp32 ${{ env.ESP32_CORE }}
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@${ESP32_CORE}
+      - name: Compilar ${{ matrix.sketch }} para ${{ matrix.modelo }}
+        run: |
+          arduino-cli compile --fqbn "${{ matrix.fqbn }}" --warnings default --output-dir out firmware/${{ matrix.sketch }}
+          ls -la out
+          mkdir -p bin
+          cp out/${{ matrix.sketch }}.ino.merged.bin bin/${{ matrix.sketch }}-${{ matrix.modelo }}.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fw-${{ matrix.sketch }}-${{ matrix.modelo }}
+          path: bin/
+
+  pico:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Herramientas
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-arm-none-eabi libnewlib-arm-none-eabi cmake >/dev/null
+      - name: MicroPython ${{ env.MICROPYTHON }} con NexusPico
+        run: |
+          git clone -q --depth 1 -b ${MICROPYTHON} https://github.com/micropython/micropython mp
+          make -C mp/mpy-cross -j4 >/dev/null
+          make -C mp/ports/rp2 BOARD=RPI_PICO_W submodules >/dev/null
+          make -C mp/ports/rp2 BOARD=RPI_PICO_W FROZEN_MANIFEST=$GITHUB_WORKSPACE/firmware/nexuspico/manifest.py -j4 >/dev/null
+          mkdir -p bin && cp mp/ports/rp2/build-RPI_PICO_W/firmware.uf2 bin/nexuspico-picow.uf2
+          ls -la bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fw-nexuspico-picow
+          path: bin/
+
+  subir:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+    needs: [pruebas, esp32, pico]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fw-*
+          path: nuevos
+          merge-multiple: true
+      - name: firmware/bin y firmware.json
+        run: |
+          mkdir -p firmware/bin
+          cp nuevos/* firmware/bin/
+          python3 - <<'EOF'
+          import hashlib, json, re, os, time
+          from pathlib import Path
+          fw = Path("firmware")
+          def ver(path, pat):
+              m = re.search(pat, Path(path).read_text(encoding="utf-8"))
+              return m.group(1) if m else ""
+          v = {"nexusled": ver(fw / "nexusled/nl_core.h", r'NEXUSLED_VERSION\s+"([^"]+)"') or ver(fw / "nexusled/nexusled.ino", r'NEXUSLED_VERSION\s+"([^"]+)"'),
+               "nexuswatch": ver(fw / "nexuswatch/nw_core.h", r'NEXUSWATCH_VERSION\s+"([^"]+)"'),
+               "nexuspico": ver(fw / "nexuspico/nexuspico.py", r'VERSION = "([^"]+)"')}
+          arch = {}
+          for p in sorted((fw / "bin").iterdir()):
+              if p.suffix not in (".bin", ".uf2"):
+                  continue
+              fam = p.stem.split("-")[0]
+              arch[p.name] = {"version": v.get(fam, ""), "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+                              "grabar": "copiar a la unidad RPI-RP2" if p.suffix == ".uf2" else "esptool write_flash 0x0"}
+          (fw / "bin" / "firmware.json").write_text(json.dumps({"commit": os.environ["GITHUB_SHA"], "nucleo_esp32": os.environ["ESP32_CORE"],
+              "micropython": os.environ["MICROPYTHON"], "archivos": arch}, indent=2) + "\n", encoding="utf-8")
+          EOF
+          cat firmware/bin/firmware.json
+      - name: Subir a la rama
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firmware/bin
+          git diff --cached --quiet && exit 0
+          git commit -q -m "Firmware: binarios compilados de ${GITHUB_SHA::7}"
+          for i in 1 2 3; do git pull -q --rebase origin "${GITHUB_REF_NAME}" && git push -q origin "HEAD:${GITHUB_REF_NAME}" && exit 0; sleep 5; done
+          exit 1
