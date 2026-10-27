@@ -183,7 +183,10 @@ class Serie {
     if (h_ != INVALID_HANDLE_VALUE) CloseHandle(h_);
     h_ = INVALID_HANDLE_VALUE;
 #else
-    if (fd_ >= 0) ::close(fd_);
+    if (fd_ >= 0) {
+      ioctl(fd_, TIOCNXCL);   // el modo exclusivo dura mientras haya alguien con el puerto abierto
+      ::close(fd_);
+    }
     fd_ = -1;
 #endif
   }
@@ -857,6 +860,17 @@ class Grabador {
   }
 
   void cambiar_baudios(int baud) {
+    try {   // primero, que el puerto de este lado admita esa velocidad: la ROM ya no vuelve atras
+      s_.velocidad(baud);
+      s_.velocidad(115200);
+    } catch (const Error&) {
+      try {
+        s_.velocidad(115200);
+      } catch (const Error&) {
+      }
+      aviso("baudios", 100, "sigo a 115200 baudios (el puerto no admite " + std::to_string(baud) + ")");
+      return;
+    }
     std::vector<uint8_t> d;
     detail::put32(d, (uint32_t)baud);
     detail::put32(d, 0);

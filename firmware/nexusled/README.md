@@ -1,4 +1,4 @@
-# NexusLED — firmware para ESP32 y tiras WS2812
+# NexusLED — firmware para ESP32, ESP8266 y tiras WS2812
 
 Firmware propio de NEXUS, al estilo de WLED: maneja tiras **WS2812 / WS2812B / SK6812 (RGB y RGBW)** desde un
 **ESP32** y se controla desde NEXUS (*Ajustes → Luces LED*), desde su propia página web o por su API.
@@ -32,6 +32,14 @@ arduino-cli upload  --fqbn esp32:esp32:esp32 -p /dev/ttyUSB0 firmware/nexusled
 ```bash
 cd firmware && pio run -e esp32 -t upload     # o esp32s3 / esp32c3
 ```
+
+## ESP8266 (ESP-01/01S, ESP-12, NodeMCU, Wemos D1 mini)
+Mismo firmware con el núcleo **esp8266** 3.x (gestor de placas:
+`https://arduino.esp8266.com/stable/package_esp8266com_index.json`). Los LED salen por un envío temporizado, así
+que valen los GPIO 0-5 y 12-15; por defecto el **GPIO 2** (D4 en NodeMCU/Wemos, el único libre en el ESP-01).
+Hasta 600 LED. Binarios: `nexusled-esp8266.bin` (1 MB, modo DOUT: ESP-01S y cualquier placa mayor),
+`-esp8266-4m` (NodeMCU, Wemos) y `-esp8266-512k` (ESP-01 antiguo; cabe, pero no hay sitio para actualizar por Wi-Fi).
+En el ESP-01 usa un adaptador de 3,3 V y pon GPIO0 a GND al darle corriente para grabarlo (ver `../README.md`).
 
 ## Conexión de la tira
 | Tira | ESP32 |

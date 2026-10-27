@@ -2,11 +2,11 @@
 
 Nexus-Office reparte su estado (en línea, escuchando, pensando, usando una herramienta, hablando, hecho, error) y lo
 que hace cada agente a tres dispositivos baratos que se conectan por Wi‑Fi a tu ordenador. Todo se graba y configura
-**sin internet**: los binarios, el script de grabado y `esptool` vienen en el paquete.
+**sin internet**: los binarios y el grabador vienen en el paquete.
 
 | Dispositivo | Placa | Qué hace | Binario (`firmware/bin/`) |
 |---|---|---|---|
-| **NexusLED** | Cualquier ESP32 (ESP32, S2, S3, C3, C6) con tiras WS2812, WS2812B o SK6812 (RGB y RGBW) | Luces que muestran el estado de Nexus (vúmetro con su voz al hablar), 23 efectos, 11 paletas, hasta 4 tiras y 1500 LED | `nexusled-esp32.bin`, `-esp32s2`, `-esp32s3`, `-esp32c3`, `-esp32c6` |
+| **NexusLED** | Toda la familia ESP con Wi‑Fi: ESP8266 (ESP‑01/01S, ESP‑12, NodeMCU, Wemos D1 mini), ESP32, S2, S3, C3, C5 y C6, con tiras WS2812, WS2812B o SK6812 (RGB y RGBW) | Luces que muestran el estado de Nexus (vúmetro con su voz al hablar), 23 efectos, 11 paletas, hasta 4 tiras y 1500 LED (600 en el ESP8266) | `nexusled-esp8266.bin` (1 MB), `-esp8266-4m`, `-esp8266-512k`, `-esp32`, `-esp32s2`, `-esp32s3`, `-esp32c3`, `-esp32c5`, `-esp32c6` |
 | **NexusWatch** | ESP32-2424S012C-Y / (B): ESP32‑C3 con pantalla redonda GC9A01 de 1,28" y táctil CST816S | Reloj con el avatar animado, qué hace cada agente y los modos | `nexuswatch-esp32c3.bin` |
 | **NexusPico** | Raspberry Pi Pico W + pantalla de tinta Waveshare 2,13" V3 o V4 (la del pwnagotchi) | Avatar de bolsillo con caras al estilo pwnagotchi según el estado | `nexuspico-picow.uf2` |
 
@@ -16,7 +16,25 @@ que hace cada agente a tres dispositivos baratos que se conectan por Wi‑Fi a t
 de ESP32, escribe la Wi‑Fi y pulsa **GRABAR**. Nexus graba el binario, le pone la Wi‑Fi, su propia dirección y la
 clave de red, y el dispositivo aparece en *Conectados ahora*. Para el Pico W, conéctalo con **BOOTSEL** pulsado.
 
-**Con el script** (`firmware/flash.py` en la carpeta de instalación):
+Nexus-Office graba con su propio grabador en C++ (nexus-flash), sin esptool ni Python: detecta el chip, elige el
+binario, lo graba, lo comprueba y le manda la configuración. Si el adaptador USB de la placa (CH340, CP210x o FTDI)
+no tiene driver, **INSTALAR DRIVERS** lo instala.
+
+**ESP‑01 y placas sin reinicio automático**: con un adaptador USB‑serie de 3,3 V, une GPIO0 a GND y dale corriente;
+Nexus espera 20 s a que entre en modo de carga. Al terminar, suelta GPIO0 y vuelve a darle corriente. El ESP‑01S y
+cualquier ESP8266 de 1 MB o más usan `nexusled-esp8266.bin`; el ESP‑01 azul antiguo de 512 KB, `-esp8266-512k` (sin
+actualización por Wi‑Fi); NodeMCU y Wemos pueden usar `-esp8266-4m`.
+
+**Con la orden** `nexus-flash` (en `firmware/` de la carpeta de instalación o compilada desde `firmware/flasher`):
+
+```bash
+nexus-flash puertos
+nexus-flash luces --wifi MiRed MiClave --leds 60            # GPIO 16 en ESP32, GPIO 2 en ESP8266
+nexus-flash reloj --wifi MiRed MiClave --nexus 192.168.1.10:8775 CLAVE_DE_RED
+nexus-flash pico  --wifi MiRed MiClave --nexus 192.168.1.10:8775 CLAVE_DE_RED
+```
+
+**Con el script de Python** (`firmware/flash.py`, en la edición Python):
 
 ```bash
 python firmware/flash.py puertos
@@ -26,7 +44,7 @@ python firmware/flash.py pico  --wifi MiRed MiClave --nexus 192.168.1.10:8775 CL
 python firmware/flash.py config reloj --wifi OtraRed OtraClave      # solo cambiar la configuración
 ```
 
-El script reconoce el modelo de ESP32 y elige su `.bin`. La *clave de red* es la de *Red COOP → Conectar
+Los dos reconocen el chip y eligen su `.bin`. La *clave de red* es la de *Red COOP → Conectar
 dispositivos*, y Nexus-Office tiene que escuchar en la red local.
 
 **A mano**: `esptool --chip esp32s3 write_flash 0x0 nexusled-esp32s3.bin` (los `.bin` son imágenes completas y van en
@@ -39,7 +57,8 @@ Sin el script, cada dispositivo sin Wi‑Fi crea su propia red (`NexusLED-XXXX`,
 ## Luces NexusLED
 - *Dispositivos → Luces*: **BUSCAR** encuentra las luces de tu red (mDNS y UDP) o se añaden por IP. Para cada una:
   encender, brillo, efecto, paleta, color y si sigue el estado de Nexus.
-- Conexión: DIN de la tira al GPIO 16 (en el ESP32‑C3, por ejemplo el 8 o el 10) con una resistencia de 330 Ω, y GND
+- Conexión: DIN de la tira al GPIO 16 (en el ESP32‑C3, por ejemplo el 8 o el 10; en el ESP8266 el GPIO 2, que es D4
+  en NodeMCU y Wemos y el único libre en el ESP‑01) con una resistencia de 330 Ω, y GND
   común entre el ESP32 y la fuente. Más detalles en `firmware/nexusled/README.md`.
 
 ## Reloj NexusWatch

@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <map>
+#include <memory>
 
 #include "nexus_flash.h"
 
@@ -141,8 +142,8 @@ std::string con_pin(const Args& a, const std::string& cfg, const std::string& ch
 void grabar_esp(const Args& a, const std::string& tipo, const std::string& bin, std::string& puerto) {
   if (puerto.empty()) puerto = puerto_auto("esp");
   Opciones op = opciones(a);
-  Grabador g(puerto, avance);
-  Chip c = g.conectar(op.espera);
+  auto g = std::make_unique<Grabador>(puerto, avance);   // se cierra antes de mandar la configuracion
+  Chip c = g->conectar(op.espera);
   std::string modelo = a.get("--modelo", c.nombre);
   if (tipo == "reloj" && c.nombre != "esp32c3")
     throw Error("el reloj ESP32-2424S012C lleva un ESP32-C3 y este es un " + c.descripcion);
@@ -152,7 +153,8 @@ void grabar_esp(const Args& a, const std::string& tipo, const std::string& bin, 
   std::string archivo = bin + "/" + (tipo == "reloj" ? std::string("nexuswatch-esp32c3.bin") : binario_luces(modelo));
   if (!existe_archivo(archivo)) throw Error("falta " + archivo + " (no hay firmware compilado para " + modelo + ")");
   avance("preparar", 0, "firmware " + archivo);
-  g.grabar(leer_archivo(archivo), 0, op);
+  g->grabar(leer_archivo(archivo), 0, op);
+  g.reset();
   avance("reiniciar", 100, archivo.substr(archivo.find_last_of("/\\") + 1) + " grabado en " + puerto);
   if (tipo == "luces") {
     std::string cfg = con_pin(a, montar_config(a, "luces"), c.nombre);

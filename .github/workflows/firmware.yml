@@ -18,7 +18,7 @@ permissions:
 
 env:
   ESP32_CORE: "3.1.1"
-  ESP32_CORE_NUEVO: "3.3.0"   # ESP32-C2 y ESP32-C5 solo vienen en los nucleos recientes
+  ESP32_CORE_NUEVO: "3.3.0"   # el ESP32-C5 solo viene en los nucleos recientes
   ESP8266_CORE: "3.1.2"
   MICROPYTHON: "v1.24.1"
 
@@ -58,8 +58,7 @@ jobs:
           - { sketch: nexusled, modelo: esp32c3, fqbn: "esp32:esp32:esp32c3:PartitionScheme=min_spiffs,CDCOnBoot=cdc" }
           - { sketch: nexusled, modelo: esp32c6, fqbn: "esp32:esp32:esp32c6:PartitionScheme=min_spiffs,CDCOnBoot=cdc" }
           - { sketch: nexuswatch, modelo: esp32c3, fqbn: "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio" }
-          # en prueba: si no compilan, el resto de binarios se sube igual
-          - { sketch: nexusled, modelo: esp32c2, fqbn: "esp32:esp32:esp32c2:PartitionScheme=min_spiffs,FlashMode=dio", nuevo: true }
+          # en prueba: si no compila, el resto de binarios se sube igual (el ESP32-C2 no esta: el nucleo de Arduino no trae sus librerias)
           - { sketch: nexusled, modelo: esp32c5, fqbn: "esp32:esp32:esp32c5:PartitionScheme=min_spiffs,CDCOnBoot=cdc", nuevo: true }
     continue-on-error: ${{ matrix.nuevo == true }}
     env:
@@ -83,6 +82,9 @@ jobs:
           ls -la out
           mkdir -p bin
           cp out/${{ matrix.sketch }}.ino.merged.bin bin/${{ matrix.sketch }}-${{ matrix.modelo }}.bin
+      - name: Cargadores disponibles (si falla)
+        if: failure()
+        run: ls ~/.arduino15/packages/esp32/tools/esp32-arduino-libs/*/${{ matrix.modelo }}/bin/ || true
       - uses: actions/upload-artifact@v4
         with:
           name: fw-${{ matrix.sketch }}-${{ matrix.modelo }}
@@ -216,7 +218,7 @@ jobs:
                   continue
               fam = p.stem.split("-")[0]
               arch[p.name] = {"version": v.get(fam, ""), "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
-                              "grabar": "copiar a la unidad RPI-RP2" if p.suffix == ".uf2" else "esptool write_flash 0x0"}
+                              "grabar": "copiar a la unidad RPI-RP2" if p.suffix == ".uf2" else "nexus-flash grabar (0x0)"}
           (fw / "bin" / "firmware.json").write_text(json.dumps({"commit": os.environ["GITHUB_SHA"], "nucleo_esp32": os.environ["ESP32_CORE"],
               "nucleo_esp32_nuevo": os.environ["ESP32_CORE_NUEVO"], "nucleo_esp8266": os.environ["ESP8266_CORE"],
               "micropython": os.environ["MICROPYTHON"], "archivos": arch}, indent=2) + "\n", encoding="utf-8")
