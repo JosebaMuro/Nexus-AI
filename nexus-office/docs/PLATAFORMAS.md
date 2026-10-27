@@ -8,14 +8,14 @@ instalan sin internet. Solo el modelo de IA se descarga, y solo si hay conexión
 
 | Plataforma | Instalador | Ejecución local de IA | Notas |
 |---|---|---|---|
-| Windows 10/11 x64 | `Nexus-Office-Setup-1.8.0-windows-x64.exe` | ✅ CPU, CUDA (NVIDIA), Vulkan (NVIDIA, AMD, Intel), OpenVINO | Instalador gráfico NSIS, accesos directos, desinstalador en *Aplicaciones*, servicio opcional. **Probado en el equipo de desarrollo.** |
-| Windows 11 ARM64 (Snapdragon X) | `Nexus-Office-Setup-1.8.0-windows-arm64.exe` | ✅ CPU ARM64 y Vulkan (Adreno); NPU Hexagon vía `onnxruntime-qnn` | llama-server y sd-cli nativos ARM64; Python x64 emulado por Windows 11. El instalador se niega a seguir en un Windows que no sea ARM64. |
-| Linux x86_64 | `Nexus-Office-1.8.0-linux-x86_64.run`, `nexus-office_1.8.0_amd64.deb`, Docker | ✅ CPU, CUDA, Vulkan, OpenVINO | Ubuntu, Debian, Fedora, Arch... (glibc 2.28 o posterior). |
-| **Steam Deck** (SteamOS) | `Nexus-Office-1.8.0-linux-x86_64.run` | ✅ CPU / Vulkan (APU AMD) | Instala en modo escritorio en tu carpeta de usuario (SteamOS es de solo lectura) y añade `start.sh` como *juego no‑Steam*. |
-| Linux ARM64 (Raspberry Pi 4/5, Jetson, Orange Pi) | `Nexus-Office-1.8.0-linux-aarch64.run`, `nexus-office_1.8.0_arm64.deb` | ✅ CPU y Vulkan (Pi 5: Qwen3‑VL 2B Thinking); CUDA en Jetson Orin | Hace falta un sistema de **64 bits** (Raspberry Pi OS 64‑bit, Ubuntu). Los sistemas de 32 bits (`armv7l`) no están soportados. Usa disco SSD/USB3 para los modelos. |
-| macOS Apple Silicon / Intel | `Nexus-Office-1.8.0-macos-arm64.tar.gz`, `Nexus-Office-1.8.0-macos-x86_64.tar.gz` | ✅ Metal (Apple Silicon), CPU | Incluye `Nexus-Office.command` y `Nexus-Office.app`. Primera apertura: clic derecho → Abrir (no está firmado). |
-| **Android** (app Nexus-Office VPN) | `Nexus-Office-1.8.0-android-vpn.apk` | ⚙️ Cliente del PC | App nativa (Android 7+). Conecta con el Nexus-Office de tu PC (Windows, Linux o macOS) por **VPN WireGuard cifrada** desde cualquier sitio, por HTTPS con certificado anclado o por la Wi‑Fi de la oficina. Webui completa, voz del sistema, adjuntar y descargar ficheros. Ver [VPN.md](VPN.md). |
-| **Android** (app Nexus-Office autónomo) | `Nexus-Office-1.8.0-android-autonomo.apk` | ✅ CPU (3 variantes ARM), GPU (Adreno por OpenCL; Mali, Immortalis, Xclipse y PowerVR por Vulkan) y NPU Hexagon de los Snapdragon 8 Gen 2 o posteriores (llama.cpp Hexagon, experimental). Otras NPU (APU, TPU, Exynos) detectadas pero sin uso | Nexus-Office 100 % en el móvil, sin PC (Android 9+, ARM64). La APK lleva Python 3.12, Nexus-Office, sus dependencias y llama.cpp (CPU y GPU); detecta CPU, GPU y NPU, mide si el modelo va más rápido en GPU o en CPU y solo descarga el modelo de IA adecuado a la RAM del móvil (Qwen3‑VL 2B o 4B Thinking). Arranque al encender opcional. Ver [android-autonomo/README.md](../android-autonomo/README.md). |
+| Windows 10/11 x64 | `Nexus-Office-Setup-2.2.0-windows-x64.exe` | ✅ CPU, CUDA (NVIDIA), Vulkan (NVIDIA, AMD, Intel), OpenVINO | Instalador gráfico NSIS, accesos directos, desinstalador en *Aplicaciones*, servicio opcional. **Probado en el equipo de desarrollo.** |
+| Windows 11 ARM64 (Snapdragon X) | `Nexus-Office-Setup-2.2.0-windows-arm64.exe` | ✅ CPU ARM64 y Vulkan (Adreno); NPU Hexagon vía `onnxruntime-qnn` | llama-server y sd-cli nativos ARM64; Python x64 emulado por Windows 11. El instalador se niega a seguir en un Windows que no sea ARM64. |
+| Linux x86_64 | `Nexus-Office-2.2.0-linux-x86_64.run`, `nexus-office_2.2.0_amd64.deb`, Docker | ✅ CPU, CUDA, Vulkan, OpenVINO | Ubuntu, Debian, Fedora, Arch... (glibc 2.28 o posterior). |
+| **Steam Deck** (SteamOS) | `Nexus-Office-2.2.0-linux-x86_64.run` | ✅ CPU / Vulkan (APU AMD) | Instala en modo escritorio en tu carpeta de usuario (SteamOS es de solo lectura) y añade `start.sh` como *juego no‑Steam*. |
+| Linux ARM64 (Raspberry Pi 4/5, Jetson, Orange Pi) | `Nexus-Office-2.2.0-linux-aarch64.run`, `nexus-office_2.2.0_arm64.deb` | ✅ CPU y Vulkan (Pi 5: Qwen3‑VL 2B Thinking); CUDA en Jetson Orin | Hace falta un sistema de **64 bits** (Raspberry Pi OS 64‑bit, Ubuntu). Los sistemas de 32 bits (`armv7l`) no están soportados. Usa disco SSD/USB3 para los modelos. |
+| macOS Apple Silicon / Intel | `Nexus-Office-2.2.0-macos-arm64.tar.gz`, `Nexus-Office-2.2.0-macos-x86_64.tar.gz` | ✅ Metal (Apple Silicon), CPU | Incluye `Nexus-Office.command` y `Nexus-Office.app`. Primera apertura: clic derecho → Abrir (no está firmado). |
+| **Android** (app Nexus-Office VPN) | `Nexus-Office-2.2.0-android-vpn.apk` | ⚙️ Cliente del PC | App nativa (Android 7+). Conecta con el Nexus-Office de tu PC (Windows, Linux o macOS) por **VPN WireGuard cifrada** desde cualquier sitio, por HTTPS con certificado anclado o por la Wi‑Fi de la oficina. Webui completa, voz del sistema, adjuntar y descargar ficheros. Ver [VPN.md](VPN.md). |
+| **Android** (app Nexus-Office, recomendada) | `Nexus-Office-2.2.0-android-autonomo.apk` | ✅ CPU (3 variantes ARM), GPU (Adreno por OpenCL; Mali, Immortalis, Xclipse y PowerVR por Vulkan) y NPU Hexagon de los Snapdragon 8 Gen 2 o posteriores (llama.cpp Hexagon, experimental). Otras NPU (APU, TPU, Exynos) detectadas pero sin uso | Nexus-Office 100 % en el móvil, sin PC (Android 9+, ARM64). La APK lleva Python 3.12, Nexus-Office, sus dependencias y llama.cpp (CPU y GPU); detecta CPU, GPU y NPU, mide si el modelo va más rápido en GPU o en CPU y solo descarga el modelo de IA adecuado a la RAM del móvil (Qwen3‑VL 2B o 4B Thinking). Arranque al encender opcional. También se conecta al Nexus-Office del PC (*RED → Conectar a mi ordenador*). Ver [android-autonomo/README.md](../android-autonomo/README.md). |
 | **Android ARM64** (Termux) | Desde el código fuente o desde la app Nexus-Office VPN | ✅ CPU vía Termux (`pkg llama-cpp`) | Ya no se entrega un paquete para Termux, pero `install-termux.sh` sigue en el código fuente, y la app Nexus-Office VPN da el comando que descarga Nexus-Office desde tu PC (`/api/package/termux`). Instala Termux desde F‑Droid. Para la mayoría de móviles es más sencilla la app Nexus-Office autónomo. |
 | iPhone / iPad | PWA | ⚠️ Cliente | iOS no permite ejecutar este tipo de servidor; úsalo como app web conectada a tu PC o a tu red cooperativa. |
 | **Xbox Series** | PWA (Microsoft Edge) | ⚠️ Cliente | Las consolas son plataformas cerradas: no permiten instalar Python ni runtimes. Abre la UI de tu PC desde Edge (puede instalarse como app). |
@@ -30,7 +30,7 @@ instalan sin internet. Solo el modelo de IA se descarga, y solo si hay conexión
 | Instalador | Cómo instala | Opciones |
 |---|---|---|
 | `.exe` (Windows, NSIS) | Copia la carpeta portable a `%LOCALAPPDATA%\Nexus-Office` (o la elegida) sin pedir administrador y ejecuta `install.ps1 -Offline -Clean -Modelos no` (más `-Oficina`). Después, `python -m nexus modelos --descargar` y, si se pidió, `python -m nexus servicio instalar [--red]` con UAC solo para ese paso. Accesos directos con `pythonw.exe -m nexus run` (sin consola) y *Nexus-Office (consola)* con `start.bat`. | Página de opciones: perfil de oficina, descargar el modelo, servicio al encender, acceso desde la red local, acceso directo en el escritorio. Silencioso: `/S /OFICINA=<perfil> /SERVICIO /RED /MODELOS=auto\|todos\|no /D=<carpeta>` (`/D` siempre al final). |
-| `.run` (Linux) | Script `sh` con el `.tar.gz` incrustado. Lo extrae en la carpeta indicada (por defecto `~/.local/share/nexus-office`) y ejecuta `install.sh` con el resto de opciones. | `sh Nexus-Office-1.8.0-linux-<arch>.run [carpeta] [--oficina=<perfil>] [--servicio [--red]] [--modelos=auto\|todos\|no]` |
+| `.run` (Linux) | Script `sh` con el `.tar.gz` incrustado. Lo extrae en la carpeta indicada (por defecto `~/.local/share/nexus-office`) y ejecuta `install.sh` con el resto de opciones. | `sh Nexus-Office-2.2.0-linux-<arch>.run [carpeta] [--oficina=<perfil>] [--servicio [--red]] [--modelos=auto\|todos\|no]` |
 | `.deb` (Debian, Ubuntu, Raspberry Pi OS 64 bits) | Programa en `/opt/nexus-office`; `postinst` prepara `venv/` sin internet (`install.sh --offline --no-clean --modelos=no`). Lanzador `/usr/bin/nexus-office` y entrada de menú. Los datos de cada usuario van a `~/.local/share/nexus-office` (`NEXUS_DATA_DIR`). La primera ejecución de `nexus-office` evalúa el hardware y descarga el modelo. `prerm` quita el servicio. | `nexus-office [servicio\|modelos\|oficina\|detect\|pull\|chat] …`; servicio con `sudo nexus-office servicio instalar [--red]`. |
 | `.tar.gz` (macOS) | Carpeta portable. `Nexus-Office.command` ejecuta `install.sh` la primera vez (quita la cuarentena de Gatekeeper a los binarios incluidos) y después `start.sh`. | `./install.sh --oficina=<perfil> --servicio [--red] --modelos=…` |
 
@@ -56,7 +56,7 @@ siempre en la red local).
 
 ## Instalar desde el código fuente (sin compilar)
 
-Desde `Nexus-Office-1.8.0-codigo-fuente.zip`, `install.sh` (Linux, WSL, macOS) e `install.bat` / `install.ps1` (Windows)
+Desde `Nexus-Office-2.2.0-codigo-fuente.zip`, `install.sh` (Linux, WSL, macOS) e `install.bat` / `install.ps1` (Windows)
 descargan el Python portable y las dependencias. Si la carpeta tiene `runtime/` y `wheelhouse/` (como los
 instaladores), no usan internet. Wheels comprobadas para CPython 3.11 (`nexus wheels --check`, simulando la
 instalación sin red):
@@ -143,7 +143,7 @@ permite construir el de ARM64 desde x86_64), más `bundled/runtimes`. Los datos 
   o termux-services con Termux:Boot. La app Nexus-Office autónomo arranca su servicio en primer plano al encender
   (`BootReceiver`). Todo en [SERVICIO.md](SERVICIO.md).
 - **Descargas**: `nexus/downloads.py` lista los ficheros de `<datos>/descargas/` (por ejemplo,
-  `data/descargas/windows/Nexus-Office-Setup-1.8.0-windows-x64.exe`) y los clasifica por plataforma según su nombre. Para
+  `data/descargas/windows/Nexus-Office-Setup-2.2.0-windows-x64.exe`) y los clasifica por plataforma según su nombre. Para
   repartir los instaladores en la oficina, copia la carpeta de una entrega (`windows/`, `linux/`, `macos/`,
   `android/`…) ahí; nada la llena automáticamente. *Sistema → Descargas* marca el del sistema anfitrión y el del
   dispositivo que mira la página. Se sirven en `/descargas/<ruta>` con la misma protección de clave de red que el resto.
@@ -194,12 +194,12 @@ Resultado:
 
 ```
 dist/
-  windows/  Nexus-Office-Setup-1.8.0-windows-x64.exe, Nexus-Office-Setup-1.8.0-windows-arm64.exe
-  linux/    Nexus-Office-1.8.0-linux-x86_64.run, Nexus-Office-1.8.0-linux-aarch64.run,
-            nexus-office_1.8.0_amd64.deb, nexus-office_1.8.0_arm64.deb
-  macos/    Nexus-Office-1.8.0-macos-arm64.tar.gz, Nexus-Office-1.8.0-macos-x86_64.tar.gz
-  android/  Nexus-Office-1.8.0-android-autonomo.apk, Nexus-Office-1.8.0-android-vpn.apk   (de --apk)
-  Nexus-Office-1.8.0-codigo-fuente.zip, LEEME.txt, SHA256SUMS.txt (+ los ficheros de --docs)
+  windows/  Nexus-Office-Setup-2.2.0-windows-x64.exe, Nexus-Office-Setup-2.2.0-windows-arm64.exe
+  linux/    Nexus-Office-2.2.0-linux-x86_64.run, Nexus-Office-2.2.0-linux-aarch64.run,
+            nexus-office_2.2.0_amd64.deb, nexus-office_2.2.0_arm64.deb
+  macos/    Nexus-Office-2.2.0-macos-arm64.tar.gz, Nexus-Office-2.2.0-macos-x86_64.tar.gz
+  android/  Nexus-Office-2.2.0-android-autonomo.apk, Nexus-Office-2.2.0-android-vpn.apk   (de --apk)
+  Nexus-Office-2.2.0-codigo-fuente.zip, LEEME.txt, SHA256SUMS.txt (+ los ficheros de --docs)
 ```
 
 Cada instalador lleva la carpeta portable completa: código, `runtime/` (CPython de la plataforma), `wheelhouse/`
@@ -207,7 +207,7 @@ Cada instalador lleva la carpeta portable completa: código, `runtime/` (CPython
 Ya no se generan los paquetes *online* que descargaban Python y las dependencias al instalar, ni los `.zip` por
 plataforma, ni el zip maestro, ni el paquete de Termux.
 
-`Nexus-Office-1.8.0-codigo-fuente.zip` contiene solo código, tests, documentación, empaquetado y las apps Android, sin
+`Nexus-Office-2.2.0-codigo-fuente.zip` contiene solo código, tests, documentación, empaquetado y las apps Android, sin
 `venv/`, datos, modelos, cachés ni compilados; `build.py` se para si encuentra ficheros sensibles (claves, `.env`,
 `config.yaml`, registros). Las versiones de referencia de Python portable, llama.cpp, stable-diffusion.cpp y los
 modelos por perfil están en `requirements.txt`; se regenera con `packaging/requirements_ref.py`.
@@ -224,21 +224,23 @@ Para enviar los instaladores a un móvil o a otro canal con límite de tamaño (
 En la red de la oficina es más cómodo copiar `dist/` en `data/descargas/` del PC con Nexus-Office y descargarlos desde
 *Sistema → Descargas*.
 
-## Apps Android (versión 1.8.0)
+## Apps Android (versión 2.2.0)
 
-Hay dos apps. Son independientes y pueden instalarse a la vez:
+Desde la 2.2 la app **autónoma** es la única que hace falta: lleva la IA en el móvil y, en *RED → Conectar a mi
+ordenador*, el mismo cliente de la app VPN (red local, HTTPS anclado y VPN WireGuard). La app VPN se sigue
+publicando para móviles que no pueden con la IA local. Las dos pueden instalarse a la vez:
 
 | | Nexus-Office VPN | Nexus-Office autónomo |
 |---|---|---|
-| Fichero | `Nexus-Office-1.8.0-android-vpn.apk` | `Nexus-Office-1.8.0-android-autonomo.apk` |
+| Fichero | `Nexus-Office-2.2.0-android-vpn.apk` | `Nexus-Office-2.2.0-android-autonomo.apk` |
 | Paquete | `ai.nexus.office.client` (sustituye a la app 1.3) | `ai.nexus.office.autonomo` |
 | Android | 7.0 o superior (API 24) | 9.0 o superior (API 28), ARM64 |
 | Dónde corre la IA | En tu PC con Windows, Linux o macOS | En el propio móvil (modelo elegido según su RAM), en la GPU si llama.cpp puede usarla y va más rápida, si no en la CPU |
-| Conexión | VPN WireGuard cifrada, HTTPS anclado o Wi‑Fi | Ninguna (servidor en `127.0.0.1`) |
+| Conexión | VPN WireGuard cifrada, HTTPS anclado o Wi‑Fi | Su IA en `127.0.0.1` y, si quieres, tu PC por VPN WireGuard, HTTPS anclado o Wi‑Fi |
 | Arranque al encender | — | Opcional: *Sistema → Arranque automático* → **ARRANCAR AL ENCENDER** |
 | Compilar | `venv/python packaging/build_apk.py` | `bash packaging/build_android_runtime.sh` y `venv/python packaging/build_apk_autonomo.py` |
 
-La versión de las dos APK sale de `nexus/__init__.py` más `APK_REVISION` (`packaging/build_apk.py`): la 1.8.0 revisión 0 da versionCode 10700. Desde la 1.8.0 los identificadores son `ai.nexus.office.client` y `ai.nexus.office.autonomo`, así que Nexus-Office no se instala encima de NexusAI: conviven.
+La versión de las dos APK sale de `nexus/__init__.py` más `APK_REVISION` (`packaging/build_apk.py`): la 2.2.0 revisión 0 da versionCode 10700. Desde la 2.2.0 los identificadores son `ai.nexus.office.client` y `ai.nexus.office.autonomo`, así que Nexus-Office no se instala encima de NexusAI: conviven.
 
 **Actualizar desde la app 1.3**: la app Nexus-Office VPN 1.4 está firmada con una clave nueva. Desinstala antes la app Nexus-Office anterior, porque Android no deja instalar encima una app con otra firma. Después vuelve a conectar con el código de tu PC.
 

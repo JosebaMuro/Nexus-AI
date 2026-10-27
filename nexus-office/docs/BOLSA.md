@@ -2,11 +2,45 @@
 
 El perfil `bolsa-inversiones` convierte Nexus-Office en la oficina de una pyme o un despacho que trabaja con bolsa,
 fondos, ETF, renta fija y criptoactivos. Trae una **mesa de bolsa simulada** para practicar sin dinero en un entorno
-que imita uno real. Todo funciona sin internet, en Windows, macOS, Linux, Raspberry Pi y Android.
+que imita uno real, en Windows, macOS, Linux, Raspberry Pi y Android. Desde la 2.1 la mesa usa **cotizaciones
+reales** cuando hay conexión, y sin ella sigue simulada desde el último precio real.
 
-> **Aviso.** Los precios de la mesa son ficticios: no son cotizaciones reales. Nada de lo que dicen los agentes es
+> **Aviso.** La mesa es **siempre simulada**: nunca usa dinero ni envía órdenes a ningún bróker. Con conexión los
+> precios son reales (con el retraso de cada bolsa); sin ella, simulados. Nada de lo que dicen los agentes es
 > asesoramiento financiero personalizado, que solo puede dar una entidad o un asesor registrado en la CNMV. Invertir
 > conlleva el riesgo de perder dinero.
+
+## Datos reales (2.1)
+Con `bolsa.datos: "reales"` (por defecto) la mesa toma las cotizaciones y el cambio de divisa de internet:
+
+| Fuente | Para qué | Retraso |
+|---|---|---|
+| **Yahoo Finance** | Acciones, ETF, cripto y divisas con los mismos símbolos del catálogo (SAN.MC, AAPL, VWCE.DE, BTC-EUR, EURUSD=X) y gráficos | ≈15 min en bolsa, tiempo real en cripto |
+| **CNBC** | Respaldo de cotizaciones y **velas** de acciones cuando Yahoo limita (pasa mucho desde servidores) | ≈15 min |
+| **Google Finance** y **Stooq** | Respaldo de cotizaciones | ≈15 min |
+| **Coinbase** y **Kraken** | Respaldo de cotizaciones y **velas** de cripto | Tiempo real |
+| **BCE** | Cambio de divisa de respaldo | Diario |
+
+Cada fuente que falla se aparta un rato (30 s, 60 s, 120 s… hasta 15 min) y se prueba la siguiente. Sin ninguna, la
+mesa sigue con la simulación desde el último precio real. Cada precio dice su fuente y su retraso.
+`bolsa.datos: "simulados"` vuelve a los precios ficticios de antes.
+
+## Agente de bolsa autónomo (2.1)
+Gestiona su propia cartera **simulada** («Agente autónomo (simulada)») con esos datos reales, como lo haría una
+persona en la mesa, con sus comisiones, horquilla y horarios. En cada ciclo (60 s por defecto):
+
+1. Recopila cotizaciones y cierres diarios de su universo de valores y guarda el histórico para trabajar sin red.
+2. Calcula medias de 20 y 50 sesiones, RSI de 14, momento ajustado por volatilidad y ATR.
+3. Puntúa cada valor con pesos que **aprende** de sus operaciones cerradas.
+4. Gestiona lo que tiene: stop de protección en el libro, stop que sube con el precio, toma de beneficios y salida si
+   se rompe la tendencia.
+5. Abre posiciones con la bolsa abierta arriesgando como mucho el 1 % del patrimonio por operación (stop a 2 ATR),
+   con límites de peso por valor, de posiciones y una reserva de liquidez.
+
+Su **diario** explica por qué compra, vende o espera. En la vista Bolsa se ven en vivo su curva de patrimonio y el
+**gráfico de cada orden activa** (precio, límite, stop, ejecución y objetivo). Se ajusta o se para en la vista Bolsa o
+con `POST /api/bolsa/agente` (`activo`, `intervalo_s`, `riesgo_pct`, `max_posiciones`, `max_peso_pct`,
+`reserva_pct`, `universo`, `capital`); `GET /api/bolsa/agente` da su estado. Nunca opera con dinero real.
 
 ## Agentes
 

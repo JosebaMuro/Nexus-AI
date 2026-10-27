@@ -1,5 +1,22 @@
 # Cambios
 
+## Nexus-Office 2.2.0: la versión de referencia
+
+Une la 1.9, la 2.0 y lo hecho para la edición C++ 2.1 en Windows, Linux, macOS y Android, sin quitar nada de la
+1.8.1. Comparación completa en [docs/NOVEDADES-2.2.md](docs/NOVEDADES-2.2.md).
+
+- **Perfiles de hardware** (motor, modelo, contexto, capas en GPU, caché KV en VRAM o RAM) y **elección de GPU** con
+  `--device`; en Linux ya no se usan llvmpipe ni lavapipe y, si la GPU falla, se sigue en la CPU.
+- **Barra superior** con menús IA, PERFIL, MEMORIA y RED que muestran lo que tiene el equipo.
+- **RAG que lee como un navegador**: Chrome, Edge o Chromium sin ventana para webs con JavaScript, con perfil propio
+  y proxy que solo deja salir a direcciones públicas (`rag.browser`).
+- **Despachos** con una escena animada de lo que hace cada agente, y **sexo** elegible de cada personaje y del usuario.
+- **APK única**: la autónoma también se conecta al ordenador por red local, internet o VPN WireGuard.
+- **Avatares**: encuadre de modelos grandes en el chat y biblioteca de avatares 3D gratuitos.
+- **Bolsa**: velas de CNBC para acciones y de Coinbase o Kraken para cripto cuando Yahoo limita; variación correcta
+  sin cierre anterior.
+- Los instaladores llevan el **firmware** de los dispositivos y los **ejemplos** para importar.
+
 ## Nexus-Office 2.0.0
 
 ### Todo un dominio, sin excepciones, convertido en conocimiento para un agente

@@ -82,6 +82,11 @@ def stage(target: str) -> Path:
             shutil.copytree(src, dest / name, ignore=lambda d, names: [n for n in names if EXCLUDE.search(n)])
         else:
             shutil.copy2(src, dest / name)
+    # firmware de las luces, el reloj y el Pico W (Dispositivos > Grabar firmware, firmware/flash.py) y los ejemplos
+    # para importar (grafo de la Wikipedia, resumen del proyecto), que viven fuera de esta carpeta en el repositorio
+    for src, name in ((ROOT.parent / "firmware", "firmware"), (ROOT.parent / "nexus-office-cpp" / "ejemplos", "ejemplos")):
+        if src.is_dir():
+            shutil.copytree(src, dest / name, ignore=lambda d, names: [n for n in names if EXCLUDE.search(n)])
     if t.get("mac"):
         _mac_launchers(dest)
     (dest / "PLATAFORMA.txt").write_text(f"Nexus-Office {VERSION} - {target}\n{t.get('note', '')}\n", encoding="utf-8")

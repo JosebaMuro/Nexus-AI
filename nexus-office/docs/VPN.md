@@ -1,6 +1,6 @@
 # VPN cifrada para la app Nexus-Office VPN (WireGuard)
 
-La app **Nexus-Office VPN** para Android (`Nexus-Office-1.8.0-android-vpn.apk`) llega al Nexus-Office de tu PC por un túnel **WireGuard**
+La app **Nexus-Office VPN** para Android (`Nexus-Office-2.2.0-android-vpn.apk`) llega al Nexus-Office de tu PC por un túnel **WireGuard**
 cifrado. Funciona igual en Windows, Linux, macOS y WSL, en casa y fuera de ella (datos móviles), sin publicar Nexus-Office
 en internet.
 

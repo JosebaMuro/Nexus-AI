@@ -9,18 +9,18 @@ Todos los instaladores son **100 % portables**: llevan dentro Python, todo lo qu
 (llama-server y sd-cli, para CPU y para la tarjeta gráfica). **Se instalan sin internet.** Lo único que se descarga
 es el modelo de IA, elegido según tu equipo, y solo si hay conexión (ver [más abajo](#modelo-de-ia-elegido-según-tu-equipo)).
 
-Elige el fichero de tu equipo (versión 1.8.0):
+Elige el fichero de tu equipo (versión 2.2.0):
 
 | Equipo | Fichero |
 |---|---|
-| PC con Windows 10/11 de 64 bits (Intel o AMD) | `windows/Nexus-Office-Setup-1.8.0-windows-x64.exe` |
-| PC con Windows 11 en ARM (Snapdragon X) | `windows/Nexus-Office-Setup-1.8.0-windows-arm64.exe` |
-| PC con Linux (Ubuntu, Debian, Fedora, Steam Deck…) | `linux/Nexus-Office-1.8.0-linux-x86_64.run`, `.AppImage` o `.flatpak`; en Debian y Ubuntu también `linux/nexus-office_1.8.0_amd64.deb` |
-| Raspberry Pi 4/5 y otros Linux ARM de 64 bits | `linux/Nexus-Office-1.8.0-linux-aarch64.run`, `.AppImage`, `.flatpak` o `linux/nexus-office_1.8.0_arm64.deb` |
-| Mac con Apple Silicon (M1, M2, M3…) | `macos/Nexus-Office-1.8.0-macos-arm64.tar.gz` |
-| Mac con Intel | `macos/Nexus-Office-1.8.0-macos-x86_64.tar.gz` |
-| Móvil Android: Nexus-Office dentro del móvil | `android/Nexus-Office-1.8.0-android-autonomo.apk` |
-| Móvil Android: usar el Nexus-Office del PC de la oficina | `android/Nexus-Office-1.8.0-android-vpn.apk` |
+| PC con Windows 10/11 de 64 bits (Intel o AMD) | `windows/Nexus-Office-Setup-2.2.0-windows-x64.exe` |
+| PC con Windows 11 en ARM (Snapdragon X) | `windows/Nexus-Office-Setup-2.2.0-windows-arm64.exe` |
+| PC con Linux (Ubuntu, Debian, Fedora, Steam Deck…) | `linux/Nexus-Office-2.2.0-linux-x86_64.run`, `.AppImage` o `.flatpak`; en Debian y Ubuntu también `linux/nexus-office_2.2.0_amd64.deb` |
+| Raspberry Pi 4/5 y otros Linux ARM de 64 bits | `linux/Nexus-Office-2.2.0-linux-aarch64.run`, `.AppImage`, `.flatpak` o `linux/nexus-office_2.2.0_arm64.deb` |
+| Mac con Apple Silicon (M1, M2, M3…) | `macos/Nexus-Office-2.2.0-macos-arm64.tar.gz` |
+| Mac con Intel | `macos/Nexus-Office-2.2.0-macos-x86_64.tar.gz` |
+| Móvil Android: Nexus-Office dentro del móvil y conexión al PC de la oficina | `android/Nexus-Office-2.2.0-android-autonomo.apk` |
+| Móvil Android modesto: solo usar el Nexus-Office del PC | `android/Nexus-Office-2.2.0-android-vpn.apk` |
 
 `SHA256SUMS.txt` trae la huella de cada fichero, para comprobar que se ha copiado bien. Si Nexus-Office ya está instalado
 en un PC de la oficina, los demás equipos y móviles pueden descargar su instalador desde él (ver
@@ -28,7 +28,7 @@ en un PC de la oficina, los demás equipos y móviles pueden descargar su instal
 
 ### Windows
 
-1. Haz doble clic en `Nexus-Office-Setup-1.8.0-windows-x64.exe` (o `-arm64.exe` en un PC con Snapdragon X).
+1. Haz doble clic en `Nexus-Office-Setup-2.2.0-windows-x64.exe` (o `-arm64.exe` en un PC con Snapdragon X).
 2. El instalador no está firmado. Si Windows muestra «Windows protegió su PC», pulsa **Más información →
    Ejecutar de todas formas**.
 3. Acepta la licencia y elige la carpeta. Por defecto es `%LOCALAPPDATA%\Nexus-Office` y no hace falta ser administrador.
@@ -51,7 +51,7 @@ configuración); si dices que no, quedan en la carpeta `data`.
 **Instalación desatendida** (por ejemplo, en varios PC):
 
 ```bat
-Nexus-Office-Setup-1.8.0-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED /MODELOS=auto /D=C:\Nexus-Office
+Nexus-Office-Setup-2.2.0-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED /MODELOS=auto /D=C:\Nexus-Office
 ```
 
 | Opción | Qué hace |
@@ -68,8 +68,8 @@ Nexus-Office-Setup-1.8.0-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED /MO
 **Con el instalador `.run`** (cualquier distribución):
 
 ```bash
-sh Nexus-Office-1.8.0-linux-x86_64.run                   # en Raspberry Pi y ARM: Nexus-Office-1.8.0-linux-aarch64.run
-sh Nexus-Office-1.8.0-linux-x86_64.run ~/Nexus-Office --oficina=herreria --servicio --red
+sh Nexus-Office-2.2.0-linux-x86_64.run                   # en Raspberry Pi y ARM: Nexus-Office-2.2.0-linux-aarch64.run
+sh Nexus-Office-2.2.0-linux-x86_64.run ~/Nexus-Office --oficina=herreria --servicio --red
 ```
 
 Se instala en `~/.local/share/nexus-office` si no indicas otra carpeta. Opciones:
@@ -79,7 +79,7 @@ Se instala en `~/.local/share/nexus-office` si no indicas otra carpeta. Opciones
 - `--servicio`: arranque automático, como servicio de tu usuario que arranca al encender el equipo (si el sistema
   permite `loginctl enable-linger`; si no, al iniciar sesión). Con `sudo` se instala
   para todo el equipo en `/opt/nexus-office` (a nombre de tu usuario) y el servicio es del sistema:
-  `sudo sh Nexus-Office-1.8.0-linux-x86_64.run --servicio --red`.
+  `sudo sh Nexus-Office-2.2.0-linux-x86_64.run --servicio --red`.
 - `--red` (junto con `--servicio`): el servicio escucha en la red local.
 
 Después, abre *Nexus-Office* desde el menú de aplicaciones o ejecuta `start.sh` en la carpeta de instalación. En Steam
@@ -89,10 +89,10 @@ Deck, instálalo en modo escritorio y añade `start.sh` como *juego no‑Steam*.
 va instalado dentro; tus datos quedan en `~/.local/share/nexus-office`.
 
 ```bash
-chmod +x Nexus-Office-1.8.0-linux-x86_64.AppImage      # en Raspberry Pi y ARM: Nexus-Office-1.8.0-linux-aarch64.AppImage
-./Nexus-Office-1.8.0-linux-x86_64.AppImage              # arranca Nexus-Office y abre el navegador
-./Nexus-Office-1.8.0-linux-x86_64.AppImage oficina herreria
-./Nexus-Office-1.8.0-linux-x86_64.AppImage servicio instalar --red   # arranque automático (usa la ruta del AppImage: no lo muevas después)
+chmod +x Nexus-Office-2.2.0-linux-x86_64.AppImage      # en Raspberry Pi y ARM: Nexus-Office-2.2.0-linux-aarch64.AppImage
+./Nexus-Office-2.2.0-linux-x86_64.AppImage              # arranca Nexus-Office y abre el navegador
+./Nexus-Office-2.2.0-linux-x86_64.AppImage oficina herreria
+./Nexus-Office-2.2.0-linux-x86_64.AppImage servicio instalar --red   # arranque automático (usa la ruta del AppImage: no lo muevas después)
 ```
 
 Si tu sistema no tiene FUSE (aparece «libfuse.so.2 not found»), ejecútalo con `--appimage-extract-and-run` delante
@@ -102,7 +102,7 @@ de los argumentos, o instala `libfuse2`.
 `org.freedesktop.Platform 24.08` (si no lo tienes ya).
 
 ```bash
-flatpak install --user Nexus-Office-1.8.0-linux-x86_64.flatpak     # o -aarch64.flatpak
+flatpak install --user Nexus-Office-2.2.0-linux-x86_64.flatpak     # o -aarch64.flatpak
 flatpak run ai.nexus.NexusOffice                                   # o desde el menú de aplicaciones
 flatpak run ai.nexus.NexusOffice servicio instalar                 # deja lista la unidad; actívala con:
 systemctl --user enable --now nexus-office
@@ -113,7 +113,7 @@ Los datos quedan en `~/.var/app/ai.nexus.NexusOffice/data/nexus-office`.
 **Con el paquete `.deb`** (Debian, Ubuntu, Linux Mint, Raspberry Pi OS de 64 bits):
 
 ```bash
-sudo apt install ./nexus-office_1.8.0_amd64.deb         # en Raspberry Pi y ARM: nexus-office_1.8.0_arm64.deb
+sudo apt install ./nexus-office_2.2.0_amd64.deb         # en Raspberry Pi y ARM: nexus-office_2.2.0_arm64.deb
 nexus-office                                            # arranca Nexus-Office y abre el navegador
 sudo nexus-office servicio instalar --red               # opcional: arranque automático accesible desde la red
 ```
@@ -128,7 +128,7 @@ si puedes: cargan mucho más rápido que desde la tarjeta SD.
 
 ### macOS
 
-1. Descomprime `Nexus-Office-1.8.0-macos-arm64.tar.gz` (o `-macos-x86_64` en un Mac con Intel) donde quieras.
+1. Descomprime `Nexus-Office-2.2.0-macos-arm64.tar.gz` (o `-macos-x86_64` en un Mac con Intel) donde quieras.
 2. Abre **Nexus-Office.command**. Como no está firmado por Apple, la primera vez haz **clic derecho → Abrir** y confirma.
 3. La primera vez se prepara Nexus-Office (sin internet salvo para el modelo de IA) y después se abre el navegador.
 
@@ -140,17 +140,17 @@ Desde la terminal también puedes elegir las opciones:
 
 ### Android
 
-Hay dos apps, independientes; puedes instalar las dos:
+Desde la 2.2 hay **una sola app** para todo, `Nexus-Office-2.2.0-android-autonomo.apk` (Android 9 o superior, ARM64):
 
-| App | Fichero | Para qué |
-|---|---|---|
-| **Nexus-Office autónomo** | `Nexus-Office-1.8.0-android-autonomo.apk` | Nexus-Office completo dentro del móvil, sin PC (Android 9 o superior, ARM64). La APK lo lleva todo y solo descarga el modelo de IA adecuado a la RAM del móvil: Qwen3‑VL 2B o 4B Thinking. Detecta la CPU, la GPU y la NPU del móvil. En los Snapdragon 8 Gen 2 o posteriores pone el modelo en la NPU; si no hay NPU utilizable o falla, en la GPU (Adreno, Mali, Immortalis, Xclipse…), y si tampoco, en la CPU. Lo ves en *Sistema → Hardware*. Ver [su guía](../android-autonomo/README.md). |
-| **Nexus-Office VPN** | `Nexus-Office-1.8.0-android-vpn.apk` | App ligera para usar el Nexus-Office del PC de la oficina (Android 7 o superior), en la Wi‑Fi o desde fuera por VPN cifrada. En el PC, *Red COOP → VPN cifrada* → **GENERAR CÓDIGO VPN**; en la app, *Conectar por VPN* y pega el código. Ver [VPN](VPN.md). |
+- **Nexus-Office en el móvil**, sin PC y sin conexión. La APK lo lleva todo y solo descarga el modelo de IA adecuado a la RAM del móvil (Qwen3‑VL 2B o 4B Thinking). Detecta la CPU, la GPU y la NPU: en los Snapdragon 8 Gen 2 o posteriores pone el modelo en la NPU; si no hay NPU utilizable o falla, en la GPU (Adreno, Mali, Immortalis, Xclipse…), y si tampoco, en la CPU. Lo ves en *Sistema → Hardware* y en el menú **IA** de la barra superior. Ver [su guía](../android-autonomo/README.md).
+- **Conectar a mi ordenador**: en el menú **RED** de la barra superior. Abre el Nexus-Office de tu PC (Windows, Linux o macOS) en la Wi‑Fi, desde internet con un código `NEXUSR1:` o por **VPN cifrada WireGuard** con un código `NEXUSV1:` (en el PC: *Red COOP → VPN cifrada → GENERAR CÓDIGO VPN*). El botón **USAR NEXUS-OFFICE EN ESTE MÓVIL** vuelve a la IA del teléfono. Ver [VPN](VPN.md) y [Acceso remoto](ACCESO_REMOTO.md).
 
-1. Copia la APK al móvil o descárgala desde el PC de la oficina (*Sistema → Descargas*).
+Se sigue publicando la app ligera `Nexus-Office-2.2.0-android-vpn.apk` (Android 7 o superior) para móviles que no pueden con la IA local y solo quieren usar la del PC.
+
+1. Copia la APK al móvil o descárgala desde el PC de la oficina (*Sistema → Descargas*) o desde la web de descargas.
 2. Ábrela. Android pedirá permiso para **instalar apps desconocidas** desde esa app (el navegador o el gestor de
    archivos): concédelo.
-3. Si tenías la app Nexus-Office 1.3, desinstálala antes: la app VPN actual está firmada con otra clave.
+3. Si tenías una autónoma anterior a la 2.0 o la app Nexus-Office 1.3, desinstálala antes: estaban firmadas con otra clave. Desde la 2.0 se actualiza encima sin perder nada.
 
 ## Modelo de IA elegido según tu equipo
 
@@ -212,6 +212,16 @@ después ábrelo para instalarlo.
 
 El modo **USUARIO** (arriba a la derecha) muestra solo lo necesario. Nada de lo que hagas en este modo puede romper la configuración avanzada.
 
+### La barra superior
+Las cuatro píldoras de arriba son menús que se abren con un toque y muestran lo que tu equipo tiene de verdad:
+
+- **IA**: el motor (llama.cpp, el integrado, Ollama, LM Studio…), dónde corre (CPU, GPU o NPU, solo las que hay) y el modelo activo. Con **dos o más GPU** eliges en cuál va el modelo; las tarjetas «de software» (llvmpipe, lavapipe, SwiftShader) no aparecen porque irían más lentas que la CPU.
+- **PERFIL**: el perfil de hardware (*Automático*, *Rendimiento*, *Equilibrado*, *Modelo grande*, *Ahorro*, *Solo CPU* o los tuyos). Cada perfil fija motor, acelerador, modelo, contexto, capas en la GPU y si la memoria de la conversación (caché KV) va en la VRAM o en la RAM. **Editar perfiles** crea o cambia los tuyos.
+- **MEMORIA**: el modelo de *embeddings*, cuánto sabe Nexus-Office y cómo lee las páginas web (*Automático*, *Siempre como navegador* o *Nunca*).
+- **RED**: la red COOP, el acceso desde la red local y, en el móvil, **Conectar a mi ordenador**.
+
+En el móvil el menú se abre a pantalla completa con pestañas.
+
 ### Chat
 - Escribe y pulsa **Enter** (Shift+Enter = nueva línea). El selector de la izquierda elige agente; *Automático* deja que Nexus-Office decida.
 - **📎** adjunta imágenes (también puedes pegarlas): Nexus-Office las describe, lee texto (OCR) y responde preguntas sobre ellas.
@@ -226,8 +236,16 @@ Prueba: *«Me llamo Ane y me gusta el surf»*, *«¿Qué sabes de mí?»*, *«Ge
 ### El avatar
 A la derecha del chat está el **núcleo cognitivo**: cada punto es algo que Nexus-Office ha aprendido (personas, lugares, gustos, conceptos) y las líneas son relaciones. Cambia de color según su estado: cian (en línea), violeta (pensando), ámbar (herramienta), magenta (hablando, late con la voz), verde (escuchando).
 
+En *Ajustes > Avatar* puedes **buscar y descargar avatares 3D gratuitos** de Internet: cientos de avatares VRM de Open Source Avatars (casi todos CC0), los modelos de referencia de VRM Consortium, Khronos y three.js, y modelos con licencia Creative Commons de Sketchfab (para descargar de Sketchfab hace falta la clave de API gratuita de tu cuenta). Lo descargado queda en tu equipo con su autor y su licencia, y se puede elegir como avatar en cualquier momento, también sin conexión.
+
+El avatar 3D se encuadra solo, sea del tamaño que sea el modelo descargado: en el chat siempre se ve entero dentro de su hueco. Ver [AVATAR.md](AVATAR.md).
+
 ### Salón
 Representación gráfica de los agentes reunidos. Mira cómo conversan, cómo se delegan tareas y qué habilidades han demostrado. Pulsa **Convocar reunión** o escribe algo en el salón. Mientras dura una reunión el botón muestra *REUNIÓN EN CURSO…* y no se puede convocar otra encima. La **Transcripción** recoge todo lo dicho y funciona igual en ordenador, móvil y tableta.
+
+La pestaña **DESPACHOS** muestra a cada agente en su despacho haciendo lo que hace de verdad en ese momento: piensa con un café, escribe, busca en internet, lee, dibuja con el lápiz, compone con los cascos, habla por teléfono con el Profesor o sale por la puerta hacia la reunión del salón. La ventana sigue la hora real y la pantalla de la pared muestra el trabajo en curso.
+
+Cada personaje, **tú incluido**, puede ser mujer u hombre: el de cada agente en *Agentes → editar → Sexo* y el tuyo en *Ajustes → Tu personaje*. Cambia peinado, complexión, barba, pestañas y labios. Ver [SALON.md](SALON.md).
 
 ### Núcleo
 Explora tu grafo de conocimiento en 3D (arrastra para girar, rueda para acercar), busca recuerdos, borra los que no quieras y enséñale datos nuevos.
@@ -236,7 +254,9 @@ Explora tu grafo de conocimiento en 3D (arrastra para girar, rueda para acercar)
 Genera imágenes y música, analiza imágenes y revisa la galería.
 
 ### Bolsa
-Mesa de bolsa **simulada** para practicar sin dinero: cartera ficticia de 10.000 €, cotizaciones que se mueven solo con la bolsa abierta (en su hora local y con sus festivos), órdenes a mercado, limitadas y stop, comisiones, impuestos, cambio de divisa y deslizamiento. Los precios son ficticios y nada de esto es asesoramiento financiero. Con el perfil *Bolsa e inversiones* los agentes de la oficina también usan la mesa. Una cartera **real** solo sirve de seguimiento: ninguna orden se ejecuta sin que escribas `CONFIRMO`, y Nexus-Office no se conecta a ningún bróker. Ver [BOLSA.md](BOLSA.md).
+Mesa de bolsa **simulada** para practicar sin dinero: cartera ficticia de 10.000 €, órdenes a mercado, limitadas y stop, comisiones, impuestos, cambio de divisa y deslizamiento. **Con conexión, los precios son cotizaciones reales** (Yahoo Finance, con el retraso de cada bolsa; CNBC, Google Finance, Stooq, Coinbase y Kraken de respaldo, también para los gráficos) y el cambio de divisa es el real; sin conexión la mesa sigue simulada desde el último precio real, solo con la bolsa abierta (en su hora local y con sus festivos). Nunca se usa dinero ni se envían órdenes reales, y nada de esto es asesoramiento financiero.
+
+El **agente de bolsa autónomo** gestiona su propia cartera simulada con esos datos reales: analiza cada valor (medias de 20 y 50 sesiones, RSI, momento y volatilidad), arriesga como mucho el 1 % del patrimonio por operación, pone un stop de protección y lo sube cuando el precio sube, vende en el objetivo o si se rompe la tendencia, y aprende de sus operaciones cerradas. Su diario explica por qué compra, vende o espera, y la curva de patrimonio y los gráficos de cada orden se ven en vivo. Se ajusta (o se para) en la vista Bolsa o con `POST /api/bolsa/agente`. Con el perfil *Bolsa e inversiones* los agentes de la oficina también usan la mesa. Una cartera **real** solo sirve de seguimiento: ninguna orden se ejecuta sin que escribas `CONFIRMO`, y Nexus-Office no se conecta a ningún bróker. Ver [BOLSA.md](BOLSA.md).
 
 ### Modelos
 En modo usuario verás los **recomendados para tu equipo** con una etiqueta: *ideal*, *compatible*, *pesado* o *no cabe*. Si el instalador no pudo descargar el modelo elegido (por ejemplo, sin internet), pulsa **Descargar** en el marcado con ★ y después **Activar**. Descarga también el modelo de **embeddings** (Qwen3-Embedding, 639 MB): mejora la búsqueda en tu biblioteca y en la memoria y se activa solo.
@@ -246,15 +266,26 @@ Nombre del asistente, idioma, estilo de respuesta (breve/equilibrado/detallado),
 
 En modo administrador aparece el **Gestor de conocimiento**: lo que Nexus-Office sabe de ti y es común a todos los agentes, lo que sabe cada agente de su especialidad, importar grafos y leer un ZIP. Ver [MEMORIA.md](MEMORIA.md).
 
-Puedes **importar como conocimiento un grafo de cualquier formato** (Gephi, Cytoscape, Neo4j, RDF/OWL, Excel, Mermaid, mapas mentales, la base de otro Nexus-Office…): suéltalo en *Gestor de conocimiento > Importar / exportar*, pídeselo a un agente en el chat o usa `python -m nexus grafo importar fichero`. El formato se reconoce solo y lo importado se suma a lo que Nexus-Office ya sabe. Ver [GRAFOS.md](GRAFOS.md).
+Puedes **importar como conocimiento un grafo de cualquier formato** (Gephi, Cytoscape, Neo4j, RDF/OWL, Excel, Mermaid, mapas mentales, la base de otro Nexus-Office…): suéltalo en *Gestor de conocimiento > Importar / exportar*, pídeselo a un agente en el chat o usa `python -m nexus grafo importar fichero`. El formato se reconoce solo y lo importado se suma a lo que Nexus-Office ya sabe. Ver [GRAFOS.md](GRAFOS.md). Para probarlo, los paquetes traen en `ejemplos/grafo-wikipedia-es/` un **grafo multicapa de la Wikipedia en español** (temas, artículos, enlaces y hechos de Wikidata): `python -m nexus grafo importar ejemplos/grafo-wikipedia-es/grafo.graphml --en auto`.
+
+En `ejemplos/resumen-proyecto/` está **Nexus-Office-resumen.md**, un resumen de todo el programa. Súbelo a la **Biblioteca** y los agentes sabrán responder preguntas sobre el propio Nexus-Office.
 
 Nexus-Office recuerda las pautas que le pidas («no uses emojis», «respóndeme siempre con ejemplos», «llámame Joseba») y todos los agentes las respetan.
 
+### Profesor (IA online)
+El agente **Profesor** enseña y resuelve dudas. Si un administrador pone en *Ajustes → Profesor* la clave de una IA online (Google Gemini, ChatGPT, Perplexity, Claude, Mistral, DeepSeek, Groq, OpenRouter u otra compatible con OpenAI), el Profesor la usa; si no, responde con el modelo local. Los demás agentes le preguntan cuando no saben algo y guardan la lección en su memoria. Ninguna otra parte de Nexus-Office usa la IA online, y la clave nunca se muestra. Desde la terminal: `curl -X PUT -H "X-Admin-Token: ..." -H "Content-Type: application/json" -d '{"proveedor":"gemini","clave":"..."}' http://127.0.0.1:8775/api/nube`.
+
+### Dispositivos: luces, reloj y Pico W
+Nexus-Office reparte su estado (escuchando, pensando, hablando...) a las **luces NexusLED** (ESP32 con tiras WS2812/SK6812), al **reloj NexusWatch** (ESP32-2424S012C) y al **avatar de bolsillo NexusPico** (Pico W con pantalla de tinta). En *Dispositivos* buscas las luces de tu red, eliges efectos y brillo, y cambias de **modo** (Normal, Manos libres, Silencio, Concentración, Rendimiento, Ahorro, Noche) desde el ordenador, el móvil o el reloj. El reloj muestra qué hace cada agente. Desde *Dispositivos > Grabar firmware* (o con `python firmware/flash.py`) se graba el firmware por USB sin internet: los binarios y esptool vienen en la carpeta `firmware/` del paquete, y Nexus le pone la Wi-Fi y su dirección. Ver [DISPOSITIVOS.md](DISPOSITIVOS.md).
+
 ### Motor y acelerador
-Al abrir Nexus-Office puedes elegir el motor de IA y si usa la CPU, la GPU o la NPU, probarlo y ver dónde ha quedado el modelo de verdad. Ver [ACELERADOR.md](ACELERADOR.md).
+Al abrir Nexus-Office puedes elegir el motor de IA y si usa la CPU, la GPU o la NPU, probarlo y ver dónde ha quedado el modelo de verdad. Después lo cambias cuando quieras en los menús **IA** y **PERFIL** de la barra superior. Ver [ACELERADOR.md](ACELERADOR.md).
+
+### Leer páginas web como un navegador
+Muchas webs se pintan con JavaScript y por debajo están vacías. Cuando la Biblioteca, *URL a PDF* o un agente leen una de ellas, Nexus-Office la abre con el Chrome, Edge o Chromium del equipo, sin ventana, y se queda con lo que verías tú. Usa un perfil propio que se limpia antes de cada lectura y solo llega a direcciones públicas. Se elige en el menú **MEMORIA**. Ver [RAG.md](RAG.md).
 
 ### Usarlo desde el móvil, tablet o consola
-Nexus-Office tiene que escuchar en la red local: instala el [arranque automático](#arranque-automático) con *accesible desde la red local*, activa *Red COOP → Conectar dispositivos → Permitir acceso desde la red* o arráncalo con `--host 0.0.0.0`. Después abre `http://IP-DEL-PC:8775` desde el navegador del otro dispositivo e introduce la **clave de red** que aparece en *Conectar dispositivos*. Puedes **instalarlo como app** (PWA) desde el menú del navegador, o usar la **app Nexus-Office VPN**.
+Nexus-Office tiene que escuchar en la red local: instala el [arranque automático](#arranque-automático) con *accesible desde la red local*, activa *Red COOP → Conectar dispositivos → Permitir acceso desde la red* o arráncalo con `--host 0.0.0.0`. Después abre `http://IP-DEL-PC:8775` desde el navegador del otro dispositivo e introduce la **clave de red** que aparece en *Conectar dispositivos*. Puedes **instalarlo como app** (PWA) desde el menú del navegador, o usar la **app Nexus-Office** (menú **RED → Conectar a mi ordenador**).
 
 La interfaz se adapta sola al dispositivo:
 

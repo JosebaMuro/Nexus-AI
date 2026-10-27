@@ -19,6 +19,24 @@
 - **Herramientas**: `rag_search`, `rag_list`, `url_to_pdf` y `crawl_docs`.
 - **Interfaz**: *Núcleo → Biblioteca RAG*: procesar URL, rastrear documentación, arrastrar documentos, buscar, abrir, mover de grafo y borrar.
 
+## Leer páginas como un navegador (2.2)
+Muchas webs (tiendas, documentación hecha con React, Vue o Angular, paneles) llegan casi vacías y se pintan después con
+JavaScript. Para que la Biblioteca, *URL a PDF*, el rastreador y la herramienta web de los agentes lean lo mismo que tú:
+
+- Nexus-Office busca un **Chrome, Edge, Chromium o Brave** en el equipo (Windows, macOS y Linux, también el
+  `chrome-headless-shell` de Playwright) y lo abre **sin ventana** (`--headless --dump-dom`), dejando unos segundos
+  para que la página ejecute su JavaScript. Se queda con el DOM final y lo procesa como cualquier HTML.
+- **Cuándo**: en *Automático* solo si la página lo necesita (un `<div id="root">` o `__next` vacío, `<noscript>` que
+  pide JavaScript, muchos scripts y poco texto). *Siempre como navegador* lo hace con todas; *Nunca* lo apaga.
+  Se cambia en el menú **MEMORIA** de la barra superior o con `rag.browser` (`auto`, `siempre`, `nunca`).
+- **Seguridad**: el navegador usa un perfil propio de Nexus-Office (no el tuyo), que se vacía de cookies y
+  almacenamiento antes de cada lectura, y sale a internet por un proxy propio que **solo deja llegar a direcciones
+  públicas** (nada de `localhost`, la red local ni los metadatos de la nube), salvo que se active
+  `rag.allow_private_urls`. Como mucho hay dos navegadores a la vez.
+- Si no hay navegador, o tarda más de 40 s, se usa la descarga normal y se avisa en la respuesta.
+- Un administrador puede fijar uno concreto con `rag.browser_path`. `GET /api/rag/navegador` dice el modo y el
+  navegador encontrado. La herramienta `web_fetch` de los agentes indica `"navegador": true` cuando lo ha usado.
+
 ## Grafo general o grafo de un agente
 El grafo de conocimiento tiene un **grafo general**, común a todos los agentes, y dentro de él un **subgrafo aislado por agente**.
 

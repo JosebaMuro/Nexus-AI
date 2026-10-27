@@ -14,6 +14,37 @@ Nexus-Office según tu equipo, como hasta ahora.
 - Desde la terminal: `python -m nexus run --motor llamaserver --acelerador gpu` (cualquiera de las dos opciones fija
   la elección y no pregunta).
 
+## Perfiles de hardware (2.2)
+Un **perfil** guarda de una vez cómo usar tu equipo: motor, acelerador, GPU, modelo, contexto, capas en la GPU y
+dónde va la memoria de la conversación (caché KV: en la **VRAM**, más rápida, o en la **RAM**, para que quepa un
+modelo más grande en una gráfica pequeña), y si se bloquea el modelo en RAM (`--mlock`).
+
+| Perfil de serie | Para qué |
+|---|---|
+| **Automático** | Lo decide Nexus-Office según el equipo (como siempre) |
+| **Rendimiento** | GPU, modelo entero en la VRAM y contexto máximo |
+| **Equilibrado** | GPU si la hay, contexto moderado (8192) |
+| **Modelo grande** | Parte del modelo en la VRAM y el resto y el contexto en la RAM (bloqueada) |
+| **Ahorro** | CPU, contexto corto (2048) y la mitad de los hilos: menos consumo |
+| **Solo CPU** | Sin GPU ni NPU |
+
+Se elige en el menú **PERFIL** de la barra superior, que muestra solo lo que tu hardware permite. **Editar perfiles**
+crea, copia o cambia los tuyos (si cambias uno de serie y lo borras, vuelve a ser el original). Al activar uno, Nexus-Office reinicia el motor con esos
+valores. API: `GET /api/hw/perfiles`, `PUT` y `DELETE /api/hw/perfiles/{id}`, `POST /api/hw/perfiles/{id}/activar`.
+Configuración: `hardware.perfil` y `hardware.perfiles`.
+
+## Equipos con dos o más GPU y Linux (2.2)
+- llama-server se arranca con `--device` para la GPU elegida (la lista sale de `llama-server --list-devices`). Antes
+  podía caer en la integrada aunque hubiera una dedicada, o repartir capas entre las dos.
+- En el menú **IA** eliges la GPU cuando hay más de una (`POST /api/hw/gpu`, `hardware.gpu`). En *Automático* se
+  prefiere la dedicada con más VRAM.
+- Los dispositivos **de software** (llvmpipe, lavapipe, SwiftShader) no se usan nunca: en Linux sin driver de
+  Vulkan aparecían como «GPU» e iban más lentos que la CPU. Si es lo único que hay, se queda en CPU y lo dice.
+- El nombre de la GPU se reconoce aunque llama.cpp le añada sufijos (por ejemplo «Intel(R) UHD Graphics 770 (ADL-S GT1)»).
+- Si la GPU elegida falla al arrancar, Nexus-Office vuelve a la CPU y lo muestra en el menú **IA** (`gpu_error`).
+
+No se ha podido probar con dos GPU físicas; la elección se ha probado con la salida real de `--list-devices` de varios equipos.
+
 ## Motores
 
 | Motor | Qué es | CPU | GPU | NPU | Visión |
