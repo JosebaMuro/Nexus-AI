@@ -265,8 +265,9 @@ El agente **Profesor** enseña y resuelve dudas. Si un administrador pone en *Aj
 Nexus-Office reparte su estado (escuchando, pensando, hablando...) a las **luces NexusLED** (ESP32 con tiras WS2812/SK6812), al **reloj NexusWatch** (ESP32-2424S012C) y al **avatar de bolsillo NexusPico** (Pico W con pantalla de tinta). En *Dispositivos* buscas las luces de tu red, eliges efectos y brillo, y cambias de **modo** (Normal, Manos libres, Silencio, Concentración, Rendimiento, Ahorro, Noche) desde el ordenador, el móvil o el reloj. El reloj muestra qué hace cada agente. Desde *Dispositivos > Grabar firmware* se graba el firmware por USB sin internet: los binarios vienen en la carpeta `firmware/` del paquete y el grabador va dentro de Nexus-Office (nexus-flash, en C++: no hace falta esptool ni Python), y Nexus le pone la Wi-Fi y su dirección.
 
 **Placas ESP que se pueden grabar**: toda la familia ESP con Wi-Fi, ESP8266 (ESP-01, ESP-01S, ESP-12, NodeMCU,
-Wemos D1 mini), ESP32 (DevKitC, WROOM, WROVER, ESP32-CAM), ESP32-S2, ESP32-S3, ESP32-C2, ESP32-C3, ESP32-C5 y
-ESP32-C6. Nexus detecta el chip solo. El ESP32-H2 y el ESP32-P4 se reconocen, pero no tienen Wi-Fi propio y no
+Wemos D1 mini), ESP32 (DevKitC, WROOM, WROVER, ESP32-CAM), ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C5 y
+ESP32-C6. Nexus detecta el chip solo. El ESP8266 tiene imagen de 1 MB (ESP-01S y mayores), 4 MB y 512 KB (ESP-01
+antiguo). El ESP32-C2 se reconoce, pero todavía no hay firmware de luces para él. El ESP32-H2 y el ESP32-P4 se reconocen, pero no tienen Wi-Fi propio y no
 pueden hablar con Nexus. El **ESP-01** no tiene botón de arranque: une GPIO0 a GND al enchufarlo.
 
 **Drivers USB-serie**: muchas placas usan un puente CH340/CH9102, CP210x o FTDI. Si falta su driver, *Grabar

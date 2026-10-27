@@ -25,7 +25,7 @@
 namespace nx::devices::firmware {
 
 const std::vector<std::string> MODELOS_LUCES = {"esp8266", "esp32",   "esp32s2", "esp32s3",
-                                                "esp32c2", "esp32c3", "esp32c5", "esp32c6"};
+                                                "esp32c3", "esp32c5", "esp32c6"};   // el C2 se reconoce, pero Arduino no lo compila
 // imagenes del ESP8266 por tamano de flash: la de 1 MB vale para el ESP-01S y cualquier placa mayor
 const json VARIANTES_ESP8266 = jparse(R"J([
   {"modelo": "esp8266", "nombre": "ESP8266 1 MB (ESP-01S, ESP-12, NodeMCU, Wemos D1 mini)"},
