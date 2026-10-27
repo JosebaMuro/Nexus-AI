@@ -183,7 +183,10 @@ class Serie {
     if (h_ != INVALID_HANDLE_VALUE) CloseHandle(h_);
     h_ = INVALID_HANDLE_VALUE;
 #else
-    if (fd_ >= 0) ::close(fd_);
+    if (fd_ >= 0) {
+      ioctl(fd_, TIOCNXCL);   // el modo exclusivo dura mientras haya alguien con el puerto abierto
+      ::close(fd_);
+    }
     fd_ = -1;
 #endif
   }
