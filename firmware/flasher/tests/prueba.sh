@@ -24,7 +24,8 @@ for chip in esp8266 esp32 esp32s2 esp32s3 esp32c2 esp32c3 esp32c5 esp32c6; do
   kill $ROM; wait $ROM 2>/dev/null || true
   n=$(wc -c < "$T/bin/nexusled-$chip.bin")
   if [ "${det%% *}" != "$chip" ]; then echo "FALLO $chip: detectado '$det'"; fallos=$((fallos+1)); continue; fi
-  if ! cmp -n "$n" "$T/bin/nexusled-$chip.bin" "$T/volcado" >/dev/null 2>&1; then
+  head -c "$n" "$T/volcado" > "$T/inicio"
+  if ! cmp "$T/bin/nexusled-$chip.bin" "$T/inicio" >/dev/null 2>&1; then
     echo "FALLO $chip: la flash no coincide"; cat "$T/salida.txt" "$T/rom.log"; fallos=$((fallos+1)); continue
   fi
   if ! grep -q '"ok":true' "$T/salida.txt" || ! grep -q '"pin":2\|"pin":16' "$T/rom.log"; then
@@ -40,7 +41,7 @@ ROM=$!
 i=0; while [ ! -e "$T/tty" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done
 "$OUT/nexus-flash" grabar "$T/parte.bin" --puerto "$T/tty" --direccion 0x10000 --espera 5 --json > "$T/salida.txt"
 kill $ROM; wait $ROM 2>/dev/null || true
-dd if="$T/volcado" of="$T/trozo" bs=1024 skip=64 count=5 2>/dev/null; if cmp -n 5000 "$T/parte.bin" "$T/trozo" >/dev/null && grep -q '"fase":"verificar","pct":100' "$T/salida.txt"; then
+dd if="$T/volcado" bs=1024 skip=64 count=5 2>/dev/null | head -c 5000 > "$T/trozo"; if cmp "$T/parte.bin" "$T/trozo" >/dev/null && grep -q '"fase":"verificar","pct":100' "$T/salida.txt"; then
   echo "ok grabar en 0x10000 con --json"
 else
   echo "FALLO grabar en 0x10000"; cat "$T/salida.txt"; fallos=$((fallos+1))
