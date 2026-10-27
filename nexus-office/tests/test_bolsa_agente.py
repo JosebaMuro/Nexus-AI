@@ -204,3 +204,21 @@ def test_api_agente(services):
         g = c.get(f"/api/bolsa/orden/{o['id']}/grafico").json()
         assert g["orden"]["id"] == o["id"] and any(n["tipo"] == "limite" for n in g["niveles"])
         assert "puntos" in g
+
+
+def test_cnbc_respaldo_cuando_yahoo_limita():
+    import httpx
+    from nexus.office import bolsa_datos as D
+
+    def h(req):
+        u = str(req.url)
+        if "yahoo" in u:
+            return httpx.Response(429)
+        if "cnbc" in u:
+            assert "symbols=SAN-ES" in u
+            return httpx.Response(200, json={"FormattedQuoteResult": {"FormattedQuote": [
+                {"symbol": "SAN-ES", "last": "7,512.5", "previous_day_closing": "7,400", "currencyCode": "EUR"}]}})
+        return httpx.Response(404)
+    d = D.DatosMercado(httpx.Client(transport=httpx.MockTransport(h)))
+    q = d.quote("SAN.MC")
+    assert q["fuente"] == "CNBC" and q["precio"] == 7512.5 and q["cierre_anterior"] == 7400 and q["divisa"] == "EUR"

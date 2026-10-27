@@ -63,6 +63,9 @@ def test_diagnostico_de_fuentes():
         "stooq_d": "https://stooq.com/q/d/l/?s=aapl.us&i=d",
         "nasdaq": "https://api.nasdaq.com/api/quote/AAPL/info?assetclass=stocks",
         "cnbc": "https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=AAPL|SAN-ES&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json",
+        "cnbc_eu": "https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=SAN-ES|ASML-NL|MC-FR|SHEL-GB|SAP-DE|IWDA-NL|VWCE-DE|IBGL-NL&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json",
+        "cnbc_chart": "https://ts-api.cnbc.com/harmony/app/charts/1M.json?symbol=AAPL",
+        "nasdaq_hist": "https://api.nasdaq.com/api/quote/AAPL/chart?assetclass=stocks",
         "marketwatch": "https://www.marketwatch.com/investing/stock/aapl",
         "investing": "https://api.investing.com/api/financialdata/6408/historical/chart/?period=P1D&interval=PT5M&pointscount=60",
         "bme": "https://www.bolsasymercados.es/bme-exchange/es/Mercados-y-Cotizaciones/Acciones/Mercado-Continuo/Precios/ibex-35-ES0SI0000005",
@@ -76,6 +79,9 @@ def test_diagnostico_de_fuentes():
                 r = c.get(u)
                 t = r.text
                 m = re.search(r'data-last-price="[^"]*"|"last"\s*:\s*"?[0-9.]+|"regularMarketPrice":[0-9.]+|"lastSalePrice":"[^"]+"', t)
+                if k == "cnbc_eu":
+                    for q in (r.json().get("FormattedQuoteResult") or {}).get("FormattedQuote") or []:
+                        print("DIAG cnbc_eu", q.get("symbol"), q.get("last"), q.get("currencyCode"), q.get("code"))
                 print(f"DIAG {k}: {r.status_code} {len(t)}B {r.headers.get('content-type', '')[:30]} "
                       f"{m.group(0) if m else repr(t[:160])}")
             except Exception as e:  # noqa: BLE001

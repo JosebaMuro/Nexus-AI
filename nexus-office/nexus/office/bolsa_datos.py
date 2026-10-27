@@ -35,6 +35,8 @@ YAHOO = ("https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com")
 STOOQ_SUFFIX = {".MC": ".es", ".DE": ".de", ".PA": ".fr", ".AS": ".nl", ".L": ".uk"}
 GOOGLE_EXCHANGE = {".MC": "BME", ".DE": "ETR", ".PA": "EPA", ".AS": "AMS", ".L": "LON", ".MI": "BIT", ".SW": "SWX"}
 US_EXCHANGE = {"NASDAQ": "NASDAQ", "NYSE": "NYSE"}
+CNBC_SUFFIX = {".MC": "-ES", ".DE": "-DE", ".PA": "-FR", ".AS": "-NL", ".L": "-GB", ".MI": "-IT", ".SW": "-CH"}
+CNBC = "https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol"
 KRAKEN_PAIR = {"BTC-EUR": "XBTEUR", "ETH-EUR": "ETHEUR", "SOL-EUR": "SOLEUR", "ADA-EUR": "ADAEUR"}
 # rango -> (rango Yahoo, intervalo Yahoo)
 RANGOS = {"1d": ("1d", "1m"), "5d": ("5d", "5m"), "1mo": ("1mo", "30m"), "6mo": ("6mo", "1d"), "1y": ("1y", "1d"),
@@ -70,7 +72,7 @@ class DatosMercado:
         self._quotes: dict[str, tuple[float, dict]] = {}
         self._series: dict[tuple[str, str], tuple[float, list]] = {}
         self._fx: dict[str, tuple[float, float]] = {}
-        self.fuentes = {n: Fuente(n) for n in ("yahoo", "google", "stooq", "coinbase", "kraken", "bce")}
+        self.fuentes = {n: Fuente(n) for n in ("yahoo", "cnbc", "google", "stooq", "coinbase", "kraken", "bce")}
         self.mercado_de: dict[str, str] = {}   # simbolo -> mercado del catalogo (para Google Finance en EE. UU.)
         self.ultima_fuente = ""
         self.ultimo_ok = 0.0
@@ -174,6 +176,32 @@ class DatosMercado:
         return {"precio": px, "cierre_anterior": prev, "ts": time.time(), "divisa": "", "fuente": "Stooq",
                 "retraso": "≈15 min", "puntos": []}
 
+    @staticmethod
+    def _cnbc_symbol(sym: str) -> str:
+        for suf, cs in CNBC_SUFFIX.items():
+            if sym.upper().endswith(suf):
+                return sym[: -len(suf)].upper() + cs
+        return sym.upper()
+
+    @staticmethod
+    def _num(v) -> float | None:
+        try:
+            return float(str(v).replace(",", "").replace("%", "").strip())
+        except (TypeError, ValueError):
+            return None
+
+    def _quote_cnbc(self, sym: str) -> dict:
+        """CNBC (acciones y ETF de EE. UU. y Europa): responde tambien desde servidores donde Yahoo limita."""
+        r = self._get("cnbc", CNBC, params={"symbols": self._cnbc_symbol(sym), "requestMethod": "itv", "noform": "1",
+                                             "partnerId": "2", "fund": "1", "exthrs": "1", "output": "json"})
+        q = (((r.json().get("FormattedQuoteResult") or {}).get("FormattedQuote")) or [{}])[0]
+        px = self._num(q.get("last"))
+        if not px or px <= 0:
+            raise LookupError(f"cnbc: sin precio para {sym}")
+        prev = self._num(q.get("previous_day_closing")) or px
+        return {"precio": px, "cierre_anterior": prev, "ts": time.time(), "divisa": q.get("currencyCode") or "",
+                "fuente": "CNBC", "retraso": "≈15 min" if q.get("realTime") != "true" else "tiempo real", "puntos": []}
+
     def _google_symbol(self, sym: str) -> str:
         for suf, ex in GOOGLE_EXCHANGE.items():
             if sym.upper().endswith(suf):
@@ -228,7 +256,7 @@ class DatosMercado:
         if hit and time.time() - hit[0] < age:
             return hit[1]
         crypto = bool(re.match(r"^[A-Z0-9]+-(EUR|USD)$", sym))
-        chain = [self._quote_yahoo] + ([self._quote_crypto] if crypto else [self._quote_google, self._quote_stooq])
+        chain = [self._quote_yahoo] + ([self._quote_crypto] if crypto else [self._quote_cnbc, self._quote_google, self._quote_stooq])
         for fn in chain:
             try:
                 q = fn(sym)
