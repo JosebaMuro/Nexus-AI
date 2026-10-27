@@ -11,8 +11,10 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <queries>
+        <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="https" /></intent>
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
@@ -48,6 +50,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Conectar con el Nexus-Office del ordenador: red local, internet (TLS anclado) o VPN WireGuard -->
+        <activity
+            android:name=".EscritorioActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
+            android:windowSoftInputMode="adjustResize" />
+        <service
+            android:name=".NexusVpnService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
 
         <service
             android:name=".NexusServerService"

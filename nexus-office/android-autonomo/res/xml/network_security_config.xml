@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Solo el servidor local de Nexus-Office (127.0.0.1) va sin TLS; nunca sale del movil. -->
+<!-- Sin TLS solo el servidor local (127.0.0.1) y el Nexus-Office del ordenador en la red local o por la VPN, que eliges
+     tu en «Conectar a mi ordenador». Desde internet la conexion va por HTTPS con el certificado anclado al emparejar. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">localhost</domain>
-    </domain-config>
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

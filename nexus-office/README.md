@@ -15,17 +15,19 @@
 |---|---|
 | **Multimodal** | Texto + visión con razonamiento (Qwen3‑VL Thinking vía `llama-server`), generación de imagen (stable-diffusion.cpp), música (compositor procedural WAV+MIDI o MusicGen en GPU), voz (Piper / SAPI / navegador) y reconocimiento de voz (faster‑whisper / navegador). |
 | **Memoria y aprendizaje** | Memoria semántica a largo plazo con **grafo general común** (tu perfil, gustos, pautas de comportamiento, relaciones e interacciones) y **memoria propia de cada agente** con el saber hacer de su especialidad. **Gestor de conocimiento** para importar como conocimiento grafos de **cualquier formato**, reconocido solo (JSON, CSV, Excel, GraphML, GEXF, GML, DOT, Pajek, RDF/OWL, JSON-LD, Neo4j/Cypher, GraphSON, Mermaid, mapas mentales, notas con `[[enlaces]]`, SQLite, ZIP…) y fusionarlos con lo que ya sabe, leer y razonar un ZIP, editar, mover y fusionar nodos. Embeddings **Qwen3-Embedding** en CPU, especializados en documentación, extracción de hechos y preferencias, retroalimentación 👍/👎 que genera ejemplos y lecciones, preferencia de longitud aprendida, consolidación y olvido gradual. |
-| **RAG y URL→PDF** | Biblioteca de documentos con búsqueda híbrida y citas. Formatos: PDF, Word, OpenDocument, PowerPoint, Excel, EPUB, RTF, HTML, Markdown, texto y código. También **archivos ZIP, RAR, 7z y TAR** con proyectos o documentación. **Importación en lote** que usa todos los núcleos y **rastreo web paralelo** de sitios de documentación. Convierte cualquier URL en un **PDF estructurado** (portada, índice, secciones, tablas, imágenes, enlaces), lo publica, lo archiva en el RAG y **asimila** su contenido en memoria y grafo. |
-| **Avatar** | Seleccionable: **Geisha del eclipse 3D** construida a partir de una hoja de personaje (casco visual de las siluetas de frente/perfil/espalda con las fotos proyectadas por shader; busto o cuerpo entero con doble clic; parpadeo, mirada, labios sincronizados con la voz, eclipse que cambia con el estado), **grafo neuronal** 2D o **tu propio modelo GLB/GLTF/VRM**. |
+| **RAG y URL→PDF** | Biblioteca de documentos con búsqueda híbrida y citas. Formatos: PDF, Word, OpenDocument, PowerPoint, Excel, EPUB, RTF, HTML, Markdown, texto y código. También **archivos ZIP, RAR, 7z y TAR** con proyectos o documentación. **Importación en lote** que usa todos los núcleos y **rastreo web paralelo** de sitios de documentación. Convierte cualquier URL en un **PDF estructurado** (portada, índice, secciones, tablas, imágenes, enlaces), lo publica, lo archiva en el RAG y **asimila** su contenido en memoria y grafo. Las webs hechas con JavaScript se **leen como un navegador**. |
+| **Avatar** | Seleccionable: **Geisha del eclipse 3D** construida a partir de una hoja de personaje (casco visual de las siluetas de frente/perfil/espalda con las fotos proyectadas por shader; busto o cuerpo entero con doble clic; parpadeo, mirada, labios sincronizados con la voz, eclipse que cambia con el estado), **grafo neuronal** 2D o **tu propio modelo GLB/GLTF/VRM**, también de la **biblioteca de avatares 3D gratuitos** (Open Source Avatars, VRM Consortium, Khronos, three.js, Sketchfab). |
 | **Mejorador de prompts** | Botón ✨ en chat, imagen y música: reescribe con el LLM (o por reglas) añadiendo estilo, iluminación, composición, calidad, negativo y traducción al inglés; los prompts de imagen de los agentes se mejoran solos. |
 | **Editor de temas** | Cambia por completo la estética: 7 plantillas (Neón, Geisha carmesí, Sakura claro, Matrix, Ámbar retro, Minimal, Claro profesional), colores, tipografías, redondeo, brillo, desenfoque y efectos de fondo; exportar/importar JSON. |
 | **Drivers** | Detecta versión y antigüedad del driver de la GPU frente a lo que necesitan los runtimes y abre el actualizador **oficial** del fabricante (siempre confirmado por el usuario). |
 | **Oficina para pymes** | **59 perfiles** (oficios, comercio, hostelería, salud, despachos, bolsa e inversiones, agro, transporte, industria…) con agentes de oficina y de sector, cada uno con su grafo, y modelos de IA sugeridos para el sector. Ver [docs/OFICINA.md](docs/OFICINA.md). |
-| **Móvil y red local** | Dos apps Android. **Nexus-Office VPN** se conecta con tu PC (Windows, Linux o macOS) por **VPN WireGuard cifrada**, HTTPS anclado o Wi‑Fi. **Nexus-Office autónomo** lleva Nexus-Office completo dentro del móvil, sin PC. Acceso desde móvil, tablet o consola protegido con **clave de red**. El PC de la oficina reparte los instaladores a la red (*Sistema → Descargas*). |
+| **Móvil y red local** | **Una app Android** con Nexus-Office completo dentro del móvil (NPU, GPU o CPU), que además se conecta con tu PC (Windows, Linux o macOS) por **VPN WireGuard cifrada**, HTTPS anclado o Wi‑Fi. La app VPN ligera sigue para móviles modestos. Acceso desde móvil, tablet o consola protegido con **clave de red**. El PC de la oficina reparte los instaladores a la red (*Sistema → Descargas*). |
+| **Bolsa** | Mesa **siempre simulada** con **cotizaciones reales** (Yahoo, CNBC, Google, Stooq, Coinbase, Kraken) y un **agente de bolsa autónomo** con su cartera simulada, diario y gráficos en vivo de sus órdenes. Ver [docs/BOLSA.md](docs/BOLSA.md). |
+| **Dispositivos** | Luces **NexusLED** (cualquier ESP32), reloj **NexusWatch** (ESP32-2424S012C) y avatar de bolsillo **NexusPico** (Pico W con la pantalla del pwnagotchi), con modos y grabado del firmware sin internet. Ver [docs/DISPOSITIVOS.md](docs/DISPOSITIVOS.md). |
 | **Agentes** | Agentes en YAML totalmente configurables (prompt, modelo, herramientas, memoria, delegación). Enrutado automático y delegación entre agentes. |
-| **Salón virtual** | Sala gráfica donde los agentes se reúnen, aprenden qué se le da bien a cada uno, deciden en quién delegar y **proponen nuevos agentes** cuando detectan carencias. |
+| **Salón virtual** | Sala gráfica y **despachos animados** con lo que hace cada agente (personajes mujer u hombre, tú incluido) donde los agentes se reúnen, aprenden qué se le da bien a cada uno, deciden en quién delegar y **proponen nuevos agentes** cuando detectan carencias. |
 | **Herramientas** | Sistema modular y **supervisado** (políticas por riesgo, aprobaciones humanas, sandbox, auditoría). Los agentes pueden **proponer herramientas nuevas**, que solo se instalan tras revisión de un administrador. |
-| **Hardware** | Detecta CPU, GPU NVIDIA/AMD/Intel/Apple y **NPU** (Intel AI Boost, AMD Ryzen AI, Qualcomm Hexagon, Apple ANE), elige el perfil óptimo, monitoriza el rendimiento y **reajusta la configuración en cada arranque**. |
+| **Hardware** | Detecta CPU, GPU NVIDIA/AMD/Intel/Apple y **NPU** (Intel AI Boost, AMD Ryzen AI, Qualcomm Hexagon, Apple ANE), elige el perfil óptimo o el **perfil de hardware** que tú definas (motor, modelo, capas en GPU, caché en VRAM o RAM), deja **elegir la GPU** cuando hay varias, monitoriza el rendimiento y **reajusta la configuración en cada arranque**. |
 | **Modelos** | Descarga **cualquier modelo** de **Hugging Face, Ollama, ModelScope, Civitai y Kaggle** (también repositorios completos, GGUF multiparte y proyector de visión automático; con Ollama instalado usa `ollama pull`), con cada fichero anotado: cuantización, motor compatible, si cabe y si irá lento en tu equipo, y ★ en la opción recomendada. Importación local y lector GGUF. |
 | **VPN cifrada** | Túnel WireGuard entre el PC y la app Nexus-Office VPN, con una clave precompartida por móvil. Solo pasa por él el tráfico de la app. El PC se configura solo, o con los comandos de Windows, Linux, macOS o WSL. Ver [VPN](docs/VPN.md). |
 | **Acceso remoto** | Desde cualquier lugar por internet con **TLS 1.3** (intercambio post‑cuántico X25519MLKEM768, AES‑GCM o ChaCha20), certificado anclado en la app, dispositivos emparejados con código de un solo uso y revocables, UPnP, detección de CGNAT y **asistente del router** que abre su configuración y da la regla exacta. |
@@ -41,19 +43,19 @@ modelo de IA adecuado; lo descarga si hay conexión y, si no, lo deja recomendad
 
 | Equipo | Fichero |
 |---|---|
-| Windows 10/11 x64 | `Nexus-Office-Setup-1.8.0-windows-x64.exe` |
-| Windows 11 ARM (Snapdragon X) | `Nexus-Office-Setup-1.8.0-windows-arm64.exe` |
-| Linux x86_64 | `Nexus-Office-1.8.0-linux-x86_64.run` o `nexus-office_1.8.0_amd64.deb` |
-| Linux ARM64, Raspberry Pi 4/5 (sistema de 64 bits) | `Nexus-Office-1.8.0-linux-aarch64.run` o `nexus-office_1.8.0_arm64.deb` |
-| macOS Apple Silicon / Intel | `Nexus-Office-1.8.0-macos-arm64.tar.gz` / `Nexus-Office-1.8.0-macos-x86_64.tar.gz` (abre `Nexus-Office.command`) |
-| Android, Nexus-Office dentro del móvil | `Nexus-Office-1.8.0-android-autonomo.apk` |
-| Android, cliente del PC de la oficina | `Nexus-Office-1.8.0-android-vpn.apk` |
-| Código fuente | `Nexus-Office-1.8.0-codigo-fuente.zip` |
+| Windows 10/11 x64 | `Nexus-Office-Setup-2.2.0-windows-x64.exe` |
+| Windows 11 ARM (Snapdragon X) | `Nexus-Office-Setup-2.2.0-windows-arm64.exe` |
+| Linux x86_64 | `Nexus-Office-2.2.0-linux-x86_64.run` o `nexus-office_2.2.0_amd64.deb` |
+| Linux ARM64, Raspberry Pi 4/5 (sistema de 64 bits) | `Nexus-Office-2.2.0-linux-aarch64.run` o `nexus-office_2.2.0_arm64.deb` |
+| macOS Apple Silicon / Intel | `Nexus-Office-2.2.0-macos-arm64.tar.gz` / `Nexus-Office-2.2.0-macos-x86_64.tar.gz` (abre `Nexus-Office.command`) |
+| Android: Nexus-Office dentro del móvil y conexión al PC | `Nexus-Office-2.2.0-android-autonomo.apk` |
+| Android, cliente del PC de la oficina | `Nexus-Office-2.2.0-android-vpn.apk` |
+| Código fuente | `Nexus-Office-2.2.0-codigo-fuente.zip` |
 
 ```bash
-Nexus-Office-Setup-1.8.0-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED       # Windows, desatendido
-sh Nexus-Office-1.8.0-linux-x86_64.run --oficina=herreria --servicio --red          # Linux y Raspberry Pi
-sudo apt install ./nexus-office_1.8.0_amd64.deb && nexus-office                         # Debian, Ubuntu, Raspberry Pi OS
+Nexus-Office-Setup-2.2.0-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED       # Windows, desatendido
+sh Nexus-Office-2.2.0-linux-x86_64.run --oficina=herreria --servicio --red          # Linux y Raspberry Pi
+sudo apt install ./nexus-office_2.2.0_amd64.deb && nexus-office                         # Debian, Ubuntu, Raspberry Pi OS
 ```
 
 El instalador de Windows es gráfico (perfil de oficina, modelo de IA, servicio al encender, acceso desde la red y

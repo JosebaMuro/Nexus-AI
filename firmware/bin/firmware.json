@@ -1,41 +1,63 @@
 {
-  "commit": "9af59646ba32e975e9d28e7ba7f52b60489355d6",
+  "commit": "37b98ff9ec5eef139eb5f6dcf6af524d00b8fb34",
   "nucleo_esp32": "3.1.1",
+  "nucleo_esp32_nuevo": "3.3.0",
+  "nucleo_esp8266": "3.1.2",
   "micropython": "v1.24.1",
   "archivos": {
     "nexusled-esp32.bin": {
       "version": "1.0.0",
-      "sha256": "b0d556a99d90b10f27d6ae912fbc0672c90321ffa1aced2b010ec12b69cd82bc",
+      "sha256": "376f48da7f199d88ccb3a8cb0ac3ad46a1ee24986f3a329becd7dea9e2f992e8",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32c3.bin": {
       "version": "1.0.0",
-      "sha256": "93591f0470d0ad8aef79e75dea3778ede188cc9b487c6797d1cc177b6710f064",
+      "sha256": "7b0a9e3e0a9f13c713bec14a19e619b13e65a836b82b9d4a2c4e2cf973dce961",
+      "grabar": "esptool write_flash 0x0"
+    },
+    "nexusled-esp32c5.bin": {
+      "version": "1.0.0",
+      "sha256": "240720917e5811807401a94d8b80ff045a87ff7b5a7608a666e530dc4e25555f",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32c6.bin": {
       "version": "1.0.0",
-      "sha256": "dad65577c5706ea2c8ea7020682f6f74260bf92b3901a4db53dc1f5c03cac92d",
+      "sha256": "5bf29ada7a7644f41009cb04c8d120e2a664dd166e7f77db6bba182393e25ec3",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32s2.bin": {
       "version": "1.0.0",
-      "sha256": "ee11430a3eefc389b5f9228a9a4f70dcd3d29d3029b1ffeea1f20b11d8189115",
+      "sha256": "7c8b1bbb31a07b3721fd4d287bee3c10968fa8c0b177f4193991e07dae2f8810",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32s3.bin": {
       "version": "1.0.0",
-      "sha256": "d6128361fdd92bfb102b3bdcba7cd50f0356d0cfc039a0bdd15874aa1e946ca3",
+      "sha256": "5c1efb18d0ecb54ee1f60bda8c23af502e37218183afab158549e9a47d2e882a",
+      "grabar": "esptool write_flash 0x0"
+    },
+    "nexusled-esp8266-4m.bin": {
+      "version": "1.0.0",
+      "sha256": "cf875210a5ca9c958074071b9764a8af1355263cc8f1c170abd0466cfc6a4b8d",
+      "grabar": "esptool write_flash 0x0"
+    },
+    "nexusled-esp8266-512k.bin": {
+      "version": "1.0.0",
+      "sha256": "ff900fd545acb931d74d1078306f362cfb9315d322e5a6a95cc1849d0b37ef47",
+      "grabar": "esptool write_flash 0x0"
+    },
+    "nexusled-esp8266.bin": {
+      "version": "1.0.0",
+      "sha256": "90564ecfc45ba20f6287e00a18af77c10741cc539678017196c35d0c115ee757",
       "grabar": "esptool write_flash 0x0"
     },
     "nexuspico-picow.uf2": {
       "version": "1.0.0",
-      "sha256": "cfbd0fdf38c8d96100abd02f5a1567d1ee56d91a26b8a0226a847c370e28d435",
+      "sha256": "1acb6fa0abf8999568548e86b7f8702c582d809ec2a1a6cea1454b8350ceaa27",
       "grabar": "copiar a la unidad RPI-RP2"
     },
     "nexuswatch-esp32c3.bin": {
       "version": "1.0.0",
-      "sha256": "c9f5b29009fecad473f5d76d944f5505399ba5281653cd99a1b9bf4af209349a",
+      "sha256": "b209c1fdfe359327cd4b0df26cfcb2925e3e941a397ab9afdbe0326e19c0db39",
       "grabar": "esptool write_flash 0x0"
     }
   }

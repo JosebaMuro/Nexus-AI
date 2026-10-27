@@ -123,7 +123,7 @@ python -m nexus oficina --quitar            # vuelve a los agentes por defecto d
 ```
 
 **Al instalar**: en el instalador de Windows, el desplegable *Perfil de oficina* de la página *Opciones* (o
-`/OFICINA=herreria` en modo silencioso); `sh Nexus-Office-1.8.0-linux-x86_64.run --oficina=herreria` (Linux y Raspberry
+`/OFICINA=herreria` en modo silencioso); `sh Nexus-Office-2.2.0-linux-x86_64.run --oficina=herreria` (Linux y Raspberry
 Pi); `./install.sh --oficina=herreria` (macOS y código fuente); `install.bat -Oficina herreria` (Windows desde el
 código fuente); `bash install-termux.sh --oficina=herreria` (Android con Termux), o la variable de entorno
 `NEXUS_OFICINA=herreria` con los scripts. Con el `.deb`: `nexus-office oficina herreria`. Ver

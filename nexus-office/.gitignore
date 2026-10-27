@@ -7,3 +7,4 @@ wheelhouse/
 bundled/
 .pytest_cache/
 !tests/data/
+dist/

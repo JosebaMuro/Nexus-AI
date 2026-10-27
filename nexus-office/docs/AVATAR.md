@@ -15,6 +15,28 @@ Todos los avatares 3D se encuadran solos en el hueco libre del panel, entre los 
 - Si el modelo no tiene hueso `head`, el busto toma el 18 % superior.
 - La respiración ya no saca del encuadre a los modelos cuyo origen no está en los pies, y el aro de estado y las partículas se ajustan a la medida del modelo.
 
+## Encuadre en el chat (2.2)
+Los modelos muy grandes, muy pequeños o con el origen lejos del cuerpo ya no se salen del hueco del chat: la cámara
+se coloca con la caja real del modelo ya escalado (no con la del fichero), en el hueco que deja libre el chat en
+ordenador, tableta y móvil, y vuelve a encuadrar cuando cambia el tamaño del panel.
+
+## Biblioteca de avatares 3D gratuitos (2.2)
+En **Ajustes → Avatar → AVATARES 3D GRATIS** se buscan y descargan modelos gratuitos:
+
+| Fuente | Qué hay | Licencia |
+|---|---|---|
+| **Open Source Avatars** (opensourceavatars.com) | Cientos de avatares VRM: 100Avatars de Polygonal Mind, ToxSam, chibis… El índice está en GitHub y los modelos en Arweave o IPFS (si una pasarela falla prueba otra). | Casi todos CC0 |
+| **Modelos de referencia** | Muestras del VRM Consortium, Khronos glTF y three.js. | Abiertas |
+| **Sketchfab** | Búsqueda de modelos descargables con licencia Creative Commons. Para descargar hace falta la clave de API gratuita de tu cuenta (*Ajustes → Avatar*, campo *Clave de API de Sketchfab*, `avatares.sketchfab_token`). | CC (la de cada modelo) |
+
+Lo descargado queda en `outputs/avatars` con su miniatura, autor, licencia y origen (`biblioteca.json`), y se elige
+como avatar en cualquier momento, también sin conexión. Solo se descargan direcciones que vienen del propio catálogo,
+de 300 MB como mucho y en GLB, GLTF o VRM.
+
+API: `GET /api/avatares/buscar?fuente=osa|muestras|sketchfab&q=...`, `POST /api/avatares/descargar` `{id}` (devuelve
+un trabajo que se sigue en `GET /api/avatares/trabajo/{tid}`), `GET /api/avatares` (biblioteca),
+`POST /api/avatares/{id}/usar` y `DELETE /api/avatares/{id}`.
+
 ## Crear un avatar de calidad a partir de imágenes
 La geisha actual se genera a partir de la hoja de personaje (proyección de fotos sobre un volumen de siluetas): de frente y en perfil es fiel a la referencia, y en ángulos intermedios mezcla vistas. Para un modelo con malla y rig completos:
 

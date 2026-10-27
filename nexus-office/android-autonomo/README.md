@@ -70,7 +70,15 @@ Los cambios se aplican entre respuestas. Para ver lo que ha decidido: *Sistema �
 - **DNS**: el Python de la app no puede usar el DNS de Android. La app le pasa los servidores DNS de la red activa y Nexus-Office resuelve los nombres él mismo (`nexus/android_dns.py`). Si no responden, usa 1.1.1.1, 8.8.8.8 o 9.9.9.9.
 - **Interfaz**: voz del sistema, adjuntar varios ficheros, y botones COPIAR y DESCARGAR.
 
-Es independiente de la app **Nexus-Office VPN** (`ai.nexus.office.client`, carpeta `../android`), así que puedes tener las dos instaladas.
+## Conectar a mi ordenador (desde 2.2)
+
+La misma APK también se conecta al Nexus-Office de tu PC (Windows, Linux o macOS): en la barra superior, **RED → Conectar a mi ordenador**. Ofrece lo mismo que la app VPN:
+
+- **Red local**: busca tu PC en la Wi‑Fi o escribe su dirección.
+- **Internet**: con el código de emparejamiento del PC, por HTTPS con el certificado anclado.
+- **VPN cifrada (WireGuard)**: con el código NEXUSV1 del panel VPN del PC. Solo pasa por la VPN el tráfico de la app.
+
+El botón **USAR NEXUS-OFFICE EN ESTE MÓVIL** vuelve a la IA del teléfono, que sigue funcionando sin conexión. La app VPN ligera (`ai.nexus.office.client`, carpeta `../android`) se sigue publicando para móviles que no son ARM64 o con poca memoria; las dos pueden estar instaladas a la vez.
 
 ## Compilar
 

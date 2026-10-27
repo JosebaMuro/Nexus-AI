@@ -19,12 +19,18 @@
 namespace nl {
 
 static const int MAX_OUTPUTS = 4;
-static const int MAX_LEDS = 1500;
+#ifndef NL_MAX_LEDS
+#define NL_MAX_LEDS 1500
+#endif
+#ifndef NL_DEFAULT_PIN
+#define NL_DEFAULT_PIN 16
+#endif
+static const int MAX_LEDS = NL_MAX_LEDS;   // ESP8266: menos (menos RAM y las interrupciones paradas al enviar)
 static const int MAX_SEGMENTS = 8;
 static const int MAX_PRESETS = 16;
 
 struct OutputCfg {
-  int pin = 16;
+  int pin = NL_DEFAULT_PIN;
   int count = 30;
   std::string order = "GRB";  // orden de color del chip (WS2812: GRB)
   bool rgbw = false;          // SK6812 RGBW
@@ -432,7 +438,7 @@ class Device {
           sum += oc.count;
           outs.push_back(oc);
         }
-        if (sum > MAX_LEDS) { err = "demasiados LED (maximo 1500)"; ok = false; }
+        if (sum > MAX_LEDS) { err = "demasiados LED (maximo " + std::to_string(MAX_LEDS) + ")"; ok = false; }
         else {
           int oldTotal = total();
           outputs = outs;
