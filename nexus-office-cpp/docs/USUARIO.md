@@ -228,6 +228,8 @@ Prueba: *«Me llamo Ane y me gusta el surf»*, *«¿Qué sabes de mí?»*, *«Ge
 ### El avatar
 A la derecha del chat está el **núcleo cognitivo**: cada punto es algo que Nexus-Office ha aprendido (personas, lugares, gustos, conceptos) y las líneas son relaciones. Cambia de color según su estado: cian (en línea), violeta (pensando), ámbar (herramienta), magenta (hablando, late con la voz), verde (escuchando).
 
+En *Ajustes > Avatar* puedes **buscar y descargar avatares 3D gratuitos** de Internet: cientos de avatares VRM de Open Source Avatars (casi todos CC0), los modelos de referencia de VRM Consortium, Khronos y three.js, y modelos con licencia Creative Commons de Sketchfab (para descargar de Sketchfab hace falta la clave de API gratuita de tu cuenta). Lo descargado queda en tu equipo con su autor y su licencia, y se puede elegir como avatar en cualquier momento, también sin conexión.
+
 ### Salón
 Representación gráfica de los agentes reunidos. Mira cómo conversan, cómo se delegan tareas y qué habilidades han demostrado. Pulsa **Convocar reunión** o escribe algo en el salón. Mientras dura una reunión el botón muestra *REUNIÓN EN CURSO…* y no se puede convocar otra encima. La **Transcripción** recoge todo lo dicho y funciona igual en ordenador, móvil y tableta.
 

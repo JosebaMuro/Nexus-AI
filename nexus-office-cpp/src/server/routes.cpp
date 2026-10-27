@@ -16,6 +16,7 @@
 #include "gen/data.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
+#include "media/avatares.h"
 #include "media/media.h"
 #include "memory/memory.h"
 #include "models/models.h"
@@ -1259,6 +1260,43 @@ void register_routes(App& app) {
     std::string fname = std::to_string((long long)now()) + "_" + safe_name(name, 1000);
     write_file(paths::sub({"outputs", "avatars"}) / P(fname), f->content);
     return json{{"url", "/outputs/avatars/" + fname}, {"size", f->content.size()}};
+  });
+
+  // avatares 3D gratuitos de Internet (Open Source Avatars, modelos de referencia, Sketchfab)
+  auto avs = [](Ctx& c) -> avatares::Avatares& {
+    Services* s = &c.app.S();
+    return avatares::get([s] { return s->config.str("avatares.sketchfab_token"); });
+  };
+  app.get("/api/avatares", [avs](Ctx& c) -> Out {
+    return json{{"biblioteca", avs(c).biblioteca()}, {"fuentes", avatares::FUENTES},
+                {"sketchfab_clave", !c.app.S().config.str("avatares.sketchfab_token").empty()}};
+  });
+  app.get("/api/avatares/buscar", [avs](Ctx& c) -> Out {
+    std::string fuente = c.q("fuente", "osa");
+    try {
+      return avs(c).buscar(fuente, c.q("q"), c.qi("pagina", 1), c.qi("por_pagina", 24));
+    } catch (const http::HttpError& e) {
+      throw HttpErr(502, "No se pudo consultar " + fuente + ": " + e.what());
+    }
+  });
+  app.post("/api/avatares/descargar", [avs](Ctx& c) -> Out { return avs(c).descargar(c.bs("id", "")); });
+  app.get("/api/avatares/trabajo/{tid}", [avs](Ctx& c) -> Out {
+    json j = avs(c).trabajo(c.p("tid"));
+    if (j.is_null()) throw HttpErr(404, "trabajo desconocido");
+    return j;
+  });
+  app.post("/api/avatares/{aid}/usar", [avs](Ctx& c) -> Out {
+    for (auto& it : avs(c).biblioteca())
+      if (jstr(it, "id") == c.p("aid")) {
+        c.app.S().config.set("user.avatar_model", it["url"]);
+        c.app.S().config.set("user.avatar_style", "glb");
+        return json{{"ok", true}, {"url", it["url"]}};
+      }
+    throw HttpErr(404, "avatar no descargado");
+  });
+  app.del("/api/avatares/{aid}", [avs](Ctx& c) -> Out {
+    if (!avs(c).borrar(c.p("aid"))) throw HttpErr(404, "avatar no descargado");
+    return json{{"ok", true}};
   });
 
   app.get("/api/voice", [](Ctx& c) -> Out { return c.app.S().voice->info(); });

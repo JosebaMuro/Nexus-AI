@@ -42,6 +42,11 @@
 - Grabar el firmware por USB sin internet desde *Dispositivos > Grabar firmware*: los binarios y esptool vienen en el
   paquete, con puertos serie nativos en Windows, Linux y macOS.
 
+### Avatares 3D gratuitos
+- Biblioteca de avatares en *Ajustes > Avatar*: busca y descarga avatares VRM de Open Source Avatars, modelos de
+  referencia (VRM Consortium, Khronos, three.js) y modelos CC de Sketchfab. Si una pasarela IPFS falla prueba otra, solo
+  descarga URLs del catálogo y lo descargado sirve sin conexión (`/api/avatares`).
+
 ### Ejemplos para importar
 - **Grafo multicapa de la Wikipedia en español** (`ejemplos/grafo-wikipedia-es`): 2.251 nodos y 7.007 relaciones en
   cuatro capas (temas, artículos, enlaces entre artículos y hechos de Wikidata), en GraphML y JSON. Se importa con

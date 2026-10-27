@@ -53,6 +53,7 @@ const json& config_defaults() {
   "bolsa": {"datos": "reales", "refresco_s": 20,
             "agente": {"activo": true, "intervalo_s": 60, "capital": 10000.0, "riesgo_pct": 1.0, "max_posiciones": 8,
                        "max_peso_pct": 20.0, "reserva_pct": 10.0, "universo": []}},
+  "avatares": {"sketchfab_token": ""},
   "nube": {"proveedor": "", "modelo": "", "base_url": "", "esfuerzo": "medium",
            "clave_gemini": "", "clave_openai": "", "clave_perplexity": "", "clave_claude": "", "clave_mistral": "",
            "clave_deepseek": "", "clave_groq": "", "clave_openrouter": "", "clave_compatible": ""},
@@ -66,6 +67,7 @@ const std::set<std::string>& user_keys() {
     std::set<std::string> s;
     for (auto it = config_defaults()["user"].begin(); it != config_defaults()["user"].end(); ++it)
       s.insert("user." + it.key());
+    s.insert("avatares.sketchfab_token");   // clave de API de Sketchfab (para descargar; buscar no la necesita)
     return s;
   }();
   return K;
@@ -75,6 +77,7 @@ const std::set<std::string>& secret_keys() {
   static const std::set<std::string> K = {"admin.pin_hash",        "admin.pin_salt",       "llm.openai_api_key",
                                           "models.huggingface_token", "models.civitai_token", "models.kaggle_key",
                                           "models.modelscope_token", "coop.passphrase",      "server.lan_key",
+                                          "avatares.sketchfab_token",
                                           "nube.clave_gemini", "nube.clave_openai", "nube.clave_perplexity",
                                           "nube.clave_claude", "nube.clave_mistral", "nube.clave_deepseek",
                                           "nube.clave_groq", "nube.clave_openrouter", "nube.clave_compatible"};
