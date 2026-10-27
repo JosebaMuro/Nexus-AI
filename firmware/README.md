@@ -73,4 +73,4 @@ Todo compila y la lógica está probada en el PC, pero falta probarlo en las pla
 pantalla GC9A01 y el táctil CST816S del reloj, el refresco de la tinta (V3 y V4) del Pico W, la salida RMT de las
 tiras en cada modelo de ESP32, la salida temporizada y la memoria del ESP8266 con tiras largas, y nexus-flash con
 placas y adaptadores de verdad (está probado contra una ROM falsa que sigue el protocolo de Espressif). El ESP32-C2
-todavía no tiene binario: el núcleo de Arduino no trae su cargador.
+no tiene binario: el núcleo de Arduino (3.3.0) no trae sus librerías; nexus-flash sí lo detecta y lo graba.

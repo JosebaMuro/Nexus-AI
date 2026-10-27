@@ -18,7 +18,7 @@ permissions:
 
 env:
   ESP32_CORE: "3.1.1"
-  ESP32_CORE_NUEVO: "3.3.0"   # ESP32-C2 y ESP32-C5 solo vienen en los nucleos recientes
+  ESP32_CORE_NUEVO: "3.3.0"   # el ESP32-C5 solo viene en los nucleos recientes
   ESP8266_CORE: "3.1.2"
   MICROPYTHON: "v1.24.1"
 
@@ -58,8 +58,7 @@ jobs:
           - { sketch: nexusled, modelo: esp32c3, fqbn: "esp32:esp32:esp32c3:PartitionScheme=min_spiffs,CDCOnBoot=cdc" }
           - { sketch: nexusled, modelo: esp32c6, fqbn: "esp32:esp32:esp32c6:PartitionScheme=min_spiffs,CDCOnBoot=cdc" }
           - { sketch: nexuswatch, modelo: esp32c3, fqbn: "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio" }
-          # en prueba: si no compilan, el resto de binarios se sube igual
-          - { sketch: nexusled, modelo: esp32c2, fqbn: "esp32:esp32:esp32c2:PartitionScheme=min_spiffs,FlashMode=dio", nuevo: true }
+          # en prueba: si no compila, el resto de binarios se sube igual (el ESP32-C2 no esta: el nucleo de Arduino no trae sus librerias)
           - { sketch: nexusled, modelo: esp32c5, fqbn: "esp32:esp32:esp32c5:PartitionScheme=min_spiffs,CDCOnBoot=cdc", nuevo: true }
     continue-on-error: ${{ matrix.nuevo == true }}
     env:
