@@ -46,8 +46,10 @@ ATRIBUTOS = {"P1082": "poblacion", "P2046": "superficie_km2", "P2044": "altitud_
              "P585": "fecha", "P2048": "altura_m", "P2067": "masa_kg", "P1128": "empleados", "P856": "web"}
 
 
-def get(url: str, params: dict, intentos: int = 6) -> dict:
-    q = urllib.parse.urlencode({**params, "format": "json", "formatversion": "2", "maxlag": "5"})
+def get(url: str, params: dict, intentos: int = 8) -> dict:
+    # maxlag solo con la Wikipedia: Wikidata va con retraso a menudo y para leer no hace falta
+    extra = {"maxlag": "5"} if url == WIKI else {}
+    q = urllib.parse.urlencode({**params, "format": "json", "formatversion": "2", **extra})
     for n in range(intentos):
         try:
             req = urllib.request.Request(f"{url}?{q}", headers={"User-Agent": UA, "Accept-Encoding": "identity"})
@@ -60,7 +62,7 @@ def get(url: str, params: dict, intentos: int = 6) -> dict:
             if n == intentos - 1:
                 raise
             print(f"  reintento ({e})", file=sys.stderr)
-            time.sleep(2 ** n)
+            time.sleep(min(60, 2 ** n))
     return {}
 
 
