@@ -102,6 +102,14 @@ hw::HardwareInfo cached_hardware() {
 
 int cmd_run(const Args& a) {
   Config& cfg = get_config();
+  if (hw::android() && !cfg.flag("android.configured", false)) {
+    // valores pensados para un movil (android_main.py); despues el usuario los cambia en Ajustes
+    cfg.set("server.host", "127.0.0.1");
+    cfg.set("server.open_browser", false);
+    cfg.set("llm.max_tokens", 768);
+    cfg.set("memory.llm_graph_extraction", false);
+    cfg.set("android.configured", true);
+  }
   std::string motor = a.get("motor"), accel = a.get("acelerador");
   if (!motor.empty() || !accel.empty()) {   // eleccion por linea de comandos: no preguntar
     if (!motor.empty()) {

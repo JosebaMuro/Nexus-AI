@@ -41,6 +41,9 @@ class VoiceEngine;
 namespace nx::coop {
 class CoopNode;
 }
+namespace nx::android_tune {
+class LiveTuner;
+}
 namespace nx::remote {
 class RemoteAccess;
 class VPN;
@@ -90,6 +93,7 @@ class Services {
   std::unique_ptr<coop::CoopNode> coop;
   std::unique_ptr<remote::RemoteAccess> remote;
   std::unique_ptr<remote::VPN> vpn;
+  std::unique_ptr<android_tune::LiveTuner> android_tuner;   // solo en la app Android autonoma
 
  private:
   std::mutex emb_mu_;

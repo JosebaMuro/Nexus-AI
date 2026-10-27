@@ -47,6 +47,9 @@ void LLMManager::rebuild() {
   backends_.push_back({"llamaserver", std::make_shared<LlamaServerBackend>(
                                           rt_, resolver("gguf"), [this] { return profile_; },
                                           [this] { return config_.str("hardware.llama_variant"); })});
+  std::static_pointer_cast<LlamaServerBackend>(backends_.back().second)->set_llm_opts = [this](const json& o) {
+    update_llm_profile(o);
+  };
   backends_.push_back({"llamacpp", std::make_shared<UnavailableBackend>("llamacpp")});
   backends_.push_back({"ollama", std::make_shared<OllamaBackend>(config_.str("llm.ollama_url"), timeout)});
   backends_.push_back({"openai", std::make_shared<OpenAICompatBackend>(config_.str("llm.openai_base_url"),
@@ -159,8 +162,19 @@ json LLMManager::status() {
   return {{"backend", b}, {"model", model}, {"available", avail}};
 }
 
+json LLMManager::llm_profile() {
+  std::lock_guard<std::recursive_mutex> lk(mu_);
+  return profile_.value("llm", json::object());
+}
+
+void LLMManager::update_llm_profile(const json& changes) {
+  std::lock_guard<std::recursive_mutex> lk(mu_);
+  if (!profile_.contains("llm")) return;
+  for (auto& [k, v] : changes.items()) profile_["llm"][k] = v;
+}
+
 json LLMManager::options(const json& agent_opts) {
-  json llm = profile_["llm"];
+  json llm = llm_profile();
   json o = {{"n_ctx", llm["n_ctx"]},
             {"n_threads", llm["n_threads"]},
             {"n_batch", llm["n_batch"]},

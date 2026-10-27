@@ -267,7 +267,12 @@ jobs:
           JAR=$(ls -d "$ANDROID_HOME"/platforms/android-* | sort -V | grep -E 'android-3[4-9]$' | head -1)/android.jar
           export PATH="$BT:$PATH" NEXUS_ANDROID_JAR="$JAR"
           python -m pip install -q pillow
-          python nexus-office-cpp/packaging/build_apk_autonomo.py --exe aout/Nexus-Office/nexus-office --libs alibs --recursos aout/Nexus-Office
+          # GPU y NPU del movil: llama-server-gpu y los backends de ggml (Vulkan, OpenCL, Hexagon) de android-npu-libs
+          git fetch -q --depth 1 origin android-npu-libs
+          git show FETCH_HEAD:android-gpu-npu-libs.tar.gz > npu.tgz
+          (git show FETCH_HEAD:SHA256SUMS.txt | grep android-gpu-npu-libs.tar.gz | sed 's|  .*|  npu.tgz|' | sha256sum -c -)
+          mkdir -p glibs && tar xzf npu.tgz -C glibs
+          python nexus-office-cpp/packaging/build_apk_autonomo.py --exe aout/Nexus-Office/nexus-office --libs alibs --recursos aout/Nexus-Office --gpu-libs glibs/lib
           "$BT/apksigner" verify --print-certs nexus-office-cpp/dist-apk/*.apk | head -4
       - uses: actions/upload-artifact@v4
         with:

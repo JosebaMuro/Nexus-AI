@@ -85,6 +85,7 @@ class Monitor {
   void record_error(const std::string& kind, const std::string& message);
   json live();
   json summary(bool final_ = false);
+  std::vector<json> llm_calls();
   bool previous_unclean = false;
   json previous_info = json::object();
   json settings;

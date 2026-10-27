@@ -158,14 +158,18 @@ class LlamaServerBackend : public OpenAICompatBackend {
   json effective();
   std::string variant;
   int port = 0;
+  // Android: la NPU o la GPU no arrancan con el driver del movil; el gestor cambia gpu_layers/device del perfil
+  std::function<void(const json&)> set_llm_opts;
 
  private:
+  void ensure_once(const std::string& model, const json& opts);
+  json gpu_failed(const std::string& reason, const std::string& device);
   runtimes::RuntimeManager* rt_;
   Resolver resolve_;
   std::function<json()> profile_;
   std::function<std::string()> variant_getter_;
   std::unique_ptr<proc::Process> proc_;
-  std::string key_;
+  std::string key_, device_;
   json effective_ = json::object();
   std::recursive_mutex mu_;
 };
@@ -244,6 +248,9 @@ class LLMManager {
   std::pair<std::string, std::string> select(const std::string& spec = "default");
   json status();
   json options(const json& agent_opts = json::object());
+  // perfil de llama.cpp (hilos, contexto, GPU) con el cerrojo del gestor: lo cambia el autoajuste en vivo
+  json llm_profile();
+  void update_llm_profile(const json& changes);
   bool reasoning_model(const std::string& backend, const std::string& model);
   bool thinking_only(const std::string& backend, const std::string& model);
   void stream(json messages, const std::string& spec, Opts opts, const Sink& out);

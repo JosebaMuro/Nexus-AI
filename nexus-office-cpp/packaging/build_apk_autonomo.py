@@ -2,11 +2,13 @@
 (nexus-office/android-autonomo), pero el servidor es nexus-office compilado con el NDK en vez de Python.
 
     python packaging/build_apk_autonomo.py --exe <nexus-office para Android> --libs <carpeta con libllama-server*.so>
-                                           --recursos <carpeta instalada con nexus/>
+                                           --recursos <carpeta instalada con nexus/> [--gpu-libs <carpeta lib/>]
 
 La APK lleva:
   lib/arm64-v8a/libnexusoffice.so          el ejecutable de Nexus-Office C++ (Android solo deja ejecutar lo que va aqui)
   lib/arm64-v8a/libllama-server*.so        llama-server estatico en 3 variantes de CPU (de la APK autonoma 2.0.0)
+  lib/arm64-v8a/libllama-server-gpu.so     llama.cpp con la libc de Android y los backends Vulkan, OpenCL y Hexagon
+  lib/arm64-v8a/libggml-*.so ...           (NPU de los Snapdragon 8 Gen 2+); de la rama android-npu-libs (--gpu-libs)
   assets/runtime.zip + runtime.json        la carpeta nexus/ (interfaz web, perfiles, agentes, certificados)
 Se instala junto a la app de la edicion Python (identificador ai.nexus.office.cpp). Usa las herramientas de Android y
 la firma de nexus-office/packaging/build_apk.py; las fuentes Java se toman de la app Python y se adaptan al compilar.
@@ -65,7 +67,14 @@ LAUNCH_NEW = '''        detail = "Arrancando Nexus-Office...";
         env.put("NEXUS_DATA_DIR", new File(data, "nexus").getAbsolutePath());
         env.put("NEXUS_ANDROID", "1");
         String llama = llamaBinary(libs);
-        if (llama != null) env.put("NEXUS_RUNTIME_LLAMA", llama);
+        if (llama != null) {
+            env.put("NEXUS_RUNTIME_LLAMA", llama);
+            env.put("NEXUS_RUNTIME_LLAMA_CPU", llama);
+        }
+        // llama.cpp con GPU (Vulkan/OpenCL) y NPU (Hexagon): lo usa si la sonda de hardware las encuentra
+        File gpu = new File(libs, "libllama-server-gpu.so");
+        if (gpu.isFile()) env.put("NEXUS_RUNTIME_LLAMA_GPU", gpu.getAbsolutePath());
+        env.put("NEXUS_ANDROID_LIBS", libs);
         env.put("NEXUS_DNS", dnsServers());
         env.put("NEXUS_DEVICE_STATE", new File(data, "device_state.json").getAbsolutePath());
         File info = new File(data, "device_info.json");
@@ -138,7 +147,7 @@ def runtime_zip(resources: Path, dest: Path) -> dict:
     return {"files": len(infos), "bytes": sum(i.file_size for i in infos), "version": VERSION}
 
 
-def build(exe: Path, libs: Path, resources: Path) -> Path:
+def build(exe: Path, libs: Path, resources: Path, gpu_libs: Path | None = None) -> Path:
     missing = [str(p) for p in [exe, *(libs / n for n in LLAMA), resources / "nexus" / "web" / "index.html"] if not p.is_file()]
     if missing:
         sys.exit(f"faltan: {', '.join(missing)}")
@@ -173,6 +182,13 @@ def build(exe: Path, libs: Path, resources: Path) -> Path:
         z.write(exe, "lib/arm64-v8a/libnexusoffice.so")
         for n in LLAMA:
             z.write(libs / n, f"lib/arm64-v8a/{n}")
+        if gpu_libs:   # GPU y NPU: llama-server-gpu y los backends de ggml que carga a demanda
+            so = sorted(gpu_libs.glob("*.so"))
+            if not any(f.name == "libllama-server-gpu.so" for f in so):
+                sys.exit(f"falta libllama-server-gpu.so en {gpu_libs}")
+            for f in so:
+                z.write(f, f"lib/arm64-v8a/{f.name}")
+            print(f"[apk] GPU/NPU: {len(so)} bibliotecas ({sum(f.stat().st_size for f in so) / 1e6:.0f} MB)")
         z.write(OUT / "runtime.zip", "assets/runtime.zip", compress_type=zipfile.ZIP_STORED)
         z.writestr("assets/runtime.json", json.dumps(meta))
         z.writestr("assets/LICENSES/LEEME.txt",
@@ -195,5 +211,6 @@ if __name__ == "__main__":
     ap.add_argument("--exe", type=Path, required=True)
     ap.add_argument("--libs", type=Path, required=True)
     ap.add_argument("--recursos", type=Path, required=True)
+    ap.add_argument("--gpu-libs", type=Path, help="llama-server-gpu y libggml-*.so (Vulkan, OpenCL, Hexagon)")
     a = ap.parse_args()
-    build(a.exe, a.libs, a.recursos)
+    build(a.exe, a.libs, a.recursos, a.gpu_libs)

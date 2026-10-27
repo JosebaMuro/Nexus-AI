@@ -1,6 +1,10 @@
 // Ensamblado de todos los servicios de Nexus-Office (core.py).
 #include "core/services.h"
 
+#include <thread>
+
+#include "core/android_tune.h"
+
 #include "agents/agents.h"
 #include "coop/coop.h"
 #include "remote/remote.h"
@@ -165,6 +169,17 @@ void Services::start() {
   std::vector<mem::ToolView> views;
   for (auto& t : tools->for_agent({"*"})) views.push_back(t->view());
   assist->prewarm(views, agents->list());
+  if (hw::android() && config.flag("hardware.adaptive_tuning", true)) {
+    android_tuner = std::make_unique<android_tune::LiveTuner>(*this);
+    android_tuner->start();
+    std::thread([this] {
+      try {
+        android_tune::after_start(*this, android_tuner.get());
+      } catch (const std::exception& e) {
+        L.warning("Optimizacion tras el arranque: ", e.what());
+      }
+    }).detach();
+  }
   if (config.flag("coop.enabled", false)) {
     try {
       coop->start();
@@ -185,6 +200,7 @@ void Services::shutdown() {
   }
   if (embed_worker) embed_worker->stop();
   if (auto e = embedder()) e->close();
+  if (android_tuner) android_tuner->stop();
   if (monitor) monitor->stop();
 }
 

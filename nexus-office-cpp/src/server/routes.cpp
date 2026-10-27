@@ -10,6 +10,7 @@
 #include "coop/coop.h"
 #include "remote/remote.h"
 #include "core/service.h"
+#include "core/android_tune.h"
 #include "core/services.h"
 #include "core/system.h"
 #include "gen/data.h"
@@ -412,13 +413,28 @@ void register_routes(App& app) {
 
   app.get("/api/monitor", [](Ctx& c) -> Out { return c.app.S().monitor->live(); });
 
-  for (auto* p : {"/api/android/autoajuste"}) {
-    app.get(p, [](Ctx&) -> Out { throw HttpErr(404, "El autoajuste en vivo solo funciona en la app Android autonoma"); });
-  }
-  app.post("/api/android/autoajuste/medir",
-           [](Ctx&) -> Out { throw HttpErr(404, "El autoajuste en vivo solo funciona en la app Android autonoma"); });
-  app.post("/api/android/autoajuste/modelo/{mid}",
-           [](Ctx&) -> Out { throw HttpErr(404, "El autoajuste en vivo solo funciona en la app Android autonoma"); });
+  // app Android autonoma: nucleos, hilos medidos, limites por temperatura o bateria y consejo de modelo
+  auto tuner = [](Ctx& c) -> android_tune::LiveTuner& {
+    auto& t = c.app.S().android_tuner;
+    if (!t) throw HttpErr(404, "El autoajuste en vivo solo funciona en la app Android autonoma");
+    return *t;
+  };
+  app.get("/api/android/autoajuste", [tuner](Ctx& c) -> Out { return tuner(c).report(); });
+  // vuelve a medir los hilos desde cero (p. ej. tras cambiar de funda o de ajustes de rendimiento)
+  app.post("/api/android/autoajuste/medir", [tuner](Ctx& c) -> Out {
+    auto& t = tuner(c);
+    t.reset_trials();
+    return t.step();
+  });
+  // acepta el consejo de modelo: lo activa, o lo descarga y lo activa al terminar
+  app.post("/api/android/autoajuste/modelo/{mid}", [tuner](Ctx& c) -> Out {
+    auto& t = tuner(c);
+    try {
+      return t.switch_model(c.p("mid"));
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
+  });
 
   app.post("/api/hardware/redetect", [](Ctx& c) -> Out {
     Services& s = c.app.S();
