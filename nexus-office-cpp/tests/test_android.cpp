@@ -1,7 +1,5 @@
 // CPU, GPU y NPU en la app Android autonoma (hardware/android_accel) y autoajuste en vivo (core/android_tune): las
 // mismas comprobaciones que tests/test_android_accel.py y tests/test_android_tune.py de la edicion Python.
-#include <sys/stat.h>
-
 #include "check.h"
 #include "core/android_tune.h"
 #include "core/config.h"
@@ -35,9 +33,11 @@ fs::path tmpdir(const std::string& name) {
   return d;
 }
 
+#ifndef _WIN32   // los llama-server falsos son guiones con #! (POSIX)
 void executable(const fs::path& p, const std::string& text) {
   write_file(p, text);
-  ::chmod(p.c_str(), 0755);
+  fs::permissions(p, fs::perms::owner_all | fs::perms::group_read | fs::perms::group_exec |
+                         fs::perms::others_read | fs::perms::others_exec);
 }
 
 // llama-server falso: --list-devices imprime la lista; si no, sirve /health salvo con un dispositivo «roto»
@@ -59,6 +59,7 @@ void fake_server(const fs::path& p, const std::string& listing, const std::strin
                 "        self.send_response(200); self.end_headers(); self.wfile.write(b'{}')\n"
                 "http.server.HTTPServer(('127.0.0.1', int(a[a.index('--port') + 1])), H).serve_forever()\n");
 }
+#endif
 
 std::vector<std::string> lines_of(const fs::path& p) {
   auto t = read_file(p);
@@ -123,6 +124,7 @@ TEST("android: dispositivos de llama-server, NPU Hexagon, GPU y SoC") {
   CHECK(aa::npu(aa::soc({{"ro.board.platform", "rk3588"}}, json::object()), none).is_null());
 }
 
+#ifndef _WIN32
 TEST("android: sonda con cache, NPU que falla y vuelta a la GPU y a la CPU") {
   fs::path d = tmpdir("sonda");
   set_env("NEXUS_DATA_DIR", S(d / "nexus"));
@@ -190,6 +192,7 @@ TEST("android: llama-server en la NPU cae a la GPU y despues a la CPU") {
   for (auto* k : {"NEXUS_RUNTIME_LLAMA", "NEXUS_RUNTIME_LLAMA_CPU", "NEXUS_RUNTIME_LLAMA_GPU", "NEXUS_ANDROID_LIBS"})
     set_env(k, "");
 }
+#endif
 
 TEST("android: nucleos, candidatos, temperatura, bateria y consejo de modelo") {
   fs::path d = tmpdir("nucleos");
@@ -225,6 +228,7 @@ TEST("android: nucleos, candidatos, temperatura, bateria y consejo de modelo") {
   CHECK(at::warmup_ok(json::object(), 8, 2).first);
 }
 
+#ifndef _WIN32
 TEST("android: el autoajuste compara GPU y CPU y despues mide los hilos") {
   fs::path d = tmpdir("tuner");
   set_env("NEXUS_DATA_DIR", S(d / "nexus"));
@@ -270,3 +274,4 @@ TEST("android: el autoajuste compara GPU y CPU y despues mide los hilos") {
   s->shutdown();
   for (auto* k : {"NEXUS_DEVICE_STATE", "NEXUS_RUNTIME_LLAMA_CPU", "NEXUS_RUNTIME_LLAMA_GPU"}) set_env(k, "");
 }
+#endif
