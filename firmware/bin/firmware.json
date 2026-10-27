@@ -1,5 +1,5 @@
 {
-  "commit": "37b98ff9ec5eef139eb5f6dcf6af524d00b8fb34",
+  "commit": "de5265a50cdecc04e10616439c0bd1c2612b0dfd",
   "nucleo_esp32": "3.1.1",
   "nucleo_esp32_nuevo": "3.3.0",
   "nucleo_esp8266": "3.1.2",
@@ -7,32 +7,32 @@
   "archivos": {
     "nexusled-esp32.bin": {
       "version": "1.0.0",
-      "sha256": "376f48da7f199d88ccb3a8cb0ac3ad46a1ee24986f3a329becd7dea9e2f992e8",
+      "sha256": "2e731c35fd332e5285282b4752c5d7e4b46d2a1086fb2b91e2f4abe80ca40a29",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32c3.bin": {
       "version": "1.0.0",
-      "sha256": "7b0a9e3e0a9f13c713bec14a19e619b13e65a836b82b9d4a2c4e2cf973dce961",
+      "sha256": "8e5ebfc368bd22deed9891cbdd5df93cedfc0a265c149e23fceba163c699f810",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32c5.bin": {
       "version": "1.0.0",
-      "sha256": "240720917e5811807401a94d8b80ff045a87ff7b5a7608a666e530dc4e25555f",
+      "sha256": "294cd8e4706c531ab8023f75b00058befa5360d209f7e116d12b4838a1b4c961",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32c6.bin": {
       "version": "1.0.0",
-      "sha256": "5bf29ada7a7644f41009cb04c8d120e2a664dd166e7f77db6bba182393e25ec3",
+      "sha256": "926c043e82f86740da9595565bb69920047e3afcb53e5cc7f72a8a93ff52ebd7",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32s2.bin": {
       "version": "1.0.0",
-      "sha256": "7c8b1bbb31a07b3721fd4d287bee3c10968fa8c0b177f4193991e07dae2f8810",
+      "sha256": "b38b8201c6d2eb25fce9abf7a60c3284c07cec1f42b0f62ae6e080b7a5302216",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp32s3.bin": {
       "version": "1.0.0",
-      "sha256": "5c1efb18d0ecb54ee1f60bda8c23af502e37218183afab158549e9a47d2e882a",
+      "sha256": "63b5172451d2b2ddc69c600cb520dc6809914c3f1c9ccafce55996adebf581b1",
       "grabar": "esptool write_flash 0x0"
     },
     "nexusled-esp8266-4m.bin": {
@@ -57,7 +57,7 @@
     },
     "nexuswatch-esp32c3.bin": {
       "version": "1.0.0",
-      "sha256": "b209c1fdfe359327cd4b0df26cfcb2925e3e941a397ab9afdbe0326e19c0db39",
+      "sha256": "f4921d260cd016068ba51664e3c66615f4f4f818467579600456eb7334f5a6a3",
       "grabar": "esptool write_flash 0x0"
     }
   }
