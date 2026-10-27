@@ -10,6 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -1059,6 +1060,50 @@ def create_app(services: Services | None = None) -> FastAPI:
         dest = paths.sub("outputs", "avatars") / f"{int(time.time())}_{safe}"
         dest.write_bytes(data)
         return {"url": f"/outputs/avatars/{dest.name}", "size": len(data)}
+
+    # avatares 3D gratuitos de Internet (Open Source Avatars, modelos de referencia, Sketchfab)
+    def _avs():
+        from ..media import avatares
+        return avatares.get(S().config)
+
+    @app.get("/api/avatares")
+    def avatares_lista():
+        from ..media import avatares
+        return {"biblioteca": _avs().biblioteca(), "fuentes": avatares.FUENTES,
+                "sketchfab_clave": bool(S().config.get("avatares.sketchfab_token", ""))}
+
+    @app.get("/api/avatares/buscar")
+    def avatares_buscar(fuente: str = "osa", q: str = "", pagina: int = 1, por_pagina: int = 24):
+        try:
+            return _avs().buscar(fuente, q, pagina, por_pagina)
+        except httpx.HTTPError as e:
+            raise HTTPException(502, f"No se pudo consultar {fuente}: {e}") from e
+
+    @app.post("/api/avatares/descargar")
+    def avatares_descargar(data: dict = Body(...)):
+        return _avs().descargar(str(data.get("id", "")))
+
+    @app.get("/api/avatares/trabajo/{tid}")
+    def avatares_trabajo(tid: str):
+        j = _avs().trabajos.get(tid)
+        if not j:
+            raise HTTPException(404, "trabajo desconocido")
+        return j
+
+    @app.post("/api/avatares/{aid}/usar")
+    def avatares_usar(aid: str):
+        it = next((i for i in _avs().biblioteca() if i["id"] == aid), None)
+        if not it:
+            raise HTTPException(404, "avatar no descargado")
+        S().config.set("user.avatar_model", it["url"])
+        S().config.set("user.avatar_style", "glb")
+        return {"ok": True, "url": it["url"]}
+
+    @app.delete("/api/avatares/{aid}")
+    def avatares_borrar(aid: str):
+        if not _avs().borrar(aid):
+            raise HTTPException(404, "avatar no descargado")
+        return {"ok": True}
 
     @app.get("/api/voice")
     def voice_info():

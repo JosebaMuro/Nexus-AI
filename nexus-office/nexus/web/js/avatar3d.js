@@ -250,7 +250,13 @@ class Base3D {
     const body = this.body || this.model; if (!body) return null;
     body.updateMatrixWorld(true);
     const full = new THREE.Box3().setFromObject(body), H = full.max.y - full.min.y;
-    if (this.framing === "cuerpo") return full;
+    if (this.framing === "cuerpo" || !this.head) {   // sin cabeza conocida no se adivina el busto
+      if (this.ring && this.ringBase) {   // que el aro del suelo tambien quepa
+        const r = 0.6 * this.ringBase;
+        full.expandByPoint(new THREE.Vector3(-r, full.min.y, 0)).expandByPoint(new THREE.Vector3(r, full.min.y, 0));
+      }
+      return full;
+    }
     let head = this.head && !this.head.isBone ? new THREE.Box3().setFromObject(this.head) : null;
     if (!head || head.isEmpty()) {   // modelo propio: el hueso de la cabeza o el 18 % superior
       const hy = this.head ? this.head.getWorldPosition(new THREE.Vector3()).y : full.max.y - H * 0.09;
@@ -265,7 +271,7 @@ class Base3D {
   frame() { const b = this.subjectBox(); if (b) this.fitBox(b); }
   toggleFraming() {
     this.framing = this.framing === "busto" ? "cuerpo" : "busto";
-    try { localStorage.setItem("nexus_avatar_framing", this.framing); } catch {}
+    try { localStorage.setItem(this.framingKey || "nexus_avatar_framing", this.framing); } catch {}
     this.frame();
   }
   setState(s) { this.state = STATE_COLORS[s] ? s : "idle"; this.targetColor.set(STATE_COLORS[this.state] === STATE_COLORS.idle ? this.accent : STATE_COLORS[this.state]); }
@@ -653,6 +659,34 @@ class GeishaAvatar extends Base3D {
 }
 
 /* ------------------------------------------------------------------ modelo propio GLB/GLTF/VRM */
+/* ---- modelos propios: caja con la pose real (piel) y brazos relajados si vienen en T ---- */
+function skinnedBox(model) {
+  model.updateMatrixWorld(true);
+  model.traverse((o) => { if (o.isSkinnedMesh && o.skeleton) o.skeleton.update(); });
+  return new THREE.Box3().setFromObject(model);
+}
+function relaxArms(model, gltf, deg = 68) {
+  const json = gltf.parser?.json || {}, assoc = gltf.parser?.associations;
+  const human = json.extensions?.VRMC_vrm?.humanoid?.humanBones || {};
+  const vrm0 = Object.fromEntries((json.extensions?.VRM?.humanoid?.humanBones || []).map((b) => [b.bone, { node: b.node }]));
+  const byNode = (idx) => { let f = null; if (idx == null || !assoc) return null; model.traverse((o) => { if (!f && assoc.get(o)?.nodes === idx) f = o; }); return f; };
+  const find = (side) => byNode((human[side + "UpperArm"] || vrm0[side + "UpperArm"] || {}).node) || (() => {
+    const re = side === "left" ? /^(mixamorig\d*:?)?leftarm$|left.?upper.?arm|upper.?arm.?l$|^l.?upperarm$|^arm\.l$/i : /^(mixamorig\d*:?)?rightarm$|right.?upper.?arm|upper.?arm.?r$|^r.?upperarm$|^arm\.r$/i;
+    let f = null; model.traverse((o) => { if (!f && o.isBone && re.test(o.name.replace(/[\s_]/g, ""))) f = o; }); return f; })();
+  for (const side of ["left", "right"]) {
+    const bone = find(side), child = bone && bone.children.find((c) => c.isBone || c.isObject3D);
+    if (!bone || !child) continue;
+    const a = bone.getWorldPosition(new THREE.Vector3()), b = child.getWorldPosition(new THREE.Vector3());
+    const d = b.sub(a); const len = d.length(); if (!len || Math.abs(d.y) > len * 0.35) continue;   // ya esta bajado
+    const horiz = new THREE.Vector3(d.x, 0, d.z).normalize(), r = THREE.MathUtils.degToRad(deg);
+    const target = horiz.multiplyScalar(Math.cos(r)).add(new THREE.Vector3(0, -Math.sin(r), 0)).normalize();
+    const qw = new THREE.Quaternion().setFromUnitVectors(d.normalize(), target);
+    const parentQ = bone.parent.getWorldQuaternion(new THREE.Quaternion()), boneQ = bone.getWorldQuaternion(new THREE.Quaternion());
+    bone.quaternion.copy(parentQ.invert().multiply(qw).multiply(boneQ));
+    model.updateMatrixWorld(true);
+  }
+}
+
 class GLBAvatar extends Base3D {
   constructor(container, url, onError) {
     super(container);
@@ -664,7 +698,9 @@ class GLBAvatar extends Base3D {
     ring.rotation.x = -Math.PI / 2; S.add(ring); this.ring = ring;
     this.camera.position.set(0, 1.4, 2.6); this.camera.lookAt(0, 1.2, 0);
     this.morphs = []; this.headBone = null; this.mixer = null;
-    this.framing = (() => { try { return localStorage.getItem("nexus_avatar_framing") || "busto"; } catch { return "busto"; } })();
+    // modelo propio: por defecto entero (cabe siempre en el hueco, sea del tamano que sea); doble clic = busto
+    this.framingKey = "nexus_avatar_framing_glb";
+    this.framing = (() => { try { return localStorage.getItem(this.framingKey) || "cuerpo"; } catch { return "cuerpo"; } })();
     container.addEventListener("dblclick", this.onDbl = () => this.toggleFraming());
     new GLTFLoader().load(url, (gltf) => {
       const model = gltf.scene || gltf.scenes?.[0];
@@ -672,10 +708,12 @@ class GLBAvatar extends Base3D {
       model.updateMatrixWorld(true);
       // VRM 0.x mira hacia -Z: se gira para que mire a la camara
       const vrm0 = gltf.parser?.json?.extensions?.VRM; if (vrm0) model.rotation.y = Math.PI;
-      const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3());
+      model.updateMatrixWorld(true);
+      if (!gltf.animations.length) relaxArms(model, gltf);   // en T: brazos bajados (mas natural y cabe mejor)
+      const box = skinnedBox(model), size = box.getSize(new THREE.Vector3());
       // cualquier unidad (cm, mm, m): se normaliza a 1,75 de alto; los modelos tumbados o anchos (no humanos) por su lado mayor
       const k = 1.75 / (Math.max(size.y, size.x * 0.75, size.z * 0.75) || 1); model.scale.multiplyScalar(k);
-      const b2 = new THREE.Box3().setFromObject(model), c = b2.getCenter(new THREE.Vector3());
+      const b2 = skinnedBox(model), c = b2.getCenter(new THREE.Vector3());
       model.position.x -= c.x; model.position.z -= c.z; model.position.y -= b2.min.y; this.baseY = model.position.y;
       S.add(model); this.model = model;
       model.traverse((o) => {
@@ -693,7 +731,7 @@ class GLBAvatar extends Base3D {
     }, undefined, (err) => onError && onError(err));
   }
   ringAt() {   // el aro del estado y las particulas a la medida del modelo
-    const b = new THREE.Box3().setFromObject(this.model), sz = b.getSize(new THREE.Vector3());
+    const b = skinnedBox(this.model), sz = b.getSize(new THREE.Vector3());
     this.ring.scale.setScalar(Math.max(0.6, Math.max(sz.x, sz.z) / 1.1)); this.ringBase = this.ring.scale.x;
     this.moteCenter = new THREE.Vector3(0, b.min.y + sz.y * 0.74, 0);
   }

@@ -424,6 +424,18 @@
 <div id="approvals"></div>
 <div id="toasts"></div>
 
+<dialog id="avlib-dialog" class="avlib-dialog">
+  <h2>AVATARES 3D GRATUITOS</h2>
+  <p class="muted" style="margin:0 0 10px">Descárgalos una vez y úsalos siempre, también sin conexión. Respeta la licencia de cada uno.</p>
+  <div class="row" style="flex-wrap:wrap"><select class="input" id="avlib-src" style="width:auto"></select>
+    <input class="input" id="avlib-q" placeholder="Buscar (chica, robot, anime, zombi…)" style="flex:1 1 160px;min-width:0"><button class="btn primary" id="avlib-go">BUSCAR</button></div>
+  <div class="muted" id="avlib-info" style="margin:6px 0;font-size:.8rem"></div>
+  <div class="avlib-grid" id="avlib-res"></div>
+  <div class="row" style="justify-content:center;margin-top:8px"><button class="btn sm" id="avlib-prev">‹ ANTERIOR</button><span class="muted mono" id="avlib-page"></span><button class="btn sm" id="avlib-next">SIGUIENTE ›</button></div>
+  <h3 style="margin:14px 0 6px">Mis avatares descargados</h3>
+  <div class="avlib-grid" id="avlib-mine"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="avlib-close">CERRAR</button></div>
+</dialog>
 <dialog id="accel-dialog" class="accel-dialog">
   <h2>MOTOR Y ACELERADOR</h2>
   <p class="muted" id="accel-hw">Detectando…</p>

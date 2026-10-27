@@ -150,6 +150,7 @@
     update: (g) => { lastGraph = g; avatarImpl.update(g); }, setAccent: (c) => avatarImpl.setAccent(c),
     get level() { return avatarImpl.level || 0; },
   };
+  window.NexusAvatarActual = () => avatarImpl;   // para diagnosticar el avatar desde la consola
   const when3d = () => new Promise((res) => (window.NexusAvatar3D ? res() : addEventListener("nexus-avatar3d-ready", res, { once: true })));
   async function applyAvatar(style, modelUrl) {
     const key = style + "|" + (modelUrl || "");
@@ -170,6 +171,64 @@
     avatarImpl.setAccent(S.cfg.accent_color || "#00f0ff");
     if (lastGraph) avatarImpl.update(lastGraph);
   }
+  /* biblioteca de avatares 3D gratuitos (Open Source Avatars, modelos de referencia, Sketchfab) */
+  const AvLib = {
+    page: 1, per: 24, src: "osa",
+    async open() {
+      const d = await api("/api/avatares");
+      $("#avlib-src").innerHTML = Object.entries(d.fuentes).map(([k, f]) => `<option value="${k}" title="${esc(f.descripcion)}">${esc(f.nombre)}</option>`).join("");
+      $("#avlib-src").value = this.src;
+      this.mine(d.biblioteca);
+      const dlg = $("#avlib-dialog"); if (!dlg.open) dlg.showModal();
+      this.search(1);
+    },
+    card(it, mine) {
+      const th = mine ? it.miniatura_url : it.miniatura;
+      const using = mine && S.cfg.user && S.cfg.user.avatar_model === it.url && S.cfg.user.avatar_style === "glb";
+      return `<div class="avlib-card ${using ? "on" : ""}"><div class="th">${th ? `<img loading="lazy" src="${esc(th)}" alt="" onerror="this.remove()">` : "⬢"}</div>
+        <b title="${esc(it.nombre)}">${esc(it.nombre)}</b><small title="${esc(it.coleccion || it.autor || "")}">${esc(it.coleccion || it.autor || "")}</small>
+        <small>${esc(it.formato || "")} · ${esc(it.licencia || "licencia sin indicar")}</small>
+        <div class="row">${mine ? `<button class="btn sm primary" data-avuse="${esc(it.id)}">${using ? "EN USO" : "USAR"}</button><button class="btn sm" data-avdel="${esc(it.id)}">✕</button>`
+          : it.descargado ? '<span class="tag ok">descargado</span>' : `<button class="btn sm primary" data-avget="${esc(it.id)}">DESCARGAR</button>`}</div></div>`;
+    },
+    mine(list) {
+      $("#avlib-mine").innerHTML = list.length ? list.map((i) => this.card(i, true)).join("") : '<p class="muted">Aún no has descargado ninguno.</p>';
+      $$("[data-avuse]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/avatares/${b.dataset.avuse}/usar`, { method: "POST" }); await loadConfig(); toast("Avatar cambiado"); this.refreshMine(); })));
+      $$("[data-avdel]").forEach((b) => (b.onclick = guard(async () => { if (!confirm("¿Borrar este avatar descargado?")) return; await api(`/api/avatares/${b.dataset.avdel}`, { method: "DELETE" }); this.refreshMine(); })));
+    },
+    async refreshMine() { this.mine((await api("/api/avatares")).biblioteca); },
+    async search(page) {
+      this.page = Math.max(1, page); this.src = $("#avlib-src").value;
+      $("#avlib-res").innerHTML = '<span class="chip"><span class="spin"></span>Buscando…</span>';
+      let r;
+      try { r = await api(`/api/avatares/buscar?fuente=${this.src}&q=${encodeURIComponent($("#avlib-q").value.trim())}&pagina=${this.page}&por_pagina=${this.per}`); }
+      catch (e) { $("#avlib-res").innerHTML = `<p class="muted">${esc(e.message || e)}</p>`; return; }
+      const pages = Math.max(1, Math.ceil(r.total / this.per));
+      $("#avlib-info").textContent = `${r.total} modelos` + (r.necesita_clave ? " · para descargar de Sketchfab pon tu clave de API gratuita (Ajustes > Avatar > clave de Sketchfab)" : "");
+      $("#avlib-page").textContent = `${this.page} / ${pages}`;
+      $("#avlib-prev").disabled = this.page <= 1; $("#avlib-next").disabled = this.page >= pages;
+      $("#avlib-res").innerHTML = r.resultados.length ? r.resultados.map((i) => this.card(i, false)).join("") : '<p class="muted">Sin resultados (¿sin conexión? Lo ya descargado sigue abajo).</p>';
+      $$("[data-avget]").forEach((b) => (b.onclick = guard(async () => {
+        b.disabled = true; b.textContent = "…";
+        const j = await api("/api/avatares/descargar", { body: { id: b.dataset.avget } });
+        for (;;) {
+          await new Promise((res) => setTimeout(res, 600));
+          const s = await api(`/api/avatares/trabajo/${j.id}`);
+          if (s.estado === "en_curso") { b.textContent = s.total ? Math.round((100 * s.bytes) / s.total) + " %" : (s.bytes / 1e6).toFixed(1) + " MB"; continue; }
+          if (s.estado === "error") { b.disabled = false; b.textContent = "REINTENTAR"; toast("No se pudo descargar: " + s.error, true); return; }
+          b.outerHTML = '<span class="tag ok">descargado</span>';
+          if (confirm(`«${s.avatar.nombre}» descargado. ¿Usarlo ahora como avatar?`)) { await api(`/api/avatares/${s.avatar.id}/usar`, { method: "POST" }); await loadConfig(); toast("Avatar cambiado"); }
+          this.refreshMine(); return;
+        }
+      })));
+    },
+  };
+  $("#avlib-go").onclick = guard(() => AvLib.search(1));
+  $("#avlib-q").onkeydown = (e) => { if (e.key === "Enter") guard(() => AvLib.search(1))(); };
+  $("#avlib-src").onchange = guard(() => AvLib.search(1));
+  $("#avlib-prev").onclick = guard(() => AvLib.search(AvLib.page - 1));
+  $("#avlib-next").onclick = guard(() => AvLib.search(AvLib.page + 1));
+  $("#avlib-close").onclick = () => $("#avlib-dialog").close();
   let explorer = null;
   const STATE_SUB = { idle: "núcleo cognitivo", thinking: "procesando", tool: "ejecutando", speaking: "síntesis de voz", listening: "captando audio" };
   const devSync = { last: "", t: 0, timer: null };
@@ -1720,7 +1779,9 @@
           <button data-av="glb"><span class="e">⬢</span>Modelo propio<br><small>GLB · GLTF · VRM</small></button>
         </div>
         <div class="row" style="margin-top:8px"><span class="muted mono" style="flex:1">${u.avatar_model ? esc(u.avatar_model.split("/").pop()) : "sin modelo propio"}</span>
-          <button class="btn sm" id="av-upload">SUBIR MODELO 3D</button><input type="file" id="av-file" accept=".glb,.gltf,.vrm" hidden></div></div>`;
+          <button class="btn sm primary" id="av-lib">AVATARES 3D GRATIS</button><button class="btn sm" id="av-upload">SUBIR MODELO 3D</button><input type="file" id="av-file" accept=".glb,.gltf,.vrm" hidden></div>
+        <div class="muted" style="font-size:.75rem;margin-top:4px">Doble clic en el avatar: cuerpo entero o busto.</div>
+        <div class="row" style="margin-top:6px"><input class="input" id="av-skf" type="password" placeholder="Clave de API de Sketchfab (opcional, para descargar de Sketchfab)" style="flex:1;min-width:0"><button class="btn sm" id="av-skf-save">GUARDAR</button></div></div>`;
     $$("[data-av]").forEach((b) => { b.classList.toggle("on", (u.avatar_style || "geisha") === b.dataset.av);
       b.onclick = guard(async () => {
         if (b.dataset.av === "glb" && !u.avatar_model) return $("#av-file").click();
@@ -1728,6 +1789,8 @@
     themeEditor();
     $("#layout-pref").onchange = (e) => { NexusDevice.setPreference(e.target.value); toast("Diseño: " + ({ auto: "automático", ...LAYOUT_NAMES })[e.target.value].toLowerCase()); };
     $("#av-upload").onclick = () => $("#av-file").click();
+    $("#av-lib").onclick = guard(() => AvLib.open());
+    $("#av-skf-save").onclick = guard(async () => { await api("/api/config", { method: "PUT", body: { "avatares.sketchfab_token": $("#av-skf").value.trim() } }); $("#av-skf").value = ""; toast("Clave de Sketchfab guardada"); });
     $("#av-file").onchange = guard(async (e) => {
       const f = e.target.files[0]; if (!f) return; const fd = new FormData(); fd.append("file", f);
       toast("Subiendo modelo…"); const r = await api("/api/avatar/upload", { body: fd });
