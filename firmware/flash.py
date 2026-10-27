@@ -6,7 +6,8 @@
     python firmware/flash.py pico   [--wifi RED CLAVE] [--nexus 192.168.1.10:8775 CLAVE]
     python firmware/flash.py config reloj|luces|pico ...   # solo la configuracion, sin regrabar
 
-* luces: NexusLED en cualquier ESP32 (ESP32, S2, S3, C3, C6). El modelo se detecta solo.
+* luces: NexusLED en ESP8266 (ESP-01/01S, NodeMCU, Wemos...) y ESP32 (ESP32, S2, S3, C3, C5, C6). Se detecta solo.
+  En la edicion C++ esto lo hace nexus-flash (firmware/flasher), sin esptool.
 * reloj: NexusWatch en la ESP32-2424S012C (ESP32-C3 con pantalla redonda).
 * pico : NexusPico en el Pico W con la pantalla de tinta del pwnagotchi. Conecta el Pico manteniendo pulsado
   BOOTSEL: aparece la unidad RPI-RP2 y se copia el .uf2; despues se le graba config.json por el puerto serie.
@@ -28,7 +29,7 @@ from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 BIN = AQUI / "bin"
-MODELOS_LUCES = ("esp32", "esp32s2", "esp32s3", "esp32c3", "esp32c6")
+MODELOS_LUCES = ("esp8266", "esp8266-4m", "esp8266-512k", "esp32", "esp32s2", "esp32s3", "esp32c3", "esp32c5", "esp32c6")
 # fabricantes USB: Espressif nativo, CP210x, CH340/CH9102, FTDI, Raspberry Pi (Pico)
 VID_ESP = {0x303A, 0x10C4, 0x1A86, 0x0403}
 VID_PICO = 0x2E8A
@@ -103,12 +104,12 @@ def _esptool(args: list[str], log=print) -> str:
 
 def detectar_chip(puerto: str, log=print) -> str:
     out = _esptool(["--port", puerto, "chip_id"], log)
-    m = re.search(r"(?:Chip is|Chip type:)\s*(ESP32(?:-[A-Z0-9]+)?)", out)
+    m = re.search(r"(?:Chip is|Chip type:)\s*(ESP8266|ESP32(?:-[A-Z0-9]+)?)", out)
     if not m:
         raise RuntimeError("no se reconoce el chip")
     chip = m.group(1).lower().replace("-", "")
     # el ESP32 clasico aparece como ESP32-D0WD-V3, ESP32-PICO-D4...
-    return chip if chip in ("esp32s2", "esp32s3", "esp32c2", "esp32c3", "esp32c6", "esp32h2", "esp32p4") else "esp32"
+    return chip if chip in ("esp8266", "esp32s2", "esp32s3", "esp32c2", "esp32c3", "esp32c5", "esp32c6", "esp32h2", "esp32p4") else "esp32"
 
 
 def puerto_auto(tipo: str) -> str:
@@ -124,12 +125,14 @@ def flashear_esp32(tipo: str, puerto: str = "", modelo: str = "", log=print) -> 
     if tipo == "reloj" and chip != "esp32c3":
         raise RuntimeError(f"el reloj ESP32-2424S012C lleva un ESP32-C3 y este es un {chip}")
     modelo = modelo or chip
+    if tipo == "luces" and not modelo.startswith(chip):
+        raise RuntimeError(f"el modelo {modelo} no es para el {chip} conectado")
     if tipo == "luces" and modelo not in MODELOS_LUCES:
         raise RuntimeError(f"no hay NexusLED para {modelo} (hay: {', '.join(MODELOS_LUCES)})")
     fw = binario(tipo, modelo)
     if not fw.exists():
         raise RuntimeError(f"falta {fw.name} en firmware/bin")
-    _esptool(["--chip", modelo, "--port", puerto, "--baud", "460800", "write_flash", "0x0", str(fw)], log)
+    _esptool(["--chip", chip, "--port", puerto, "--baud", "115200" if chip == "esp8266" else "460800", "write_flash", "0x0", str(fw)], log)
     log(f"{fw.name} grabado en {puerto}")
     return {"ok": True, "puerto": puerto, "chip": chip, "archivo": fw.name}
 
@@ -226,7 +229,7 @@ def main(argv=None) -> int:
     ap.add_argument("--wifi", nargs="+", metavar=("RED", "CLAVE"))
     ap.add_argument("--nexus", nargs="+", metavar=("HOST", "CLAVE"))
     ap.add_argument("--leds", type=int, help="luces: numero de LED de la tira")
-    ap.add_argument("--pin", type=int, default=16, help="luces: GPIO de datos (16 por defecto)")
+    ap.add_argument("--pin", type=int, default=16, help="luces: GPIO de datos (16 por defecto; 2 en el ESP8266)")
     ap.add_argument("--nombre", help="luces: nombre de la tira")
     a = ap.parse_args(argv)
     try:

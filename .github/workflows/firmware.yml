@@ -83,6 +83,9 @@ jobs:
           ls -la out
           mkdir -p bin
           cp out/${{ matrix.sketch }}.ino.merged.bin bin/${{ matrix.sketch }}-${{ matrix.modelo }}.bin
+      - name: Cargadores disponibles (si falla)
+        if: failure()
+        run: ls ~/.arduino15/packages/esp32/tools/esp32-arduino-libs/*/${{ matrix.modelo }}/bin/ || true
       - uses: actions/upload-artifact@v4
         with:
           name: fw-${{ matrix.sketch }}-${{ matrix.modelo }}
@@ -216,7 +219,7 @@ jobs:
                   continue
               fam = p.stem.split("-")[0]
               arch[p.name] = {"version": v.get(fam, ""), "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
-                              "grabar": "copiar a la unidad RPI-RP2" if p.suffix == ".uf2" else "esptool write_flash 0x0"}
+                              "grabar": "copiar a la unidad RPI-RP2" if p.suffix == ".uf2" else "nexus-flash grabar (0x0)"}
           (fw / "bin" / "firmware.json").write_text(json.dumps({"commit": os.environ["GITHUB_SHA"], "nucleo_esp32": os.environ["ESP32_CORE"],
               "nucleo_esp32_nuevo": os.environ["ESP32_CORE_NUEVO"], "nucleo_esp8266": os.environ["ESP8266_CORE"],
               "micropython": os.environ["MICROPYTHON"], "archivos": arch}, indent=2) + "\n", encoding="utf-8")
