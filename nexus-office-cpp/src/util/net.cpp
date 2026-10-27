@@ -1,5 +1,6 @@
 #include "util/net.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -300,6 +301,48 @@ std::vector<std::pair<std::string, std::string>> udp_query(const std::string& ho
   }
   close_sock(s);
   return out;
+}
+
+std::vector<UdpReply> udp_broadcast(const std::vector<std::pair<std::string, int>>& targets, const std::string& msg,
+                                    double timeout, int rounds) {
+  wsa();
+  std::vector<UdpReply> out;
+  sock_t s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  if (s == BAD) return out;
+  int on = 1;
+  setsockopt(s, SOL_SOCKET, SO_BROADCAST, (const char*)&on, sizeof on);
+  char buf[4096];
+  for (int r = 0; r < std::max(1, rounds); ++r) {
+    for (auto& [host, port] : targets) {
+      sockaddr_in a;
+      if (v4addr(host, port, a)) sendto(s, msg.data(), (int)msg.size(), 0, (sockaddr*)&a, sizeof a);
+    }
+    auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds((long long)(timeout * 1000 / std::max(1, rounds)));
+    while (true) {
+      auto left = std::chrono::duration_cast<std::chrono::milliseconds>(end - std::chrono::steady_clock::now()).count();
+      if (left <= 0 || !wait_readable(s, (int)left)) break;
+      sockaddr_in from{};
+      socklen_t fl = sizeof from;
+      int n = (int)recvfrom(s, buf, sizeof buf, 0, (sockaddr*)&from, &fl);
+      if (n <= 0) continue;
+      char ip[64];
+      inet_ntop(AF_INET, &from.sin_addr, ip, sizeof ip);
+      out.push_back({std::string(buf, (size_t)n), ip, (int)ntohs(from.sin_port)});
+    }
+  }
+  close_sock(s);
+  return out;
+}
+
+bool udp_send(const std::string& host, int port, const std::string& data) {
+  wsa();
+  sockaddr_in a;
+  if (!v4addr(host, port, a)) return false;
+  sock_t s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  if (s == BAD) return false;
+  bool ok = sendto(s, data.data(), (int)data.size(), 0, (sockaddr*)&a, sizeof a) == (int)data.size();
+  close_sock(s);
+  return ok;
 }
 
 std::optional<std::string> tcp_exchange(const std::string& host, int port, const std::string& data, double timeout,

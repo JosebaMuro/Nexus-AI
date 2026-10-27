@@ -158,14 +158,18 @@ class LlamaServerBackend : public OpenAICompatBackend {
   json effective();
   std::string variant;
   int port = 0;
+  // Android: la NPU o la GPU no arrancan con el driver del movil; el gestor cambia gpu_layers/device del perfil
+  std::function<void(const json&)> set_llm_opts;
 
  private:
+  void ensure_once(const std::string& model, const json& opts);
+  json gpu_failed(const std::string& reason, const std::string& device);
   runtimes::RuntimeManager* rt_;
   Resolver resolve_;
   std::function<json()> profile_;
   std::function<std::string()> variant_getter_;
   std::unique_ptr<proc::Process> proc_;
-  std::string key_;
+  std::string key_, device_;
   json effective_ = json::object();
   std::recursive_mutex mu_;
 };
@@ -194,6 +198,41 @@ class UnavailableBackend : public Backend {
   std::string n_;
 };
 
+// IA online para el agente Profesor (llm/cloud.py): Gemini, ChatGPT, Perplexity, Claude, Mistral... Solo con la
+// clave que pone un administrador y solo si un agente la pide ("nube:", "nube:<proveedor>[:<modelo>]").
+struct CloudProvider {
+  std::string id, nombre, estilo, base_url, modelo, clave_en;
+};
+const std::vector<CloudProvider>& cloud_providers();
+extern const std::vector<std::string> CLOUD_EFFORTS;
+
+class CloudError : public std::runtime_error {
+ public:
+  using std::runtime_error::runtime_error;
+};
+
+class CloudBackend : public Backend {
+ public:
+  explicit CloudBackend(Config& config, double timeout = 180) : config_(config), timeout_(timeout) {}
+  std::string name() const override { return "nube"; }
+  bool available() override { return ready(); }
+  std::vector<std::string> models() override;
+  void stream_chat(const json& messages, const std::string& model, const Opts& opts, const Sink& out) override;
+  std::pair<std::string, std::string> resolve(const std::string& spec = "") const;
+  bool ready(const std::string& spec = "") const;
+  std::string key(const std::string& prov) const;
+  std::string base_url(const std::string& prov) const;
+  json status() const;
+  json test(const std::string& spec = "");
+  static std::map<std::string, std::string>& base_override();   // pruebas: URL de un servidor falso
+
+ private:
+  Config& config_;
+  double timeout_;
+  void openai(const std::string& prov, const json& messages, const std::string& model, const Opts& opts, Pipe& pipe);
+  void anthropic(const json& messages, const std::string& model, const Opts& opts, Pipe& pipe);
+};
+
 // intenciones inequivocas que se resuelven con una herramienta sin esperar al LLM
 std::optional<std::pair<std::string, json>> detect_intent(const std::string& text, const std::set<std::string>& tools);
 
@@ -209,6 +248,9 @@ class LLMManager {
   std::pair<std::string, std::string> select(const std::string& spec = "default");
   json status();
   json options(const json& agent_opts = json::object());
+  // perfil de llama.cpp (hilos, contexto, GPU) con el cerrojo del gestor: lo cambia el autoajuste en vivo
+  json llm_profile();
+  void update_llm_profile(const json& changes);
   bool reasoning_model(const std::string& backend, const std::string& model);
   bool thinking_only(const std::string& backend, const std::string& model);
   void stream(json messages, const std::string& spec, Opts opts, const Sink& out);

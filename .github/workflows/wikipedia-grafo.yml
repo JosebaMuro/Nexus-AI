@@ -1,0 +1,54 @@
+name: Grafo multicapa de la Wikipedia en español
+
+# Genera el grafo de ejemplo (nexus-office-cpp/tools/wikipedia_grafo.py) con las API públicas de es.wikipedia.org y
+# wikidata.org, que necesitan internet, y lo deja en la rama «datos-grafo-wikipedia» (y como artefacto) para que se
+# incluya en la Release, en la web de descargas y en los paquetes como ejemplo para importar.
+on:
+  push:
+    paths:
+      - "nexus-office-cpp/tools/wikipedia_grafo.py"
+      - ".github/workflows/wikipedia-grafo.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wikipedia-grafo
+  cancel-in-progress: true
+
+jobs:
+  grafo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Generar el grafo
+        run: python3 nexus-office-cpp/tools/wikipedia_grafo.py --salida grafo-wikipedia-es --articulos 1500
+      - name: Comprobar que se importa
+        run: |
+          python3 - <<'EOF'
+          import json, xml.etree.ElementTree as ET
+          g = json.load(open("grafo-wikipedia-es/grafo.json", encoding="utf-8"))
+          ET.parse("grafo-wikipedia-es/grafo.graphml")
+          capas = {n["capa"] for n in g["nodes"]} | {e["capa"] for e in g["links"]}
+          print(len(g["nodes"]), "nodos,", len(g["links"]), "relaciones, capas:", sorted(capas))
+          assert len(g["nodes"]) > 500 and len(g["links"]) > 1000 and len(capas) == 4
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grafo-wikipedia-es
+          path: grafo-wikipedia-es
+      - name: Dejarlo en la rama datos-grafo-wikipedia
+        run: |
+          set -e
+          cd grafo-wikipedia-es
+          git init -q -b datos-grafo-wikipedia
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Grafo multicapa de la Wikipedia en español (${GITHUB_SHA::8})"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" datos-grafo-wikipedia

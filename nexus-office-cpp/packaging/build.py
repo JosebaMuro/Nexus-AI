@@ -1,4 +1,4 @@
-"""Instaladores de Nexus-Office 2.0 beta C (edicion C++). Todos son 100 % portables y se instalan sin internet: llevan
+"""Instaladores de Nexus-Office 2.1 (edicion C++). Todos son 100 % portables y se instalan sin internet: llevan
 el ejecutable nativo (nexus-office), la interfaz web y los motores de IA (llama-server y sd-cli en sus variantes,
 piper y whisper-cli); solo los modelos de IA se descargan, si hay red, elegidos segun el hardware.
 
@@ -10,12 +10,13 @@ Entradas (en .cache/, las deja .github/workflows/cpp-entrega.yml):
   .cache/cpp/<target>/Nexus-Office/            carpeta instalada por «cmake --install» en cada sistema (cpp.yml)
   .cache/desktop-runtimes/<target>/llama|sd/   llama-server y sd-cli de la Release de la edicion Python
   .cache/desktop-runtimes/<target>/piper|whisper/   voz: piper (rhasspy/piper) y whisper-cli (whisper.cpp)
-Salida en dist/ (los nombres llevan la version, 2.0.0-beta-cpp, y no chocan con los de la edicion Python):
+Salida en dist/ (los nombres llevan la version, 2.1.0-cpp, y no chocan con los de la edicion Python):
   windows/  Nexus-Office-Setup-<ver>-windows-x64.exe / -arm64.exe     instalador grafico (NSIS; makensis)
   linux/    Nexus-Office-<ver>-linux-<x86_64|aarch64>.run / .AppImage / .flatpak, nexus-office-c_<ver>_<amd64|arm64>.deb
   macos/    Nexus-Office-<ver>-macos-<arm64|x86_64>.tar.gz              abre «Nexus-Office.command»
   android/  las APK de --apk
   Nexus-Office-<ver>-codigo-fuente.zip, LEEME.txt, SHA256SUMS.txt
+  Nexus-Office-<ver>-grafo-wikipedia-es.zip y Nexus-Office-resumen.md (ejemplos/; tambien van dentro de cada paquete)
 """
 from __future__ import annotations
 
@@ -46,9 +47,9 @@ def _version() -> str:
     return m.group(1)
 
 
-VERSION = _version()                                   # 2.0.0-beta-cpp
+VERSION = _version()                                   # 2.1.0-cpp
 NUMVER = re.match(r"\d+\.\d+\.\d+", VERSION).group(0)  # 2.0.0 (NSIS y metadatos que solo admiten numeros)
-DEB_VERSION = VERSION.replace("-", "~", 1).replace("-", ".")   # 2.0.0~beta.cpp: dpkg la ordena antes que la 2.0.0
+DEB_VERSION = VERSION.replace("-", "~", 1).replace("-", ".")   # 2.1.0~cpp: dpkg la ordena antes que la 2.1.0
 TARGETS = {
     "windows-x64": {"os": "windows"},
     "windows-arm64": {"os": "windows"},
@@ -89,6 +90,21 @@ def stage(target: str) -> Path:
         shutil.copy2(f, dest / "docs" / f.name)
     for name in ("README.md", "CHANGELOG.md"):
         shutil.copy2(ROOT / name, dest / name)
+    # ejemplos para importar: el grafo multicapa de la Wikipedia en espanol y el resumen del proyecto para la biblioteca
+    shutil.copytree(ROOT / "ejemplos", dest / "ejemplos")
+    # firmware de las luces NexusLED, el reloj NexusWatch y el Pico W (binarios ya compilados) y esptool para grabarlos
+    fw = REPO / "firmware"
+    if (fw / "bin").is_dir():
+        (dest / "firmware").mkdir()
+        shutil.copytree(fw / "bin", dest / "firmware" / "bin")
+        shutil.copytree(fw / "nexuspico", dest / "firmware" / "nexuspico", ignore=shutil.ignore_patterns("__pycache__"))
+        for name in ("README.md", "flash.py"):
+            shutil.copy2(fw / name, dest / "firmware" / name)
+        esp = CACHE / "esptool" / target
+        if esp.is_dir() and any(esp.glob("esptool*")):
+            shutil.copytree(esp, dest / "firmware" / "tools")
+        log(f"{target}: firmware {', '.join(sorted(p.name for p in (fw / 'bin').iterdir()))}"
+            f"{' + esptool' if (dest / 'firmware' / 'tools').is_dir() else ''}")
     shutil.copy2(PY_EDITION / "LICENSE", dest / "LICENSE")
     for rt in RUNTIMES:
         r = CACHE / "desktop-runtimes" / target / rt
@@ -253,7 +269,7 @@ Depends: libc6 (>= 2.35)
 Recommends: libvulkan1, libgomp1, ca-certificates
 Installed-Size: {size_kb}
 Maintainer: Nexus-Office <nexus@localhost>
-Description: Oficina de IA local para pymes (edicion C++, beta)
+Description: Oficina de IA local para pymes (edicion C++)
  Un unico programa nativo con la misma interfaz que Nexus-Office: agentes por gremio, memoria,
  documentos y voz. Incluye los motores de IA: se instala sin internet. Detecta el hardware
  (CPU, GPU, NPU) y elige el modelo de IA adecuado. Puede funcionar como servicio.
@@ -424,7 +440,8 @@ SOURCE_PARTS = ["nexus-office-cpp", "nexus-office/nexus/web", "nexus-office/nexu
                 "nexus-office/nexus/office/agentes", "nexus-office/nexus/office/conocimiento",
                 "nexus-office/nexus/agents/defaults", "nexus-office/nexus/remote/pair.html", "nexus-office/LICENSE",
                 ".github/workflows/cpp.yml",
-                ".github/workflows/cpp-entrega.yml", ".github/workflows/cpp-publicar.yml"]
+                ".github/workflows/cpp-entrega.yml", ".github/workflows/cpp-publicar.yml",
+                ".github/workflows/wikipedia-grafo.yml", "firmware"]
 SOURCE_SKIP = re.compile(r"(^|/)(build[^/]*|dist[^/]*|\.cache|__pycache__|node_modules|\.git)/|\.pyc$")   # carpetas
 SECRET_FILES = re.compile(r"\.(jks|keystore|pass|pem|key|p12|log)$|(^|/)(config\.ya?ml|\.env)$", re.I)
 SECRET_OK = {"nexus-office-cpp/third_party/certs/cacert.pem"}    # certificados raiz publicos (Mozilla)
@@ -450,15 +467,15 @@ def source_zip() -> Path:
     return out
 
 
-README = """Nexus-Office {version} - edicion C++ (beta) - instaladores 100 % portables (se instalan sin internet)
+README = """Nexus-Office {version} - edicion C++ - instaladores 100 % portables (se instalan sin internet)
 =====================================================================================================
 
-La misma oficina de IA que Nexus-Office 2.0 (misma interfaz, mismos agentes, perfiles y datos), reescrita en C++: un
-unico programa nativo, sin Python, que arranca en menos de un segundo y ocupa mucho menos. Lleva dentro los motores de
+La misma oficina de IA que la edicion Python de Nexus-Office (misma interfaz, mismos agentes, perfiles y datos, y todas
+sus funciones), reescrita en C++: un unico programa nativo, sin Python, que arranca en menos de un segundo y ocupa mucho menos. Lleva dentro los motores de
 IA (llama-server y sd-cli: CPU, Vulkan y, segun la plataforma, CUDA o Metal; voz con piper y whisper). Al instalar
 evalua el hardware (memoria, grafica, procesador) y elige el modelo de IA adecuado; lo descarga si hay internet.
 Todos pueden dejar Nexus-Office como servicio que arranca solo con el equipo. Se instala junto a la edicion Python
-sin pisarla. Lo que aun no hace la edicion C++ esta en docs/CPP.md.
+sin pisarla. Detalles de la edicion en docs/CPP.md.
 
 windows/  Nexus-Office-Setup-{version}-windows-x64.exe    PC con Windows 10/11 de 64 bits (Intel/AMD; NVIDIA con CUDA)
           Nexus-Office-Setup-{version}-windows-arm64.exe  Windows 11 en ARM (Snapdragon X)
@@ -475,11 +492,22 @@ macos/    Nexus-Office-{version}-macos-arm64.tar.gz (Apple Silicon) / macos-x86_
 android/  Nexus-Office-{version}-android-autonomo.apk  Nexus-Office C++ completo dentro del movil (ARM64, Android 9+)
           Nexus-Office-{version}-android-vpn.apk       app ligera que conecta con el Nexus-Office de la oficina
 Nexus-Office-{version}-codigo-fuente.zip               codigo C++ limpio, pruebas, empaquetado y recursos compartidos
+Nexus-Office-{version}-grafo-wikipedia-es.zip          ejemplo para importar: grafo multicapa de la Wikipedia en espanol
+Nexus-Office-resumen.md                                resumen del proyecto para la biblioteca (RAG) de Nexus-Office
 Manual-de-usuario.pdf / Documentacion-tecnica.pdf
 
 Raspberry Pi: hace falta el sistema de 64 bits (Raspberry Pi OS 64-bit, Ubuntu); Pi 4 o Pi 5 con 4 GB o mas.
 Integridad: SHA256SUMS.txt
 """
+
+
+def examples() -> None:
+    """Los ejemplos tambien sueltos en la Release: el grafo de la Wikipedia (zip) y el resumen para la biblioteca."""
+    grafo = ROOT / "ejemplos" / "grafo-wikipedia-es"
+    with zipfile.ZipFile(DIST / f"Nexus-Office-{VERSION}-grafo-wikipedia-es.zip", "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        for f in sorted(grafo.iterdir()):
+            z.write(f, f"grafo-wikipedia-es/{f.name}")
+    shutil.copy2(ROOT / "ejemplos" / "resumen-proyecto" / "Nexus-Office-resumen.md", DIST / "Nexus-Office-resumen.md")
 
 
 def checksums() -> None:
@@ -530,6 +558,7 @@ def main() -> None:
     for extra in a.docs:
         shutil.copy2(extra, DIST / Path(extra).name)
     source_zip()
+    examples()
     (DIST / "LEEME.txt").write_text(README.format(version=VERSION), encoding="utf-8")
     checksums()
     log(f"Listo: {DIST}")

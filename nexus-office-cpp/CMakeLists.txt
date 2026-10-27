@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
-# Nexus-Office 2.0.0-beta-cpp: la oficina para pymes reescrita en C++ (misma interfaz web, mismos datos).
-project(NexusOfficeCpp VERSION 2.0.0 LANGUAGES C CXX)
+# Nexus-Office 2.1.0-cpp: la oficina para pymes reescrita en C++ (misma interfaz web, mismos datos).
+project(NexusOfficeCpp VERSION 2.1.0 LANGUAGES C CXX)
 
-set(NEXUS_VERSION "2.0.0-beta-cpp")
+set(NEXUS_VERSION "2.1.0-cpp")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -170,4 +170,12 @@ if(NEXUS_BUILD_TESTS)
   target_link_libraries(nexus-tests PRIVATE nexus_core)
   add_test(NAME nexus-tests COMMAND nexus-tests WORKING_DIRECTORY $<TARGET_FILE_DIR:nexus-office>)
   add_dependencies(nexus-tests nexus-office)
+  # emulador del firmware NexusLED (mismo nucleo que el ESP32) para probar las luces sin hardware
+  set(NEXUSLED_EMU_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../firmware/emulator/nexusled_emu.cpp)
+  if(NOT WIN32 AND EXISTS ${NEXUSLED_EMU_SRC})
+    add_executable(nexusled-emu ${NEXUSLED_EMU_SRC})
+    set_target_properties(nexusled-emu PROPERTIES CXX_STANDARD 17)
+    add_dependencies(nexus-tests nexusled-emu)
+    target_compile_definitions(nexus-tests PRIVATE NEXUSLED_EMU="$<TARGET_FILE:nexusled-emu>")
+  endif()
 endif()

@@ -1,6 +1,6 @@
 name: Nexus-Office C++ (compilar y probar)
 
-# Edicion C++ de Nexus-Office (nexus-office-cpp/, 2.0 beta C): compila y pasa las pruebas en cada sistema nativo,
+# Edicion C++ de Nexus-Office (nexus-office-cpp/, 2.1): compila y pasa las pruebas en cada sistema nativo,
 # compara la API y los flujos con la edicion Python y prueba la interfaz web en Chromium. Cada compilacion deja la
 # carpeta instalada (ejecutable + nexus/) como artefacto «cpp-<plataforma>», que usa cpp-entrega.yml.
 on:
@@ -45,6 +45,8 @@ jobs:
         run: cmake --build build --config Release --parallel 4
       - name: Pruebas
         shell: bash
+        env:
+          NEXUS_ONLINE_TESTS: "1"   # cotizaciones reales de la bolsa con la pila TLS de cada sistema
         run: ctest --test-dir build -C Release --output-on-failure --timeout 900
       - name: Instalar en una carpeta
         shell: bash

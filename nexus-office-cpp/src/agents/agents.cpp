@@ -5,6 +5,8 @@
 // ["*"]), memory, can_delegate_to, keywords, specialty, color, icon, enabled.
 #include "agents/agents.h"
 
+#include "agents/activity.h"
+
 #include <set>
 
 #include "core/services.h"
@@ -300,6 +302,13 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
     found = a.front();
   }
   const AgentSpec spec = *found;
+  if (!remote) {   // lo que hace cada agente: despachos, reloj y salon
+    tools::Emit base = emit;
+    emit = [base, aid = spec.id, text](const json& e) {
+      activity().on_event(aid, e, text);
+      base(e);
+    };
+  }
   emit({{"type", "agent"}, {"agent", spec.id}, {"name", spec.name}, {"color", spec.color}, {"icon", spec.icon}});
   bool use_memory = spec.memory && truthy(s.config.get("user.memory_enabled", true));
   if (save && use_memory && !remote) {

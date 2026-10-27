@@ -850,4 +850,57 @@ Image apply(Image img, const json& prims, std::optional<std::pair<double, double
   return img;
 }
 
+std::string load_font(const std::string& name) { return find_font(name); }
+
+double text_length(const std::string& font, const std::string& text, int size) {
+  stbtt_fontinfo fi;
+  int off = stbtt_GetFontOffsetForIndex((const unsigned char*)font.data(), 0);
+  if (off < 0 || !stbtt_InitFont(&fi, (const unsigned char*)font.data(), off)) return 0;
+  float scale = stbtt_ScaleForMappingEmToPixels(&fi, (float)size);
+  std::u32string t = u32(text);
+  double x = 0;
+  for (size_t i = 0; i < t.size(); ++i) {
+    int g = stbtt_FindGlyphIndex(&fi, (int)t[i]), adv, lsb;
+    stbtt_GetGlyphHMetrics(&fi, g, &adv, &lsb);
+    x += adv * scale;
+    if (i + 1 < t.size()) x += scale * stbtt_GetGlyphKernAdvance(&fi, g, stbtt_FindGlyphIndex(&fi, (int)t[i + 1]));
+  }
+  return x;
+}
+
+void text_gray(std::vector<uint8_t>& canvas, int w, int h, int x, int y, const std::string& font, const std::string& text,
+               int size, uint8_t ink) {
+  stbtt_fontinfo fi;
+  int off = stbtt_GetFontOffsetForIndex((const unsigned char*)font.data(), 0);
+  if (off < 0 || !stbtt_InitFont(&fi, (const unsigned char*)font.data(), off)) return;
+  float scale = stbtt_ScaleForMappingEmToPixels(&fi, (float)size);
+  int asc, desc, gap;
+  stbtt_GetFontVMetrics(&fi, &asc, &desc, &gap);
+  int baseline = y + (int)std::lround(asc * scale);
+  std::u32string t = u32(text);
+  float xpos = (float)x;
+  for (size_t i = 0; i < t.size(); ++i) {
+    int g = stbtt_FindGlyphIndex(&fi, (int)t[i]), adv, lsb;
+    float sub = xpos - std::floor(xpos);
+    int x0, y0, x1, y1;
+    stbtt_GetGlyphBitmapBoxSubpixel(&fi, g, scale, scale, sub, 0, &x0, &y0, &x1, &y1);
+    int bw = x1 - x0, bh = y1 - y0;
+    if (bw > 0 && bh > 0) {
+      std::vector<uint8_t> bm((size_t)bw * bh);
+      stbtt_MakeGlyphBitmapSubpixel(&fi, bm.data(), bw, bh, bw, scale, scale, sub, 0, g);
+      for (int yy = 0; yy < bh; ++yy)
+        for (int xx = 0; xx < bw; ++xx) {
+          int X = (int)std::floor(xpos) + x0 + xx, Y = baseline + y0 + yy;
+          if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
+          double a = bm[(size_t)yy * bw + xx] / 255.0;
+          auto& d = canvas[(size_t)Y * w + X];
+          d = (uint8_t)std::lround(d * (1 - a) + ink * a);
+        }
+    }
+    stbtt_GetGlyphHMetrics(&fi, g, &adv, &lsb);
+    xpos += adv * scale;
+    if (i + 1 < t.size()) xpos += scale * stbtt_GetGlyphKernAdvance(&fi, g, stbtt_FindGlyphIndex(&fi, (int)t[i + 1]));
+  }
+}
+
 }  // namespace nx::raster

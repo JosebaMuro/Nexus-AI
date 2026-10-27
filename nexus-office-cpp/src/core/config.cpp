@@ -50,6 +50,13 @@ const json& config_defaults() {
   "vpn": {"enabled": false, "port": 51820, "subnet": "10.78.0.0/24", "endpoints": []},
   "performance": {"workers": 0, "crawl_connections": 0},
   "rag": {"crawl_batch_pages": 0, "allow_private_urls": false},
+  "bolsa": {"datos": "reales", "refresco_s": 20,
+            "agente": {"activo": true, "intervalo_s": 60, "capital": 10000.0, "riesgo_pct": 1.0, "max_posiciones": 8,
+                       "max_peso_pct": 20.0, "reserva_pct": 10.0, "universo": []}},
+  "avatares": {"sketchfab_token": ""},
+  "nube": {"proveedor": "", "modelo": "", "base_url": "", "esfuerzo": "medium",
+           "clave_gemini": "", "clave_openai": "", "clave_perplexity": "", "clave_claude": "", "clave_mistral": "",
+           "clave_deepseek": "", "clave_groq": "", "clave_openrouter": "", "clave_compatible": ""},
   "admin": {"pin_hash": "", "pin_salt": ""}
 })JSON");
   return D;
@@ -60,6 +67,7 @@ const std::set<std::string>& user_keys() {
     std::set<std::string> s;
     for (auto it = config_defaults()["user"].begin(); it != config_defaults()["user"].end(); ++it)
       s.insert("user." + it.key());
+    s.insert("avatares.sketchfab_token");   // clave de API de Sketchfab (para descargar; buscar no la necesita)
     return s;
   }();
   return K;
@@ -68,7 +76,11 @@ const std::set<std::string>& user_keys() {
 const std::set<std::string>& secret_keys() {
   static const std::set<std::string> K = {"admin.pin_hash",        "admin.pin_salt",       "llm.openai_api_key",
                                           "models.huggingface_token", "models.civitai_token", "models.kaggle_key",
-                                          "models.modelscope_token", "coop.passphrase",      "server.lan_key"};
+                                          "models.modelscope_token", "coop.passphrase",      "server.lan_key",
+                                          "avatares.sketchfab_token",
+                                          "nube.clave_gemini", "nube.clave_openai", "nube.clave_perplexity",
+                                          "nube.clave_claude", "nube.clave_mistral", "nube.clave_deepseek",
+                                          "nube.clave_groq", "nube.clave_openrouter", "nube.clave_compatible"};
   return K;
 }
 
@@ -165,6 +177,7 @@ json Config::update(const json& changes, bool admin) {
     const std::string& key = it.key();
     if (starts_with(key, "admin.")) continue;
     if (!admin && !user_keys().count(key)) throw PermissionError("'" + key + "' requiere modo administrador");
+    if (secret_keys().count(key) && it.value() == "********") continue;   // la vista enmascarada: se conserva
     set(key, it.value(), false);
     applied[key] = it.value();
   }

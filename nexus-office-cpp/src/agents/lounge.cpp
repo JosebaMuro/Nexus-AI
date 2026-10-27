@@ -8,6 +8,7 @@
 #include <thread>
 
 #include "agents/agents.h"
+#include "agents/activity.h"
 #include "core/services.h"
 #include "llm/llm.h"
 #include "tools/tools.h"
@@ -346,6 +347,12 @@ json Lounge::meet(bool quick, const std::string& topic) {
     std::atomic<bool>& f;
     ~Release() { f = false; }
   } release{meeting_};
+  struct Idle {   // al acabar (o si algo falla) todos vuelven a su despacho
+    Services& s;
+    ~Idle() {
+      for (auto& a : s.agents->list()) activity().set(a.id, "idle");
+    }
+  } idle{s_};
   tasks_since_meeting = 0;
   auto agents = s_.agents->list();
   json sk = skills();
@@ -353,6 +360,7 @@ json Lounge::meet(bool quick, const std::string& topic) {
        "Abro la reunion del salon" + (topic.empty() ? "" : ": " + topic) + ". Somos " + std::to_string(agents.size()) +
            " agentes.",
        "system", {{"event", "meeting_start"}});
+  for (auto& a : agents) activity().set(a.id, "meeting", "Reunión del salón" + (topic.empty() ? "" : ": " + topic));
   auto strong_of = [&](const std::string& id, size_t n) {
     std::vector<std::string> out;
     if (sk.contains(id))

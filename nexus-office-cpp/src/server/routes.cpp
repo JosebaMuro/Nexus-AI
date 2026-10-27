@@ -10,16 +10,22 @@
 #include "coop/coop.h"
 #include "remote/remote.h"
 #include "core/service.h"
+#include "core/android_tune.h"
 #include "core/services.h"
 #include "core/system.h"
 #include "gen/data.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
+#include "media/avatares.h"
 #include "media/media.h"
 #include "memory/memory.h"
 #include "models/models.h"
 #include "models/runtimes.h"
 #include "office/bolsa.h"
+#include "office/bolsa_agente.h"
+#include "devices/devices.h"
+#include "devices/firmware.h"
+#include "agents/activity.h"
 #include "memory/kg.h"
 #include "memory/kg_jobs.h"
 #include "rag/web.h"
@@ -40,9 +46,6 @@ namespace {
 
 auto L = log::get("server");
 
-[[noreturn]] void not_in_cpp(const std::string& what) {
-  throw HttpErr(501, what + " todavia no esta disponible en la edicion C++ (2.0 beta C). Usa la edicion Python para esto.");
-}
 
 // str(KeyError("x")) de Python
 std::string key_msg(const std::exception& e) { return "'" + std::string(e.what()) + "'"; }
@@ -361,6 +364,44 @@ void register_routes(App& app) {
     return json{{"applied", applied}};
   });
 
+  // ------------------------------------------------------------------ IA online (agente Profesor)
+  auto cloud = [](Ctx& c) { return std::static_pointer_cast<llm::CloudBackend>(c.app.S().llm->backend("nube")); };
+  app.get("/api/nube", [cloud](Ctx& c) -> Out { return cloud(c)->status(); });
+
+  app.put("/api/nube", [cloud](Ctx& c) -> Out {
+    Config& cfg = c.app.S().config;
+    if (!c.body.is_object()) throw HttpErr(422, "Se esperaba un objeto JSON");
+    auto known = [](const std::string& id) {
+      for (auto& p : llm::cloud_providers())
+        if (p.id == id) return true;
+      return false;
+    };
+    std::string prov = c.body.contains("proveedor") ? jstr(c.body, "proveedor") : cfg.str("nube.proveedor");
+    if (!prov.empty() && !known(prov)) {
+      std::vector<std::string> ids;
+      for (auto& p : llm::cloud_providers()) ids.push_back(p.id);
+      throw HttpErr(400, "proveedor desconocido: " + prov + ". Validos: " + join(ids, ", "));
+    }
+    if (c.body.contains("esfuerzo") &&
+        std::find(llm::CLOUD_EFFORTS.begin(), llm::CLOUD_EFFORTS.end(), jstr(c.body, "esfuerzo")) ==
+            llm::CLOUD_EFFORTS.end())
+      throw HttpErr(400, "esfuerzo no valido. Validos: " + join(llm::CLOUD_EFFORTS, ", "));
+    cfg.set("nube.proveedor", prov, false);
+    for (const char* k : {"modelo", "base_url", "esfuerzo"})
+      if (c.body.contains(k)) cfg.set(std::string("nube.") + k, trim(jstr(c.body, k)), false);
+    std::string clave = trim(jstr(c.body, "clave"));
+    if (!prov.empty() && !clave.empty() && clave != "********") cfg.set("nube.clave_" + prov, clave, false);
+    if (c.body.contains("borrar_claves") && c.body["borrar_claves"].is_array())
+      for (auto& p : c.body["borrar_claves"])
+        if (p.is_string() && known(p.get<std::string>())) cfg.set("nube.clave_" + p.get<std::string>(), "", false);
+    cfg.save();
+    return cloud(c)->status();
+  }, true);
+
+  app.post("/api/nube/probar", [cloud](Ctx& c) -> Out {
+    return cloud(c)->test(c.body.is_object() ? jstr(c.body, "proveedor") : "");
+  }, true);
+
   // ------------------------------------------------------------------ hardware / rendimiento
   app.get("/api/hardware", [](Ctx& c) -> Out {
     Services& s = c.app.S();
@@ -374,13 +415,28 @@ void register_routes(App& app) {
 
   app.get("/api/monitor", [](Ctx& c) -> Out { return c.app.S().monitor->live(); });
 
-  for (auto* p : {"/api/android/autoajuste"}) {
-    app.get(p, [](Ctx&) -> Out { throw HttpErr(404, "El autoajuste en vivo solo funciona en la app Android autonoma"); });
-  }
-  app.post("/api/android/autoajuste/medir",
-           [](Ctx&) -> Out { throw HttpErr(404, "El autoajuste en vivo solo funciona en la app Android autonoma"); });
-  app.post("/api/android/autoajuste/modelo/{mid}",
-           [](Ctx&) -> Out { throw HttpErr(404, "El autoajuste en vivo solo funciona en la app Android autonoma"); });
+  // app Android autonoma: nucleos, hilos medidos, limites por temperatura o bateria y consejo de modelo
+  auto tuner = [](Ctx& c) -> android_tune::LiveTuner& {
+    auto& t = c.app.S().android_tuner;
+    if (!t) throw HttpErr(404, "El autoajuste en vivo solo funciona en la app Android autonoma");
+    return *t;
+  };
+  app.get("/api/android/autoajuste", [tuner](Ctx& c) -> Out { return tuner(c).report(); });
+  // vuelve a medir los hilos desde cero (p. ej. tras cambiar de funda o de ajustes de rendimiento)
+  app.post("/api/android/autoajuste/medir", [tuner](Ctx& c) -> Out {
+    auto& t = tuner(c);
+    t.reset_trials();
+    return t.step();
+  });
+  // acepta el consejo de modelo: lo activa, o lo descarga y lo activa al terminar
+  app.post("/api/android/autoajuste/modelo/{mid}", [tuner](Ctx& c) -> Out {
+    auto& t = tuner(c);
+    try {
+      return t.switch_model(c.p("mid"));
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
+  });
 
   app.post("/api/hardware/redetect", [](Ctx& c) -> Out {
     Services& s = c.app.S();
@@ -1206,6 +1262,43 @@ void register_routes(App& app) {
     return json{{"url", "/outputs/avatars/" + fname}, {"size", f->content.size()}};
   });
 
+  // avatares 3D gratuitos de Internet (Open Source Avatars, modelos de referencia, Sketchfab)
+  auto avs = [](Ctx& c) -> avatares::Avatares& {
+    Services* s = &c.app.S();
+    return avatares::get([s] { return s->config.str("avatares.sketchfab_token"); });
+  };
+  app.get("/api/avatares", [avs](Ctx& c) -> Out {
+    return json{{"biblioteca", avs(c).biblioteca()}, {"fuentes", avatares::FUENTES},
+                {"sketchfab_clave", !c.app.S().config.str("avatares.sketchfab_token").empty()}};
+  });
+  app.get("/api/avatares/buscar", [avs](Ctx& c) -> Out {
+    std::string fuente = c.q("fuente", "osa");
+    try {
+      return avs(c).buscar(fuente, c.q("q"), c.qi("pagina", 1), c.qi("por_pagina", 24));
+    } catch (const http::HttpError& e) {
+      throw HttpErr(502, "No se pudo consultar " + fuente + ": " + e.what());
+    }
+  });
+  app.post("/api/avatares/descargar", [avs](Ctx& c) -> Out { return avs(c).descargar(c.bs("id", "")); });
+  app.get("/api/avatares/trabajo/{tid}", [avs](Ctx& c) -> Out {
+    json j = avs(c).trabajo(c.p("tid"));
+    if (j.is_null()) throw HttpErr(404, "trabajo desconocido");
+    return j;
+  });
+  app.post("/api/avatares/{aid}/usar", [avs](Ctx& c) -> Out {
+    for (auto& it : avs(c).biblioteca())
+      if (jstr(it, "id") == c.p("aid")) {
+        c.app.S().config.set("user.avatar_model", it["url"]);
+        c.app.S().config.set("user.avatar_style", "glb");
+        return json{{"ok", true}, {"url", it["url"]}};
+      }
+    throw HttpErr(404, "avatar no descargado");
+  });
+  app.del("/api/avatares/{aid}", [avs](Ctx& c) -> Out {
+    if (!avs(c).borrar(c.p("aid"))) throw HttpErr(404, "avatar no descargado");
+    return json{{"ok", true}};
+  });
+
   app.get("/api/voice", [](Ctx& c) -> Out { return c.app.S().voice->info(); });
 
   app.post("/api/voice/tts", [](Ctx& c) -> Out {
@@ -1352,6 +1445,220 @@ void register_routes(App& app) {
       long long cid = c.qi("cartera", 0), anio = c.qi("anio", 0);
       return b.informe_fiscal(cid ? json(cid) : json(nullptr), anio ? json(anio) : json(nullptr));
     });
+  });
+  app.get("/api/bolsa/serie/{simbolo}", [B](Ctx& c) -> Out {   // serie real (o simulada sin conexion) para graficos
+    return B([&](bolsa::Bolsa& b) { return b.serie(c.p("simbolo"), c.q("rango", "1d")); });
+  });
+  // seguimiento en vivo de una orden: precio actual, serie y niveles (limite, stop, ejecucion, objetivo)
+  app.get("/api/bolsa/orden/{oid}/grafico", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      long long oid = c.pi("oid");
+      json o = b.orden(oid);
+      if (jstr(o, "estado") == "pendiente") b.procesar(oid);
+      o = b.orden(oid);
+      json q = b.precio(jstr(o, "simbolo"));
+      json niveles = json::array();
+      if (truthy(o.value("limite", json()))) niveles.push_back({{"tipo", "limite"}, {"precio", o["limite"]}, {"texto", "Límite"}});
+      if (truthy(o.value("stop", json())))
+        niveles.push_back({{"tipo", "stop"}, {"precio", o["stop"]},
+                           {"texto", std::string("Stop") + (truthy(o.value("activada", json())) ? " (activado)" : "")}});
+      if (truthy(o.value("precio_ejec", json())))
+        niveles.push_back({{"tipo", "ejecucion"}, {"precio", o["precio_ejec"]}, {"texto", "Ejecutada"}, {"ts", o["ejecutada"]}});
+      if (b.db().one("SELECT name FROM sqlite_master WHERE name='agente_posiciones'"))
+        if (auto g = b.db().one("SELECT entrada, objetivo FROM agente_posiciones WHERE simbolo=? AND (orden_stop=? OR "
+                                "orden_entrada=?)",
+                                {o["simbolo"], oid, oid})) {
+          niveles.push_back({{"tipo", "entrada"}, {"precio", (*g)["entrada"]}, {"texto", "Entrada del agente"}});
+          niveles.push_back({{"tipo", "objetivo"}, {"precio", (*g)["objetivo"]}, {"texto", "Objetivo del agente"}});
+        }
+      json s = b.serie(jstr(o, "simbolo"), c.q("rango", "1d"));
+      return json{{"orden", o}, {"cotizacion", q}, {"niveles", niveles}, {"puntos", s["puntos"]}, {"real", s["real"]},
+                  {"agente", jstr(o, "origen") == bolsa::ORIGEN_AGENTE}};
+    });
+  });
+  app.get("/api/bolsa/agente", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa&) { return bolsa::agente().estado(); });
+  });
+  // ajustes del agente autonomo (activo, intervalo_s, riesgo_pct, max_posiciones, max_peso_pct, reserva_pct,
+  // universo, capital). Siempre opera en simulacion.
+  app.post("/api/bolsa/agente", [B](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    static const std::vector<std::pair<std::string, char>> allowed = {
+        {"activo", 'b'}, {"intervalo_s", 'f'}, {"riesgo_pct", 'f'}, {"max_posiciones", 'i'}, {"max_peso_pct", 'f'},
+        {"reserva_pct", 'f'}, {"universo", 'l'}, {"capital", 'f'}};
+    for (auto& [k, typ] : allowed) {
+      if (!c.has_b(k)) continue;
+      json v = c.body[k];
+      json out;
+      try {
+        if (typ == 'b') out = truthy(v);
+        else if (typ == 'f') out = v.is_string() ? std::stod(v.get<std::string>()) : v.get<double>();
+        else if (typ == 'i') out = (long long)(v.is_string() ? std::stod(v.get<std::string>()) : v.get<double>());
+        else {
+          if (!v.is_array()) throw std::invalid_argument("lista");
+          out = json::array();
+          for (auto& x : v) {
+            std::string t = trim(x.is_string() ? x.get<std::string>() : jdump(x));
+            if (!t.empty()) out.push_back(upper(t));
+          }
+        }
+      } catch (const std::exception&) {
+        throw HttpErr(400, k + ": valor no valido");
+      }
+      s.config.set("bolsa.agente." + k, out);
+    }
+    auto& ag = bolsa::agente();
+    if (c.has_b("activo") && c.body["activo"] == true) {
+      if (ag.listeners.empty()) ag.listeners.push_back([&app = c.app](const json& e) { app.broadcast(e); });
+      ag.start();
+    }
+    if (c.has_b("activo") && c.body["activo"] == false) ag.stop();
+    if (truthy(c.b("ciclo", false))) B([&](bolsa::Bolsa&) { return ag.ciclo(); });
+    return ag.estado();
+  });
+
+  // ------------------------------------------------------------------ dispositivos: luces, reloj y avatar Pico W
+  auto H = [](Ctx& c) -> devices::Hub& { return devices::hub(c.app.ready() ? &c.app.S() : nullptr); };
+  auto D = [](auto fn) -> Out {
+    try {
+      return fn();
+    } catch (const std::out_of_range& e) {
+      throw HttpErr(404, e.what());
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
+  };
+  auto first = [](const json& a, const json& b) { return truthy(a) ? a : b; };
+  app.get("/api/dispositivos", [H](Ctx& c) -> Out {
+    auto& h = H(c);
+    return json{{"estado", h.snapshot()}, {"leds", h.leds.list()}, {"modos", h.modos()}, {"modo", h.modo_actual()},
+                {"clientes", h.clientes_recientes()}};
+  });
+  app.get("/api/dispositivos/estado", [H](Ctx& c) -> Out {   // estado ligero para el reloj y el Pico W (cada 1-2 s)
+    auto& h = H(c);
+    std::string tipo = c.q("tipo");
+    h.visto(c.q("cliente"), tipo.empty() ? "web" : tipo, {{"ip", c.host}});
+    return h.snapshot();
+  });
+  app.post("/api/dispositivos/estado", [H, first](Ctx& c) -> Out {
+    json st = first(c.b("estado", nullptr), first(c.b("state", nullptr), "idle"));
+    return H(c).set_state(Ctx::as_str(st), c.b("nivel", nullptr), c.b("texto", nullptr),
+                          truthy(c.b("origen", nullptr)) ? c.bs("origen") : "");
+  });
+  app.get("/api/dispositivos/reloj", [H](Ctx& c) -> Out {
+    auto& h = H(c);
+    std::string cl = c.q("cliente");
+    h.visto(cl.empty() ? c.host : cl, "reloj", {{"ip", c.host}});
+    return h.resumen_reloj();
+  });
+  app.post("/api/dispositivos/modo", [H, D](Ctx& c) -> Out {
+    return D([&] { return H(c).aplicar_modo(c.bs("modo", ""), truthy(c.b("origen", nullptr)) ? c.bs("origen") : ""); });
+  });
+  app.get("/api/dispositivos/pico/manifiesto", [H](Ctx& c) -> Out { return H(c).pico_manifiesto(); });
+  app.get("/api/dispositivos/pico/{estado}.bin", [H](Ctx& c) -> Out {
+    return Raw{200, H(c).pico_buffer(c.p("estado")), "application/octet-stream"};
+  });
+  app.get("/api/dispositivos/pico/{estado}.png", [H](Ctx& c) -> Out {
+    return Raw{200, H(c).pico_png(c.p("estado")), "image/png"};
+  });
+  app.get("/api/dispositivos/leds/buscar", [H](Ctx& c) -> Out {
+    std::vector<std::string> hosts;
+    for (auto& x : split(c.q("ip"), ","))
+      if (!trim(x).empty()) hosts.push_back(trim(x));
+    return json{{"encontrados", H(c).leds.discover(1.5, hosts)}};
+  });
+  app.post("/api/dispositivos/leds", [H](Ctx& c) -> Out {
+    std::string host = trim(c.bs("host", ""));
+    if (host.empty()) throw HttpErr(400, "falta la IP del dispositivo");
+    json port = c.b("port", nullptr);
+    return H(c).leds.add(c.bs("host"), truthy(port) ? (int)jnum(port.is_string() ? json(std::stod(port.get<std::string>())) : port) : 80,
+                         truthy(c.b("name", nullptr)) ? c.bs("name") : "", truthy(c.b("token", nullptr)) ? c.bs("token") : "",
+                         truthy(c.b("id", nullptr)) ? c.bs("id") : "");
+  });
+  app.put("/api/dispositivos/leds/{did}", [H, D](Ctx& c) -> Out {
+    json kw = json::object();
+    for (auto k : {"name", "enabled", "follow_state", "token"}) kw[k] = c.b(k, nullptr);
+    return D([&] { return H(c).leds.update(c.p("did"), kw); });
+  });
+  app.del("/api/dispositivos/leds/{did}", [H](Ctx& c) -> Out {
+    H(c).leds.remove(c.p("did"));
+    return json{{"ok", true}};
+  });
+  // pasarela a la API del NexusLED (efectos, paletas, presets, brillo...) para la app y el movil
+  for (std::string method : {"GET", "POST", "DELETE"})
+    app.route(method, "/api/dispositivos/leds/{did}/api/{ruta:path}", [H, method](Ctx& c) -> Out {
+      json body = method == "GET" || !c.body.is_object() ? json(nullptr) : c.body;
+      try {
+        return H(c).leds.call(c.p("did"), method, "/api/" + c.p("ruta"), body);
+      } catch (const std::out_of_range& e) {
+        throw HttpErr(404, e.what());
+      } catch (const std::invalid_argument& e) {
+        throw HttpErr(400, e.what());
+      } catch (const std::exception& e) {
+        throw HttpErr(502, std::string("el dispositivo no responde: ") + e.what());
+      }
+    });
+  app.get("/api/agentes/actividad", [](Ctx&) -> Out { return agents::activity().all(); });
+
+  // ------------------------------------------------------------------ grabar firmware (solo desde el propio equipo)
+  auto solo_local = [](Ctx& c) {
+    if (!c.local()) throw HttpErr(403, "Solo desde el propio equipo");
+  };
+  auto nexus_para_dispositivos = [](Ctx& c) {
+    std::string port = Ctx::as_str(c.app.S().config.get("server.port", 8775));
+    std::vector<json> addrs;
+    for (auto& a : coop::overlay_addresses()) addrs.push_back(a);
+    std::stable_sort(addrs.begin(), addrs.end(),
+                     [](const json& a, const json& b) { return (jstr(a, "kind") != "lan") < (jstr(b, "kind") != "lan"); });
+    std::string host;
+    for (auto& a : addrs) {
+      std::string ip = jstr(a, "ip");
+      if (starts_with(ip, "169.254.") || starts_with(ip, "127.")) continue;
+      host = ip + ":" + port;
+      break;
+    }
+    std::string sh = c.app.S().config.str("server.host", "127.0.0.1");
+    return json{{"host", host}, {"key", c.app.lan_key()}, {"escucha_red", sh != "127.0.0.1" && sh != "localhost"}};
+  };
+  app.get("/api/firmware", [solo_local, nexus_para_dispositivos](Ctx& c) -> Out {
+    solo_local(c);
+    namespace fw = devices::firmware;
+    json info = fw::disponible();
+    if (fw::carpeta().empty()) {
+      info["binarios"] = json::array();
+      info["puertos"] = json::array();
+      info["error"] = "no encuentro la carpeta firmware/ (con flash.py)";
+    } else {
+      info["binarios"] = fw::binarios();
+      info["puertos"] = fw::puertos();
+      info["modelos_luces"] = fw::MODELOS_LUCES;
+    }
+    info["nexus"] = nexus_para_dispositivos(c);
+    return info;
+  });
+  app.post("/api/firmware/grabar", [solo_local, nexus_para_dispositivos](Ctx& c) -> Out {
+    solo_local(c);
+    json cfg = c.b("config", nullptr);
+    if (!cfg.is_object()) cfg = json::object();
+    std::string tipo = c.bs("tipo", "");
+    if (c.bb("conectar_nexus", true) && !cfg.contains("nexus") && (tipo == "reloj" || tipo == "pico")) {
+      json n = nexus_para_dispositivos(c);
+      if (truthy(n["host"])) cfg["nexus"] = {{"host", n["host"]}, {"key", n["key"]}};
+    }
+    if (tipo == "luces") cfg.erase("nexus");
+    try {
+      return devices::firmware::trabajos().lanzar(tipo, truthy(c.b("puerto", nullptr)) ? c.bs("puerto") : "",
+                                                  truthy(c.b("modelo", nullptr)) ? c.bs("modelo") : "",
+                                                  cfg.empty() ? json(nullptr) : cfg, c.bb("solo_config", false));
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
+  });
+  app.get("/api/firmware/trabajo/{tid}", [solo_local](Ctx& c) -> Out {
+    solo_local(c);
+    json j = devices::firmware::trabajos().get(c.p("tid"));
+    if (j.is_null()) throw HttpErr(404, "trabajo desconocido");
+    return j;
   });
 
   // ------------------------------------------------------------------ herramientas

@@ -5,6 +5,7 @@
 #include <map>
 #include <set>
 
+#include "hardware/android_accel.h"
 #include "hardware/hardware.h"
 #include "util/http.h"
 #include "util/log.h"
@@ -418,6 +419,49 @@ static json probe_runtimes(const std::string& ollama_url) {
   return rt;
 }
 
+// App Android autonoma: SoC, GPU (la que llama.cpp puede usar por Vulkan/OpenCL) y NPU (Hexagon en llama.cpp en los
+// Snapdragon recientes). Ver android_accel.
+static void detect_android(HardwareInfo& info) {
+  json acc = android_accel::detect();
+  json s = acc["soc"], g = acc["gpu"], n = acc["npu"];
+  if (!jstr(s, "name").empty()) info.cpu_name = jstr(s, "name");
+  info.gpus.clear();   // en Android /sys/class/drm no es accesible: la GPU la da la sonda
+  json use = g.value("use", json());
+  if (!use.is_object()) use = json::object();
+  bool on_npu = jstr(use, "backend") == "hexagon";
+  if (!jstr(g, "name").empty()) {
+    json dev = use;
+    if (on_npu) {
+      dev = json::object();
+      for (auto& d : g.value("devices", json::array()))
+        if (jstr(d, "name") == jstr(g, "name")) {
+          dev = d;
+          break;
+        }
+    }
+    GPU gpu;
+    gpu.vendor = jstr(g, "vendor");
+    gpu.name = jstr(g, "name");
+    gpu.vram_gb = round_to(jnum(dev.value("mem_mb", json(0))) / 1024, 2);
+    gpu.integrated = true;
+    gpu.driver = jstr(g, "gl_vendor");
+    gpu.source = !dev.empty() ? "android-" + jstr(dev, "backend") : "android-egl";
+    info.gpus.push_back(gpu);
+  }
+  if (n.is_object()) {
+    NPU x;
+    x.vendor = jstr(n, "vendor");
+    x.name = jstr(n, "name");
+    x.runtime_hint = jstr(n, "runtime_hint");
+    x.source = truthy(n.value("usable", json(false))) ? "android-hexagon" : jstr(n, "source");
+    info.npus.push_back(x);
+  }
+  info.runtimes["android_accel"] = {{"gpu_backend", jstr(use, "backend")}, {"gpu_device", jstr(use, "dev")},
+                                    {"gpu_devices", g.value("devices", json::array())}, {"gpu_broken", jstr(g, "broken")},
+                                    {"gpu_note", jstr(g, "note")}, {"gpu_binary", g.value("binary", false)},
+                                    {"vulkan", jstr(g, "vulkan")}, {"soc", s}};
+}
+
 HardwareInfo detect(const std::string& ollama_url, bool probe) {
   HardwareInfo info;
   info.os = sys::os_name();
@@ -448,6 +492,7 @@ HardwareInfo detect(const std::string& ollama_url, bool probe) {
   safe("windows", detect_windows);
 #endif
   if (sys::is_linux() && !sys::is_android()) safe("linux", detect_linux);
+  if (sys::is_android()) safe("android", detect_android);
   if (sys::is_macos()) safe("macos", detect_macos);
   if (!sys::is_android()) safe("nvidia", detect_nvidia);
   if (probe) {

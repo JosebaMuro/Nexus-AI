@@ -1,5 +1,5 @@
 #!/bin/sh
-# Nexus-Office 2.0 beta C (edicion C++) - preparacion en Linux y macOS. No instala nada mas: el programa es un unico
+# Nexus-Office 2.1 (edicion C++) - preparacion en Linux y macOS. No instala nada mas: el programa es un unico
 # ejecutable (nexus-office) con la interfaz web y los motores de IA al lado. Funciona sin internet.
 # Uso: ./install.sh [--oficina=<perfil>] [--servicio [--red]] [--modelos=auto|todos|no]
 #   --oficina=ID    configura la oficina de una pyme (herreria, reformas...; lista: ./nexus-office oficina)

@@ -23,6 +23,16 @@ std::string local_ip_towards(const std::string& host);   // IP de salida hacia e
 // UDP: envia los mensajes a host:port (multicast incluido) y recoge respuestas (datos, IP de origen) hasta timeout
 std::vector<std::pair<std::string, std::string>> udp_query(const std::string& host, int port,
                                                            const std::vector<std::string>& messages, double timeout);
+// UDP con difusion (SO_BROADCAST): envia msg a cada destino (host, puerto) `rounds` veces y recoge respuestas
+// (datos, IP, puerto de origen) durante timeout segundos
+struct UdpReply {
+  std::string data, ip;
+  int port = 0;
+};
+std::vector<UdpReply> udp_broadcast(const std::vector<std::pair<std::string, int>>& targets, const std::string& msg,
+                                    double timeout, int rounds = 2);
+// UDP sin respuesta (estado en directo para las luces); false si no se pudo enviar
+bool udp_send(const std::string& host, int port, const std::string& data);
 // TCP en claro: conecta, envia y lee hasta cerrar o max bytes. nullopt si no se pudo conectar
 std::optional<std::string> tcp_exchange(const std::string& host, int port, const std::string& data, double timeout,
                                         size_t max_bytes = 65536);

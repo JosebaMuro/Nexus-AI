@@ -394,7 +394,7 @@ std::vector<fs::path> bundled_matches(const fs::path& base, const std::string& p
     if (!it->is_regular_file(ec)) continue;
     fs::path rel = it->path().lexically_relative(base);
     std::vector<std::string> comps;
-    for (auto& c : rel) comps.push_back(S(c));
+    for (const auto& c : rel) comps.push_back(S(c));
     if (comps.size() < parts.size()) continue;
     bool ok = true;
     for (size_t i = 0; i < parts.size() && ok; ++i)

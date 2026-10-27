@@ -7,6 +7,7 @@
 #include <numeric>
 #include <set>
 
+#include "hardware/android_accel.h"
 #include "hardware/hardware.h"
 #include "util/crypto.h"
 #include "util/log.h"
@@ -206,9 +207,25 @@ json plan(const HardwareInfo& hw, const std::string& accel_in) {
   if (accel == "auto") return mkplan("", "", nullptr, true, "");
   if (accel == "cpu") return mkplan("cpu", "cpu", "", true, "");
   if (android()) {
-    // la edicion C++ en Android usa la CPU (la deteccion Vulkan/OpenCL/Hexagon del movil sigue en la version Python)
-    std::string note = accel == "npu" ? "Este móvil no tiene una NPU que llama.cpp pueda usar (Hexagon HTP v73+); se usa la GPU"
-                                      : "";
+    json rt = hw.runtimes.value("android_accel", json::object());
+    json devs = rt.is_object() && rt.contains("devices") ? rt["devices"] : json();
+    if (devs.is_null()) {
+      try {
+        devs = android_accel::detect()["gpu"].value("devices", json::array());
+      } catch (...) {
+        devs = json::array();
+      }
+    }
+    if (!devs.is_array()) devs = json::array();
+    std::string note;
+    if (accel == "npu") {
+      for (auto& d : devs)
+        if (android_accel::is_npu_dev(jstr(d, "dev"))) return mkplan("hexagon", "", d["dev"], true, "");
+      accel = "gpu";
+      note = "Este móvil no tiene una NPU que llama.cpp pueda usar (Hexagon HTP v73+); se usa la GPU";
+    }
+    json g = android_accel::pick(devs, false);
+    if (!g.is_null()) return mkplan(jstr(g, "backend"), "", g["dev"], accel == "gpu" && note.empty(), note);
     return mkplan("cpu", "cpu", "", false,
                   (note.empty() ? "" : note + "; ") + "ninguna GPU utilizable por llama.cpp: se usa la CPU");
   }

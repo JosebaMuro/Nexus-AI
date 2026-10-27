@@ -130,6 +130,11 @@ void Monitor::record_llm(const std::string& backend, const std::string& model, i
                         {"t", now()}});
 }
 
+std::vector<json> Monitor::llm_calls() {
+  std::lock_guard<std::mutex> lk(mu_);
+  return llm_calls_;
+}
+
 void Monitor::record_error(const std::string& kind, const std::string& message) {
   {
     std::lock_guard<std::mutex> lk(mu_);

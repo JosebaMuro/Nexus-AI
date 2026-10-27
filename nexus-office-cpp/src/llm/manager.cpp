@@ -47,12 +47,16 @@ void LLMManager::rebuild() {
   backends_.push_back({"llamaserver", std::make_shared<LlamaServerBackend>(
                                           rt_, resolver("gguf"), [this] { return profile_; },
                                           [this] { return config_.str("hardware.llama_variant"); })});
+  std::static_pointer_cast<LlamaServerBackend>(backends_.back().second)->set_llm_opts = [this](const json& o) {
+    update_llm_profile(o);
+  };
   backends_.push_back({"llamacpp", std::make_shared<UnavailableBackend>("llamacpp")});
   backends_.push_back({"ollama", std::make_shared<OllamaBackend>(config_.str("llm.ollama_url"), timeout)});
   backends_.push_back({"openai", std::make_shared<OpenAICompatBackend>(config_.str("llm.openai_base_url"),
                                                                        config_.str("llm.openai_api_key"),
                                                                        config_.str("llm.openai_model"), timeout)});
   backends_.push_back({"transformers", std::make_shared<UnavailableBackend>("transformers")});
+  backends_.push_back({"nube", std::make_shared<CloudBackend>(config_, timeout)});
   backends_.push_back({"builtin", std::make_shared<BuiltinBackend>()});
   avail_.clear();
 }
@@ -106,7 +110,11 @@ bool LLMManager::is_available(const std::string& name) {
 std::pair<std::string, std::string> LLMManager::select(const std::string& spec) {
   if (!spec.empty() && spec != "default" && contains(spec, ":")) {
     std::string b = spec.substr(0, spec.find(':')), m = spec.substr(spec.find(':') + 1);
-    if (b == "peer" || is_available(b)) return {b, m};
+    if (b == "nube") {   // IA online: solo con clave; si no, el modelo local de siempre
+      if (std::static_pointer_cast<CloudBackend>(backend("nube"))->ready(m)) return {b, m};
+    } else if (b == "peer" || is_available(b)) {
+      return {b, m};
+    }
   }
   std::string def = config_.str("llm.default_model");
   if (!def.empty() && contains(def, ":")) {
@@ -131,10 +139,10 @@ std::pair<std::string, std::string> LLMManager::select(const std::string& spec) 
     order.insert(order.begin(), engine);
   }
   for (auto& n : names)
-    if (std::find(order.begin(), order.end(), n) == order.end())
+    if (n != "nube" && std::find(order.begin(), order.end(), n) == order.end())
       order.insert(n == "llamaserver" ? order.begin() : order.end() - (order.empty() ? 0 : 1), n);
   for (auto& n : order)
-    if (is_available(n)) return {n, ""};
+    if (n != "nube" && is_available(n)) return {n, ""};
   return {"builtin", ""};
 }
 
@@ -154,8 +162,19 @@ json LLMManager::status() {
   return {{"backend", b}, {"model", model}, {"available", avail}};
 }
 
+json LLMManager::llm_profile() {
+  std::lock_guard<std::recursive_mutex> lk(mu_);
+  return profile_.value("llm", json::object());
+}
+
+void LLMManager::update_llm_profile(const json& changes) {
+  std::lock_guard<std::recursive_mutex> lk(mu_);
+  if (!profile_.contains("llm")) return;
+  for (auto& [k, v] : changes.items()) profile_["llm"][k] = v;
+}
+
 json LLMManager::options(const json& agent_opts) {
-  json llm = profile_["llm"];
+  json llm = llm_profile();
   json o = {{"n_ctx", llm["n_ctx"]},
             {"n_threads", llm["n_threads"]},
             {"n_batch", llm["n_batch"]},
