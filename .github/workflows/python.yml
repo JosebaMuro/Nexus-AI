@@ -32,6 +32,7 @@ jobs:
       - name: Cotizaciones reales (internet)
         env:
           NEXUS_ONLINE_TESTS: "1"
+          PYTHONUTF8: "1"
         run: python -m pytest -q -s tests/test_bolsa_online.py tests/test_avatares.py::test_catalogos_reales
       - name: Pruebas
         if: always()

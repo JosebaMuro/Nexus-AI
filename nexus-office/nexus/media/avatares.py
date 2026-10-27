@@ -165,7 +165,11 @@ class Avatares:
                   "count": por_pagina, "cursor": (pagina - 1) * por_pagina, "sort_by": "-likeCount"}
         r = self.http.get("https://api.sketchfab.com/v3/search", params=params)
         r.raise_for_status()
-        d = r.json()
+        try:
+            d = r.json()
+        except ValueError as e:   # Sketchfab responde vacio a algunas redes (centros de datos, proxies)
+            raise RuntimeError(f"Sketchfab no ha devuelto resultados desde esta red (HTTP {r.status_code}); "
+                               "prueba más tarde o usa Open Source Avatars") from e
         items = []
         for m in d.get("results", []):
             lic = (m.get("license") or {}).get("label") or (m.get("license") or {}).get("slug") or ""

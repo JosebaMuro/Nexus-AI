@@ -222,3 +222,26 @@ def test_cnbc_respaldo_cuando_yahoo_limita():
     d = D.DatosMercado(httpx.Client(transport=httpx.MockTransport(h)))
     q = d.quote("SAN.MC")
     assert q["fuente"] == "CNBC" and q["precio"] == 7512.5 and q["cierre_anterior"] == 7400 and q["divisa"] == "EUR"
+
+
+def test_cnbc_velas_y_variacion_sin_cierre():
+    import httpx
+    from nexus.office import bolsa_datos as D
+
+    def h(req):
+        u = str(req.url)
+        if "yahoo" in u:
+            return httpx.Response(429)
+        if "charts/6M.json" in u:
+            assert "symbol=SAN-ES" in u
+            return httpx.Response(200, json={"barData": {"priceBars": [
+                {"open": "7.0", "high": "7.2", "low": "6.9", "close": "7.1", "volume": 10, "tradeTimeinMills": "1761523200000"},
+                {"open": "7.1", "high": "7.4", "low": "7.0", "close": "7.3", "volume": 12, "tradeTimeinMills": "1761609600000"}]}})
+        if "restQuote" in u:
+            return httpx.Response(200, json={"FormattedQuoteResult": {"FormattedQuote": [
+                {"symbol": "AAPL", "last": "110.00", "change": "+10.00", "change_pct": "+10.00%", "currencyCode": "USD"}]}})
+        return httpx.Response(404)
+    d = D.DatosMercado(httpx.Client(transport=httpx.MockTransport(h)))
+    pts = d.serie("SAN.MC", "6mo")
+    assert [p["precio"] for p in pts] == [7.1, 7.3] and pts[0]["ts"] == 1761523200 and pts[1]["maximo"] == 7.4
+    assert d.quote("AAPL")["cierre_anterior"] == 100

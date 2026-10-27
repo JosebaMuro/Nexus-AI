@@ -79,6 +79,10 @@ def test_diagnostico_de_fuentes():
                 r = c.get(u)
                 t = r.text
                 m = re.search(r'data-last-price="[^"]*"|"last"\s*:\s*"?[0-9.]+|"regularMarketPrice":[0-9.]+|"lastSalePrice":"[^"]+"', t)
+                if k == "cnbc":
+                    q0 = ((r.json().get("FormattedQuoteResult") or {}).get("FormattedQuote") or [{}])[0]
+                    print("DIAG cnbc campos", {x: q0.get(x) for x in ("last", "change", "change_pct", "previous_day_closing",
+                                                                       "open", "realTime", "last_time")})
                 if k == "cnbc_eu":
                     for q in (r.json().get("FormattedQuoteResult") or {}).get("FormattedQuote") or []:
                         print("DIAG cnbc_eu", q.get("symbol"), q.get("last"), q.get("currencyCode"), q.get("code"))

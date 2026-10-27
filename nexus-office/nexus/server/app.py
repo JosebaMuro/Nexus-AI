@@ -1122,7 +1122,7 @@ def create_app(services: Services | None = None) -> FastAPI:
     def avatares_buscar(fuente: str = "osa", q: str = "", pagina: int = 1, por_pagina: int = 24):
         try:
             return _avs().buscar(fuente, q, pagina, por_pagina)
-        except httpx.HTTPError as e:
+        except (httpx.HTTPError, RuntimeError) as e:
             raise HTTPException(502, f"No se pudo consultar {fuente}: {e}") from e
 
     @app.post("/api/avatares/descargar")

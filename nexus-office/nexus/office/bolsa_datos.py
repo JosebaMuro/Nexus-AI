@@ -39,6 +39,8 @@ CNBC_SUFFIX = {".MC": "-ES", ".DE": "-DE", ".PA": "-FR", ".AS": "-NL", ".L": "-G
 CNBC = "https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol"
 KRAKEN_PAIR = {"BTC-EUR": "XBTEUR", "ETH-EUR": "ETHEUR", "SOL-EUR": "SOLEUR", "ADA-EUR": "ADAEUR"}
 # rango -> (rango Yahoo, intervalo Yahoo)
+CNBC_CHART = "https://ts-api.cnbc.com/harmony/app/charts/{rango}.json"
+CNBC_RANGO = {"1d": "1D", "5d": "5D", "1mo": "1M", "6mo": "6M", "1y": "1Y", "5y": "5Y"}
 RANGOS = {"1d": ("1d", "1m"), "5d": ("5d", "5m"), "1mo": ("1mo", "30m"), "6mo": ("6mo", "1d"), "1y": ("1y", "1d"),
           "5y": ("5y", "1wk")}
 
@@ -198,9 +200,27 @@ class DatosMercado:
         px = self._num(q.get("last"))
         if not px or px <= 0:
             raise LookupError(f"cnbc: sin precio para {sym}")
-        prev = self._num(q.get("previous_day_closing")) or px
+        prev = self._num(q.get("previous_day_closing"))
+        if not prev:   # sin cierre anterior: se deduce de la variacion
+            ch, pct = self._num(q.get("change")), self._num(q.get("change_pct"))
+            prev = px - ch if ch is not None else px / (1 + pct / 100) if pct not in (None, -100) else px
         return {"precio": px, "cierre_anterior": prev, "ts": time.time(), "divisa": q.get("currencyCode") or "",
                 "fuente": "CNBC", "retraso": "≈15 min" if q.get("realTime") != "true" else "tiempo real", "puntos": []}
+
+    def _cnbc_points(self, sym: str, rango: str) -> list[dict]:
+        r = self._get("cnbc", CNBC_CHART.format(rango=CNBC_RANGO.get(rango, "1D")), params={"symbol": self._cnbc_symbol(sym)})
+        out = []
+        for b in ((r.json().get("barData") or {}).get("priceBars") or []):
+            c, t = self._num(b.get("close")), self._num(b.get("tradeTimeinMills"))
+            if not c or not t:
+                continue
+            row = {"ts": t / 1000, "precio": c}
+            for k, name in (("open", "apertura"), ("high", "maximo"), ("low", "minimo"), ("volume", "volumen")):
+                v = self._num(b.get(k))
+                if v is not None:
+                    row[name] = v
+            out.append(row)
+        return out
 
     def _google_symbol(self, sym: str) -> str:
         for suf, ex in GOOGLE_EXCHANGE.items():
@@ -291,6 +311,13 @@ class DatosMercado:
         try:
             pts = self._yahoo_points(self._yahoo_chart(sym, *RANGOS[rango]))
         except Exception:   # noqa: BLE001
+            pts = []
+        if not pts and not re.match(r"^[A-Z0-9]+-(EUR|USD)$", sym):
+            try:            # respaldo: velas de CNBC (responde donde Yahoo limita)
+                pts = self._cnbc_points(sym, rango)
+            except Exception:   # noqa: BLE001
+                pts = []
+        if not pts:
             return hit[1] if hit else []
         with self._lock:
             self._series[key] = (time.time(), pts)
