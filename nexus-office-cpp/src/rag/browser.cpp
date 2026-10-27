@@ -153,7 +153,9 @@ std::string render_now(const std::string& url, const std::string& exe, int budge
   if (!shell) cmd.push_back("--headless=new");
   for (const char* f : {"--disable-gpu", "--no-first-run", "--no-default-browser-check", "--mute-audio",
                         "--disable-extensions", "--disable-background-networking", "--disable-component-update",
-                        "--disable-sync", "--hide-scrollbars", "--blink-settings=imagesEnabled=false"})
+                        "--disable-sync", "--hide-scrollbars", "--blink-settings=imagesEnabled=false",
+                        // sin llavero del sistema: en macOS Chrome puede quedarse esperando al Llavero sin interfaz
+                        "--use-mock-keychain", "--password-store=basic"})
     cmd.push_back(f);
   cmd.push_back("--user-data-dir=" + S(prof));
   cmd.push_back("--virtual-time-budget=" + std::to_string(budget_ms));
