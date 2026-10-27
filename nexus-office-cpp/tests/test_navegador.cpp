@@ -20,7 +20,7 @@ const std::string SPA = R"(<!doctype html><html><head><title>Tienda</title></hea
   Array.from({length: 40}, (_, i) => '<p>Bicicleta electrica modelo ' + i + ' con bateria de larga duracion</p>').join('');</script>
 <script src="/vacio.js"></script></body></html>)";
 
-std::string normal() {
+std::string pagina_normal() {
   std::string p;
   for (int i = 0; i < 100; ++i) p += "texto de verdad ";
   return "<html><body><h1>Hola</h1><p>" + p + "</p></body></html>";
@@ -47,7 +47,7 @@ struct Sitio {
 
 TEST("navegador: detecta paginas con JavaScript") {
   CHECK(rag::browser::needs_browser(SPA));
-  CHECK(!rag::browser::needs_browser(normal()));
+  CHECK(!rag::browser::needs_browser(pagina_normal()));
   CHECK(!rag::browser::needs_browser("solo texto plano"));
   CHECK(rag::browser::needs_browser(R"(<html><body><app-root></app-root><script src="a.js"></script></body></html>)"));
   json i = rag::browser::info();
@@ -80,8 +80,8 @@ TEST("navegador: lee el DOM tras el JavaScript y el proxy corta la red local") {
   cfg.set("rag.allow_private_urls", true, false);
   auto [dom, usado] = rag::browser::maybe_render(sitio.url(), SPA, "auto");
   CHECK(usado && contains(dom, "modelo 39"));
-  auto [same, usado2] = rag::browser::maybe_render(sitio.url(), normal(), "auto");
-  CHECK(!usado2 && same == normal());
+  auto [same, usado2] = rag::browser::maybe_render(sitio.url(), pagina_normal(), "auto");
+  CHECK(!usado2 && same == pagina_normal());
   CHECK(rag::browser::maybe_render(sitio.url(), SPA, "nunca") == std::make_pair(SPA, false));
   cfg.set("rag.allow_private_urls", old, false);
   // sin permiso para URLs privadas, el navegador sale por el proxy y este corta 127.0.0.1
