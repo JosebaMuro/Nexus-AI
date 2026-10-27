@@ -45,3 +45,38 @@ def test_fuentes_de_respaldo():
     r = httpx.get("https://query1.finance.yahoo.com/v8/finance/chart/AAPL?range=1d&interval=5m", headers={"User-Agent": D.UA})
     print("yahoo directo:", r.status_code, r.text[:300])
     assert isinstance(ok["_quote_crypto:BTC-EUR"], float)
+
+
+def test_diagnostico_de_fuentes():
+    """Solo informa: que devuelve cada servicio desde aqui (para elegir fuentes que funcionen en cualquier red)."""
+    import re
+
+    import httpx
+    from nexus.office import bolsa_datos as D
+    h = {"User-Agent": D.UA, "Accept-Language": "en-US,en;q=0.9"}
+    urls = {
+        "google": "https://www.google.com/finance/quote/AAPL:NASDAQ?hl=en",
+        "google_bme": "https://www.google.com/finance/quote/SAN:BME?hl=en",
+        "yahoo2": "https://query2.finance.yahoo.com/v8/finance/chart/SAN.MC?range=1d&interval=5m",
+        "stooq": "https://stooq.com/q/l/?s=aapl.us&f=sd2t2ohlcv&h&e=csv",
+        "stooq_pl": "https://stooq.pl/q/l/?s=aapl.us&f=sd2t2ohlcv&h&e=csv",
+        "stooq_d": "https://stooq.com/q/d/l/?s=aapl.us&i=d",
+        "nasdaq": "https://api.nasdaq.com/api/quote/AAPL/info?assetclass=stocks",
+        "cnbc": "https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=AAPL|SAN-ES&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json",
+        "marketwatch": "https://www.marketwatch.com/investing/stock/aapl",
+        "investing": "https://api.investing.com/api/financialdata/6408/historical/chart/?period=P1D&interval=PT5M&pointscount=60",
+        "bme": "https://www.bolsasymercados.es/bme-exchange/es/Mercados-y-Cotizaciones/Acciones/Mercado-Continuo/Precios/ibex-35-ES0SI0000005",
+        "euronext": "https://live.euronext.com/en/ajax/getDetailedQuote/NL0010273215-XAMS",
+        "boerse_frankfurt": "https://api.boerse-frankfurt.de/v1/data/quote_box/single?isin=DE0007164600&mic=XETR",
+        "lse": "https://api.londonstockexchange.com/api/gw/lse/instruments/alldata/SHEL",
+    }
+    with httpx.Client(headers=h, timeout=10, follow_redirects=True) as c:
+        for k, u in urls.items():
+            try:
+                r = c.get(u)
+                t = r.text
+                m = re.search(r'data-last-price="[^"]*"|"last"\s*:\s*"?[0-9.]+|"regularMarketPrice":[0-9.]+|"lastSalePrice":"[^"]+"', t)
+                print(f"DIAG {k}: {r.status_code} {len(t)}B {r.headers.get('content-type', '')[:30]} "
+                      f"{m.group(0) if m else repr(t[:160])}")
+            except Exception as e:  # noqa: BLE001
+                print(f"DIAG {k}: ERROR {e}")
