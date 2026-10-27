@@ -55,13 +55,17 @@ def web_fetch(args, ctx):
                 break
         ctype, final, status, enc = r.headers.get("content-type", ""), str(r.url), r.status_code, r.encoding
     raw = bytes(data).decode(enc or "utf-8", errors="replace")
+    rendered = False
+    if status == 200 and "html" in ctype:
+        from ...rag.browser import maybe_render
+        raw, rendered = maybe_render(final, raw)   # como un navegador: ejecuta el JavaScript si la pagina lo necesita
     text = html_to_text(raw) if "html" in ctype or raw.lstrip()[:15].lower().startswith(("<!doctype", "<html")) else raw
     limit = max(200, int(args.get("max_chars", 4000)))
     offset = max(0, int(args.get("offset", 0)))
     title = re.search(r"(?is)<title>(.*?)</title>", raw)
     part = text[offset:offset + limit]
     out = {"url": final, "status": status, "title": html.unescape(title.group(1).strip()) if title else "",
-           "text": part, "offset": offset, "total_chars": len(text)}
+           "text": part, "offset": offset, "total_chars": len(text), "navegador": rendered}
     if offset + limit < len(text):
         out["next_offset"] = offset + limit   # hay mas: vuelve a llamar con este offset para la siguiente parte
     return out

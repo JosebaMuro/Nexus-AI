@@ -193,6 +193,7 @@ def http_fetcher(connections: int = 8) -> tuple[Fetcher, Callable[[], None]]:
     import httpx
 
     from ..tools.builtin.web_tools import _public_url
+    from . import browser
     limits = httpx.Limits(max_connections=connections, max_keepalive_connections=connections)
     client = httpx.Client(headers=UA, timeout=25, follow_redirects=True, limits=limits)
 
@@ -211,7 +212,9 @@ def http_fetcher(connections: int = 8) -> tuple[Fetcher, Callable[[], None]]:
                     if len(data) > cap:
                         break
             body = bytes(data) if is_doc else bytes(data).decode(r.encoding or "utf-8", errors="replace")
-            return r.status_code, ctype, body, str(r.url)
+        if not is_doc and r.status_code == 200 and "html" in ctype.lower():
+            body, _ = browser.maybe_render(str(r.url), body)   # paginas que se pintan con JavaScript
+        return r.status_code, ctype, body, str(r.url)
 
     return fetch, client.close
 
