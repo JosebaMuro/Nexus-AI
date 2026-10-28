@@ -97,9 +97,8 @@ def stage(target: str) -> Path:
     if (fw / "bin").is_dir():
         (dest / "firmware").mkdir()
         shutil.copytree(fw / "bin", dest / "firmware" / "bin")
-        shutil.copytree(fw / "nexuspico", dest / "firmware" / "nexuspico", ignore=shutil.ignore_patterns("__pycache__"))
-        for name in ("README.md", "flash.py"):
-            shutil.copy2(fw / name, dest / "firmware" / name)
+        shutil.copytree(fw / "nexuspico", dest / "firmware" / "nexuspico", ignore=shutil.ignore_patterns("__pycache__", "build*"))
+        shutil.copy2(fw / "README.md", dest / "firmware" / "README.md")
         # drivers USB-serie de los puentes de las placas (Windows y macOS; Linux los trae en el kernel)
         drv = CACHE / "drivers" / target
         so = "windows" if target.startswith("windows") else "macos" if target.startswith("macos") else ""
