@@ -216,27 +216,21 @@ jobs:
         run: |
           mkdir -p firmware/bin
           cp nuevos/* firmware/bin/
-          python3 - <<'EOF'
-          import hashlib, json, re, os, time
-          from pathlib import Path
-          fw = Path("firmware")
-          def ver(path, pat):
-              m = re.search(pat, Path(path).read_text(encoding="utf-8"))
-              return m.group(1) if m else ""
-          v = {"nexusled": ver(fw / "nexusled/nl_core.h", r'NEXUSLED_VERSION\s+"([^"]+)"') or ver(fw / "nexusled/nexusled.ino", r'NEXUSLED_VERSION\s+"([^"]+)"'),
-               "nexuswatch": ver(fw / "nexuswatch/nw_core.h", r'NEXUSWATCH_VERSION\s+"([^"]+)"'),
-               "nexuspico": ver(fw / "nexuspico/np_core.h", r'VERSION = "([^"]+)"')}
-          arch = {}
-          for p in sorted((fw / "bin").iterdir()):
-              if p.suffix not in (".bin", ".uf2"):
-                  continue
-              fam = p.stem.split("-")[0]
-              arch[p.name] = {"version": v.get(fam, ""), "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
-                              "grabar": "copiar a la unidad RPI-RP2" if p.suffix == ".uf2" else "nexus-flash grabar (0x0)"}
-          (fw / "bin" / "firmware.json").write_text(json.dumps({"commit": os.environ["GITHUB_SHA"], "nucleo_esp32": os.environ["ESP32_CORE"],
-              "nucleo_esp32_nuevo": os.environ["ESP32_CORE_NUEVO"], "nucleo_esp8266": os.environ["ESP8266_CORE"],
-              "pico_sdk": os.environ["PICO_SDK"], "archivos": arch}, indent=2) + "\n", encoding="utf-8")
-          EOF
+          ver() { grep -oE "$2" "$1" 2>/dev/null | head -1 | sed -E 's/.*"([^"]+)".*/\1/'; }
+          VLED=$(ver firmware/nexusled/nl_core.h 'NEXUSLED_VERSION[[:space:]]+"[^"]+"'); [ -n "$VLED" ] || VLED=$(ver firmware/nexusled/nexusled.ino 'NEXUSLED_VERSION[[:space:]]+"[^"]+"')
+          VWATCH=$(ver firmware/nexuswatch/nw_core.h 'NEXUSWATCH_VERSION[[:space:]]+"[^"]+"')
+          VPICO=$(ver firmware/nexuspico/np_core.h 'VERSION = "[^"]+"')
+          ARCH='{}'
+          for p in $(ls firmware/bin | sort); do
+            case "$p" in *.bin) GRABAR="nexus-flash grabar (0x0)" ;; *.uf2) GRABAR="copiar a la unidad RPI-RP2" ;; *) continue ;; esac
+            case "${p%%-*}" in nexusled) V=$VLED ;; nexuswatch) V=$VWATCH ;; nexuspico) V=$VPICO ;; *) V="" ;; esac
+            SUM=$(sha256sum "firmware/bin/$p" | cut -d' ' -f1)
+            ARCH=$(jq --arg n "$p" --arg v "$V" --arg s "$SUM" --arg g "$GRABAR" '. + {($n): {version: $v, sha256: $s, grabar: $g}}' <<< "$ARCH")
+          done
+          jq -n --arg c "$GITHUB_SHA" --arg e "$ESP32_CORE" --arg en "$ESP32_CORE_NUEVO" --arg e8 "$ESP8266_CORE" \
+            --arg ps "$PICO_SDK" --argjson a "$ARCH" \
+            '{commit: $c, nucleo_esp32: $e, nucleo_esp32_nuevo: $en, nucleo_esp8266: $e8, pico_sdk: $ps, archivos: $a}' \
+            > firmware/bin/firmware.json
           cat firmware/bin/firmware.json
       - name: Subir a la rama
         run: |

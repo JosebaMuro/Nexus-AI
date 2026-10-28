@@ -1,4 +1,4 @@
-// Grabar el firmware de las luces, el reloj y el Pico W desde Nexus (nexus/devices/firmware.py y firmware/flash.py).
+// Grabar el firmware de las luces, el reloj y el Pico W desde Nexus (grabador nexus-flash, en C++).
 //
 // Los binarios van en firmware/bin (sin internet). El Pico W se graba copiando el .uf2 a la unidad RPI-RP2 y su
 // config.json se escribe por el REPL de MicroPython; los ESP8266/ESP32 se graban con nexus-flash (firmware/flasher, el

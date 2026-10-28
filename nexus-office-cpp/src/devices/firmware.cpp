@@ -1,4 +1,4 @@
-// Grabar firmware (nexus/devices/firmware.py y firmware/flash.py) con puertos serie nativos en cada sistema.
+// Grabar firmware con puertos serie nativos en cada sistema (grabador nexus-flash, en C++).
 #include "devices/firmware.h"
 
 #include <chrono>

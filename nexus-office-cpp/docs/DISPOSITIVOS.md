@@ -34,14 +34,12 @@ nexus-flash reloj --wifi MiRed MiClave --nexus 192.168.1.10:8775 CLAVE_DE_RED
 nexus-flash pico  --wifi MiRed MiClave --nexus 192.168.1.10:8775 CLAVE_DE_RED
 ```
 
-**Con el script de Python** (`firmware/flash.py`, en la edición Python):
+**Desde Nexus-Office** (misma lógica, sin abrir la interfaz):
 
 ```bash
-python firmware/flash.py puertos
-python firmware/flash.py luces --wifi MiRed MiClave --leds 60 --pin 16
-python firmware/flash.py reloj --wifi MiRed MiClave --nexus 192.168.1.10:8775 CLAVE_DE_RED
-python firmware/flash.py pico  --wifi MiRed MiClave --nexus 192.168.1.10:8775 CLAVE_DE_RED
-python firmware/flash.py config reloj --wifi OtraRed OtraClave      # solo cambiar la configuración
+nexus-office firmware                                  # placas, puertos y drivers
+nexus-office firmware grabar luces --wifi MiRed --clave MiClave
+nexus-office firmware grabar reloj --puerto COM5
 ```
 
 Los dos reconocen el chip y eligen su `.bin`. La *clave de red* es la de *Red COOP → Conectar
