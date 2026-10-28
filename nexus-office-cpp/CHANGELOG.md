@@ -1,5 +1,15 @@
 # Cambios
 
+## Nexus-Office 2.4.0-cpp
+
+### Conversaciones largas sin perder el hilo
+- Cada conversación tiene un hilo: resumen progresivo de lo antiguo, notas fijas del proyecto y recuperación de los
+  mensajes anteriores que vienen al caso. Antes solo se veían los 12 últimos mensajes y lo demás se perdía.
+- El contexto se reparte en tokens según el `n_ctx` real del modelo y del equipo, no con un número fijo de mensajes.
+- La petición actual ya no se puede descartar al ajustar el contexto (antes, con resultados de herramientas largos,
+  podía quedarse fuera la propia pregunta).
+- Panel **🧵 HILO** en el chat y API `/api/sessions/{id}/hilo`. Las conversaciones se abren enteras (hasta 1000 mensajes).
+
 ## Nexus-Office 2.3.0-cpp
 
 ### Todo el proyecto en C++
@@ -12,14 +22,6 @@
 - El firmware del Pico W (NexusPico) está en C++ con el Pico SDK y la herramienta `flash.py` desaparece: todas las
   placas se graban con `nexus-office firmware` o desde *Dispositivos*.
 - La edición Python queda congelada: no recibe cambios nuevos.
-
-### Conversaciones largas sin perder el hilo
-- Cada conversación tiene un hilo: resumen progresivo de lo antiguo, notas fijas del proyecto y recuperación de los
-  mensajes anteriores que vienen al caso. Antes solo se veían los 12 últimos mensajes y lo demás se perdía.
-- El contexto se reparte en tokens según el `n_ctx` real del modelo y del equipo, no con un número fijo de mensajes.
-- La petición actual ya no se puede descartar al ajustar el contexto (antes, con resultados de herramientas largos,
-  podía quedarse fuera la propia pregunta).
-- Panel **🧵 HILO** en el chat y API `/api/sessions/{id}/hilo`. Las conversaciones se abren enteras (hasta 1000 mensajes).
 
 ### Documentación
 - La documentación técnica y el manual describen la edición C++: órdenes `nexus-office`, carpetas e identificadores
