@@ -292,9 +292,9 @@ fs::path carpeta() {
   if (!e.empty()) cands.push_back(P(e));
   cands.push_back(paths::root() / "firmware");
   cands.push_back(paths::package().parent_path() / "firmware");
-  cands.push_back(paths::package().parent_path().parent_path() / "firmware");   // repositorio: nexus-office/nexus
+  cands.push_back(paths::package().parent_path().parent_path() / "firmware");   // repositorio: <build>/nexus
   for (auto& c : cands)
-    if (is_file(c / "bin" / "firmware.json") || is_file(c / "flash.py")) return c;
+    if (is_file(c / "bin" / "firmware.json")) return c;
   return {};
 }
 

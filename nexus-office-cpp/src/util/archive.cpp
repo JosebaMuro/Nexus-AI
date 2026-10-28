@@ -348,3 +348,186 @@ bool extract(const fs::path& archive, const fs::path& dest) {
 extern "C" void bz_internal_error(int code) {
   throw std::runtime_error("bzip2: error interno " + std::to_string(code));
 }
+
+// ---------------------------------------------------------------- escritura por partes
+namespace nx::archive {
+
+static std::FILE* open_w(const fs::path& p, const char* mode) {
+#ifdef _WIN32
+  std::wstring m(mode, mode + std::strlen(mode));
+  return _wfopen(p.c_str(), m.c_str());
+#else
+  return std::fopen(p.c_str(), mode);
+#endif
+}
+
+static mz_bool tgz_out(const void* buf, int len, void* user) {
+  return std::fwrite(buf, 1, (size_t)len, (std::FILE*)user) == (size_t)len;
+}
+
+TarGzWriter::TarGzWriter(const fs::path& dest, int level) {
+  f_ = open_w(dest, "wb");
+  if (!f_) return;
+  static const unsigned char gz[10] = {0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 0xff};
+  if (std::fwrite(gz, 1, 10, f_) != 10) return;
+  auto* d = (tdefl_compressor*)std::malloc(sizeof(tdefl_compressor));
+  if (!d) return;
+  comp_ = d;
+  ok_ = tdefl_init(d, tgz_out, f_, (int)tdefl_create_comp_flags_from_zip_params(level, -15, MZ_DEFAULT_STRATEGY)) ==
+        TDEFL_STATUS_OKAY;
+}
+
+TarGzWriter::~TarGzWriter() {
+  if (!closed_) close();
+  std::free(comp_);
+}
+
+bool TarGzWriter::put(const void* data, size_t n) {
+  if (!ok_) return false;
+  crc_ = (uint32_t)mz_crc32(crc_, (const unsigned char*)data, n);
+  size_ += n;
+  if (tdefl_compress_buffer((tdefl_compressor*)comp_, data, n, TDEFL_NO_FLUSH) != TDEFL_STATUS_OKAY) ok_ = false;
+  return ok_;
+}
+
+bool TarGzWriter::header(const std::string& name, char type, uint64_t size, int mode, int64_t mtime,
+                         const std::string& link) {
+  auto field = [](char* dst, size_t n, uint64_t v) { std::snprintf(dst, n, "%0*llo", (int)n - 1, (unsigned long long)v); };
+  auto block = [&](const std::string& nm, char tp, uint64_t sz, const std::string& lk) {
+    char h[512] = {0};
+    std::memcpy(h, nm.data(), std::min<size_t>(nm.size(), 100));
+    field(h + 100, 8, (uint64_t)mode);
+    field(h + 108, 8, 0);
+    field(h + 116, 8, 0);
+    field(h + 124, 12, sz);
+    field(h + 136, 12, (uint64_t)(mtime < 0 ? (int64_t)now() : mtime));
+    std::memset(h + 148, ' ', 8);
+    h[156] = tp;
+    std::memcpy(h + 157, lk.data(), std::min<size_t>(lk.size(), 100));
+    std::memcpy(h + 257, "ustar  ", 8);   // GNU
+    std::memcpy(h + 265, "root", 4);
+    std::memcpy(h + 297, "root", 4);
+    unsigned sum = 0;
+    for (unsigned char c : h) sum += c;
+    std::snprintf(h + 148, 8, "%06o", sum);
+    return put(h, 512);
+  };
+  auto longlink = [&](char tp, const std::string& value) {
+    if (!block("././@LongLink", tp, value.size() + 1, "")) return false;
+    std::string data = value;
+    data.push_back('\0');
+    data.append((512 - data.size() % 512) % 512, '\0');
+    return put(data.data(), data.size());
+  };
+  if (link.size() > 100 && !longlink('K', link)) return false;
+  if (name.size() > 100 && !longlink('L', name)) return false;
+  return block(name, type, size, link);
+}
+
+bool TarGzWriter::add_dir(const std::string& name, int mode, int64_t mtime) {
+  std::string n = name;
+  if (n.empty() || n.back() != '/') n += '/';
+  return header(n, '5', 0, mode, mtime);
+}
+
+bool TarGzWriter::add_bytes(const std::string& name, std::string_view data, int mode, int64_t mtime) {
+  if (!header(name, '0', data.size(), mode, mtime)) return false;
+  if (!put(data.data(), data.size())) return false;
+  static const char zero[512] = {0};
+  return put(zero, (512 - data.size() % 512) % 512);
+}
+
+bool TarGzWriter::add_file(const std::string& name, const fs::path& src, int mode, int64_t mtime) {
+  std::FILE* in = open_w(src, "rb");
+  if (!in) return ok_ = false;
+  std::error_code ec;
+  uint64_t size = fs::file_size(src, ec);
+  bool good = !ec && header(name, '0', size, mode, mtime);
+  std::vector<char> buf(1 << 20);
+  uint64_t done = 0;
+  while (good && done < size) {
+    size_t n = std::fread(buf.data(), 1, (size_t)std::min<uint64_t>(buf.size(), size - done), in);
+    if (n == 0) { good = false; break; }
+    good = put(buf.data(), n);
+    done += n;
+  }
+  std::fclose(in);
+  static const char zero[512] = {0};
+  if (good) good = put(zero, (512 - size % 512) % 512);
+  if (!good) ok_ = false;
+  return good;
+}
+
+bool TarGzWriter::add_symlink(const std::string& name, const std::string& target, int64_t mtime) {
+  return header(name, '2', 0, 0777, mtime, target);
+}
+
+bool TarGzWriter::close() {
+  if (closed_) return ok_;
+  closed_ = true;
+  if (f_) {
+    static const char zero[1024] = {0};
+    if (ok_) put(zero, 1024);
+    if (ok_ && tdefl_compress_buffer((tdefl_compressor*)comp_, nullptr, 0, TDEFL_FINISH) != TDEFL_STATUS_DONE) ok_ = false;
+    unsigned char tail[8];
+    for (int i = 0; i < 4; ++i) tail[i] = (unsigned char)(crc_ >> (8 * i));
+    for (int i = 0; i < 4; ++i) tail[4 + i] = (unsigned char)((uint32_t)size_ >> (8 * i));
+    if (ok_ && std::fwrite(tail, 1, 8, f_) != 8) ok_ = false;
+    if (std::fclose(f_) != 0) ok_ = false;
+    f_ = nullptr;
+  }
+  return ok_;
+}
+
+ZipWriter::ZipWriter(const fs::path& dest, bool append) {
+  auto* z = new mz_zip_archive();
+  z_ = z;
+  std::string p = S(dest);
+  if (append)
+    ok_ = mz_zip_reader_init_file(z, p.c_str(), 0) && mz_zip_writer_init_from_reader_v2(z, p.c_str(), 0);
+  else
+    ok_ = mz_zip_writer_init_file_v2(z, p.c_str(), 0, 0);
+}
+
+ZipWriter::~ZipWriter() {
+  if (!closed_) close();
+  delete (mz_zip_archive*)z_;
+}
+
+static mz_uint zip_level(int level) { return level < 0 ? (mz_uint)MZ_DEFAULT_LEVEL : (mz_uint)level; }
+
+bool ZipWriter::add_file(const std::string& name, const fs::path& src, int level) {
+  if (!ok_) return false;
+  std::FILE* in = open_w(src, "rb");
+  if (!in) return ok_ = false;
+  std::error_code ec;
+  uint64_t size = fs::file_size(src, ec);
+  ok_ = !ec && mz_zip_writer_add_cfile((mz_zip_archive*)z_, name.c_str(), in, size, nullptr, nullptr, 0,
+                                       zip_level(level), nullptr, 0, nullptr, 0);
+  std::fclose(in);
+  if (ok_) { ++count_; bytes_ += size; }
+  return ok_;
+}
+
+bool ZipWriter::add_bytes(const std::string& name, std::string_view data, int level) {
+  if (!ok_) return false;
+  ok_ = mz_zip_writer_add_mem((mz_zip_archive*)z_, name.c_str(), data.data(), data.size(), zip_level(level));
+  if (ok_) { ++count_; bytes_ += data.size(); }
+  return ok_;
+}
+
+bool ZipWriter::close() {
+  if (closed_) return ok_;
+  closed_ = true;
+  auto* z = (mz_zip_archive*)z_;
+  if (z->m_zip_mode == MZ_ZIP_MODE_WRITING) {
+    if (ok_) ok_ = mz_zip_writer_finalize_archive(z);
+    if (!mz_zip_writer_end(z)) ok_ = false;
+  } else {
+    mz_zip_reader_end(z);
+    ok_ = false;
+  }
+  return ok_;
+}
+
+}  // namespace nx::archive

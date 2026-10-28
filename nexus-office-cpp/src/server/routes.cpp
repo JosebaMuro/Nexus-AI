@@ -1682,7 +1682,7 @@ void register_routes(App& app) {
     if (fw::carpeta().empty()) {
       info["binarios"] = json::array();
       info["puertos"] = json::array();
-      info["error"] = "no encuentro la carpeta firmware/ (con flash.py)";
+      info["error"] = "no encuentro la carpeta firmware/ (con bin/firmware.json)";
     } else {
       info["binarios"] = fw::binarios();
       info["puertos"] = fw::puertos();

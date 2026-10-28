@@ -20,10 +20,9 @@ marcha, lo que más ocupa es llama-server, que es el mismo en las dos.
 - **Interfaz**: todas las vistas (Chat, Salón, Núcleo, Estudio, Agentes, Modelos, Herramientas, Sistema, Ajustes),
   modo usuario y administrador con PIN, temas, avatar y modo en vivo por voz.
 - **API**: todas las rutas HTTP y el WebSocket de la edición Python, con las mismas respuestas (también los errores 422 al estilo de
-  FastAPI). Las pruebas `tests/compare_api.py` y `tests/compare_flows.py` arrancan las dos ediciones con datos nuevos y
-  comparan 39 rutas y 41 flujos completos (administrador, memoria, agentes, biblioteca, multimedia, grafo, oficina y
-  chat por WebSocket), y `tests/compare_full.py` otros 108 (bolsa, grafos, web, red COOP, VPN y GIMP): coinciden
-  todos salvo la clave `edition` que añade esta edición y un código de error (404 frente a 405) en una ruta inexistente.
+  FastAPI). Hasta la 2.2 se comparó ruta por ruta y flujo por flujo con la edición Python (39 rutas, 41 flujos y otras
+  108 comprobaciones de bolsa, grafos, web, red COOP, VPN y GIMP): coincidían todos salvo la clave `edition` y un código
+  de error en una ruta inexistente. Desde que la edición Python quedó congelada, esas comparaciones se retiraron.
 - **Motor de IA**: llama-server (llama.cpp) con el selector de motor y acelerador (CPU, GPU, NPU) al arrancar, modelos
   recomendados según el hardware (Qwen3.5), descarga de Hugging Face, Ollama, ModelScope, Civitai y Kaggle, y el motor
   integrado sin modelo para las operaciones sencillas (la calculadora del chat responde aunque no haya modelo).
@@ -78,7 +77,7 @@ La 2.0 beta C dejaba fuera varias funciones. Desde la 2.1 están todas, con las 
 ## Ejemplos incluidos
 
 - `ejemplos/grafo-wikipedia-es/`: grafo multicapa de la Wikipedia en español para importar (capas `1-temas`,
-  `2-articulos`, `3-enlaces` y `4-wikidata`). Lo genera `tools/wikipedia_grafo.py` con las API públicas de
+  `2-articulos`, `3-enlaces` y `4-wikidata`). Lo genera `nexus-construir grafo-wikipedia` con las API públicas de
   es.wikipedia.org y wikidata.org, desde la GitHub Action `wikipedia-grafo.yml`.
 - `ejemplos/resumen-proyecto/Nexus-Office-resumen.md`: resumen de todo el proyecto para subirlo a la biblioteca.
 
@@ -94,7 +93,7 @@ de servicio, así que solo una puede estar en marcha a la vez.
 
 ```
 nexus-office-cpp/
-  CMakeLists.txt        compila nexus-office y las pruebas; copia los recursos compartidos junto al ejecutable
+  CMakeLists.txt        compila nexus-office, nexus-construir y las pruebas; copia los recursos junto al ejecutable
   src/main.cpp          línea de órdenes
   src/server/           servidor HTTP y WebSocket (cpp-httplib) y las rutas de la API (routes.cpp)
   src/core/             configuración, base de datos (SQLite), servicios y servicio del sistema
@@ -106,10 +105,13 @@ nexus-office-cpp/
   src/media/            imagen, música, voz y mejorador de prompts
   src/agents/ src/tools/ src/office/   agentes, salón, herramientas supervisadas y perfiles de oficina
   src/util/             ficheros, procesos, HTTP, expresiones regulares (PCRE2), YAML, cifrado, texto
-  src/gen/data.cpp      datos de la edición Python (catálogos, tablas) generados por tools/gen_data.py
+  src/gen/data.cpp      catálogos y tablas, generado por «nexus-construir datos» desde recursos/datos/*.json
+  recursos/             interfaz web, perfiles de oficina, agentes, paquetes de conocimiento y tablas de datos
+  android/              app Android (Java) de la APK autónoma
+  tools/construir/      nexus-construir: instaladores, APK, manuales en PDF, prueba de humo, grafo de ejemplo y datos
   third_party/          cpp-httplib, nlohmann/json, SQLite, miniz, PCRE2, rapidyaml, stb y certificados raíz
-  tests/                pruebas unitarias y de integración, comparación con Python y prueba de la interfaz
-  packaging/            instaladores (build.py, NSIS, guiones de instalación)
+  tests/                pruebas unitarias y de integración y prueba de la interfaz (ui_smoke.js, en Chromium)
+  packaging/            plantilla NSIS, iconos y guiones de instalación que usa nexus-construir
 ```
 
 Dependencias externas: ninguna en tiempo de ejecución. Para compilar, un compilador C++20 (GCC 12, Clang 15, MSVC
@@ -123,14 +125,29 @@ ctest --test-dir build --output-on-failure
 build/nexus-office run
 ```
 
+### nexus-construir
+
+La herramienta de construcción también es C++ (`tools/construir/`, se compila con el resto y no va en los paquetes):
+
+```
+nexus-construir paquetes [--targets windows-x64 linux-aarch64 ...]   instaladores en dist/ (.exe, .run, .deb, AppImage,
+                                                                      Flatpak y macOS), código fuente, LEEME y sumas
+nexus-construir apk --exe E --libs D --recursos R [--gpu-libs G]     APK autónoma de Android (aapt2, d8, apksigner)
+nexus-construir pdf [carpeta]                                        manuales en PDF (Markdown propio + Chromium)
+nexus-construir humo <carpeta instalada>                             prueba con modelos reales de un instalador
+nexus-construir grafo-wikipedia [--articulos 1500]                   grafo multicapa de ejemplo (internet)
+nexus-construir datos [--extraer]                                    recursos/datos/*.json <-> src/gen/data.cpp
+```
+
+Escribe los tar.gz y zip por partes (paquetes de varios GB sin cargarlos en memoria), el `.deb` sin dpkg y los PDF con el
+protocolo DevTools de Chromium. Las herramientas externas que usa son las de cada formato: makensis, appimagetool,
+flatpak, y aapt2/d8/zipalign/apksigner/javac del SDK de Android.
+
 ## Pruebas
 
 - `nexus-tests`: unitarias (texto, expresiones regulares, YAML, JSON, configuración, base de datos, memoria, RAG...) y
   una de integración que levanta el servidor en un puerto libre y recorre API, administrador, memoria, biblioteca,
   multimedia y chat por WebSocket.
-- `tests/compare_api.py`, `tests/compare_flows.py` y `tests/compare_full.py`: comparación con la edición Python, ruta
-  por ruta y flujo por flujo; `tests/compare_kg.py` lee un ejemplo de cada formato de grafo en las dos ediciones y
-  `tests/compare_gimp.py` compara 73 ediciones de imagen píxel a píxel.
 - `nexus-tests nube` y `nexus-tests android`: el Profesor contra un servidor falso de OpenAI y de Anthropic, y la sonda,
   el respaldo NPU → GPU → CPU y el autoajuste de Android con un llama-server falso.
 - `nexus-tests bolsa`: cotizaciones con fuentes falsas (caché, peniques a libras, sin conexión) y el agente autónomo
@@ -138,8 +155,7 @@ build/nexus-office run
   pide precios reales del catálogo con la pila TLS de cada sistema.
 - `nexus-tests dispositivos`: luces contra el emulador del firmware NexusLED (`firmware/emulator`, se compila con las
   pruebas), modos, reloj, imágenes del Pico W y grabado del reloj con un esptool falso y un puerto serie simulado, y de un ESP8266 con nexus-flash contra una ROM de Espressif simulada; autorreparación de una configuración y una base de datos dañadas y de un puerto ocupado.
-  El código real del Pico W (`firmware/nexuspico/nexuspico.py`) descarga las imágenes del servidor C++ y su giro
-  coincide byte a byte.
+  El firmware del Pico W (`firmware/nexuspico/`, en C++ con el Pico SDK) descarga esas mismas imágenes del servidor.
 - `tests/ui_smoke.js`: abre la interfaz en Chromium, pregunta «¿Cuánto es 12*7?», espera «84», recorre las vistas y
   falla si hay errores de JavaScript o respuestas 5xx.
 - Revisión de memoria con AddressSanitizer y UndefinedBehaviorSanitizer recorriendo todas las pruebas anteriores: sin

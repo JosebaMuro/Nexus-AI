@@ -13,14 +13,8 @@
 namespace nx {
 
 // ---------------------------------------------------------------- SHA-256 (FIPS 180-4)
-namespace {
-struct Sha256 {
-  uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
-  unsigned char buf[64];
-  size_t len = 0;
-  uint64_t total = 0;
-  static uint32_t rotr(uint32_t x, int n) { return (x >> n) | (x << (32 - n)); }
-  void block(const unsigned char* p) {
+static uint32_t rotr(uint32_t x, int n) { return (x >> n) | (x << (32 - n)); }
+void Sha256::block(const unsigned char* p) {
     static const uint32_t k[64] = {
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98,
         0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
@@ -48,8 +42,9 @@ struct Sha256 {
       hh = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
     }
     h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
-  }
-  void update(const unsigned char* p, size_t n) {
+}
+void Sha256::update(const void* data, size_t n) {
+    auto* p = (const unsigned char*)data;
     total += n;
     while (n) {
       size_t take = std::min(n, 64 - len);
@@ -57,8 +52,8 @@ struct Sha256 {
       len += take; p += take; n -= take;
       if (len == 64) { block(buf); len = 0; }
     }
-  }
-  std::string final() {
+}
+std::string Sha256::digest() {
     uint64_t bits = total * 8;
     unsigned char pad = 0x80;
     update(&pad, 1);
@@ -71,14 +66,12 @@ struct Sha256 {
     for (int i = 0; i < 8; ++i)
       for (int j = 0; j < 4; ++j) out[4 * i + j] = (char)(h[i] >> (24 - 8 * j));
     return out;
-  }
-};
-}  // namespace
+}
 
 std::string sha256(std::string_view d) {
   Sha256 s;
-  s.update((const unsigned char*)d.data(), d.size());
-  return s.final();
+  s.update(d.data(), d.size());
+  return s.digest();
 }
 
 std::string sha1_hex(std::string_view data) {
@@ -123,11 +116,11 @@ std::string hmac_sha256(std::string_view key, std::string_view msg) {
   Sha256 in;
   in.update((const unsigned char*)ipad.data(), 64);
   in.update((const unsigned char*)msg.data(), msg.size());
-  std::string inner = in.final();
+  std::string inner = in.digest();
   Sha256 out;
   out.update((const unsigned char*)opad.data(), 64);
   out.update((const unsigned char*)inner.data(), inner.size());
-  return out.final();
+  return out.digest();
 }
 
 std::string pbkdf2_sha256(std::string_view password, std::string_view salt, int iterations, size_t dklen) {
@@ -143,10 +136,10 @@ std::string pbkdf2_sha256(std::string_view password, std::string_view salt, int 
   auto prf = [&](const unsigned char* m, size_t n) {
     Sha256 a = base_in;
     a.update(m, n);
-    std::string inner = a.final();
+    std::string inner = a.digest();
     Sha256 b = base_out;
     b.update((const unsigned char*)inner.data(), 32);
-    return b.final();
+    return b.digest();
   };
   std::string out;
   for (uint32_t blk = 1; out.size() < dklen; ++blk) {

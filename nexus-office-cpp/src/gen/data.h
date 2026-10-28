@@ -1,4 +1,4 @@
-// Tablas de datos compartidas con la version Python (generadas por tools/gen_data.py).
+// Tablas de datos (recursos/datos/*.json, metidas en data.cpp por «nexus-construir datos»).
 #pragma once
 #include <string>
 #include <string_view>

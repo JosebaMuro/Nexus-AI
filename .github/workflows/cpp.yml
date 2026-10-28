@@ -1,8 +1,8 @@
 name: Nexus-Office C++ (compilar y probar)
 
-# Edicion C++ de Nexus-Office (nexus-office-cpp/, 2.1): compila y pasa las pruebas en cada sistema nativo,
-# compara la API y los flujos con la edicion Python y prueba la interfaz web en Chromium. Cada compilacion deja la
-# carpeta instalada (ejecutable + nexus/) como artefacto «cpp-<plataforma>», que usa cpp-entrega.yml.
+# Edicion C++ de Nexus-Office (nexus-office-cpp/): compila y pasa las pruebas en cada sistema nativo y prueba la
+# interfaz web en Chromium. Cada compilacion deja la carpeta instalada (ejecutable + nexus/) como artefacto
+# «cpp-<plataforma>» y la herramienta de construccion como «construir-<plataforma>», que usa cpp-entrega.yml.
 on:
   workflow_dispatch:
   workflow_call:
@@ -56,45 +56,54 @@ jobs:
           EXE=out/Nexus-Office/nexus-office; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
           "$EXE" --version
           "$EXE" detect | head -40
+      - name: Herramienta de construccion
+        shell: bash
+        run: |
+          mkdir -p construir
+          f=$(find build -type f \( -name nexus-construir -o -name nexus-construir.exe \) | head -1)
+          cp "$f" construir/
+          construir/nexus-construir* --version
+      - name: Datos y manuales con nexus-construir
+        if: matrix.target == 'linux-x86_64'
+        run: |
+          set -e
+          C=$PWD/construir/nexus-construir
+          # src/gen/data.cpp debe estar al dia con recursos/datos/*.json
+          (cd nexus-office-cpp && "$C" datos) && git diff --exit-code nexus-office-cpp/src/gen/data.cpp
+          NEXUS_CHROMIUM=$(command -v google-chrome || command -v chromium) "$C" pdf manuales
+          ls -la manuales && test "$(head -c 5 manuales/Manual-de-usuario.pdf)" = "%PDF-"
       - uses: actions/upload-artifact@v4
         with:
           name: cpp-${{ matrix.target }}
           path: out/
           retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: construir-${{ matrix.target }}
+          path: construir/
+          retention-days: 7
 
-  comparar:
+  interfaz:
     needs: compilar
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
       - uses: actions/download-artifact@v4
         with:
           name: cpp-linux-x86_64
           path: cpp
-      - name: Edicion Python
-        run: python -m pip install -q -r nexus-office/requirements.txt httpx websockets
-      - name: Arrancar las dos ediciones
+      - name: Arrancar Nexus-Office
         run: |
           chmod +x cpp/Nexus-Office/nexus-office
           NEXUS_DATA_DIR=$RUNNER_TEMP/cpp nohup cpp/Nexus-Office/nexus-office run --no-browser --port 8790 > cpp.log 2>&1 &
-          (cd nexus-office && NEXUS_DATA_DIR=$RUNNER_TEMP/py nohup python -m nexus run --no-browser --port 8791 > ../py.log 2>&1 &)
-          for i in $(seq 120); do curl -sf localhost:8790/api/ping && curl -sf localhost:8791/api/ping && break; sleep 2; done
-      - name: Comparar flujos y rutas con la edicion Python
-        run: |
-          python nexus-office-cpp/tests/compare_flows.py http://127.0.0.1:8790 http://127.0.0.1:8791 | tee flujos.txt || true
-          python nexus-office-cpp/tests/compare_api.py http://127.0.0.1:8790 http://127.0.0.1:8791 | tee rutas.txt || true
-          # diferencias aceptadas: la clave «edition» y la lista de herramientas (docs/CPP.md)
-          grep -q "40/41 flujos iguales\|41/41 flujos iguales" flujos.txt
+          for i in $(seq 60); do curl -sf localhost:8790/api/ping && break; sleep 2; done
       - name: Interfaz web en Chromium
         run: |
           npm i --no-save playwright@1.48.2 >/dev/null && npx playwright install --with-deps chromium >/dev/null
           mkdir -p capturas && node nexus-office-cpp/tests/ui_smoke.js http://127.0.0.1:8790 capturas
       - name: Registros
         if: always()
-        run: tail -50 cpp.log; tail -20 py.log
+        run: tail -50 cpp.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:

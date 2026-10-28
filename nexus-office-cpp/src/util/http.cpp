@@ -185,6 +185,10 @@ Response do_send(const Request& req, int redirects_left) {
     return true;
   };
   auto res = cli.send(r);
+  if (res && out.status == 0) {   // 204 y HEAD: httplib no llama a response_handler cuando no hay cuerpo
+    out.status = res->status;
+    for (auto& [k, v] : res->headers) out.headers[lower(k)] = v;
+  }
   if (!res && !stopped && out.status == 0) {
     out.error = httplib::to_string(res.error());
     return out;

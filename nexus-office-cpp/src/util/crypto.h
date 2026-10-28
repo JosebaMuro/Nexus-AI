@@ -9,6 +9,18 @@
 namespace nx {
 
 std::string sha256(std::string_view data);                 // binario (32 bytes)
+// SHA-256 por partes (ficheros grandes)
+class Sha256 {
+ public:
+  void update(const void* data, size_t n);
+  std::string digest();                                     // binario (32 bytes); se llama una sola vez
+ private:
+  void block(const unsigned char* p);
+  uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
+  unsigned char buf[64];
+  size_t len = 0;
+  uint64_t total = 0;
+};
 std::string sha256_hex(std::string_view data);
 std::string sha1_hex(std::string_view data);   // solo para claves de cache e identificadores (no para seguridad)
 std::string hmac_sha256(std::string_view key, std::string_view msg);

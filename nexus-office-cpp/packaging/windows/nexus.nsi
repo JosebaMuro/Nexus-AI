@@ -1,8 +1,8 @@
 ; Nexus-Office 2.1 (edicion C++) - instalador grafico de Windows (NSIS 3). Lo genera
-; nexus-office-cpp/packaging/build.py (makensis funciona tambien en Linux): nexus-office.exe, la interfaz web y los
+; nexus-construir paquetes (makensis funciona tambien en Linux): nexus-office.exe, la interfaz web y los
 ; motores de IA (llama-server, sd-cli, piper y whisper) van dentro del .exe. Se instala junto a la edicion Python
 ; sin pisarla (carpeta y entrada de «Aplicaciones» propias).
-; Defines que pasa build.py: VERSION, ARCH (x64|arm64), PAYLOAD (carpeta Nexus-Office preparada), OUTFILE, ICON,
+; Defines que pasa nexus-construir: VERSION, ARCH (x64|arm64), PAYLOAD (carpeta Nexus-Office preparada), OUTFILE, ICON,
 ; LICENSE, PROFILES (fichero .nsh con los perfiles de oficina).
 ; Opciones de linea de comandos (tambien en modo silencioso /S):
 ;   /OFICINA=herreria  /SERVICIO  /RED  /MODELOS=auto|todos|no  /D=C:\ruta  (la ultima, siempre al final)
@@ -10,7 +10,7 @@
 Unicode true
 ManifestDPIAware true
 ; /SOLID guarda primero todo el paquete sin comprimir en un bloque de memoria que makensis no puede pasar de ~2 GB
-; (muere con SIGBUS): build.py pasa NOSOLID cuando el paquete es mayor y entonces cada fichero se comprime aparte
+; (muere con SIGBUS): nexus-construir pasa NOSOLID cuando el paquete es mayor y entonces cada fichero se comprime aparte
 !ifdef NOSOLID
   SetCompressor lzma
 !else

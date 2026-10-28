@@ -1,9 +1,17 @@
-// GENERADO por tools/gen_data.py a partir de la version Python: no editar a mano.
+// GENERADO por «nexus-construir datos» a partir de recursos/datos/*.json: no editar a mano.
 #include "gen/data.h"
 
 #include <map>
 
 namespace nx::data {
+
+static const unsigned char D_LEGACY_LLM[] = {
+  123,34,115,109,111,108,118,108,109,45,53,48,48,109,34,58,34,113,119,101,110,51,46,53,
+  45,48,46,56,98,34,44,34,113,119,101,110,51,45,118,108,45,50,98,34,58,34,113,119,
+  101,110,51,46,53,45,50,98,34,44,34,113,119,101,110,51,45,118,108,45,52,98,34,58,
+  34,113,119,101,110,51,46,53,45,52,98,34,44,34,113,119,101,110,51,45,118,108,45,56,
+  98,34,58,34,113,119,101,110,51,46,53,45,57,98,34,125,
+  0};
 
 static const unsigned char D_RECOMMENDED[] = {
   91,123,34,105,100,34,58,34,113,119,101,110,51,46,53,45,48,46,56,98,34,44,34,107,
@@ -233,14 +241,6 @@ static const unsigned char D_RECOMMENDED[] = {
   105,122,97,100,111,32,101,110,32,112,114,111,103,114,97,109,97,99,105,111,110,44,32,115,
   99,114,105,112,116,115,44,32,114,101,100,101,115,32,121,32,99,111,110,102,105,103,117,114,
   97,99,105,111,110,32,100,101,32,115,105,115,116,101,109,97,115,46,34,125,93,
-  0};
-
-static const unsigned char D_LEGACY_LLM[] = {
-  123,34,115,109,111,108,118,108,109,45,53,48,48,109,34,58,34,113,119,101,110,51,46,53,
-  45,48,46,56,98,34,44,34,113,119,101,110,51,45,118,108,45,50,98,34,58,34,113,119,
-  101,110,51,46,53,45,50,98,34,44,34,113,119,101,110,51,45,118,108,45,52,98,34,58,
-  34,113,119,101,110,51,46,53,45,52,98,34,44,34,113,119,101,110,51,45,118,108,45,56,
-  98,34,58,34,113,119,101,110,51,46,53,45,57,98,34,125,
   0};
 
 static const unsigned char D_STT_MODELS[] = {
@@ -963,8 +963,8 @@ static const unsigned char D_TOOLS[] = {
 
 std::string_view raw(const std::string& name) {
   static const std::map<std::string, std::string_view> M = {
-      {"recommended", std::string_view((const char*)D_RECOMMENDED, 5445)},
       {"legacy_llm", std::string_view((const char*)D_LEGACY_LLM, 112)},
+      {"recommended", std::string_view((const char*)D_RECOMMENDED, 5445)},
       {"stt_models", std::string_view((const char*)D_STT_MODELS, 48)},
       {"tools", std::string_view((const char*)D_TOOLS, 17037)},
   };

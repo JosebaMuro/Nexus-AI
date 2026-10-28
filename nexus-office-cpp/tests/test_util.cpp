@@ -1,4 +1,5 @@
 #include "check.h"
+#include "util/archive.h"
 #include "util/crypto.h"
 #include "util/http.h"
 #include "util/proc.h"
@@ -102,4 +103,45 @@ TEST("http: url") {
   CHECK_EQ(u.port, 8443);
   CHECK_EQ(u.path, std::string("/api/models?search=x"));
   CHECK_EQ(http::query_string({{"q", "a b"}, {"z", "ñ"}}), std::string("q=a+b&z=%C3%B1"));
+}
+
+TEST("archivos: tar.gz, zip y SHA-256 por partes") {
+  fs::path dir = fs::temp_directory_path() / ("nx-archivo-" + token_hex(4));
+  mkdirs(dir);
+  std::string big(300000, 'x');
+  for (size_t i = 0; i < big.size(); i += 7) big[i] = (char)('a' + i % 26);
+  write_file(dir / "grande.bin", big);
+  std::string largo = "Nexus-Office/" + std::string(120, 'n') + "/fichero-con-nombre-largo.txt";   // > 100: @LongLink
+  {
+    archive::TarGzWriter tar(dir / "p.tar.gz");
+    CHECK(tar.add_dir("Nexus-Office"));
+    CHECK(tar.add_file("Nexus-Office/grande.bin", dir / "grande.bin", 0755));
+    CHECK(tar.add_bytes(largo, "hola"));
+    CHECK(tar.close());
+  }
+  CHECK(archive::extract_tar(dir / "p.tar.gz", dir / "x"));
+  CHECK_EQ(read_text(dir / "x" / "Nexus-Office" / "grande.bin"), big);
+  CHECK_EQ(read_text(dir / "x" / P(largo)), std::string("hola"));
+  {
+    archive::ZipWriter z(dir / "p.zip");
+    CHECK(z.add_file("a/grande.bin", dir / "grande.bin"));
+    CHECK(z.add_bytes("b.txt", "adios", 0));
+    CHECK_EQ(z.count(), (uint64_t)2);
+    CHECK(z.close());
+  }
+  {
+    archive::ZipWriter z(dir / "p.zip", true);   // anadir a un zip que ya existe (como la APK de aapt2)
+    CHECK(z.add_bytes("c.txt", "mas"));
+    CHECK(z.close());
+  }
+  archive::Zip zip(dir / "p.zip");
+  CHECK(zip.ok());
+  CHECK_EQ(*zip.read("a/grande.bin"), big);
+  CHECK_EQ(*zip.read("b.txt"), std::string("adios"));
+  CHECK_EQ(*zip.read("c.txt"), std::string("mas"));
+  Sha256 h;
+  h.update(big.data(), 1000);
+  h.update(big.data() + 1000, big.size() - 1000);
+  CHECK_EQ(to_hex(h.digest()), sha256_hex(big));
+  rm_rf(dir);
 }

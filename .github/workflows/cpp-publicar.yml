@@ -1,10 +1,10 @@
 name: Publicar la Release de Nexus-Office C++
 
 # Se lanza al empujar la rama temporal «publicar-cpp-<version>» (no «entrega-*», que es la de la edicion Python): trae
-# entrega/entrega.json ({"run": <id de la ejecucion de cpp-entrega.yml>, "tag": "v2.1.0-cpp", "target": <rama>}),
-# la APK autonoma ya firmada en trozos (entrega/apk/) y los manuales en PDF (entrega/*.pdf). Junta los instaladores de
-# esa ejecucion, la APK VPN (la app cliente es la misma de la 2.0.0), el codigo fuente limpio, LEEME y SHA256SUMS,
-# publica la Release y borra la rama temporal.
+# entrega/entrega.json ({"run": <id de la ejecucion de cpp-entrega.yml>, "tag": "v2.1.0-cpp", "target": <rama>}) y
+# la APK autonoma ya firmada en trozos (entrega/apk/). Junta los instaladores de esa ejecucion, la APK VPN (la app
+# cliente es la misma de la 2.0.0), los manuales en PDF, el codigo fuente limpio, LEEME y SHA256SUMS con
+# nexus-construir (la herramienta C++ de esa misma ejecucion), publica la Release y borra la rama temporal.
 on:
   push:
     branches:
@@ -25,13 +25,12 @@ jobs:
       - name: Liberar espacio
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost && df -h /
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Instaladores de la ejecucion de cpp-entrega.yml
+      - name: Instaladores y nexus-construir de la ejecucion de cpp-entrega.yml
         run: |
           set -e
-          RUN=$(python -c "import json; print(json.load(open('entrega/entrega.json'))['run'])")
+          RUN=$(jq -r .run entrega/entrega.json)
+          gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n construir-linux-x86_64 -D construir
+          chmod +x construir/nexus-construir
           gh run download "$RUN" -R "$GITHUB_REPOSITORY" -p 'instalador-cpp-*' -D art
           mkdir -p nexus-office-cpp/dist
           for d in art/*/; do cp -r "$d"* nexus-office-cpp/dist/; done
@@ -48,19 +47,20 @@ jobs:
           V=$(sed -n 's/^set(NEXUS_VERSION "\([^"]*\)").*/\1/p' nexus-office-cpp/CMakeLists.txt)
           gh release download "$BASE" -R "$GITHUB_REPOSITORY" -p "Nexus-Office-${BASE#v}-android-vpn.apk" -O "apk/Nexus-Office-$V-android-vpn.apk"
           ls -la apk
-      - name: Codigo fuente, LEEME y sumas
+      - name: Manuales, codigo fuente, LEEME y sumas
         run: |
           set -e
           cd nexus-office-cpp
-          python packaging/build.py --targets --keep --apk ../apk/*.apk --docs ../entrega/*.pdf
+          NEXUS_CHROMIUM=$(command -v google-chrome || command -v chromium) ../construir/nexus-construir pdf ../manuales
+          ../construir/nexus-construir paquetes --targets --keep --apk ../apk/*.apk --docs ../manuales/*.pdf
           mkdir -p ../release
           find dist -type f ! -name SHA256SUMS.txt -exec mv {} ../release/ \;
           cd ../release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt && du -sh .
       - name: Publicar
         run: |
           set -e
-          TAG=$(python -c "import json; print(json.load(open('entrega/entrega.json'))['tag'])")
-          TARGET=$(python -c "import json; print(json.load(open('entrega/entrega.json')).get('target', 'main'))")
+          TAG=$(jq -r .tag entrega/entrega.json)
+          TARGET=$(jq -r '.target // "main"' entrega/entrega.json)
           V=${TAG#v}
           awk -v v="## Nexus-Office $V" '$0 ~ "^## " {p = (index($0, v) == 1)} p' nexus-office-cpp/CHANGELOG.md > notas.md
           printf '\nEdición C++: se instala junto a la edición Python sin pisarla. Instaladores 100 %% offline para Windows (x64 y ARM64), Linux (x86_64 y ARM64: .run, .deb, AppImage y Flatpak), macOS (Apple Silicon e Intel) y Android (autónoma y VPN). Instrucciones en LEEME.txt; integridad en SHA256SUMS.txt.\n' >> notas.md

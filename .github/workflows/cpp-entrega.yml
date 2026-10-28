@@ -3,10 +3,11 @@ name: Nexus-Office C++ (instaladores y pruebas con modelo real)
 # Entrega de la edicion C++ (nexus-office-cpp, 2.1):
 #  1. cpp.yml compila y prueba nexus-office en cada sistema nativo (artefactos cpp-<plataforma>)
 #  2. voz: whisper-cli (whisper.cpp) compilado en cada sistema y piper (rhasspy/piper) precompilado
-#  3. paquetes: .exe (NSIS), .run, .deb, AppImage, Flatpak y macOS con packaging/build.py; llama-server y sd-cli salen
-#     de los instaladores de la Release BASE de la edicion Python (los mismos motores, sin recompilarlos)
-#  4. humo: cada instalador se instala en su sistema y se prueba con modelos reales (packaging/smoke_test.py)
-#  5. android: nexus-office con el NDK, APK autonoma (firma temporal) y prueba en el emulador de Android
+#  3. paquetes: .exe (NSIS), .run, .deb, AppImage, Flatpak y macOS con «nexus-construir paquetes»; llama-server y
+#     sd-cli salen de los instaladores de la Release BASE (los mismos motores, sin recompilarlos)
+#  4. humo: cada instalador se instala en su sistema y se prueba con modelos reales («nexus-construir humo»)
+#  5. android: nexus-office con el NDK, APK autonoma («nexus-construir apk», firma temporal) y prueba en el emulador
+# nexus-construir es la herramienta de construccion en C++ (nexus-office-cpp/tools/construir): sale de cpp.yml.
 # Las APK quedan, en trozos, en la rama «apk-cpp-sin-firmar»; la firma definitiva se pone fuera de GitHub y
 # cpp-publicar.yml publica la Release.
 on:
@@ -113,13 +114,12 @@ jobs:
       - name: Liberar espacio
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost && df -h /
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
       - name: Herramientas
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq nsis flatpak p7zip-full >/dev/null
-          python -m pip install -q pillow
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nsis flatpak p7zip-full >/dev/null
+      - uses: actions/download-artifact@v4
+        with:
+          name: construir-linux-x86_64
+          path: construir
       - uses: actions/download-artifact@v4
         with:
           name: cpp-${{ matrix.target }}
@@ -181,7 +181,7 @@ jobs:
           esac
           rm -rf tmpdrv; find "$D" -maxdepth 3 | head -40
       - name: Construir
-        run: cd nexus-office-cpp && python packaging/build.py --targets ${{ matrix.target }}
+        run: chmod +x construir/nexus-construir && cd nexus-office-cpp && ../construir/nexus-construir paquetes --targets ${{ matrix.target }}
       - name: Lista
         run: ls -la nexus-office-cpp/dist/*/ && df -h /
       - uses: actions/upload-artifact@v4
@@ -209,13 +209,15 @@ jobs:
           - { target: windows-arm64, os: windows-11-arm }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          sparse-checkout: nexus-office-cpp/packaging
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python -m pip install -q websockets
+          name: construir-${{ matrix.target }}
+          path: construir
+      - name: nexus-construir
+        shell: bash
+        run: |
+          chmod +x construir/nexus-construir* || true
+          f=$(ls construir/nexus-construir*); echo "C=$PWD/$f" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@v4
         with:
           name: instalador-cpp-${{ matrix.target }}
@@ -244,20 +246,21 @@ jobs:
           "NX=C:\nxc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Probar con modelos reales (chat, selector, voz, imagen y servicio)
         shell: bash
-        run: python nexus-office-cpp/packaging/smoke_test.py "$NX" --acelerador "${{ matrix.accel || 'auto' }}"
+        run: |
+          "$C" humo "$NX" --acelerador "${{ matrix.accel || 'auto' }}"
       - name: Probar el .deb
         if: runner.os == 'Linux'
         run: |
           sudo apt-get install -y -qq ./inst/*/nexus-office-c_*.deb >/dev/null
           nexus-office-c --version
-          python nexus-office-cpp/packaging/smoke_test.py /opt/nexus-office-c --sin-imagen --sin-servicio
+          "$C" humo /opt/nexus-office-c --sin-imagen --sin-servicio
           sudo apt-get remove -y -qq nexus-office-c >/dev/null
       - name: Probar la AppImage
         if: runner.os == 'Linux'
         run: |
           cd "$RUNNER_TEMP" && chmod +x "$GITHUB_WORKSPACE"/inst/*/*.AppImage
           "$GITHUB_WORKSPACE"/inst/*/Nexus-Office-*-${{ matrix.target }}.AppImage --appimage-extract >/dev/null
-          python "$GITHUB_WORKSPACE/nexus-office-cpp/packaging/smoke_test.py" "$RUNNER_TEMP/squashfs-root/nexus" --sin-imagen --sin-servicio
+          "$C" humo "$RUNNER_TEMP/squashfs-root/nexus" --sin-imagen --sin-servicio
       - name: Probar el Flatpak
         if: matrix.target == 'linux-x86_64'
         run: |
@@ -267,12 +270,14 @@ jobs:
           flatpak run ai.nexus.NexusOfficeCpp --version
 
   android:
+    needs: cpp
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/download-artifact@v4
         with:
-          python-version: "3.12"
+          name: construir-linux-x86_64
+          path: construir
       - name: nexus-office para Android (NDK, ARM64)
         run: |
           set -e
@@ -294,13 +299,13 @@ jobs:
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           JAR=$(ls -d "$ANDROID_HOME"/platforms/android-* | sort -V | grep -E 'android-3[4-9]$' | head -1)/android.jar
           export PATH="$BT:$PATH" NEXUS_ANDROID_JAR="$JAR"
-          python -m pip install -q pillow
           # GPU y NPU del movil: llama-server-gpu y los backends de ggml (Vulkan, OpenCL, Hexagon) de android-npu-libs
           git fetch -q --depth 1 origin android-npu-libs
           git show FETCH_HEAD:android-gpu-npu-libs.tar.gz > npu.tgz
           (git show FETCH_HEAD:SHA256SUMS.txt | grep android-gpu-npu-libs.tar.gz | sed 's|  .*|  npu.tgz|' | sha256sum -c -)
           mkdir -p glibs && tar xzf npu.tgz -C glibs
-          python nexus-office-cpp/packaging/build_apk_autonomo.py --exe aout/Nexus-Office/nexus-office --libs alibs --recursos aout/Nexus-Office --gpu-libs glibs/lib
+          chmod +x construir/nexus-construir
+          (cd nexus-office-cpp && ../construir/nexus-construir apk --exe ../aout/Nexus-Office/nexus-office --libs ../alibs --recursos ../aout/Nexus-Office --gpu-libs ../glibs/lib)
           "$BT/apksigner" verify --print-certs nexus-office-cpp/dist-apk/*.apk | head -4
       - uses: actions/upload-artifact@v4
         with:

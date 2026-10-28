@@ -60,12 +60,14 @@ ctest --test-dir build --output-on-failure
 build/nexus-office run
 ```
 
-Instaladores: [packaging/build.py](packaging/build.py), que lanza `.github/workflows/cpp-entrega.yml` en GitHub
-Actions para todas las plataformas.
+Instaladores, APK, manuales en PDF y prueba de humo: `build/nexus-construir` (la herramienta de construcción, también en
+C++: [tools/construir](tools/construir)), que usa `.github/workflows/cpp-entrega.yml` en GitHub Actions para todas las
+plataformas. Todo el proyecto está en C++ (el firmware de las placas, en C/C++): no hace falta Python para compilar,
+empaquetar ni probar.
 
 ## Documentación
 
 - [Edición C++](docs/CPP.md): qué está igual, cómo está hecha y cómo se prueba.
 - [Guía de usuario](docs/USUARIO.md): instalación y uso diario.
-- El resto de guías (oficina, administrador, servicio, memoria, RAG, avatar, herramientas, API) son las de la edición
-  Python y valen igual: van en la carpeta `docs/` de cada instalador.
+- El resto de guías (oficina, administrador, servicio, memoria, RAG, avatar, herramientas, API, grafos, dispositivos)
+  están en [docs/](docs) y van en la carpeta `docs/` de cada instalador.

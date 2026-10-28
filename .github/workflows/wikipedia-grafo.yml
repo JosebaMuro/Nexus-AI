@@ -1,12 +1,13 @@
 name: Grafo multicapa de la Wikipedia en español
 
-# Genera el grafo de ejemplo (nexus-office-cpp/tools/wikipedia_grafo.py) con las API públicas de es.wikipedia.org y
+# Genera el grafo de ejemplo («nexus-construir grafo-wikipedia», nexus-office-cpp/tools/construir/grafo.cpp) con las
+# API públicas de es.wikipedia.org y
 # wikidata.org, que necesitan internet, y lo deja en la rama «datos-grafo-wikipedia» (y como artefacto) para que se
 # incluya en la Release, en la web de descargas y en los paquetes como ejemplo para importar.
 on:
   push:
     paths:
-      - "nexus-office-cpp/tools/wikipedia_grafo.py"
+      - "nexus-office-cpp/tools/construir/grafo.cpp"
       - ".github/workflows/wikipedia-grafo.yml"
   workflow_dispatch:
 
@@ -23,21 +24,20 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Compilar nexus-construir y nexus-office
+        run: |
+          cmake -S nexus-office-cpp -B build -DCMAKE_BUILD_TYPE=Release -DNEXUS_BUILD_TESTS=OFF -DNEXUS_LTO=OFF
+          cmake --build build --parallel 4 --target nexus-construir nexus-office
       - name: Generar el grafo
-        run: python3 nexus-office-cpp/tools/wikipedia_grafo.py --salida grafo-wikipedia-es --articulos 1500
+        run: build/nexus-construir grafo-wikipedia --salida grafo-wikipedia-es --articulos 1500
       - name: Comprobar que se importa
         run: |
-          python3 - <<'EOF'
-          import json, xml.etree.ElementTree as ET
-          g = json.load(open("grafo-wikipedia-es/grafo.json", encoding="utf-8"))
-          ET.parse("grafo-wikipedia-es/grafo.graphml")
-          capas = {n["capa"] for n in g["nodes"]} | {e["capa"] for e in g["links"]}
-          print(len(g["nodes"]), "nodos,", len(g["links"]), "relaciones, capas:", sorted(capas))
-          assert len(g["nodes"]) > 500 and len(g["links"]) > 1000 and len(capas) == 4
-          EOF
+          set -e
+          N=$(jq '.nodes | length' grafo-wikipedia-es/grafo.json); E=$(jq '.links | length' grafo-wikipedia-es/grafo.json)
+          C=$(jq '[.nodes[].capa, .links[].capa] | unique | length' grafo-wikipedia-es/grafo.json)
+          echo "$N nodos, $E relaciones, $C capas"
+          test "$N" -gt 500 && test "$E" -gt 1000 && test "$C" = 4
+          NEXUS_DATA_DIR=$RUNNER_TEMP/nx build/nexus-office grafo importar grafo-wikipedia-es/grafo.graphml --en general
       - uses: actions/upload-artifact@v4
         with:
           name: grafo-wikipedia-es

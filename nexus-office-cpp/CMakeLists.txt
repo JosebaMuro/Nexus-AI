@@ -10,14 +10,16 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Recursos compartidos con la version Python (interfaz web, perfiles, agentes y paquetes de conocimiento):
-# son los mismos ficheros, asi que las dos ediciones se ven y se comportan igual.
-set(NEXUS_RESOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../nexus-office/nexus" CACHE PATH "Carpeta nexus/ con web, office y agents/defaults")
+# Recursos de la aplicacion (interfaz web, perfiles, agentes y paquetes de conocimiento), en recursos/: la edicion C++
+# ya no depende de la carpeta de la edicion Python (congelada como historico).
+set(NEXUS_RESOURCES "${CMAKE_CURRENT_SOURCE_DIR}/recursos" CACHE PATH "Carpeta con web, office y agents/defaults")
 # TLS para HTTPS (descargas de modelos, web_fetch): mbedtls (se descarga y compila, sin dependencias del sistema),
 # openssl (el del sistema) o none (solo HTTP)
 set(NEXUS_TLS "mbedtls" CACHE STRING "mbedtls | openssl | none")
 option(NEXUS_STATIC_RUNTIME "Enlazar estatico el runtime de C++ (paquetes portables)" ON)
 option(NEXUS_BUILD_TESTS "Compilar las pruebas" ON)
+# nexus-construir: instaladores, APK, manuales en PDF, prueba de humo y datos (no va en los paquetes)
+option(NEXUS_BUILD_TOOLS "Compilar la herramienta de construccion nexus-construir" ON)
 if(NEXUS_STATIC_RUNTIME)
   # MSVC: runtime estatico en todo (dependencias y pruebas incluidas) para no mezclar /MT y /MD
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -92,7 +94,21 @@ if(NEXUS_TLS STREQUAL "mbedtls")
   set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
   FetchContent_Declare(mbedtls URL ${NEXUS_MBEDTLS_URL} URL_HASH SHA256=${NEXUS_MBEDTLS_SHA256}
                        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+  set(INSTALL_MBEDTLS_HEADERS OFF CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(mbedtls)
+  # mbedtls instala sus bibliotecas estaticas en lib/: no pintan nada en el paquete (CMP0082: esto va despues). Solo se
+  # quitan las suyas, y la carpeta si queda vacia
+  install(CODE [[
+    file(GLOB _nx_mbed "${CMAKE_INSTALL_PREFIX}/lib/*mbed*" "${CMAKE_INSTALL_PREFIX}/lib/*everest*"
+                       "${CMAKE_INSTALL_PREFIX}/lib/*p256m*")
+    if(_nx_mbed)
+      file(REMOVE ${_nx_mbed})
+    endif()
+    file(GLOB _nx_rest "${CMAKE_INSTALL_PREFIX}/lib/*")
+    if(NOT _nx_rest AND IS_DIRECTORY "${CMAKE_INSTALL_PREFIX}/lib")
+      file(REMOVE_RECURSE "${CMAKE_INSTALL_PREFIX}/lib")
+    endif()
+  ]])
   set(NX_TLS_LIBS mbedtls mbedx509 mbedcrypto)
   set(NX_TLS_DEFS CPPHTTPLIB_MBEDTLS_SUPPORT NEXUS_HAVE_TLS)
 elseif(NEXUS_TLS STREQUAL "openssl")
@@ -185,6 +201,16 @@ install(DIRECTORY ${NEXUS_RESOURCES}/office/perfiles ${NEXUS_RESOURCES}/office/a
 install(DIRECTORY ${NEXUS_RESOURCES}/agents/defaults DESTINATION nexus/agents)
 install(FILES ${NEXUS_RESOURCES}/remote/pair.html DESTINATION nexus/remote)
 install(FILES ${TP}/certs/cacert.pem DESTINATION nexus/certs)
+
+if(NEXUS_BUILD_TOOLS AND NOT ANDROID)
+  file(GLOB CONSTRUIR_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/construir/*.cpp)
+  add_executable(nexus-construir ${CONSTRUIR_SRC})
+  target_link_libraries(nexus-construir PRIVATE nexus_core)
+  target_compile_definitions(nexus-construir PRIVATE NEXUS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+  if(MINGW)
+    target_link_options(nexus-construir PRIVATE -municode)
+  endif()
+endif()
 
 if(NEXUS_BUILD_TESTS)
   enable_testing()
