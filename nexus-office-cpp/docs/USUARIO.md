@@ -1,6 +1,6 @@
 # Guía de usuario
 
-> **Edición C++ (2.1).** Esta guía es la de Nexus-Office con los nombres de los instaladores de la edición C++, que tiene todas las funciones de la edición Python. Cómo está hecha y en qué se diferencia: [CPP.md](CPP.md). La instalación por Linux con el `.deb` deja el programa en `/opt/nexus-office-c` y la orden `nexus-office-c`; el resto de instaladores, la orden `nexus-office` en la carpeta de instalación.
+> **Edición C++.** Esta guía es la de Nexus-Office con los nombres de los instaladores de la edición C++, que tiene todas las funciones de la edición Python y no necesita Python. Cómo está hecha y en qué se diferencia: [CPP.md](CPP.md). La instalación por Linux con el `.deb` deja el programa en `/opt/nexus-office-c` y la orden `nexus-office-c`; el resto de instaladores, la orden `nexus-office` en la carpeta de instalación.
 
 Esta guía explica cómo instalar Nexus-Office en cada equipo y cómo usarlo en el día a día. Para la configuración avanzada,
 ver la [guía de administrador](ADMINISTRADOR.md); para montar la oficina de tu empresa, [Oficina para pymes](OFICINA.md).
@@ -11,18 +11,18 @@ Todos los instaladores son **100 % portables**: llevan dentro el programa nativo
 (llama-server y sd-cli, para CPU y para la tarjeta gráfica). **Se instalan sin internet.** Lo único que se descarga
 es el modelo de IA, elegido según tu equipo, y solo si hay conexión (ver [más abajo](#modelo-de-ia-elegido-según-tu-equipo)).
 
-Elige el fichero de tu equipo (versión 2.2.0-cpp):
+Elige el fichero de tu equipo (versión 2.3.0-cpp):
 
 | Equipo | Fichero |
 |---|---|
-| PC con Windows 10/11 de 64 bits (Intel o AMD) | `windows/Nexus-Office-Setup-2.2.0-cpp-windows-x64.exe` |
-| PC con Windows 11 en ARM (Snapdragon X) | `windows/Nexus-Office-Setup-2.2.0-cpp-windows-arm64.exe` |
-| PC con Linux (Ubuntu, Debian, Fedora, Steam Deck…) | `linux/Nexus-Office-2.2.0-cpp-linux-x86_64.run`, `.AppImage` o `.flatpak`; en Debian y Ubuntu también `linux/nexus-office-c_2.2.0-cpp_amd64.deb` |
-| Raspberry Pi 4/5 y otros Linux ARM de 64 bits | `linux/Nexus-Office-2.2.0-cpp-linux-aarch64.run`, `.AppImage`, `.flatpak` o `linux/nexus-office-c_2.2.0-cpp_arm64.deb` |
-| Mac con Apple Silicon (M1, M2, M3…) | `macos/Nexus-Office-2.2.0-cpp-macos-arm64.tar.gz` |
-| Mac con Intel | `macos/Nexus-Office-2.2.0-cpp-macos-x86_64.tar.gz` |
-| Móvil Android: Nexus-Office dentro del móvil | `android/Nexus-Office-2.2.0-cpp-android-autonomo.apk` |
-| Móvil Android: usar el Nexus-Office del PC de la oficina | `android/Nexus-Office-2.2.0-cpp-android-vpn.apk` |
+| PC con Windows 10/11 de 64 bits (Intel o AMD) | `windows/Nexus-Office-Setup-2.3.0-cpp-windows-x64.exe` |
+| PC con Windows 11 en ARM (Snapdragon X) | `windows/Nexus-Office-Setup-2.3.0-cpp-windows-arm64.exe` |
+| PC con Linux (Ubuntu, Debian, Fedora, Steam Deck…) | `linux/Nexus-Office-2.3.0-cpp-linux-x86_64.run`, `.AppImage` o `.flatpak`; en Debian y Ubuntu también `linux/nexus-office-c_2.3.0-cpp_amd64.deb` |
+| Raspberry Pi 4/5 y otros Linux ARM de 64 bits | `linux/Nexus-Office-2.3.0-cpp-linux-aarch64.run`, `.AppImage`, `.flatpak` o `linux/nexus-office-c_2.3.0-cpp_arm64.deb` |
+| Mac con Apple Silicon (M1, M2, M3…) | `macos/Nexus-Office-2.3.0-cpp-macos-arm64.tar.gz` |
+| Mac con Intel | `macos/Nexus-Office-2.3.0-cpp-macos-x86_64.tar.gz` |
+| Móvil Android: Nexus-Office dentro del móvil | `android/Nexus-Office-2.3.0-cpp-android-autonomo.apk` |
+| Móvil Android: usar el Nexus-Office del PC de la oficina | `android/Nexus-Office-2.3.0-cpp-android-vpn.apk` |
 
 `SHA256SUMS.txt` trae la huella de cada fichero, para comprobar que se ha copiado bien. Si Nexus-Office ya está instalado
 en un PC de la oficina, los demás equipos y móviles pueden descargar su instalador desde él (ver
@@ -30,7 +30,7 @@ en un PC de la oficina, los demás equipos y móviles pueden descargar su instal
 
 ### Windows
 
-1. Haz doble clic en `Nexus-Office-Setup-2.2.0-cpp-windows-x64.exe` (o `-arm64.exe` en un PC con Snapdragon X).
+1. Haz doble clic en `Nexus-Office-Setup-2.3.0-cpp-windows-x64.exe` (o `-arm64.exe` en un PC con Snapdragon X).
 2. El instalador no está firmado. Si Windows muestra «Windows protegió su PC», pulsa **Más información →
    Ejecutar de todas formas**.
 3. Acepta la licencia y elige la carpeta. Por defecto es `%LOCALAPPDATA%\Nexus-Office` y no hace falta ser administrador.
@@ -53,7 +53,7 @@ configuración); si dices que no, quedan en la carpeta `data`.
 **Instalación desatendida** (por ejemplo, en varios PC):
 
 ```bat
-Nexus-Office-Setup-2.2.0-cpp-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED /MODELOS=auto /D=C:\Nexus-Office
+Nexus-Office-Setup-2.3.0-cpp-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED /MODELOS=auto /D=C:\Nexus-Office
 ```
 
 | Opción | Qué hace |
@@ -70,8 +70,8 @@ Nexus-Office-Setup-2.2.0-cpp-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED
 **Con el instalador `.run`** (cualquier distribución):
 
 ```bash
-sh Nexus-Office-2.2.0-cpp-linux-x86_64.run                   # en Raspberry Pi y ARM: Nexus-Office-2.2.0-cpp-linux-aarch64.run
-sh Nexus-Office-2.2.0-cpp-linux-x86_64.run ~/Nexus-Office --oficina=herreria --servicio --red
+sh Nexus-Office-2.3.0-cpp-linux-x86_64.run                   # en Raspberry Pi y ARM: Nexus-Office-2.3.0-cpp-linux-aarch64.run
+sh Nexus-Office-2.3.0-cpp-linux-x86_64.run ~/Nexus-Office --oficina=herreria --servicio --red
 ```
 
 Se instala en `~/.local/share/nexus-office` si no indicas otra carpeta. Opciones:
@@ -81,7 +81,7 @@ Se instala en `~/.local/share/nexus-office` si no indicas otra carpeta. Opciones
 - `--servicio`: arranque automático, como servicio de tu usuario que arranca al encender el equipo (si el sistema
   permite `loginctl enable-linger`; si no, al iniciar sesión). Con `sudo` se instala
   para todo el equipo en `/opt/nexus-office` (a nombre de tu usuario) y el servicio es del sistema:
-  `sudo sh Nexus-Office-2.2.0-cpp-linux-x86_64.run --servicio --red`.
+  `sudo sh Nexus-Office-2.3.0-cpp-linux-x86_64.run --servicio --red`.
 - `--red` (junto con `--servicio`): el servicio escucha en la red local.
 
 Después, abre *Nexus-Office* desde el menú de aplicaciones o ejecuta `start.sh` en la carpeta de instalación. En Steam
@@ -91,10 +91,10 @@ Deck, instálalo en modo escritorio y añade `start.sh` como *juego no‑Steam*.
 va instalado dentro; tus datos quedan en `~/.local/share/nexus-office`.
 
 ```bash
-chmod +x Nexus-Office-2.2.0-cpp-linux-x86_64.AppImage      # en Raspberry Pi y ARM: Nexus-Office-2.2.0-cpp-linux-aarch64.AppImage
-./Nexus-Office-2.2.0-cpp-linux-x86_64.AppImage              # arranca Nexus-Office y abre el navegador
-./Nexus-Office-2.2.0-cpp-linux-x86_64.AppImage oficina herreria
-./Nexus-Office-2.2.0-cpp-linux-x86_64.AppImage servicio instalar --red   # arranque automático (usa la ruta del AppImage: no lo muevas después)
+chmod +x Nexus-Office-2.3.0-cpp-linux-x86_64.AppImage      # en Raspberry Pi y ARM: Nexus-Office-2.3.0-cpp-linux-aarch64.AppImage
+./Nexus-Office-2.3.0-cpp-linux-x86_64.AppImage              # arranca Nexus-Office y abre el navegador
+./Nexus-Office-2.3.0-cpp-linux-x86_64.AppImage oficina herreria
+./Nexus-Office-2.3.0-cpp-linux-x86_64.AppImage servicio instalar --red   # arranque automático (usa la ruta del AppImage: no lo muevas después)
 ```
 
 Si tu sistema no tiene FUSE (aparece «libfuse.so.2 not found»), ejecútalo con `--appimage-extract-and-run` delante
@@ -104,7 +104,7 @@ de los argumentos, o instala `libfuse2`.
 `org.freedesktop.Platform 24.08` (si no lo tienes ya).
 
 ```bash
-flatpak install --user Nexus-Office-2.2.0-cpp-linux-x86_64.flatpak     # o -aarch64.flatpak
+flatpak install --user Nexus-Office-2.3.0-cpp-linux-x86_64.flatpak     # o -aarch64.flatpak
 flatpak run ai.nexus.NexusOffice                                   # o desde el menú de aplicaciones
 flatpak run ai.nexus.NexusOffice servicio instalar                 # deja lista la unidad; actívala con:
 systemctl --user enable --now nexus-office
@@ -115,7 +115,7 @@ Los datos quedan en `~/.var/app/ai.nexus.NexusOffice/data/nexus-office`.
 **Con el paquete `.deb`** (Debian, Ubuntu, Linux Mint, Raspberry Pi OS de 64 bits):
 
 ```bash
-sudo apt install ./nexus-office-c_2.2.0-cpp_amd64.deb         # en Raspberry Pi y ARM: nexus-office-c_2.2.0-cpp_arm64.deb
+sudo apt install ./nexus-office-c_2.3.0-cpp_amd64.deb         # en Raspberry Pi y ARM: nexus-office-c_2.3.0-cpp_arm64.deb
 nexus-office                                            # arranca Nexus-Office y abre el navegador
 sudo nexus-office servicio instalar --red               # opcional: arranque automático accesible desde la red
 ```
@@ -130,7 +130,7 @@ si puedes: cargan mucho más rápido que desde la tarjeta SD.
 
 ### macOS
 
-1. Descomprime `Nexus-Office-2.2.0-cpp-macos-arm64.tar.gz` (o `-macos-x86_64` en un Mac con Intel) donde quieras.
+1. Descomprime `Nexus-Office-2.3.0-cpp-macos-arm64.tar.gz` (o `-macos-x86_64` en un Mac con Intel) donde quieras.
 2. Abre **Nexus-Office.command**. Como no está firmado por Apple, la primera vez haz **clic derecho → Abrir** y confirma.
 3. La primera vez se prepara Nexus-Office (sin internet salvo para el modelo de IA) y después se abre el navegador.
 
@@ -146,8 +146,8 @@ Hay dos apps, independientes; puedes instalar las dos:
 
 | App | Fichero | Para qué |
 |---|---|---|
-| **Nexus-Office autónomo** | `Nexus-Office-2.2.0-cpp-android-autonomo.apk` | Nexus-Office C++ completo dentro del móvil, sin PC (Android 9 o superior, ARM64). La APK lo lleva todo y solo descarga el modelo de IA adecuado a la RAM del móvil. Usa la NPU Hexagon de los Snapdragon 8 Gen 2 o posteriores, la GPU (Adreno por OpenCL; Mali, Immortalis, Xclipse y PowerVR por Vulkan) o la CPU, según lo que vaya más rápido en ese móvil. |
-| **Nexus-Office VPN** | `Nexus-Office-2.2.0-cpp-android-vpn.apk` | App ligera para usar el Nexus-Office del PC de la oficina (Android 7 o superior) en la Wi‑Fi de la oficina con la clave de red, o desde fuera con la VPN cifrada (ver [Acceso remoto](ACCESO_REMOTO.md)). |
+| **Nexus-Office autónomo** | `Nexus-Office-2.3.0-cpp-android-autonomo.apk` | Nexus-Office C++ completo dentro del móvil, sin PC (Android 9 o superior, ARM64). La APK lo lleva todo y solo descarga el modelo de IA adecuado a la RAM del móvil. Usa la NPU Hexagon de los Snapdragon 8 Gen 2 o posteriores, la GPU (Adreno por OpenCL; Mali, Immortalis, Xclipse y PowerVR por Vulkan) o la CPU, según lo que vaya más rápido en ese móvil. |
+| **Nexus-Office VPN** | `Nexus-Office-2.3.0-cpp-android-vpn.apk` | App ligera para usar el Nexus-Office del PC de la oficina (Android 7 o superior) en la Wi‑Fi de la oficina con la clave de red, o desde fuera con la VPN cifrada (ver [Acceso remoto](ACCESO_REMOTO.md)). |
 
 1. Copia la APK al móvil o descárgala desde el PC de la oficina (*Sistema → Descargas*).
 2. Ábrela. Android pedirá permiso para **instalar apps desconocidas** desde esa app (el navegador o el gestor de

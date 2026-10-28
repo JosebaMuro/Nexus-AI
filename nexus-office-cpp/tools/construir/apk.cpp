@@ -12,6 +12,8 @@
 // La app Java esta en android/ (identificador ai.nexus.office.cpp). Herramientas: aapt2, d8, zipalign y apksigner del
 // SDK de Android (.cache/android/build-tools o el PATH), javac y android.jar (NEXUS_ANDROID_JAR o
 // .cache/android/platform/android.jar). Sin firma propia (.cache/android/nexus-release.jks) se crea una con keytool.
+#include <cstdio>
+
 #include "comun.h"
 #include "util/archive.h"
 #include "util/crypto.h"
@@ -26,8 +28,15 @@ namespace {
 
 const std::string APP_ID = "ai.nexus.office.cpp";
 const int MIN_SDK = 28;
-const int VERSION_CODE = 20000 + 50;   // por encima de la 2.0.0 de Python (20000 + revision): es otra app
 const char* LLAMA[] = {"libllama-server.so", "libllama-server-dotprod.so", "libllama-server-i8mm.so"};
+
+// versionCode de la version: 2.3.0-cpp -> 20300 (mayor*10000 + menor*100 + parche). Siempre por encima del 20050 que
+// llevaban las APK hasta la 2.2, para que Android instale la nueva encima.
+int version_code() {
+  int a = 0, b = 0, c = 0;
+  std::sscanf(version().c_str(), "%d.%d.%d", &a, &b, &c);
+  return std::max(a * 10000 + b * 100 + c, 20051);
+}
 
 fs::path sdk() { return raiz() / ".cache" / "android"; }
 
@@ -114,7 +123,7 @@ int apk(const std::vector<std::string>& argv) {
   ejecutar({aapt2, "link", "-o", S(out / "base.apk"), "-I", api_jar, "--manifest", S(app / "AndroidManifest.xml"),
             "--rename-manifest-package", APP_ID, "-A", S(app / "assets"), "--java", S(out / "gen"),
             "--min-sdk-version", std::to_string(MIN_SDK), "--target-sdk-version", "34", "--version-code",
-            std::to_string(VERSION_CODE), "--version-name", version(), S(out / "res.zip")});
+            std::to_string(version_code()), "--version-name", version(), S(out / "res.zip")});
   std::vector<std::string> cmd = {javac, "-encoding", "UTF-8", "--release", "8", "-Xlint:-options", "-nowarn",
                                   "-cp", api_jar, "-d", S(out / "classes")};
   for (auto& dir : {app / "src", out / "gen"})

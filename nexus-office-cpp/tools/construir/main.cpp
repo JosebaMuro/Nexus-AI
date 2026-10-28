@@ -6,6 +6,7 @@
 //   nexus-construir humo <carpeta instalada> [--exe ruta] [--modelo id] [--sin-imagen] [--sin-servicio] [--acelerador a]
 //   nexus-construir grafo-wikipedia [--salida d] [--articulos n] [--por-categoria n] [--profundidad n] [--raices a,b]
 //   nexus-construir datos             regenera src/gen/data.cpp desde recursos/datos/*.json
+//   nexus-construir avatar [hoja.jpg] recursos del avatar geisha desde su hoja de personaje
 #include <iostream>
 
 #include "comun.h"
@@ -20,7 +21,8 @@ int uso() {
                "  pdf [carpeta]                                             Manual-de-usuario.pdf y Documentacion-tecnica.pdf\n"
                "  humo <carpeta instalada> [--sin-imagen] [--sin-servicio]  prueba con modelos reales\n"
                "  grafo-wikipedia [--salida D] [--articulos N]              grafo multicapa de ejemplo (internet)\n"
-               "  datos                                                     regenera src/gen/data.cpp\n";
+               "  datos                                                     regenera src/gen/data.cpp\n"
+               "  avatar [hoja.jpg] [--salida D]                            avatar 3D geisha desde su hoja de personaje\n";
   return 2;
 }
 
@@ -35,6 +37,7 @@ int run(std::vector<std::string> a) {
     if (cmd == "humo") return nc::humo(a);
     if (cmd == "grafo-wikipedia") return nc::grafo_wikipedia(a);
     if (cmd == "datos") return nc::datos(a);
+    if (cmd == "avatar") return nc::avatar(a);
     if (cmd == "--version") {
       std::cout << NEXUS_VERSION << "\n";
       return 0;

@@ -1,5 +1,29 @@
 # Cambios
 
+## Nexus-Office 2.3.0-cpp
+
+### Todo el proyecto en C++
+- La edición C++ ya no depende de la carpeta de la edición Python: la interfaz web, los perfiles de oficina, los
+  agentes, los paquetes de conocimiento y las tablas de datos están en `recursos/`, y la app Android en `android/`.
+- **nexus-construir**, la herramienta de construcción, está en C++ y sustituye a todos los scripts de Python:
+  instaladores (.exe, .run, .deb, AppImage, Flatpak y macOS), código fuente y sumas, APK autónoma, manuales en PDF,
+  prueba de humo con modelos reales, grafo de ejemplo de la Wikipedia, tablas de datos y el avatar 3D a partir de su
+  hoja de personaje. Ninguna Action de la edición C++ usa ya Python.
+- El firmware del Pico W (NexusPico) está en C++ con el Pico SDK y la herramienta `flash.py` desaparece: todas las
+  placas se graban con `nexus-office firmware` o desde *Dispositivos*.
+- La edición Python queda congelada: no recibe cambios nuevos.
+
+### Documentación
+- La documentación técnica y el manual describen la edición C++: órdenes `nexus-office`, carpetas e identificadores
+  propios (`Nexus-Office-C`, `nexus-office-c`), instaladores sin Python, servicio con `nexus-office-w.exe` en Windows,
+  arquitectura por módulos de `src/` y empaquetado con `nexus-construir`.
+
+### Correcciones
+- Los paquetes ya no llevan las cabeceras ni las bibliotecas de mbedTLS (unos 4 MB menos por instalador).
+- Las peticiones HTTP que responden 204 (sin contenido) ya no se toman por un fallo de conexión.
+- La APK autónoma lleva un versionCode que sube con cada versión, así Android la instala encima de la anterior.
+- Prueba nueva: los 55 ejemplos de formatos de grafo se leen en todas las plataformas.
+
 ## Nexus-Office 2.2.0-cpp
 
 ### Todo en C++

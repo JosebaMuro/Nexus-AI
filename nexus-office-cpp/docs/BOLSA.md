@@ -56,12 +56,12 @@ Además lleva los agentes de oficina comunes: recepción, agenda, administració
 Cada agente aprende en su propio grafo, como en el resto de perfiles (ver [OFICINA.md](OFICINA.md)).
 
 ```
-python -m nexus oficina bolsa-inversiones
+nexus-office oficina bolsa-inversiones
 ```
 
 ## La mesa simulada
 
-Se abre en la sección **BOLSA** de la app (en el móvil, en *Más*) o con `python -m nexus bolsa`. Los datos se guardan
+Se abre en la sección **BOLSA** de la app (en el móvil, en *Más*) o con `nexus-office bolsa`. Los datos se guardan
 en `data/bolsa/bolsa.db`.
 
 - **Cartera ficticia** en euros, con 10.000 € de partida (puedes crear otras con el capital y la tarifa que quieras,
@@ -87,7 +87,7 @@ en `data/bolsa/bolsa.db`.
   con pérdidas y conservas o recompras títulos del mismo valor.
 
 Las órdenes pendientes se revisan cada vez que se consulta la mesa (la app, la terminal o un agente). Las cifras de
-tarifas, canon e impuestos son aproximadas y se pueden ajustar en `nexus/office/bolsa.py` (`TARIFAS`, `CANON_BME` y la
+tarifas, canon e impuestos son aproximadas y están en `src/office/bolsa.cpp` (`TARIFAS`, `CANON_BME` y la
 columna `impuesto_pct` de cada valor).
 
 ## Cartera real: nunca sin tu confirmación
@@ -97,31 +97,31 @@ nada se ejecute por su cuenta:
 
 1. Cualquier orden (tuya o de un agente) queda **por confirmar**. No se envía a ningún sitio.
 2. Solo una persona puede confirmarla, escribiendo `CONFIRMO`: en la app con el modo **ADMIN** activo, o en la
-   terminal con `python -m nexus bolsa confirmar <id>`. Ningún agente tiene una herramienta para confirmar.
+   terminal con `nexus-office bolsa confirmar <id>`. Ningún agente tiene una herramienta para confirmar.
 3. **Nexus-Office no se conecta a ningún bróker.** La orden confirmada la ejecutas tú en tu bróker.
 4. Después registras la ejecución real (precio, comisiones) con *REGISTRAR EJECUCIÓN* o
-   `python -m nexus bolsa ejecucion <id> <precio> --comision <euros>`, y la cartera se actualiza.
+   `nexus-office bolsa ejecucion <id> <precio> --comision <euros>`, y la cartera se actualiza.
 
 Crear una cartera real también requiere el modo administrador.
 
 ## Terminal
 
 ```
-python -m nexus bolsa                         # resumen de la cartera
-python -m nexus bolsa mercados                # bolsas abiertas o cerradas, en hora local
-python -m nexus bolsa valores santander       # buscar valores
-python -m nexus bolsa cotizar SAN.MC
-python -m nexus bolsa comprar SAN.MC 100
-python -m nexus bolsa comprar AAPL 5 --tipo limitada --limite 210 --validez hasta_cancelar
-python -m nexus bolsa vender SAN.MC 50 --tipo stop --stop 5.6
-python -m nexus bolsa ordenes | operaciones | cancelar <id>
-python -m nexus bolsa nueva "Reto 2027" --capital 3000 --tarifa neobroker
-python -m nexus bolsa reiniciar --cartera 2
-python -m nexus bolsa importar SAN.MC cierres.csv
-python -m nexus bolsa fiscal 2026
-python -m nexus bolsa nueva "Mi cartera" --modo real --capital 12000     # seguimiento, sin ejecutar nada
-python -m nexus bolsa confirmar <id>
-python -m nexus bolsa ejecucion <id> 6.12 --comision 8
+nexus-office bolsa                         # resumen de la cartera
+nexus-office bolsa mercados                # bolsas abiertas o cerradas, en hora local
+nexus-office bolsa valores santander       # buscar valores
+nexus-office bolsa cotizar SAN.MC
+nexus-office bolsa comprar SAN.MC 100
+nexus-office bolsa comprar AAPL 5 --tipo limitada --limite 210 --validez hasta_cancelar
+nexus-office bolsa vender SAN.MC 50 --tipo stop --stop 5.6
+nexus-office bolsa ordenes | operaciones | cancelar <id>
+nexus-office bolsa nueva "Reto 2027" --capital 3000 --tarifa neobroker
+nexus-office bolsa reiniciar --cartera 2
+nexus-office bolsa importar SAN.MC cierres.csv
+nexus-office bolsa fiscal 2026
+nexus-office bolsa nueva "Mi cartera" --modo real --capital 12000     # seguimiento, sin ejecutar nada
+nexus-office bolsa confirmar <id>
+nexus-office bolsa ejecucion <id> 6.12 --comision 8
 ```
 
 En la app Nexus-Office autónomo de Android la mesa está en la sección **BOLSA** igual que en el escritorio.

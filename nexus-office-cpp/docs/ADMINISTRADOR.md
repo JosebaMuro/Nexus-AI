@@ -60,37 +60,39 @@ Guía completa: [Acceso remoto](ACCESO_REMOTO.md).
 En **Sistema → Autoajuste adaptativo** verás qué cambió en cada arranque y por qué, y las pruebas de hilos (tokens/s por número de hilos). Desactívalo con `hardware.adaptive_tuning: false`. Usa **Apagar Nexus-Office** para que la sesión cuente como cierre limpio.
 
 ## Runtimes y aceleración
-**Sistema → Runtimes nativos** lista las variantes recomendadas (★) y alternativas. Por ejemplo, con iGPU Intel puedes instalar `openvino` o `vulkan` y compararlas: el autoajuste registra el rendimiento de cada sesión. Los instaladores traen llama-server y sd-cli precompilados en `bundled/runtimes/` para CPU, Vulkan y, según la plataforma, CUDA o Metal (marcados «✓ incluido»); Nexus-Office prueba primero la variante de GPU de tu hardware y cae a la CPU si falta el driver. Ver [Plataformas](PLATAFORMAS.md#aceleración-incluida-en-los-instaladores). `python -m nexus setup --auto --all` instala también PyTorch acelerado (MusicGen) si hay GPU.
+**Sistema → Runtimes nativos** lista las variantes recomendadas (★) y alternativas. Por ejemplo, con iGPU Intel puedes instalar `openvino` o `vulkan` y compararlas: el autoajuste registra el rendimiento de cada sesión. Los instaladores traen llama-server y sd-cli precompilados en `bundled/runtimes/` para CPU, Vulkan y, según la plataforma, CUDA o Metal (marcados «✓ incluido»); Nexus-Office prueba primero la variante de GPU de tu hardware y cae a la CPU si falta el driver. Ver [Plataformas](PLATAFORMAS.md#aceleración-incluida-en-los-instaladores).
 
-**App Android autónoma**: no hay que instalar nada. La APK trae llama-server de CPU y otro con GPU y NPU (Hexagon para la NPU de los Snapdragon 8 Gen 2 o posteriores, OpenCL para Adreno, Vulkan para el resto); Nexus-Office detecta CPU, GPU y NPU (`GET /api/hardware`), pone el modelo en la NPU o en la GPU si llama.cpp puede usarlas y el autoajuste (`GET /api/android/autoajuste`, campos `gpu` y `accel`) compara GPU y CPU con respuestas reales y se queda con lo más rápido. Si la NPU falla pasa a la GPU, y si falla la GPU sigue en CPU; lo anota en `data/android_accel.json` (`npu_broken`, `gpu_broken`; para volver a probarlas, borra ese fichero y `data/android_tune.json`). Ver [la app autónoma](../android-autonomo/README.md#cpu-gpu-y-npu).
+**App Android autónoma**: no hay que instalar nada. La APK trae llama-server de CPU y otro con GPU y NPU (Hexagon para la NPU de los Snapdragon 8 Gen 2 o posteriores, OpenCL para Adreno, Vulkan para el resto); Nexus-Office detecta CPU, GPU y NPU (`GET /api/hardware`), pone el modelo en la NPU o en la GPU si llama.cpp puede usarlas y el autoajuste (`GET /api/android/autoajuste`, campos `gpu` y `accel`) compara GPU y CPU con respuestas reales y se queda con lo más rápido. Si la NPU falla pasa a la GPU, y si falla la GPU sigue en CPU; lo anota en `data/android_accel.json` (`npu_broken`, `gpu_broken`; para volver a probarlas, borra ese fichero y `data/android_tune.json`). Ver [Apps Android](PLATAFORMAS.md#apps-android).
 
 ## Línea de comandos
 ```bash
-python -m nexus run [--host 0.0.0.0] [--port 8775] [--no-browser]
-python -m nexus detect                 # informe de hardware + perfil
-python -m nexus setup --auto [--all]   # extras según hardware
-python -m nexus pull auto|<id>         # modelos recomendados
-python -m nexus modelos [--descargar] [--todos]   # evalúa el hardware, elige el modelo de cada tipo y lo descarga si hay internet
-python -m nexus servicio instalar|quitar|estado [--red] [--puerto P]   # arranque automático (ver SERVICIO.md)
-python -m nexus oficina [<perfil>|--quitar]       # perfil de oficina (ver OFICINA.md)
-python -m nexus chat [--agent id]      # chat en terminal
-python -m nexus wheels --check         # comprueba que wheelhouse/ instala sin internet
-python -m nexus cleanup [--dry-run] [--no-keep]   # quita del instalador lo que este equipo no usa (ver PLATAFORMAS.md)
+nexus-office run [--host 0.0.0.0] [--port 8775] [--no-browser]
+nexus-office detect                 # informe de hardware + perfil
+nexus-office setup                  # comprueba los runtimes incluidos para este hardware
+nexus-office pull auto|<id>         # modelos recomendados
+nexus-office modelos [--descargar] [--todos]   # evalúa el hardware, elige el modelo de cada tipo y lo descarga si hay internet
+nexus-office servicio instalar|quitar|estado [--red] [--puerto P]   # arranque automático (ver SERVICIO.md)
+nexus-office oficina [<perfil>|--quitar]       # perfil de oficina (ver OFICINA.md)
+nexus-office chat [--agent id]      # chat en terminal
+nexus-office cleanup [--dry-run]    # quita las variantes de runtime que este equipo no usa (ver PLATAFORMAS.md)
+nexus-office comprobar              # comprobación y autorreparación, como al arrancar
+nexus-office firmware               # placas, puertos, drivers y grabado de firmware (ver DISPOSITIVOS.md)
+nexus-office grafo | bolsa ...      # importar grafos (GRAFOS.md) y mesa de bolsa (BOLSA.md)
 ```
 
 ## Modelo de IA elegido al instalar
-`python -m nexus modelos` (lo llaman todos los instaladores) lee el perfil de hardware y, de `nexus/models/recommended.py`, toma el modelo marcado como mejor (`best`) de cada tipo: chat y visión (Qwen3‑VL Thinking 2B, 4B u 8B), documentos (Qwen3‑Embedding 0.6B), voz (Piper) e imagen (solo con `--todos`). Imprime el equipo (RAM, VRAM, acelerador, gama), lo elegido y los modelos que caben pero irían lentos. Con `--descargar` comprueba la conexión con Hugging Face y los baja; sin internet solo recomienda. Los instaladores lo controlan con `--modelos=auto|todos|no` / `-Modelos` / `/MODELOS=`. Los modelos descargados se activan solos si no había otro del mismo tipo.
+`nexus-office modelos` (lo llaman todos los instaladores) lee el perfil de hardware y, del catálogo recomendado (`recursos/datos/recommended.json`), toma el modelo marcado como mejor (`best`) de cada tipo: chat y visión (Qwen3‑VL Thinking 2B, 4B u 8B), documentos (Qwen3‑Embedding 0.6B), voz (Piper) e imagen (solo con `--todos`). Imprime el equipo (RAM, VRAM, acelerador, gama), lo elegido y los modelos que caben pero irían lentos. Con `--descargar` comprueba la conexión con Hugging Face y los baja; sin internet solo recomienda. Los instaladores lo controlan con `--modelos=auto|todos|no` / `/MODELOS=`. Los modelos descargados se activan solos si no había otro del mismo tipo.
 
 ## Servicio (arranque automático)
-`nexus/service.py` registra `python -m nexus run --no-browser --host H --port P` en el gestor de servicios del sistema: systemd (del sistema como root, con `User=` el dueño de la carpeta o `SUDO_USER`; de usuario con `loginctl enable-linger` si no), cron `@reboot` sin systemd, launchd (LaunchDaemon como root, LaunchAgent si no), el Programador de tareas de Windows (tarea «Nexus-Office»: al arrancar el equipo como SYSTEM si eres administrador, al iniciar sesión si no; `pythonw.exe`, reinicio ante fallos, sin límite de tiempo y regla de firewall con `--red`) o termux-services + Termux:Boot. Con `sudo`, si `NEXUS_DATA_DIR` apunta a `/root`, el servicio usa los datos del usuario real. Si Nexus-Office ya responde en el puerto, `nexus run` solo abre el navegador.
+`src/core/service.cpp` registra `nexus-office run --no-browser --host H --port P` en el gestor de servicios del sistema: systemd (del sistema como root, con `User=` el dueño de la carpeta o `SUDO_USER`; de usuario con `loginctl enable-linger` si no), cron `@reboot` sin systemd, launchd (LaunchDaemon como root, LaunchAgent si no), el Programador de tareas de Windows (tarea «Nexus-Office»: al arrancar el equipo como SYSTEM si eres administrador, al iniciar sesión si no; `nexus-office-w.exe`, sin ventana, reinicio ante fallos, sin límite de tiempo y regla de firewall con `--red`)  Con `sudo`, si `NEXUS_DATA_DIR` apunta a `/root`, el servicio usa los datos del usuario real. Si Nexus-Office ya responde en el puerto, `nexus-office run` solo abre el navegador.
 
 En la interfaz: *Sistema → Arranque automático* (`GET/POST /api/service`, cambiarlo exige modo administrador). El servicio se instala con los permisos del proceso de Nexus-Office: para que arranque con el equipo, instálalo desde el instalador, con `sudo` o desde una consola de administrador. Todo en [SERVICIO.md](SERVICIO.md).
 
 ## Descargas para la oficina
-Copia los instaladores (las carpetas `windows/`, `linux/`, `macos/`, `android/` de una entrega) en `data/descargas/` y aparecen en *Sistema → Descargas* (`GET /api/downloads`; ficheros en `/descargas/<ruta>`). `nexus/downloads.py` los clasifica por plataforma según el nombre, marca el del sistema anfitrión y la página marca el del dispositivo que la mira. Desde la red hace falta la clave de red, como en el resto de rutas.
+Copia los instaladores (las carpetas `windows/`, `linux/`, `macos/`, `android/` de una entrega) en `data/descargas/` y aparecen en *Sistema → Descargas* (`GET /api/downloads`; ficheros en `/descargas/<ruta>`). Nexus-Office los clasifica por plataforma según el nombre, marca el del sistema anfitrión y la página marca el del dispositivo que la mira. Desde la red hace falta la clave de red, como en el resto de rutas.
 
 ## Construir los instaladores
-`python packaging/build.py [--targets …] [--apk …] [--docs …] [--keep]` genera `dist/{windows,linux,macos,android}`, el zip de código fuente y `SHA256SUMS.txt`. Antes hay que preparar `.cache/desktop-runtimes` con `build_python_runtimes.py`, `build_desktop_runtimes.sh` y `build_gpu_runtimes.py`, y tener `makensis` para el `.exe`. Paso a paso en [Plataformas → Empaquetado](PLATAFORMAS.md#empaquetado).
+`nexus-construir paquetes [--targets …] [--apk …] [--docs …] [--keep]` genera `dist/{windows,linux,macos,android}`, el zip de código fuente y `SHA256SUMS.txt`, y `nexus-construir pdf` los manuales en PDF. Antes hay que dejar en `.cache/` la carpeta instalada de cada sistema y los motores de IA, y tener `makensis` para el `.exe`. Paso a paso en [Plataformas → Empaquetado](PLATAFORMAS.md#empaquetado).
 
 ## Datos
-Todo vive en `data/` (con el `.deb`, en `~/.local/share/nexus-office`; en general, donde indique `NEXUS_DATA_DIR`): `config.yaml`, `nexus.db` (memoria, grafo, salón, auditoría), `models/`, `runtimes/`, `outputs/`, `agents/*.yaml`, `tools/community|proposals/`, `logs/` (con `servicio.log` del servicio en Windows, macOS y cron), `descargas/` (instaladores para la red), `perf_history.json`, `tuning.json`. Haz copia de esa carpeta para respaldar a Nexus-Office.
+Todo vive en `data/` (con el `.deb`, en `~/.local/share/nexus-office-c`; en general, donde indique `NEXUS_DATA_DIR`): `config.yaml`, `nexus.db` (memoria, grafo, salón, auditoría), `models/`, `runtimes/`, `outputs/`, `agents/*.yaml`, `tools/community|proposals/`, `logs/` (con `servicio.log` del servicio en Windows, macOS y cron), `descargas/` (instaladores para la red), `perf_history.json`, `tuning.json`. Haz copia de esa carpeta para respaldar a Nexus-Office.

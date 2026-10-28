@@ -41,7 +41,7 @@ un trabajo que se sigue en `GET /api/avatares/trabajo/{tid}`), `GET /api/avatare
 La geisha actual se genera a partir de la hoja de personaje (proyección de fotos sobre un volumen de siluetas): de frente y en perfil es fiel a la referencia, y en ángulos intermedios mezcla vistas. Para un modelo con malla y rig completos:
 
 1. **Modelo propio GLB/VRM** creado en VRoid Studio o Blender, o generado con herramientas *image‑to‑3D* (Hunyuan3D, TripoSR, Meshy…) a partir de las imágenes de referencia, y después riggeado (Mixamo/AccuRIG) y con *blendshapes* de boca y parpadeo. Nexus-Office lo carga directamente.
-2. **Mejorar la hoja**: planos de mayor resolución (≥1024 px por vista), fondo liso y vistas exactas de frente/perfil/espalda mejoran directamente el resultado de `geisha_assets.py`.
+2. **Mejorar la hoja**: planos de mayor resolución (≥1024 px por vista), fondo liso y vistas exactas de frente/perfil/espalda mejoran directamente el resultado de `nexus-construir avatar`.
 
 ### Imágenes de referencia necesarias
 Del **mismo personaje**, coherentes entre sí (una *character sheet / turnaround*), PNG o JPG ≥ 1024 px, iluminación plana sin sombras duras, fondo liso:
@@ -63,6 +63,6 @@ Si las imágenes se generan con IA, pide una *"character turnaround sheet, front
 
 ### Regenerar el avatar con otra hoja de personaje
 ```bash
-venv/python.exe packaging/geisha_assets.py ruta/a/la_hoja.jpg
+build/nexus-construir avatar ruta/a/la_hoja.jpg       # sin ruta: la hoja actual (character_sheet.jpg)
 ```
-Recorta los planos (coordenadas en `SHEET_BOXES`), segmenta, mide las siluetas y escribe `nexus/web/assets/geisha/` (PNG con transparencia + `rig.json`). Las referencias de alineación (coronilla, barbilla, cuello, suelo) están en `HEAD` y `BODY` al principio del script.
+Recorta los planos (coordenadas en `SHEET_BOXES`), segmenta, mide las siluetas y escribe `recursos/web/assets/geisha/` (PNG con transparencia + `rig.json`; `--salida` para otra carpeta). Las referencias de alineación (coronilla, barbilla, cuello, suelo) están al principio de `tools/construir/avatar.cpp`.

@@ -94,10 +94,10 @@ comparten entre perfiles; los del sector traen el conocimiento y la normativa de
 
 ### Modelos de IA sugeridos para cada sector
 
-Al instalar, Nexus-Office elige el modelo general según el hardware (`python -m nexus modelos`). Si además hay un modelo
+Al instalar, Nexus-Office elige el modelo general según el hardware (`nexus-office modelos`). Si además hay un modelo
 específico que encaja con la oficina, lo **sugiere** una vez instalada: aparece primero en **Modelos > Recomendados**
-con la etiqueta «◆ para tu oficina» y el motivo, y también al aplicar el perfil (`python -m nexus oficina <id>`)
-y en `python -m nexus modelos`. No se descarga solo: lo decides tú, viendo si cabe en tu equipo.
+con la etiqueta «◆ para tu oficina» y el motivo, y también al aplicar el perfil (`nexus-office oficina <id>`)
+y en `nexus-office modelos`. No se descarga solo: lo decides tú, viendo si cabe en tu equipo.
 
 - **Salud** (clínica dental, fisioterapia, farmacia, óptica, veterinaria, ayuda a domicilio): MedGemma 4B, entrenado
   con textos e imágenes médicas. Es apoyo para el profesional colegiado, nunca un diagnóstico.
@@ -107,33 +107,32 @@ y en `python -m nexus modelos`. No se descarga solo: lo decides tú, viendo si c
 - **Diseño e imagen** (marketing, imprenta, fotografía, floristería, pintura, carpintería, confección, eventos): el
   modelo de imagen de más calidad que permita el equipo.
 
-Un perfil puede fijar los suyos con la clave `modelos: [{id: ..., motivo: ...}]` (ids de `nexus/models/recommended.py`).
+Un perfil puede fijar los suyos con la clave `modelos: [{id: ..., motivo: ...}]` (ids del catálogo recomendado, `recursos/datos/recommended.json`).
 
 ## Elegir un perfil
 
 **Desde la interfaz** (modo administrador): *Agentes → Perfil de oficina*, elige la empresa y pulsa **APLICAR**.
 
-**Desde la terminal** (Windows: `venv\python.exe`, Linux/macOS: `venv/bin/python3`):
+**Desde la terminal**, en la carpeta de Nexus-Office (`nexus-office.exe` en Windows; con el `.deb`, `nexus-office-c`):
 
 ```
-python -m nexus oficina                     # lista los perfiles y marca el activo
-python -m nexus oficina herreria            # aplica el perfil
-python -m nexus oficina herreria --reset-agentes   # y reescribe también los agentes que hayas personalizado
-python -m nexus oficina --quitar            # vuelve a los agentes por defecto de Nexus-Office
+nexus-office oficina                     # lista los perfiles y marca el activo
+nexus-office oficina herreria            # aplica el perfil
+nexus-office oficina herreria --reset-agentes   # y reescribe también los agentes que hayas personalizado
+nexus-office oficina --quitar            # vuelve a los agentes por defecto de Nexus-Office
 ```
 
 **Al instalar**: en el instalador de Windows, el desplegable *Perfil de oficina* de la página *Opciones* (o
-`/OFICINA=herreria` en modo silencioso); `sh Nexus-Office-2.2.0-linux-x86_64.run --oficina=herreria` (Linux y Raspberry
-Pi); `./install.sh --oficina=herreria` (macOS y código fuente); `install.bat -Oficina herreria` (Windows desde el
-código fuente); `bash install-termux.sh --oficina=herreria` (Android con Termux), o la variable de entorno
-`NEXUS_OFICINA=herreria` con los scripts. Con el `.deb`: `nexus-office oficina herreria`. Ver
+`/OFICINA=herreria` en modo silencioso); `sh Nexus-Office-<ver>-linux-x86_64.run --oficina=herreria` (Linux y Raspberry
+Pi); `./install.sh --oficina=herreria` (macOS y código fuente); `install.bat --oficina=herreria` (Windows desde la
+carpeta portable), o la variable de entorno
+`NEXUS_OFICINA=herreria` con los scripts. Con el `.deb`: `nexus-office-c oficina herreria`. Ver
 [Instalación](USUARIO.md#instalación).
 
 **En Android**:
 - **App Nexus-Office autónomo (APK)**: no tiene terminal; el perfil se elige en la propia app: *Más → Agentes*, botón
   **ADMIN** (PIN), *Perfil de oficina* → **APLICAR**. La APK lleva dentro todo `nexus/`, también los perfiles y
   agentes de la oficina, y cada agente estrena su grafo en el móvil.
-- **Termux**: igual que en Linux (`venv/bin/python -m nexus oficina herreria`) o desde el navegador del móvil.
 - **App Nexus-Office VPN** (cliente del PC): usa la oficina que tenga configurada el PC.
 
 **Por API**: `GET /api/office/profiles` y `POST /api/office/profile {"id": "herreria"}` (administrador;
@@ -147,23 +146,21 @@ sobrescribir un YAML se guarda una copia en `data/agents/respaldo/`. El perfil a
 ## Sin internet
 
 Los perfiles son YAML y el conocimiento sembrado va a la base SQLite local: todo funciona **100 % offline** en
-Windows, macOS, Linux y Android (app autónoma y Termux). Los agentes de la oficina no usan herramientas que necesiten internet (búsqueda
+Windows, macOS, Linux y Android (app autónoma). Los agentes de la oficina no usan herramientas que necesiten internet (búsqueda
 web, descarga de páginas, rastreo); solo hace falta red para descargar los modelos de IA (o tráelos ya
 descargados, ver [Plataformas](PLATAFORMAS.md)). Si quieres que un agente busque en internet, añádele
 `web_search` en *Agentes → Editar*.
 
 ## Crear o ampliar perfiles
 
-- **Agentes**: `nexus/office/agentes/<id>.yaml`. Mismo formato que los agentes de Nexus-Office (`name`, `description`,
+- **Agentes**: `nexus/office/agentes/<id>.yaml` en la carpeta instalada (`recursos/office/agentes/` en el código). Mismo formato que los agentes de Nexus-Office (`name`, `description`,
   `system_prompt`, `tools`, `keywords`, `specialty`, `can_delegate_to`…) más la clave `grafo`: tripletas
   `"sujeto | relación | objeto"` con una cuarta parte opcional para la categoría (`especialidad`,
   `procedimiento`, `documento`, `experiencia`).
-- **Perfiles**: `nexus/office/perfiles/<id>.yaml` con `name`, `sector`, `assistant_name`, `icon`,
+- **Perfiles**: `nexus/office/perfiles/<id>.yaml` (`recursos/office/perfiles/` en el código) con `name`, `sector`, `assistant_name`, `icon`,
   `description`, `agents` (ids del catálogo) y `coordinator.context` (a qué se dedica la empresa).
 
-Los agentes de oficina son los de `OFFICE_ROLES` en `nexus/office/__init__.py`; el resto cuenta como gremio.
-`tests/test_office.py` comprueba que todo perfil es coherente, que cada agente tiene su grafo y que el enrutado
-lleva cada consulta al agente de su gremio.
+Los agentes de oficina son los de `OFFICE_ROLES` en `src/office/office.cpp`; el resto cuenta como gremio.
 
 ## Paquetes de conocimiento
 Un paquete (`nexus/office/conocimiento/<id>/`) lleva un manual en Markdown para la biblioteca RAG y un `grafo.yaml`

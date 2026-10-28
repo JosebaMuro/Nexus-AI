@@ -1,4 +1,4 @@
-# Edición C++ (Nexus-Office 2.1)
+# Edición C++
 
 Nexus-Office reescrito en C++20, con todas las funciones de la edición Python. Es la misma aplicación: la misma interfaz web (los ficheros de
 `nexus-office/nexus/web` se usan tal cual), la misma API HTTP y WebSocket, los mismos perfiles de oficina, agentes,
@@ -36,8 +36,8 @@ marcha, lo que más ocupa es llama-server, que es el mismo en las dos.
   aprobaciones, sandbox y auditoría, y propuestas de herramientas nuevas.
 - **Servicio**: `nexus-office servicio instalar [--red]` con systemd, launchd, el Programador de tareas de Windows (con
   `nexus-office-w.exe`, sin ventana) o Termux.
-- **Línea de órdenes**: `run`, `detect`, `pull`, `modelos`, `servicio`, `chat`, `oficina`, `bolsa`, `grafo`, `setup`,
-  `wheels` y `cleanup`, con las mismas opciones.
+- **Línea de órdenes**: `run`, `detect`, `pull`, `modelos`, `servicio`, `chat`, `oficina`, `bolsa`, `grafo`, `setup`
+  y `cleanup`, con las mismas opciones, más `comprobar` y `firmware`.
 
 ## Funciones que llegaron en la 2.1
 
@@ -137,6 +137,7 @@ nexus-construir pdf [carpeta]                                        manuales en
 nexus-construir humo <carpeta instalada>                             prueba con modelos reales de un instalador
 nexus-construir grafo-wikipedia [--articulos 1500]                   grafo multicapa de ejemplo (internet)
 nexus-construir datos [--extraer]                                    recursos/datos/*.json <-> src/gen/data.cpp
+nexus-construir avatar [hoja.jpg]                                    avatar 3D geisha desde su hoja de personaje
 ```
 
 Escribe los tar.gz y zip por partes (paquetes de varios GB sin cargarlos en memoria), el `.deb` sin dpkg y los PDF con el

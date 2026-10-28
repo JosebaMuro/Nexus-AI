@@ -21,11 +21,11 @@ En **Formatos admitidos** se despliega la lista completa.
 
 ### Desde la terminal
 ```
-python -m nexus grafo formatos                                   # lista de formatos
-python -m nexus grafo importar red.graphml                       # al grafo general
-python -m nexus grafo importar nodes.csv edges.csv --en auto     # varios ficheros, cada nodo a su sitio
-python -m nexus grafo importar recetas.ttl --en cocinero         # solo para el agente «cocinero»
-python -m nexus grafo exportar copia.json --en todo              # exportar (json, graphml o csv con --formato)
+nexus-office grafo formatos                                   # lista de formatos
+nexus-office grafo importar red.graphml                       # al grafo general
+nexus-office grafo importar nodes.csv edges.csv --en auto     # varios ficheros, cada nodo a su sitio
+nexus-office grafo importar recetas.ttl --en cocinero         # solo para el agente «cocinero»
+nexus-office grafo exportar copia.json --en todo              # exportar (json, graphml o csv con --formato)
 ```
 
 ### Desde el chat
@@ -71,8 +71,8 @@ Si el fichero no tiene forma de grafo (un PDF, una foto, código fuente, una pá
 Un grafo puede tener hasta 200.000 nodos y la subida, hasta 300 MB. Un grafo de 100.000 relaciones se lee y se inserta en pocos segundos.
 
 ## Para desarrolladores
-- La lectura está en `nexus/memory/kg_formats.py`: `parse_bytes(datos, nombre)` detecta el formato con `detect()` y devuelve `{"format", "nodes", "edges"}`. `parse_many([(nombre, datos), …])` une varios ficheros; las tablas comparten ids, de modo que `nodes.csv` y `edges.csv` forman un solo grafo.
-- La fusión está en `nexus/memory/kg_io.py`: `insert_graph(grafo, leido, destino, organizador, agentes)` devuelve `nodes`, `new`, `merged`, `relations`, `skipped` y `by_scope`.
-- Lo que dentro de un ZIP de documentos cuenta como grafo lo decide `looks_like_graph()`: las interpretaciones de último recurso (un JSON o YAML cualquiera, un esquema con sangría) llevan `generic: true` y no cuentan.
+- La lectura está en `src/memory/kg_formats.cpp`: detecta el formato y devuelve `{"format", "nodes", "edges"}`. Varios ficheros se unen en uno; las tablas comparten ids, de modo que `nodes.csv` y `edges.csv` forman un solo grafo.
+- La fusión está en `src/memory/kg_io.cpp`: devuelve `nodes`, `new`, `merged`, `relations`, `skipped` y `by_scope`.
+- Lo que dentro de un ZIP de documentos cuenta como grafo lo decide la misma lectura: las interpretaciones de último recurso (un JSON o YAML cualquiera, un esquema con sangría) llevan `generic: true` y no cuentan.
 - API: `POST /api/kg/import` acepta `file` o varios `files`; `GET /api/kg/formats` da la lista de formatos. Ver [API.md](API.md).
-- Pruebas: `tests/test_graph_import.py`, con un ejemplo real de cada formato.
+- Pruebas: `tests/kg_samples/`, con un ejemplo real de cada formato, que `nexus-tests` lee y compara.

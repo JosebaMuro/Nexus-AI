@@ -1,4 +1,4 @@
-# Nexus-Office 2.1 (edición C++)
+# Nexus-Office 2.3 (edición C++)
 
 **La oficina de IA local para pymes, reescrita en C++ y con todas las funciones de la edición Python.** Misma interfaz,
 mismos agentes por gremio, misma memoria, biblioteca, voz, imagen y música, mesa de bolsa simulada con cotizaciones
@@ -22,20 +22,20 @@ elige el modelo de IA adecuado; lo descarga si hay conexión y, si no, lo deja r
 
 | Equipo | Fichero |
 |---|---|
-| Windows 10/11 x64 | `Nexus-Office-Setup-2.2.0-cpp-windows-x64.exe` |
-| Windows 11 ARM (Snapdragon X) | `Nexus-Office-Setup-2.2.0-cpp-windows-arm64.exe` |
-| Linux x86_64 | `Nexus-Office-2.2.0-cpp-linux-x86_64.run`, `.AppImage`, `.flatpak` o `nexus-office-c_2.2.0-cpp_amd64.deb` |
-| Linux ARM64, Raspberry Pi 4/5 (64 bits) | `Nexus-Office-2.2.0-cpp-linux-aarch64.run`, `.AppImage`, `.flatpak` o `nexus-office-c_2.2.0-cpp_arm64.deb` |
-| macOS Apple Silicon / Intel | `Nexus-Office-2.2.0-cpp-macos-arm64.tar.gz` / `-macos-x86_64.tar.gz` (abre `Nexus-Office.command`) |
-| Android, Nexus-Office dentro del móvil | `Nexus-Office-2.2.0-cpp-android-autonomo.apk` |
-| Android, cliente del PC de la oficina | `Nexus-Office-2.2.0-cpp-android-vpn.apk` |
-| Código fuente | `Nexus-Office-2.2.0-cpp-codigo-fuente.zip` |
-| Ejemplos | `Nexus-Office-2.2.0-cpp-grafo-wikipedia-es.zip`, `Nexus-Office-resumen.md` |
+| Windows 10/11 x64 | `Nexus-Office-Setup-2.3.0-cpp-windows-x64.exe` |
+| Windows 11 ARM (Snapdragon X) | `Nexus-Office-Setup-2.3.0-cpp-windows-arm64.exe` |
+| Linux x86_64 | `Nexus-Office-2.3.0-cpp-linux-x86_64.run`, `.AppImage`, `.flatpak` o `nexus-office-c_2.3.0-cpp_amd64.deb` |
+| Linux ARM64, Raspberry Pi 4/5 (64 bits) | `Nexus-Office-2.3.0-cpp-linux-aarch64.run`, `.AppImage`, `.flatpak` o `nexus-office-c_2.3.0-cpp_arm64.deb` |
+| macOS Apple Silicon / Intel | `Nexus-Office-2.3.0-cpp-macos-arm64.tar.gz` / `-macos-x86_64.tar.gz` (abre `Nexus-Office.command`) |
+| Android, Nexus-Office dentro del móvil | `Nexus-Office-2.3.0-cpp-android-autonomo.apk` |
+| Android, cliente del PC de la oficina | `Nexus-Office-2.3.0-cpp-android-vpn.apk` |
+| Código fuente | `Nexus-Office-2.3.0-cpp-codigo-fuente.zip` |
+| Ejemplos | `Nexus-Office-2.3.0-cpp-grafo-wikipedia-es.zip`, `Nexus-Office-resumen.md` |
 
 ```bash
-Nexus-Office-Setup-2.2.0-cpp-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED   # Windows, desatendido
-sh Nexus-Office-2.2.0-cpp-linux-x86_64.run --oficina=herreria --servicio --red      # Linux y Raspberry Pi
-sudo apt install ./nexus-office-c_2.2.0-cpp_amd64.deb && nexus-office-c              # Debian, Ubuntu, Raspberry Pi OS
+Nexus-Office-Setup-2.3.0-cpp-windows-x64.exe /S /OFICINA=herreria /SERVICIO /RED   # Windows, desatendido
+sh Nexus-Office-2.3.0-cpp-linux-x86_64.run --oficina=herreria --servicio --red      # Linux y Raspberry Pi
+sudo apt install ./nexus-office-c_2.3.0-cpp_amd64.deb && nexus-office-c              # Debian, Ubuntu, Raspberry Pi OS
 ```
 
 Se instala junto a la edición Python sin pisarla. Después, `nexus-office` (o el acceso directo) abre
@@ -50,8 +50,8 @@ Se instala junto a la edición Python sin pisarla. Después, `nexus-office` (o e
 
 ## Compilar
 
-C++20 y CMake 3.20 (GCC 12, Clang 15, MSVC 2022 o Apple Clang 15). Usa los recursos compartidos de
-`../nexus-office/nexus` (interfaz web, perfiles y agentes): son los mismos ficheros en las dos ediciones.
+C++20 y CMake 3.20 (GCC 12, Clang 15, MSVC 2022 o Apple Clang 15). La interfaz web, los perfiles, los agentes y las
+tablas de datos están en `recursos/`: la edición C++ ya no depende de la carpeta de la edición Python.
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -60,7 +60,7 @@ ctest --test-dir build --output-on-failure
 build/nexus-office run
 ```
 
-Instaladores, APK, manuales en PDF y prueba de humo: `build/nexus-construir` (la herramienta de construcción, también en
+Instaladores, APK, manuales en PDF, prueba de humo y avatar: `build/nexus-construir` (la herramienta de construcción, también en
 C++: [tools/construir](tools/construir)), que usa `.github/workflows/cpp-entrega.yml` en GitHub Actions para todas las
 plataformas. Todo el proyecto está en C++ (el firmware de las placas, en C/C++): no hace falta Python para compilar,
 empaquetar ni probar.

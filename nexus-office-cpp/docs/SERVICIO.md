@@ -4,7 +4,8 @@ Instalado como **servicio**, Nexus-Office arranca solo al encender el equipo, si
 normal en el PC de la oficina: los móviles y los otros equipos lo encuentran siempre en marcha, aunque nadie haya
 abierto la aplicación.
 
-- Funciona en Windows, Linux (también Raspberry Pi), macOS, Android con Termux y la app **Nexus-Office autónomo**.
+- Funciona en Windows, Linux (también Raspberry Pi), macOS y la app **Nexus-Office autónomo** (y en Termux si compilas
+  Nexus-Office allí desde el código fuente).
 - El servicio apunta a la carpeta donde está instalado Nexus-Office. La carpeta sigue siendo portable, pero si la mueves,
   vuelve a instalar el servicio.
 - Con el servicio en marcha, el acceso directo, `start.bat` o `./start.sh` **no arrancan un segundo Nexus-Office**: ven que
@@ -15,27 +16,26 @@ abierto la aplicación.
 | Desde | Cómo |
 |---|---|
 | Instalador de Windows (`.exe`) | Página *Opciones* → **Arrancar Nexus-Office como servicio al encender el equipo** y, si quieres, **Accesible desde la red local**. Solo ese paso pide permiso de administrador (UAC). Silencioso: `/S /SERVICIO /RED`. |
-| Instalador de Linux (`.run`) o `install.sh` | `--servicio`, y `--red` para la red local. Crea un servicio de usuario. Ejecuta el `.run` sin `sudo` (con `sudo` se instalaría en la carpeta de root) y, si quieres el servicio del sistema, después `sudo <carpeta>/venv/bin/python3 -m nexus servicio instalar`. |
-| Paquete `.deb` | `sudo nexus-office servicio instalar [--red]` |
+| Instalador de Linux (`.run`) o `install.sh` | `--servicio`, y `--red` para la red local. Crea un servicio de usuario. Ejecuta el `.run` sin `sudo` (con `sudo` se instalaría en la carpeta de root) y, si quieres el servicio del sistema, después `sudo <carpeta>/nexus-office servicio instalar`. |
+| Paquete `.deb` | `sudo nexus-office-c servicio instalar [--red]` |
 | macOS | `./install.sh --servicio [--red]`, o el comando de la terminal (abajo). |
-| `install.ps1` / `install.bat` | `-Servicio`, y `-Red` para la red local. |
-| Termux | `bash install-termux.sh --servicio` (siempre accesible desde la red local). |
+| `install.bat` | `--servicio`, y `--red` para la red local. |
 | Interfaz web | *Sistema → Arranque automático* → **INSTALAR SERVICIO** (modo administrador). Marca *accesible desde la red local* si lo vas a usar desde móviles u otros PC. |
 | App Nexus-Office autónomo | *Sistema → Arranque automático* → **ARRANCAR AL ENCENDER**. |
 
-También con la variable de entorno `NEXUS_SERVICIO=1` en `install.sh` e `install.ps1`.
+También con la variable de entorno `NEXUS_SERVICIO=1` en `install.sh` e `install.bat`.
 
 ## Comandos
 
-En Windows, `venv\python.exe`; en Linux y macOS, `venv/bin/python3`; con el `.deb`, `nexus-office` en lugar de
-`python -m nexus`.
+Desde la carpeta de Nexus-Office (`nexus-office.exe` en Windows, `./nexus-office` en Linux y macOS); con el `.deb`,
+`nexus-office-c`; con AppImage o Flatpak, el propio paquete seguido de la orden.
 
 ```bash
-python -m nexus servicio instalar              # arranque automático, escuchando solo en este equipo
-python -m nexus servicio instalar --red        # escucha en la red local (0.0.0.0): móviles y otros PC
-python -m nexus servicio instalar --puerto 9000
-python -m nexus servicio estado                # tipo, dónde está registrado y si responde
-python -m nexus servicio quitar                # lo quita (Nexus-Office sigue instalado)
+nexus-office servicio instalar              # arranque automático, escuchando solo en este equipo
+nexus-office servicio instalar --red        # escucha en la red local (0.0.0.0): móviles y otros PC
+nexus-office servicio instalar --puerto 9000
+nexus-office servicio estado                # tipo, dónde está registrado y si responde
+nexus-office servicio quitar                # lo quita (Nexus-Office sigue instalado)
 ```
 
 Sin `--red` se usa la dirección de `server.host` de `data/config.yaml` (por defecto `127.0.0.1`), y sin `--puerto`,
@@ -60,14 +60,14 @@ En todos los casos:
 - Se reinicia solo si se cae: systemd a los 5 s, launchd a los 10 s, el Programador de tareas cada minuto (hasta 999
   veces).
 - No tiene límite de tiempo: en Windows la tarea no se para a las 72 h ni al pasar a batería.
-- Arranca con `python -m nexus run --no-browser`, sin abrir el navegador.
-- En Windows usa `pythonw.exe`, así que no abre ninguna ventana.
+- Arranca con `nexus-office run --no-browser`, sin abrir el navegador.
+- En Windows usa `nexus-office-w.exe`, así que no abre ninguna ventana.
 
 Para que el arranque sea **con el equipo** y no al iniciar sesión, instálalo con permisos de administrador: desde el
 instalador de Windows (pide UAC), con `sudo` en Linux y macOS, o desde una consola de administrador en Windows. Si lo
 instalas desde la interfaz web, se instala con los permisos de Nexus-Office (normalmente, los de tu usuario).
 
-Con el `.deb`, `sudo nexus-office servicio instalar` crea el servicio del sistema, que corre como tu usuario y usa tus
+Con el `.deb`, `sudo nexus-office-c servicio instalar` crea el servicio del sistema, que corre como tu usuario y usa tus
 datos de `~/.local/share/nexus-office`.
 
 ## App Nexus-Office autónomo (Android)
@@ -82,7 +82,7 @@ Nexus-Office del ahorro de batería en los ajustes de Android. Si el sistema lo 
 ## Quitar el servicio
 
 - **Interfaz web**: *Sistema → Arranque automático* → **QUITAR** (modo administrador).
-- **Terminal**: `python -m nexus servicio quitar`. Si lo instalaste con permisos de administrador, quítalo también
+- **Terminal**: `nexus-office servicio quitar`. Si lo instalaste con permisos de administrador, quítalo también
   con ellos: `sudo` en Linux y macOS (`sudo nexus-office servicio quitar` con el `.deb`), o una consola de administrador
   en Windows.
 - **Desinstalar**: el desinstalador de Windows y la desinstalación del `.deb` (`sudo apt remove nexus-office`) quitan el
@@ -95,13 +95,13 @@ Quitar el servicio no borra nada: Nexus-Office sigue instalado con sus datos y s
 
 | Sistema | Dónde |
 |---|---|
-| Windows | `data\logs\servicio.log` (con `pythonw.exe` no hay consola: la salida va a ese fichero, también al abrir Nexus-Office desde el acceso directo). |
+| Windows | `data\logs\servicio.log` (con `nexus-office-w.exe` no hay consola: la salida va a ese fichero, también al abrir Nexus-Office desde el acceso directo). |
 | macOS | `data/logs/servicio.log` |
 | Linux con systemd | `journalctl -u nexus-office` (del sistema) o `journalctl --user -u nexus-office` (de usuario). |
 | Linux con cron | `data/logs/servicio.log` |
 | Termux | `data/logs/current` (svlogd) |
 
-Con el `.deb`, `data/` es `~/.local/share/nexus-office`. El registro general de Nexus-Office (`data/logs/`) se ve también en
+Con el `.deb`, `data/` es `~/.local/share/nexus-office-c`. El registro general de Nexus-Office (`data/logs/`) se ve también en
 *Sistema → Registro* (modo administrador).
 
 ## Problemas frecuentes

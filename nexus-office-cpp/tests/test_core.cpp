@@ -58,3 +58,35 @@ TEST("config: valores por defecto, PIN y vista") {
   reset_config();
   CHECK(get_config().check_pin("4321"));   // persistido y releido
 }
+
+#ifdef NEXUS_TESTS_DIR
+#include "memory/kg.h"
+#include "util/text.h"
+
+// Un ejemplo real de cada formato de grafo (tests/kg_samples), comprimidos incluidos: todos se leen y dan nodos,
+// salvo x.xml, un XML cualquiera que no es un grafo y debe rechazarse con un error claro
+TEST("grafos: los ejemplos de cada formato se leen") {
+  int leidos = 0;
+  for (auto& e : fs::directory_iterator(fs::path(NEXUS_TESTS_DIR) / "kg_samples")) {
+    auto data = nx::read_file(e.path());
+    CHECK(data.has_value());
+    std::string name = e.path().filename().string();
+    json g;
+    std::string error;
+    try {
+      g = nx::kg::parse_many({{name, *data}});
+    } catch (const std::exception& ex) {
+      error = ex.what();
+    }
+    if (name == "x.xml") {
+      CHECK(contains(error, "no tiene elementos de nodo o enlace"));
+      continue;
+    }
+    bool ok = g.is_object() && !g.value("nodes", json::array()).empty();
+    if (!ok) std::fprintf(stderr, "  %s: %s\n", name.c_str(), error.empty() ? "sin nodos" : error.c_str());
+    CHECK(ok);
+    leidos += ok;
+  }
+  CHECK(leidos >= 50);
+}
+#endif

@@ -38,7 +38,7 @@ Eventos recibidos: `session`, `agent`, `state` (`thinking|tool|idle`), `token`, 
 | `POST /api/service` `{action: "instalar"\|"quitar", red}` *(admin)* | Instala o quita el servicio con el puerto de `server.port`. `red: true` escucha en `0.0.0.0`; si no, usa `server.host`. Devuelve `{ok, detail}`; `400` con el motivo si falla. Ver [SERVICIO.md](SERVICIO.md). |
 | `GET /api/downloads` | Instaladores de `<datos>/descargas/`: `{folder, host, host_label, files: [{name, path, size, platform, label}]}`. `platform`: `windows-x64`, `windows-arm64`, `linux-x86_64`, `linux-aarch64`, `macos-arm64`, `macos-x86_64`, `android`, `codigo`, `docs` u `otros`; `host` es la del equipo donde corre Nexus-Office. |
 | `GET /descargas/{path}` | Descarga un fichero de `<datos>/descargas/` (`path` como lo da `/api/downloads`; las APK con su tipo MIME de Android). `404` si no existe o sale de la carpeta. |
-| `GET /api/package/termux` | `Nexus-Office-<versión>-termux.tar.gz` con el código para instalar en Termux (lo usa la app Nexus-Office VPN). |
+| `GET /api/package/termux` | Solo desde la app Nexus-Office autónomo: `tar.gz` con su `nexus-office` para Android, sus bibliotecas, los recursos e `install-termux.sh`, para instalarlo en Termux. En un PC no hay binario de Android que dar. |
 
 Desde otro dispositivo de la red, estas rutas exigen la clave de red, como todas salvo `/api/ping`.
 

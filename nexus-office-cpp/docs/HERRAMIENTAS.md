@@ -18,8 +18,8 @@ def run(args, ctx):
     factores = {"m": 1, "km": 1000, "cm": 0.01, "mi": 1609.344}
     return {"resultado": args["valor"] * factores[args["de"]] / factores[args["a"]]}
 ```
-- **Integradas**: `nexus/tools/builtin/*.py` (pueden declarar varias con `TOOLS = [(manifiesto, función), ...]`).
-- **Comunidad**: `data/tools/community/*.py`, solo tras aprobación. Su manifiesto se lee por AST (sin ejecutar el código) y se ejecutan en un **subproceso aislado** (`python -I`, entorno mínimo, directorio sandbox, límite de tiempo).
+- **Integradas**: en C++, `src/tools/builtin_*.cpp`, con los mismos nombres, descripciones y parámetros de siempre.
+- **Comunidad**: `data/tools/community/*.py`, solo tras aprobación. Son el único sitio donde se usa Python: se ejecutan con el Python del sistema si lo hay (sin él, no están disponibles). Su manifiesto se lee por AST (sin ejecutar el código) y se ejecutan en un **subproceso aislado** (`python -I`, entorno mínimo, directorio sandbox, límite de tiempo).
 
 ## Supervisión
 | Política | Comportamiento |

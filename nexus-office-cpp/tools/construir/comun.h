@@ -61,6 +61,7 @@ int pdf(const std::vector<std::string>& argv);
 int humo(const std::vector<std::string>& argv);
 int grafo_wikipedia(const std::vector<std::string>& argv);
 int datos(const std::vector<std::string>& argv);
+int avatar(const std::vector<std::string>& argv);
 
 // markdown.cpp: Markdown (tablas, bloques de codigo, listas) a HTML, como python-markdown con
 // tables, fenced_code y sane_lists

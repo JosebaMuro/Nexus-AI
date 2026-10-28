@@ -9,30 +9,33 @@ manejo para explicar a una persona cómo hacerlo ella misma.
 Nexus-Office busca GIMP en este orden y usa el primero que arranca:
 
 1. `media.gimp_path` en la configuración (o la variable `NEXUS_GIMP`).
-2. **El GIMP incluido** en los instaladores de escritorio (`bundled/runtimes/gimp`): la versión oficial de
-   download.gimp.org, sin instalar nada y sin internet.
+2. Un GIMP copiado en `bundled/runtimes/gimp` (el mismo que preparan los instaladores de la edición Python).
 3. El GIMP del sistema: PATH, `Archivos de programa\GIMP 3`, `/Applications/GIMP.app`, Flatpak `org.gimp.GIMP` o Snap.
 
-| Sistema | GIMP incluido | Cómo se lanza |
-|---|---|---|
-| Windows x64 y ARM64 | GIMP 3 oficial (instalador silencioso a una carpeta) | `bin\gimp-console-3.x.exe` |
-| macOS Apple Silicon e Intel | `GIMP.app` del DMG oficial | `GIMP.app/Contents/MacOS/gimp-console*` o `gimp` |
-| Linux x86_64 y ARM64, Raspberry Pi 4/5 | AppImage oficial extraído | `nexus-gimp-console` (gimp-console con el entorno del AppImage) |
-| Android | No existe GIMP para Android | Pillow |
+Los instaladores de la edición C++ **no llevan GIMP** (pesa varios cientos de MB por sistema): sin él, todas las
+operaciones las hace el motor de imagen propio de Nexus-Office (`src/media/raster.cpp`), sin internet. Si quieres GIMP,
+instálalo en el equipo (o copia su carpeta en `bundled/runtimes/gimp`) y Nexus-Office lo usa solo.
+
+| Sistema | Cómo se lanza GIMP |
+|---|---|
+| Windows x64 y ARM64 | `bin\gimp-console-3.x.exe` |
+| macOS Apple Silicon e Intel | `GIMP.app/Contents/MacOS/gimp-console*` o `gimp` |
+| Linux x86_64 y ARM64, Raspberry Pi 4/5 | `gimp-console` del sistema, Flatpak o Snap |
+| Android | No existe GIMP para Android: motor propio |
 
 GIMP 3 se programa en **Python-Fu**; si el equipo solo tiene GIMP 2.10, Nexus-Office le habla en **Script-Fu**.
 Se ejecuta con un perfil propio en `data/gimp/perfil-<versión>`, así no cambia la configuración del GIMP del usuario.
 
-**Sin GIMP** (Android, o un equipo donde no se puede ejecutar) las mismas operaciones las hace **Pillow**, con el
+**Sin GIMP** (Android, o un equipo donde no está o no se puede ejecutar) las mismas operaciones las hace el **motor propio**, con el
 mismo resultado de medidas y formatos; cambia solo el detalle de algunos filtros (enfoque, reducción de ruido). Solo
-el formato XCF y `gimp_script` necesitan GIMP. Si GIMP falla en una edición, se repite con Pillow y la respuesta lo
+el formato XCF y `gimp_script` necesitan GIMP. Si GIMP falla en una edición, se repite con el motor propio y la respuesta lo
 dice (`nota`).
 
 Ajustes (`data/config.yaml`):
 
 ```yaml
 media:
-  gimp: auto          # auto (GIMP si está, si no Pillow) | gimp (solo GIMP) | pil (solo Pillow)
+  gimp: auto          # auto (GIMP si está, si no el motor propio) | gimp (solo GIMP) | pil (solo el motor propio)
   gimp_path: ""       # ruta a gimp-console si está en otro sitio
 office:
   knowledge_packs: true   # instalar el manual de GIMP en los agentes de imagen
@@ -104,22 +107,10 @@ GIMP». No va al grafo general: el resto de agentes no se llena de documentació
 herramientas del paquete sin tocar el resto de su configuración. Al aplicar un perfil desde la app se instala en ese
 momento. Se pueden añadir paquetes para otros programas con la misma estructura.
 
-## Empaquetado
-`packaging/fetch_gimp.py` descarga el GIMP oficial más reciente de download.gimp.org, comprueba su SHA256 con
-gimp.org cuando lo publica, lo prepara (instalador silencioso en Windows, `GIMP.app` del DMG en macOS, AppImage
-extraído con lanzador en Linux) y lo prueba editando con Nexus-Office. Como cada sistema necesita el suyo, lo hace
-la Action `.github/workflows/gimp-runtimes.yml` en Windows x64 y ARM64, macOS Apple Silicon e Intel y Linux x86_64 y
-ARM64, y publica los resultados en la Release `gimp-runtimes`. `packaging/build.py` copia `bundled/runtimes/gimp`
-desde `.cache/desktop-runtimes/<destino>/gimp` o lo descarga de esa Release; con `NEXUS_SIN_GIMP=1` se construye
-sin GIMP.
-
-GIMP es software libre (GNU GPL v3). El paquete conserva sus ficheros de licencia y `NEXUS-GIMP.txt` indica la
-versión y dónde está su código fuente (https://download.gimp.org/gimp/).
+## Licencia
+GIMP es software libre (GNU GPL v3); Nexus-Office solo lo ejecuta como programa aparte. Su código fuente está en
+https://download.gimp.org/gimp/.
 
 ## Pruebas
-`tests/test_gimp.py` prueba la validación y la geometría, todas las operaciones con Pillow y con cada GIMP que haya
-en el equipo (`NEXUS_GIMP_TEST=ruta1|ruta2` añade más), `gimp_script`, las herramientas sobre la carpeta de trabajo
-(rutas fuera de ella rechazadas, sin sobrescribir), las imágenes adjuntas en el chat y la instalación del paquete de
-conocimiento en el RAG y el grafo. Se ha probado con GIMP 3.0.4 y GIMP 2.10.36 en Linux. El GIMP incluido (3.2.6)
-se ha preparado y probado editando con Nexus-Office (incluido XCF) en la Action en los seis sistemas: Windows x64 y
-ARM64, macOS Apple Silicon e Intel y Linux x86_64 y ARM64.
+En la 2.1 las 73 ediciones de imagen (con el motor propio y con GIMP) se compararon píxel a píxel con la edición
+Python. Desde que la edición Python quedó congelada, esas comparaciones se retiraron.

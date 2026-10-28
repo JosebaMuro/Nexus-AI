@@ -59,7 +59,7 @@ Herramientas de descompresión:
 
 | Formato | Cómo se descomprime |
 |---|---|
-| ZIP y TAR | Con la biblioteca estándar de Python, sin instalar nada |
+| ZIP y TAR (.tar, .tar.gz) | Dentro de Nexus-Office, sin instalar nada; `.tar.bz2` y `.tar.xz`, con el `tar` del sistema |
 | RAR | Con el primer programa disponible: `unrar`, `7z` (con el códec RAR), `bsdtar` o `unar` |
 | 7z | Con `7zz`/`7z`/`7za`, `bsdtar` o `unar` |
 
@@ -68,7 +68,6 @@ Si no hay ninguno, Nexus-Office dice qué instalar:
 - Windows: 7-Zip o WinRAR. En Windows 10/11 también vale el `tar` del sistema.
 - Ubuntu y WSL: `sudo apt install unrar 7zip`. El paquete `7zip` de Debian/Ubuntu no trae el códec RAR, así que para RAR instala `unrar` (o `unar`).
 - macOS: `brew install sevenzip` o `brew install unar`.
-- Termux: `pkg install unrar p7zip`.
 
 Los programas externos descomprimen primero en una carpeta de cuarentena. Nexus-Office lee antes el listado del archivo para aplicar los mismos límites que al ZIP. Después revisa cada fichero, como con el ZIP, antes de moverlo a su carpeta. Los ficheros cifrados o dañados se descartan y se informa de ellos.
 
@@ -81,12 +80,9 @@ Seguridad y límites:
 - Al borrar el documento de la biblioteca se borran también el archivo y su carpeta descomprimida.
 
 ## Rendimiento: procesador al máximo
-- **Lectura en paralelo**: en una importación en lote, cada documento suelto se lee en un núcleo distinto, con un pool de procesos (`nexus/parallel.py`). Los archivos comprimidos se procesan uno tras otro, porque cada uno ya usa el disco a fondo.
-- **Embeddings**: el motor *hashing* reparte entre núcleos los lotes a partir de 256 fragmentos. Ollama recibe lotes de 128 y sentence-transformers de 64. Los fragmentos se guardan en la base de datos con una sola transacción.
+- **Embeddings**: el motor *hashing* reparte entre núcleos los lotes a partir de 256 fragmentos. Ollama recibe lotes de 128. Los fragmentos se guardan en la base de datos con una sola transacción.
 - **Ajustes** (`performance` en la configuración):
-  - `workers`: número de procesos. 0 = automático, uno por núcleo disponible.
   - `crawl_connections`: descargas simultáneas al rastrear. 0 = automático, entre 4 y 8.
-  - `NEXUS_NO_PROCESSES=1` fuerza hilos en lugar de procesos. En Android se hace solo.
 
 ## Rastreo (crawling) de un sitio de documentación
 Para que Nexus-Office aprenda una documentación entera (un manual, la API de una librería, la guía de un producto), dale la página inicial:

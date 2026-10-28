@@ -15,7 +15,7 @@ Desde la 1.6.0, Nexus-Office separa lo que es **común** a todos los agentes de 
 - Cada subgrafo de agente puede enlazar con nodos del general (puentes). Nunca enlaza con el subgrafo de otro agente.
 
 ### El organizador
-`nexus/memory/organizer.py` decide dónde va cada cosa que se aprende, en la conversación, con `memory_save`, al importar grafos o al leer un ZIP:
+`src/memory/organizer.cpp` decide dónde va cada cosa que se aprende, en la conversación, con `memory_save`, al importar grafos o al leer un ZIP:
 
 1. Busca, con reglas, datos personales, pautas, relaciones e interacciones. Todo eso va al general.
 2. Compara el resto con el **perfil de especialidad** de cada agente: su descripción, el campo `specialty` (*Agentes → Editar → Especialidad*) y sus palabras clave.
@@ -59,8 +59,8 @@ El informe muestra los temas, qué fue a cada grafo y lo que se aprendió.
 Los embeddings convierten un texto en un vector que representa su significado. Nexus-Office los usa para buscar en la biblioteca y en la memoria, decidir qué es común y qué es de cada agente, agrupar documentos por temas y encontrar duplicados.
 
 - **Modelo**: `qwen3-embedding-0.6b`, de `Qwen/Qwen3-Embedding-0.6B-GGUF`, fichero `Qwen3-Embedding-0.6B-Q8_0.gguf` (639 MB). Es multilingüe (más de 100 idiomas, español incluido), admite textos de hasta 32k tokens y está entrenado para buscar y clasificar documentación. Recibe **instrucciones por tarea**: buscar, recordar, clasificar, organizar, deduplicar.
-- **Descarga**: en *Modelos* (recomendado ★ para todos los perfiles), en *Ajustes → Gestor de conocimiento → Embeddings* o con `python -m nexus pull qwen3-embedding-0.6b`. Se descarga una vez y queda en `data/models/`, disponible sin conexión. Si es el único de su tipo, se activa solo.
-- **En CPU**: corre en un `llama-server` aparte (`--embedding --pooling last`), con el mismo runtime llama.cpp que el chat, incluido en todos los instaladores. Si no hay runtime, usa `llama-cpp-python`. Se arranca al primer uso y se para tras 10 minutos sin peticiones, para liberar RAM.
+- **Descarga**: en *Modelos* (recomendado ★ para todos los perfiles), en *Ajustes → Gestor de conocimiento → Embeddings* o con `nexus-office pull qwen3-embedding-0.6b`. Se descarga una vez y queda en `data/models/`, disponible sin conexión. Si es el único de su tipo, se activa solo.
+- **En CPU**: corre en un `llama-server` aparte (`--embedding --pooling last`), con el mismo runtime llama.cpp que el chat, incluido en todos los instaladores. Se arranca al primer uso y se para tras 10 minutos sin peticiones, para liberar RAM.
 - **Indexado progresivo**: en un PC modesto (por ejemplo, un i3 sin GPU), calcular los vectores de una biblioteca grande lleva un rato. Por eso los documentos y recuerdos nuevos se indexan al momento con vectores rápidos (hashing). Un proceso de fondo los recalcula con el modelo en lotes de 4 y cede el turno mientras el LLM genera una respuesta o hay una búsqueda esperando. La búsqueda mezcla los ya recalculados y los pendientes, así que todo se encuentra desde el primer momento.
 - **Cambiar de modelo** reindexa en segundo plano, con el mismo mecanismo.
 - **Ahorrar RAM**: `memory.embed_dims: 512` (o 256) recorta los vectores (Matryoshka), con poca pérdida de precisión.

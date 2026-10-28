@@ -1,5 +1,5 @@
 @echo off
-rem Nexus-Office 2.0 beta C (edicion C++) - preparacion en Windows. Uso:
+rem Nexus-Office (edicion C++) - preparacion en Windows. Uso:
 rem   install.bat [--oficina=<perfil>] [--servicio [--red]] [--modelos=auto^|todos^|no]
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
