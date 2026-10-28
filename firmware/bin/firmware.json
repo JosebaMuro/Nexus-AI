@@ -1,5 +1,5 @@
 {
-  "commit": "ffdeda9203e15b1a9a10c63b4ebb0bc9020aa71e",
+  "commit": "0b3f255222137ad9c9cd39f5b70a33142b07f8bb",
   "nucleo_esp32": "3.1.1",
   "nucleo_esp32_nuevo": "3.3.0",
   "nucleo_esp8266": "3.1.2",
@@ -7,32 +7,32 @@
   "archivos": {
     "nexusled-esp32.bin": {
       "version": "1.0.0",
-      "sha256": "e0285d03730bf958c60ab2dc27f20088e1578f9a1b3b53f55ebd37131f6fe80c",
+      "sha256": "2425b910befc3e1b32a1b8921d2d1d448a0aa0b0d49df64ca490f8c4ecafa41b",
       "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32c3.bin": {
       "version": "1.0.0",
-      "sha256": "de88142c920eb2700dcc6888562df9cec110ce2a4a6d98b0e3d2e1b08a98f8bf",
+      "sha256": "a38059a4b657b2e8c0f0e6c4b2a08ed12e11accc1770c5978789e3c8becea70f",
       "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32c5.bin": {
       "version": "1.0.0",
-      "sha256": "17d9d7be225c62612e802b97bf67031c197fd0ddf8f9ff998af1827146b2172b",
+      "sha256": "27528cfd1a715db9de63a24a19feecdc711772d96a582ac4b1b2ce1a418d9399",
       "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32c6.bin": {
       "version": "1.0.0",
-      "sha256": "72b05a4f5dbe245f53133c8f45d587ff9730f731d64d60a4a96bd911b54a6afc",
+      "sha256": "9d95578b28947e1529970751dcc255d72fd5ab816916639e6b69567363255351",
       "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32s2.bin": {
       "version": "1.0.0",
-      "sha256": "ce62f3ff505177b3e8d0aad485ba3a17601ee684319bc0cd425cf21afffce4f4",
+      "sha256": "e9de58a7b86dd70ae156067b1b02f7ac35561cd77fa282b5891e04e484f7ee4e",
       "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32s3.bin": {
       "version": "1.0.0",
-      "sha256": "5e5f324725b398a22507ae0d3277f88e9364174fe1be9a2ca7cc222ef11ace03",
+      "sha256": "251ae5b9a90435e64394bc407cca28d2b3bc8a501adcff779f3486c64fc2ff27",
       "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp8266-4m.bin": {
@@ -57,7 +57,7 @@
     },
     "nexuswatch-esp32c3.bin": {
       "version": "1.0.0",
-      "sha256": "15f0d39f0db5bdaddd2b4ac899855de35eb9b9a929b7f36f6be7263aab025015",
+      "sha256": "611a64e8f2d05eee4a8572855863436d2738055cc9647e7e4b15e00becda6d75",
       "grabar": "nexus-flash grabar (0x0)"
     }
   }
