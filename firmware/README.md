@@ -9,7 +9,7 @@
 
 Los `.bin` son imágenes completas (cargador + particiones + programa): se graban en la dirección `0x0`.
 `bin/firmware.json` lista la versión y la huella SHA-256 de cada uno. Los compila
-`.github/workflows/firmware.yml` en cada cambio de esta carpeta, con el núcleo esp32 de Arduino 3.1.1 (3.3.0 para el C5), el esp8266 3.1.2 y MicroPython 1.24.1.
+`.github/workflows/firmware.yml` en cada cambio de esta carpeta, con el núcleo esp32 de Arduino 3.1.1 (3.3.0 para el C5), el esp8266 3.1.2 y el Pico SDK 2.1.0. Herramientas para regenerar archivos, en C++: `tools/gen_assets.cpp`.
 
 ## Grabarlos
 
@@ -34,23 +34,13 @@ Detalles y API para otros programas en [`flasher/README.md`](flasher/README.md).
 programador ESP-01 con interruptor). Une GPIO0 a GND, dale corriente y lanza la orden: nexus-flash espera 20 s
 (`--espera` para más) a que entre en modo de carga. Al terminar, suelta GPIO0 y vuelve a darle corriente.
 
-**Con el script de Python** (usa `esptool` y `pyserial`, que vienen con la edición Python):
-
-```bash
-python firmware/flash.py puertos
-python firmware/flash.py luces --wifi MiRed MiClave --leds 60 --pin 16
-python firmware/flash.py reloj --wifi MiRed MiClave --nexus 192.168.1.10:8775 CLAVE_DE_RED
-python firmware/flash.py pico  --wifi MiRed MiClave --nexus 192.168.1.10:8775 CLAVE_DE_RED
-python firmware/flash.py config reloj --wifi OtraRed OtraClave      # solo cambiar la configuracion
-```
-
 La *clave de red* es la de *Red COOP › Conectar dispositivos*. Nexus tiene que escuchar en la red local (mismo sitio).
 
 **A mano**: `nexus-flash grabar bin/nexusled-esp32s3.bin`, `esptool --chip esp32s3 write_flash 0x0 bin/nexusled-esp32s3.bin`, o la web
 <https://espressif.github.io/esptool-js/> (dirección 0x0). Para el Pico W, mantén BOOTSEL al conectarlo y copia el
 `.uf2` a la unidad `RPI-RP2`.
 
-Sin el script, cada dispositivo se configura desde el móvil: si no tiene Wi-Fi crea su propia red
+Sin nexus-flash, cada dispositivo se configura desde el móvil: si no tiene Wi-Fi crea su propia red
 (`NexusLED-XXXX`, `NexusWatch-XXXX` clave `nexuswatch`, `NexusPico-XXXX` clave `nexuspico`) con una página en
 http://192.168.4.1.
 
@@ -61,16 +51,17 @@ g++ -std=c++17 -O1 -fsanitize=address,undefined tests/core_test.cpp && ./a.out  
 make -C emulator && ./emulator/nexusled-emu --help                                   # NexusLED en el PC (HTTP + UDP)
 g++ -std=c++17 -O2 -o nw-emu nexuswatch/emulator/nw_emu.cpp
 ./nw-emu nexuswatch/emulator/ejemplo.json reloj.ppm 1000 left                        # pantalla del reloj
+g++ -std=c++17 -O1 -fsanitize=address,undefined nexuspico/tests/np_test.cpp && ./a.out  # logica del Pico W
 sh flasher/tests/prueba.sh                                                           # nexus-flash contra una ROM falsa de 8 chips
 ```
 
-Las pruebas de Nexus (`nexus-office/tests/test_dispositivos.py`) usan el emulador de NexusLED y ejecutan el código
-del Pico contra el servidor.
+`np_test` hace de servidor de Nexus falso: baja las imágenes, cambia de estado, se queda sin conexión, se reinicia
+y recibe la configuración por el USB (línea JSON y la secuencia del REPL que mandan los Nexus antiguos).
 
 ## Qué no se ha podido probar sin el hardware
 
 Todo compila y la lógica está probada en el PC, pero falta probarlo en las placas reales: los tiempos de la
-pantalla GC9A01 y el táctil CST816S del reloj, el refresco de la tinta (V3 y V4) del Pico W, la salida RMT de las
+pantalla GC9A01 y el táctil CST816S del reloj, el refresco de la tinta (V3 y V4), el Wi-Fi, el portal y la flash del Pico W, la salida RMT de las
 tiras en cada modelo de ESP32, la salida temporizada y la memoria del ESP8266 con tiras largas, y nexus-flash con
 placas y adaptadores de verdad (está probado contra una ROM falsa que sigue el protocolo de Espressif). El ESP32-C2
 no tiene binario: el núcleo de Arduino (3.3.0) no trae sus librerías; nexus-flash sí lo detecta y lo graba.

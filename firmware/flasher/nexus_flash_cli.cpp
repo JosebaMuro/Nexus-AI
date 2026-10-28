@@ -102,7 +102,7 @@ std::string carpeta_bin(const Args& a, const char* argv0) {
   return "firmware/bin";
 }
 
-// configuracion de flash.py: luces -> {"config": {...}}, reloj -> {"wifi":..., "nexus":...}, pico -> config.json
+// configuracion que espera cada firmware: luces -> {"config": {...}}, reloj -> {"wifi":..., "nexus":...}, pico -> config.json
 std::string montar_config(const Args& a, const std::string& tipo) {
   std::vector<std::string> campos;
   if (a.tiene("--wifi"))

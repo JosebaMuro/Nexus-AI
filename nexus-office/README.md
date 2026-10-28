@@ -1,5 +1,9 @@
 # Nexus-Office
 
+> **Edición Python congelada (2026-10-28).** Todo el desarrollo sigue en C++, en [`nexus-office-cpp/`](../nexus-office-cpp/).
+> Este código se conserva tal cual como referencia y no recibe cambios; sus pruebas
+> (`.github/workflows/python.yml`) solo se lanzan a mano.
+
 **Agente de inteligencia artificial multimodal, portable y local**: conversa, ve imágenes, genera imágenes y música, habla y escucha, recuerda y aprende, coordina un equipo de agentes con herramientas supervisadas y se adapta automáticamente al hardware en el que se ejecuta. Todo en Python, con su propio intérprete completo dentro de la carpeta del proyecto.
 
 ```

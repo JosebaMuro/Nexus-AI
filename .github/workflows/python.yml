@@ -2,12 +2,10 @@ name: Nexus-Office Python (pruebas)
 
 # Edicion Python (nexus-office/): pruebas en Linux y Windows de 64 bits, mas las que necesitan internet
 # (cotizaciones reales de la mesa de bolsa), que en las sesiones de desarrollo no se pueden ejecutar.
+# La edicion Python esta congelada desde 2026-10-28 (todo el desarrollo sigue en C++, en nexus-office-cpp/):
+# estas pruebas solo se lanzan a mano.
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - nexus-office/**
-      - .github/workflows/python.yml
 
 permissions:
   contents: read

@@ -3,7 +3,7 @@ name: Firmware (luces, reloj y Pico W)
 # Compila el firmware de los dispositivos y deja los binarios listos para grabar en firmware/bin:
 #   nexusled-<modelo>.bin   NexusLED para cada ESP32 y ESP8266 (imagen completa, se graba en 0x0)
 #   nexuswatch-esp32c3.bin  NexusWatch para la ESP32-2424S012C (imagen completa, 0x0)
-#   nexuspico-picow.uf2     MicroPython con NexusPico congelado para el Pico W (se copia a la unidad RPI-RP2)
+#   nexuspico-picow.uf2     NexusPico (C++ con el Pico SDK) para el Pico W (se copia a la unidad RPI-RP2)
 # En un push a una rama, el ultimo paso sube los binarios a esa misma rama (firmware/bin y firmware.json).
 on:
   workflow_dispatch:
@@ -12,6 +12,7 @@ on:
       - firmware/**
       - "!firmware/bin/**"
       - .github/workflows/firmware.yml
+      - nexus-office-cpp/third_party/stb/**
 
 permissions:
   contents: read
@@ -20,7 +21,7 @@ env:
   ESP32_CORE: "3.1.1"
   ESP32_CORE_NUEVO: "3.3.0"   # el ESP32-C5 solo viene en los nucleos recientes
   ESP8266_CORE: "3.1.2"
-  MICROPYTHON: "v1.24.1"
+  PICO_SDK: "2.1.0"
 
 jobs:
   pruebas:
@@ -31,6 +32,16 @@ jobs:
         run: |
           g++ -std=c++17 -O1 -fsanitize=address,undefined -o core_test firmware/tests/core_test.cpp
           ./core_test
+      - name: Logica de NexusPico (con sanitizers)
+        run: |
+          g++ -std=c++17 -O1 -Wall -Wextra -fsanitize=address,undefined -o np_test firmware/nexuspico/tests/np_test.cpp
+          ./np_test
+      - name: Generador de recursos (fuente y avatar del reloj y del Pico)
+        run: |
+          sudo apt-get install -y -qq fonts-dejavu-core >/dev/null
+          g++ -std=c++17 -O2 -I nexus-office-cpp/third_party/stb -o gen_assets firmware/tools/gen_assets.cpp
+          ./gen_assets
+          git diff --stat -- firmware/nexuswatch/nw_assets.h
       - name: Emuladores (NexusLED y NexusWatch)
         run: |
           make -C firmware/emulator
@@ -171,14 +182,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Herramientas
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-arm-none-eabi libnewlib-arm-none-eabi cmake >/dev/null
-      - name: MicroPython ${{ env.MICROPYTHON }} con NexusPico
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib cmake >/dev/null
+      - name: Pico SDK ${{ env.PICO_SDK }}
         run: |
-          git clone -q --depth 1 -b ${MICROPYTHON} https://github.com/micropython/micropython mp
-          make -C mp/mpy-cross -j4 >/dev/null
-          make -C mp/ports/rp2 BOARD=RPI_PICO_W submodules >/dev/null
-          make -C mp/ports/rp2 BOARD=RPI_PICO_W FROZEN_MANIFEST=$GITHUB_WORKSPACE/firmware/nexuspico/manifest.py -j4 >/dev/null
-          mkdir -p bin && cp mp/ports/rp2/build-RPI_PICO_W/firmware.uf2 bin/nexuspico-picow.uf2
+          git clone -q --depth 1 -b ${PICO_SDK} https://github.com/raspberrypi/pico-sdk sdk
+          git -C sdk submodule update -q --init --depth 1 lib/cyw43-driver lib/lwip lib/tinyusb lib/btstack
+      - name: NexusPico
+        run: |
+          cmake -S firmware/nexuspico -B build-pico -DPICO_SDK_PATH=$PWD/sdk -DCMAKE_BUILD_TYPE=Release >/dev/null
+          cmake --build build-pico -j4
+          arm-none-eabi-size build-pico/nexuspico.elf
+          mkdir -p bin && cp build-pico/nexuspico.uf2 bin/nexuspico-picow.uf2
           ls -la bin
       - uses: actions/upload-artifact@v4
         with:
@@ -211,7 +225,7 @@ jobs:
               return m.group(1) if m else ""
           v = {"nexusled": ver(fw / "nexusled/nl_core.h", r'NEXUSLED_VERSION\s+"([^"]+)"') or ver(fw / "nexusled/nexusled.ino", r'NEXUSLED_VERSION\s+"([^"]+)"'),
                "nexuswatch": ver(fw / "nexuswatch/nw_core.h", r'NEXUSWATCH_VERSION\s+"([^"]+)"'),
-               "nexuspico": ver(fw / "nexuspico/nexuspico.py", r'VERSION = "([^"]+)"')}
+               "nexuspico": ver(fw / "nexuspico/np_core.h", r'VERSION = "([^"]+)"')}
           arch = {}
           for p in sorted((fw / "bin").iterdir()):
               if p.suffix not in (".bin", ".uf2"):
@@ -221,7 +235,7 @@ jobs:
                               "grabar": "copiar a la unidad RPI-RP2" if p.suffix == ".uf2" else "nexus-flash grabar (0x0)"}
           (fw / "bin" / "firmware.json").write_text(json.dumps({"commit": os.environ["GITHUB_SHA"], "nucleo_esp32": os.environ["ESP32_CORE"],
               "nucleo_esp32_nuevo": os.environ["ESP32_CORE_NUEVO"], "nucleo_esp8266": os.environ["ESP8266_CORE"],
-              "micropython": os.environ["MICROPYTHON"], "archivos": arch}, indent=2) + "\n", encoding="utf-8")
+              "pico_sdk": os.environ["PICO_SDK"], "archivos": arch}, indent=2) + "\n", encoding="utf-8")
           EOF
           cat firmware/bin/firmware.json
       - name: Subir a la rama
