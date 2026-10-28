@@ -314,7 +314,8 @@ void wikidata(Grafo& g, const std::vector<std::pair<std::string, std::string>>& 
     std::cerr << "[wikidata] " << n * 50 + lote.size() << "/" << lista.size() << std::endl;
     ++n;
     json data = get(WIKIDATA, {{"action", "wbgetentities"}, {"ids", join(lote, "|")}, {"props", "claims"}});
-    for (auto& [q, ent] : data.value("entities", json::object()).items()) {
+    json entities = data.value("entities", json::object());   // items() de un temporal quedaria colgando
+    for (auto& [q, ent] : entities.items()) {
       auto it = por_q.find(q);
       if (it == por_q.end()) continue;
       const std::string& nid = it->second;
@@ -358,7 +359,8 @@ void wikidata(Grafo& g, const std::vector<std::pair<std::string, std::string>>& 
     ++n;
     json data = get(WIKIDATA, {{"action", "wbgetentities"}, {"ids", join(lote, "|")}, {"props", "labels|descriptions"},
                                {"languages", "es"}, {"languagefallback", "1"}});
-    for (auto& [q, ent] : data.value("entities", json::object()).items()) {
+    json entities = data.value("entities", json::object());   // items() de un temporal quedaria colgando
+    for (auto& [q, ent] : entities.items()) {
       std::string lab = jstr(ent.value("labels", json::object()).value("es", json::object()), "value");
       if (!lab.empty())
         etiquetas[q] = {lab, jstr(ent.value("descriptions", json::object()).value("es", json::object()), "value")};
