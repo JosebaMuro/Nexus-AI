@@ -16,6 +16,9 @@ static double msg_tokens(const json& m) {
   return ulen(jstr(m, "content")) / 3.2 + 8 + 400.0 * m.value("images", json::array()).size();
 }
 
+// Ajusta los mensajes al contexto: nunca se pierden el sistema ni los marcados "keep" (la peticion actual).
+// Primero se quitan los mensajes intermedios mas antiguos; si aun no cabe, se recortan por el medio los mas largos
+// (resultados de herramientas) y, al final, la cola del sistema.
 json fit_context(json msgs, int n_ctx, int reply_tokens) {
   double budget = n_ctx - reply_tokens - 48;
   auto total = [&] {
@@ -23,12 +26,47 @@ json fit_context(json msgs, int n_ctx, int reply_tokens) {
     for (auto& m : msgs) s += msg_tokens(m);
     return s;
   };
-  while (total() > budget && msgs.size() > 2) msgs.erase(msgs.begin() + 1);
+  auto keep = [](const json& m) { return m.value("role", "") == "system" || truthy(m.value("keep", json())); };
+  auto anchor = [&] {   // la ultima peticion protegida; sin ninguna, el ultimo mensaje
+    for (size_t i = msgs.size(); i-- > 1;)
+      if (truthy(msgs[i].value("keep", json()))) return i;
+    return msgs.empty() ? (size_t)0 : msgs.size() - 1;
+  };
+  // 1) la conversacion anterior a la peticion, de lo mas antiguo a lo mas nuevo
+  auto drop_before = [&](bool upto_anchor) {
+    while (total() > budget) {
+      size_t lim = upto_anchor ? anchor() : msgs.size() - 1;
+      size_t i = 0;
+      while (i < lim && keep(msgs[i])) ++i;
+      if (i >= lim) break;
+      msgs.erase(msgs.begin() + (long)i);
+    }
+  };
+  drop_before(true);
+  // 2) recortar por el medio los mensajes largos (resultados de herramientas)
+  for (int guard = 0; total() > budget && guard < 8; ++guard) {
+    size_t big = 0;
+    double bt = 0;
+    for (size_t i = 0; i < msgs.size(); ++i)
+      if (msgs[i].value("role", "") != "system" && msg_tokens(msgs[i]) > bt) {
+        bt = msg_tokens(msgs[i]);
+        big = i;
+      }
+    double over = total() - budget;
+    if (bt < 400 || !msgs[big].contains("content")) break;
+    size_t chars = (size_t)std::max(1200.0, (bt - over) * 3.2);
+    std::string c = jstr(msgs[big], "content");
+    if (ulen(c) <= chars) break;
+    msgs[big]["content"] = uleft(c, chars * 2 / 3) + "\n[…]\n" + uright(c, chars / 3);
+  }
+  // 3) pasos intermedios de herramientas (el ultimo mensaje siempre se queda) y 4) la cola del sistema
+  drop_before(false);
   double over = total() - budget;
   if (over > 0 && !msgs.empty() && msgs[0]["role"] == "system") {
-    size_t keep = (size_t)std::max(400.0, (msg_tokens(msgs[0]) - over) * 3.2);
-    msgs[0]["content"] = uleft(jstr(msgs[0], "content"), keep);
+    size_t keep_chars = (size_t)std::max(400.0, (msg_tokens(msgs[0]) - over) * 3.2);
+    msgs[0]["content"] = uleft(jstr(msgs[0], "content"), keep_chars);
   }
+  for (auto& m : msgs) m.erase("keep");
   return msgs;
 }
 

@@ -8,6 +8,7 @@
 #include "core/config.h"
 #include "core/db.h"
 #include "hardware/hardware.h"
+#include "memory/hilo.h"
 #include "memory/memory.h"
 #include "util/json.h"
 
@@ -78,6 +79,7 @@ class Services {
   std::unique_ptr<mem::KnowledgeGraph> graph;
   std::unique_ptr<mem::Organizer> organizer;
   std::unique_ptr<mem::Learner> learner;
+  std::unique_ptr<mem::Hilo> hilo;   // resumen progresivo y notas fijas de cada conversacion
   std::unique_ptr<rag::RAGStore> rag;
   std::unique_ptr<mem::EmbedWorker> embed_worker;
   std::unique_ptr<llm::LLMManager> llm;

@@ -42,6 +42,14 @@ class AgentManager {
            const std::vector<std::string>& images = {}, tools::Emit emit = nullptr, bool remote = false, int depth = 0,
            bool save = true, bool live = false);
   std::string run_subtask(const std::string& target, const std::string& task, tools::ToolContext& ctx);
+  // reparto del contexto del modelo en un turno (tokens)
+  struct Presupuesto {
+    int n_ctx = 0, reply = 0;
+    int system_max = 1 << 20;   // tope del prompt de sistema base
+    int hilo = 0;               // para la conversacion: notas, resumen, fragmentos y mensajes recientes
+  };
+  Presupuesto presupuesto(const AgentSpec& spec, const json& info, const std::string& text,
+                          const std::vector<std::shared_ptr<tools::ToolSpec>>& tools, bool native, bool live);
   fs::path dir;
 
  private:

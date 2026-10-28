@@ -61,6 +61,7 @@
             <select class="input" id="agent-select" title="Agente"></select>
             <select class="input" id="session-select" title="Conversación"></select>
             <button class="btn ghost sm" id="new-chat" title="Nueva conversación">+<span class="lbl"> NUEVA</span></button>
+            <button class="btn ghost sm" id="hilo-btn" title="Hilo del proyecto: notas fijas y resumen de lo hablado">🧵<span class="lbl"> HILO</span></button>
             <button class="icon-btn sm" id="avatar-toggle" title="Mostrar u ocultar el avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></button>
             <span class="muted mono" id="chat-model" style="margin-left:auto"></span>
           </div>
@@ -460,6 +461,21 @@
   </div>
   <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="hwp-close">CERRAR</button></div>
 </dialog>
+<dialog id="hilo-dialog" class="avlib-dialog">
+  <h2>HILO DEL PROYECTO</h2>
+  <p class="muted" style="margin:0 0 10px">En conversaciones largas el agente no ve todos los mensajes a la vez: lo antiguo se resume aquí y entra siempre en su contexto, junto con tus notas fijas y los fragmentos anteriores que vengan al caso.</p>
+  <div class="muted mono" id="hilo-info" style="font-size:.8rem;margin-bottom:6px"></div>
+  <label class="muted" for="hilo-notas">NOTAS FIJAS (objetivo, decisiones, datos que nunca debe olvidar)</label>
+  <textarea class="input" id="hilo-notas" rows="5" placeholder="Ej.: Proyecto Atlas: tienda online en C++. Base de datos SQLite. Entrega el 15 de noviembre."></textarea>
+  <label class="muted" for="hilo-resumen" style="margin-top:8px;display:block">RESUMEN DE LO HABLADO (se actualiza solo; puedes corregirlo)</label>
+  <textarea class="input" id="hilo-resumen" rows="9"></textarea>
+  <div class="row" style="justify-content:flex-end;margin-top:10px;flex-wrap:wrap">
+    <button class="btn ghost" id="hilo-resumir" title="Resume ya todo menos los últimos mensajes">RESUMIR AHORA</button>
+    <button class="btn ghost" id="hilo-cerrar">CERRAR</button>
+    <button class="btn primary" id="hilo-guardar">GUARDAR</button>
+  </div>
+</dialog>
+
 <dialog id="avlib-dialog" class="avlib-dialog">
   <h2>AVATARES 3D GRATUITOS</h2>
   <p class="muted" style="margin:0 0 10px">Descárgalos una vez y úsalos siempre, también sin conexión. Respeta la licencia de cada uno.</p>

@@ -81,6 +81,13 @@ Services::Services(bool detect_hardware) : config(get_config()) {
     if (!b) throw std::runtime_error("Ollama no disponible");
     b->pull(name, on_event);
   };
+  hilo = std::make_unique<mem::Hilo>(*db, [this] { return llm && llm->inflight > 0; });
+  hilo->llm_complete = [this](const std::string& p, int max_tokens) {
+    llm::Opts o;
+    o.o = {{"max_tokens", max_tokens}, {"temperature", 0.2}, {"reasoning", "off"}};
+    return llm->complete(p, "default", o);
+  };
+  hilo->llm_real = [this] { return llm->has_real_llm(); };
   learner->llm_complete = [this](const std::string& p) {
     llm::Opts o;
     o.o = {{"max_tokens", 300}, {"temperature", 0.1}};
@@ -196,6 +203,7 @@ void Services::shutdown() {
   if (shut_) return;
   shut_ = true;
   L.info("Apagando Nexus-Office...");
+  hilo.reset();   // espera al plegado en curso antes de parar el LLM
   if (coop) coop->stop();
   if (llm) {
     auto ls = std::dynamic_pointer_cast<llm::LlamaServerBackend>(llm->backend("llamaserver"));

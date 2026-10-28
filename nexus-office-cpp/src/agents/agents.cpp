@@ -4,6 +4,7 @@
 // name, description, system_prompt, model ("default" o "backend:modelo"), temperature, max_tokens, tools (lista o
 // ["*"]), memory, can_delegate_to, keywords, specialty, color, icon, enabled.
 #include "agents/agents.h"
+#include "memory/hilo.h"
 
 #include "agents/activity.h"
 
@@ -351,19 +352,33 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
     }
   }
   bool native = !tools.empty() && s.llm->native_tools(spec.model);
-  json msgs = json::array();
-  msgs.push_back({{"role", "system"}, {"content", build_system(spec, info, tools, !native)}});
-  if (live)
-    msgs[0]["content"] = msgs[0]["content"].get<std::string>() +
-                         "\n\nConversacion EN VIVO por voz: lo que digas se leera en voz alta. Responde como al hablar: "
-                         "1-3 frases cortas y naturales, sin Markdown, listas, tablas, enlaces ni emojis. Si hace falta "
-                         "mas detalle, ofrece ampliarlo.";
+  static const char* LIVE_NOTE =
+      "\n\nConversacion EN VIVO por voz: lo que digas se leera en voz alta. Responde como al hablar: "
+      "1-3 frases cortas y naturales, sin Markdown, listas, tablas, enlaces ni emojis. Si hace falta "
+      "mas detalle, ofrece ampliarlo.";
+  // hilo de la conversacion: el presupuesto sale del contexto real del modelo (n_ctx), no de un numero fijo de
+  // mensajes, y lo que no cabe literal entra como resumen progresivo y fragmentos relevantes
+  Presupuesto pres;
+  std::string hilo_txt;
+  json history = json::array();
+  auto system_for = [&](bool text_protocol) {
+    std::string sys = mem::Hilo::recortar(build_system(spec, info, tools, text_protocol), pres.system_max);
+    if (!hilo_txt.empty()) sys += "\n\n" + hilo_txt;
+    return live ? sys + LIVE_NOTE : sys;
+  };
   if (save) {
-    for (auto& m : s.memory->history(session_id, 12)) {
-      std::string role = jstr(m, "role"), content = jstr(m, "content");
-      if ((role == "user" || role == "assistant") && !content.empty())
-        msgs.push_back({{"role", role}, {"content", uleft(content, 3000)}});
-    }
+    pres = presupuesto(spec, info, text, tools, native, live);
+    auto plan = s.hilo->plan(session_id, text, pres.hilo);
+    hilo_txt = plan.texto();
+    history = plan.recientes;
+    if (plan.omitidos > 0)
+      emit({{"type", "hilo"}, {"plegados", plan.plegados}, {"omitidos", plan.omitidos},
+            {"recuerdos", plan.recuerdos.size()}, {"tokens", plan.tokens}, {"n_ctx", pres.n_ctx}});
+  }
+  json msgs = json::array();
+  msgs.push_back({{"role", "system"}, {"content", system_for(!native)}});
+  if (save) {
+    for (auto& m : history) msgs.push_back(m);
     s.memory->add_message(session_id, "user",
                           text + (images.empty() ? "" : "\n[" + std::to_string(images.size()) + " imagen(es) adjunta(s)]"),
                           spec.id);
@@ -372,7 +387,8 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
   std::string note = stored.empty() ? ""
                                     : "\n\n[Imagenes adjuntas guardadas en tu carpeta de trabajo: " + join(stored, ", ") +
                                           ". Para editarlas usa imagen_editar con esa ruta.]";
-  msgs.push_back({{"role", "user"}, {"content", text + note}, {"images", images}});
+  // la peticion actual nunca se descarta al ajustar el contexto (fit_context)
+  msgs.push_back({{"role", "user"}, {"content", text + note}, {"images", images}, {"keep", true}});
   tools::ToolContext ctx{&s, spec.id, session_id, emit, remote, depth};
   int max_steps = (int)s.config.num("llm.max_tool_steps", 5);
   std::vector<std::string> answer_parts;
@@ -426,7 +442,7 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
       } catch (const llm::ToolsUnsupported&) {
         native = false;   // el endpoint no acepta 'tools': protocolo de texto
         s.llm->native_off.insert(s.llm->select(spec.model).first);
-        msgs[0]["content"] = build_system(spec, info, tools, true);
+        msgs[0]["content"] = system_for(true);
         opts.o.erase("tool_specs");
         s.llm->stream(msgs, spec.model, opts, sink);
       }
@@ -481,6 +497,8 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
     for (auto& m : info.value("memories", json::array())) mem_ids.push_back(m.value("id", json()));
     std::string meta = json{{"memories", mem_ids}, {"tools", tool_log}}.dump();
     mid = s.memory->add_message(session_id, "assistant", answer, spec.id, meta);
+    // pliega lo antiguo en el resumen del hilo en segundo plano (cuando el LLM queda libre)
+    if (!remote) s.hilo->encolar(session_id, pres.hilo * 55 / 100, pres.hilo * 3 / 10);
     if (use_memory && !remote) {
       s.learner->on_exchange(session_id, text, answer, spec.id, (int)s.config.num("memory.consolidate_every", 12));
       emit({{"type", "graph_update"}});
@@ -496,6 +514,36 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
   emit({{"type", "done"}, {"message_id", mid}, {"agent", spec.id}, {"text", answer}, {"session_id", session_id}});
   emit({{"type", "state"}, {"state", "idle"}});
   return {{"answer", answer}, {"message_id", mid}, {"agent", spec.id}};
+}
+
+AgentManager::Presupuesto AgentManager::presupuesto(const AgentSpec& spec, const json& info, const std::string& text,
+                                                    const std::vector<std::shared_ptr<tools::ToolSpec>>& tools,
+                                                    bool native, bool live) {
+  Services& s = s_;
+  Presupuesto p;
+  auto [b, model] = s.llm->select(spec.model);
+  bool local = b == "llamaserver" || b == "llamacpp" || b == "ollama" || b == "builtin";
+  p.n_ctx = local ? (int)jnum(s.llm->llm_profile().value("n_ctx", json(4096)), 4096)
+                  : (int)s.config.num("hilo.ctx_remoto", 32768);
+  p.n_ctx = std::max(p.n_ctx, 1024);
+  int mt = spec.max_tokens.value_or((int)s.config.num("llm.max_tokens", 1024));
+  if (live) mt = std::min(mt, (int)s.config.num("live.max_tokens", 400));
+  // como en LLMManager::stream: los modelos que razonan reservan mas para la respuesta
+  bool thinking = !live && local && s.llm->reasoning_model(b, model);
+  p.reply = local ? std::min(mt, std::max(256, thinking ? p.n_ctx / 2 : p.n_ctx / 3)) : mt;
+  int tools_tok = 0;
+  if (native) {
+    json specs = json::array();
+    for (auto& t : tools) specs.push_back(t->public_json());
+    tools_tok = mem::Hilo::tokens(specs.dump());
+  }
+  int margin = 64 + (tools.empty() ? 0 : std::min(1500, p.n_ctx / 8));   // pasos con herramientas
+  int avail = std::max(600, p.n_ctx - p.reply - tools_tok - margin - mem::Hilo::tokens(text));
+  // el sistema (perfil, memorias, documentos) no se come la conversacion: como mucho el 45 % de lo libre
+  p.system_max = std::max(300, avail * 45 / 100);
+  int sys = std::min(p.system_max, mem::Hilo::tokens(build_system(spec, info, tools, !native)));
+  p.hilo = std::clamp(avail - sys, 256, (int)s.config.num("hilo.max_tokens", 24000));
+  return p;
 }
 
 std::string AgentManager::run_subtask(const std::string& target, const std::string& task, tools::ToolContext& ctx) {

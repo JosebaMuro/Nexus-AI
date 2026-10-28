@@ -289,6 +289,7 @@
       case "tool_result": current && current.toolDone(e); break;
       case "learned": addLearned(e.items); break;
       case "media": break;
+      case "hilo": if (current && !e.sub) current.note(`🧵 hilo: ${e.omitidos} anteriores`, `Conversación larga: ${e.plegados} mensajes resumidos y ${e.recuerdos} fragmentos anteriores recuperados (${e.tokens} tokens de un contexto de ${e.n_ctx}). Ver y editar en 🧵 HILO.`); break;
       case "assist": if (current && !e.sub) current.note(`🧭 ${e.tools.length}/${e.of} herramientas`, `IA de apoyo (embeddings): herramientas al caso para esta petición: ${e.tools.join(", ")}`); break;
       case "progress":
         if (current) current.progress(e.text);
@@ -463,6 +464,26 @@
   }
   $("#session-select").onchange = (e) => guard(openSession)(e.target.value);
   $("#new-chat").onclick = () => { openSession(null); loadSessions(); };
+
+  /* ================================================================ hilo del proyecto (conversaciones largas) */
+  function showHilo(h) {
+    $("#hilo-notas").value = h.notas || ""; $("#hilo-resumen").value = h.resumen || "";
+    $("#hilo-info").textContent = `${h.mensajes} mensajes · ${h.plegados} resumidos · resumen ${h.resumen_tokens} tokens · notas ${h.notas_tokens} tokens` + (h.n_ctx ? ` · contexto del modelo ${h.n_ctx}` : "");
+  }
+  $("#hilo-btn").onclick = guard(async () => {
+    if (!S.session) return toast("Empieza una conversación y luego abre su hilo");
+    showHilo(await api(`/api/sessions/${S.session}/hilo`)); $("#hilo-dialog").showModal();
+  });
+  $("#hilo-cerrar").onclick = () => $("#hilo-dialog").close();
+  $("#hilo-guardar").onclick = guard(async () => {
+    showHilo(await api(`/api/sessions/${S.session}/hilo`, { method: "PUT", body: { notas: $("#hilo-notas").value, resumen: $("#hilo-resumen").value } }));
+    toast("Hilo guardado: el agente lo tendrá presente en cada respuesta");
+  });
+  $("#hilo-resumir").onclick = guard(async () => {
+    const b = $("#hilo-resumir"); b.disabled = true; b.textContent = "RESUMIENDO…";
+    try { const h = await api(`/api/sessions/${S.session}/hilo/resumir`, { body: { todo: true } }); showHilo(h); toast(`${h.plegados_ahora} mensajes añadidos al resumen`); }
+    finally { b.disabled = false; b.textContent = "RESUMIR AHORA"; }
+  });
 
   /* ================================================================ voz */
   let actx = null;
