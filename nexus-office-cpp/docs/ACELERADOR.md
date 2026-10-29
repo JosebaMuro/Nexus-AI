@@ -10,7 +10,10 @@ Nexus-Office según tu equipo, como hasta ahora.
 - **PROBAR** genera unas palabras con la opción marcada y dice cuánto ha tardado, los tokens por segundo y **dónde ha
   quedado el modelo de verdad** (por ejemplo, «GPU · 37/37 capas · Vulkan0 (NVIDIA GeForce RTX 4060)»).
 - **ARRANCAR** la aplica. Con **Recordar y no volver a preguntar al abrir** (marcado por defecto) no vuelve a preguntar.
-- Para cambiarla después: *Sistema → MOTOR Y CPU/GPU/NPU* (junto a *Redetectar*).
+- **Capas del modelo en la GPU / NPU** (2.6): *Automático* (las que quepan en la VRAM con el contexto pedido),
+  *Todas*, *Ninguna* (todo en la CPU) o un **número de capas**; el resto va en la CPU. Con el modelo ya cargado la
+  ventana dice cuántas capas tiene. Menos capas deja VRAM para el contexto; más capas va más rápido si caben.
+- Para cambiarla después: *Sistema → MOTOR Y CPU/GPU/NPU* (junto a *Redetectar*) o *Ajustes → Administración*.
 - Desde la terminal: `nexus-office run --motor llamaserver --acelerador gpu` (cualquiera de las dos opciones fija
   la elección y no pregunta).
 
@@ -113,6 +116,20 @@ Si lo tienes instalado, Nexus-Office lo sigue usando cuando no hay otro motor.
   teselas con poca VRAM o imágenes grandes, y **sd-server** con el modelo cargado entre imagen e imagen (se libera
   tras `media.sd_servidor_minutos`, 10 por defecto).
 
+### Correcciones de velocidad (2.6)
+- **GPU dedicada**: llama-server arranca con `-ngl auto` en lugar de 999 capas fijas. llama.cpp (`--fit`) mete en
+  la VRAM todas las capas que caben con el contexto pedido. Antes, si el modelo y la caché no cabían, CUDA en Linux
+  fallaba y **todo** pasaba a la CPU, y en Windows el driver desbordaba la VRAM a la RAM compartida (muchas veces más
+  lento). Si el llama-server es anterior a `auto`, se vuelve a 999 solo.
+- El autoajuste ya no baja a 28 o 24 capas tras un pico de VRAM (se quedaba así para siempre) y descarta ese número
+  si lo guardó una versión anterior. Tampoco agranda el contexto mirando solo la RAM cuando la caché va en la VRAM.
+- Si la GPU elegida no arranca, el paso a la CPU se queda apuntado: antes cada respuesta volvía a probar la GPU y
+  cargaba el modelo dos veces.
+- **Móvil (GPU y NPU)**: un solo slot de llama-server, así la GPU o la NPU trabajan con todo el contexto y no con la
+  mitad. Si la sonda solo ve la NPU Hexagon (sin nombre de GPU), se usa igualmente.
+- **ARM** (Snapdragon X, Raspberry Pi, móviles): se cuentan todos los núcleos para los hilos. Antes un Snapdragon X
+  de 12 núcleos se contaba como de 4.
+
 ## Cómo se comprueba que acelera de verdad
 Tras arrancar llama-server, Nexus-Office lee su registro (`logs/llama-server.log`) y anota el dispositivo real: capas
 cargadas en la GPU, dispositivo CUDA, Vulkan o Metal, la NPU Hexagon u OpenVINO. Si lo pedido no se ha cumplido
@@ -140,6 +157,8 @@ internet, *Sistema → Runtimes* los descarga de las Releases oficiales de llama
 ## Configuración
 - `llm.engine`: `auto` o `llamaserver` (`llamacpp` se acepta por compatibilidad con la edición Python, pero no está disponible).
 - `hardware.accel`: `auto`, `cpu`, `gpu` o `npu`.
+- `hardware.capas`: capas del modelo en la GPU o la NPU: `auto`, `todas`, `ninguna` o un número (2.6). También en
+  `POST /api/accel {"capas": 24}`.
 - `hardware.llama_variant`: variante de llama-server elegida (`cpu`, `vulkan`, `cuda`, `cuda13`, `rocm`, `sycl`,
   `metal`, `openvino`, `opencl-adreno`, `snapdragon`).
 - `llm.motor_acelerador`: acelerador de LiteRT-LM u ONNX Runtime GenAI que se prueba primero.

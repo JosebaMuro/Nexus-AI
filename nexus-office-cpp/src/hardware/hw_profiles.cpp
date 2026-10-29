@@ -197,6 +197,30 @@ json& superponer(json& profile, const json& p) {
   return profile;
 }
 
+json norm_capas(const json& v) {
+  if (v.is_null()) return "auto";
+  if (v.is_string() && (v == "auto" || v == "todas" || v == "ninguna")) return v;
+  bool ok;
+  int n = a_entero(v, ok);
+  if (!ok || n < 0) throw std::invalid_argument("capas: «auto», «todas», «ninguna» o un número de capas");
+  return n == 0 ? json("ninguna") : json(std::min(n, 999));
+}
+
+void aplicar_capas(json& profile, Config& cfg) {
+  json c;
+  try {
+    c = norm_capas(cfg.get("hardware.capas", "auto"));
+  } catch (const std::invalid_argument&) {
+    c = "auto";
+  }
+  json& llm = profile["llm"];
+  llm["capas_usuario"] = c;
+  if (c == "auto" || jnum(llm.value("gpu_layers", json(0))) == 0) return;   // sin GPU ni NPU no hay donde ponerlas
+  if (c == "todas") llm["gpu_layers"] = -1;
+  else if (c == "ninguna") llm["gpu_layers"] = 0;
+  else llm["gpu_layers"] = c;
+}
+
 void al_arrancar(Config& cfg) {
   json p = get(cfg, activo(cfg));
   std::string g = p.is_object() ? jstr(p, "gpu") : "";
@@ -206,6 +230,7 @@ void al_arrancar(Config& cfg) {
 void aplicar_al_perfil(Services& s) {
   json p = get(s.config, activo(s.config));
   if (p.is_object() && jstr(p, "id") != "auto") superponer(s.profile, p);
+  aplicar_capas(s.profile, s.config);
 }
 
 json activar(const std::string& pid, Config& cfg, Services* s) {
@@ -219,6 +244,7 @@ json activar(const std::string& pid, Config& cfg, Services* s) {
   json r = sys2::accel_apply(*s, jstr(p, "motor"), jstr(p, "acelerador"), std::nullopt);
   std::string nota = jstr(r, "note");
   superponer(s->profile, p);
+  aplicar_capas(s->profile, cfg);
   if (!jstr(p, "modelo").empty()) {
     try {
       s->models->activate(jstr(p, "modelo"));
@@ -249,6 +275,7 @@ json elegir_gpu(Services& s, const std::string& gpu) {
     if (!gpu.empty()) q["gpu"] = gpu;
     superponer(profile, q);
   }
+  aplicar_capas(profile, cfg);
   s.profile = profile;
   s.llm->rebuild();
   return {{"gpu", gpu}, {"dispositivo", profile["device_name"]}, {"acelerador", profile["accelerator"]}};

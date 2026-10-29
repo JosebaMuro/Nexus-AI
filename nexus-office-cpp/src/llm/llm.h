@@ -167,6 +167,7 @@ class LlamaServerBackend : public OpenAICompatBackend {
  private:
   void ensure_once(const std::string& model, const json& opts);
   json gpu_failed(const std::string& reason, const std::string& device);
+  std::string ngl_arg(int ngl, const std::string& var) const;   // valor de -ngl (gpu_layers -1 = todas las que quepan)
   runtimes::RuntimeManager* rt_;
   Resolver resolve_;
   std::function<json()> profile_;
@@ -177,6 +178,7 @@ class LlamaServerBackend : public OpenAICompatBackend {
   json gpu_ = json::object();
   std::string gpu_error_;
   bool kv_quant_failed_ = false;   // este llama-server no arranca con la cache KV cuantizada
+  bool ngl_auto_failed_ = false;   // este llama-server es anterior a «-ngl auto»
   std::recursive_mutex mu_;
 };
 

@@ -1,5 +1,23 @@
 # Cambios
 
+## Nexus-Office 2.6.0-cpp
+
+### Velocidad con GPU dedicada y con NPU
+- llama-server arranca con `-ngl auto`: llama.cpp pone en la VRAM todas las capas que caben con el contexto. Con 999
+  fijo, un modelo que no cabía hacía que CUDA fallase y todo fuera a la CPU (Linux) o que la VRAM se desbordase a
+  la RAM compartida (Windows). Con un llama-server antiguo se vuelve a 999 solo.
+- El autoajuste ya no deja el modelo en 28 o 24 capas para siempre tras un pico de VRAM, descarta ese valor si lo
+  guardó una versión anterior y no agranda el contexto si la VRAM va llena.
+- Si la GPU no arranca, el paso a la CPU se recuerda en la sesión (antes se recargaba el modelo dos veces en cada
+  respuesta).
+- Móvil: un solo slot de llama-server con GPU o NPU (todo el contexto para una conversación) y NPU Hexagon usable
+  aunque la sonda no dé nombre de GPU.
+- ARM: se cuentan todos los núcleos (un Snapdragon X de 12 núcleos se veía como de 4).
+
+### Capas en la GPU / NPU
+- Nueva opción en *MOTOR Y CPU/GPU/NPU* (y en *Ajustes → Administración*): automático, todas, ninguna o un número de
+  capas. Se guarda en `hardware.capas` y la respeta también el autoajuste del móvil.
+
 ## Nexus-Office 2.5.0-cpp
 
 ### Motores para cada acelerador

@@ -87,6 +87,8 @@ void LlamaServerBackend::ensure(const std::string& model, const json& opts_in) {
         }
         opts["gpu_layers"] = 0;
         opts["device"] = "";
+        // se queda apuntado en el perfil: si no, cada respuesta volvia a probar la GPU y recargaba el modelo dos veces
+        if (set_llm_opts) set_llm_opts({{"gpu_layers", 0}, {"device", ""}});
         continue;
       }
       json nxt = gpu_failed(e.what(), jstr(opts, "device"));
@@ -111,6 +113,16 @@ json LlamaServerBackend::gpu_failed(const std::string& reason, const std::string
   L.warning(reason, ": se sigue en ", jstr(nxt, "device").empty() ? std::string("CPU") : jstr(nxt, "device"));
   if (set_llm_opts) set_llm_opts(nxt);
   return nxt;
+}
+
+std::string LlamaServerBackend::ngl_arg(int ngl, const std::string& var) const {
+  if (ngl != -1) return std::to_string(ngl);
+  // escritorio: «auto» deja que llama.cpp (--fit, activo por defecto) meta en la VRAM todas las capas que quepan con
+  // el contexto pedido. Con 999 fijo, si el modelo y la cache no cabian, CUDA en Linux fallaba y todo iba a la CPU, y
+  // en Windows el driver desbordaba la VRAM a la RAM compartida (muchas veces mas lento). En el movil se sigue con
+  // todas: la NPU Hexagon declara 2 GB pero mapea los pesos por partes y --fit dejaria capas en la CPU.
+  if (var == "embedded" || ngl_auto_failed_) return "999";
+  return "auto";
 }
 
 void LlamaServerBackend::ensure_once(const std::string& model, const json& opts) {
@@ -179,7 +191,7 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
                                   "-b",
                                   std::to_string((int)jnum(opts.value("n_batch", json(256)), 256)),
                                   "-ngl",
-                                  std::to_string(ngl == -1 ? 999 : ngl),
+                                  ngl_arg(ngl, var),
                                   "--jinja",
                                   "--no-webui"};
   if (truthy(opts.value("n_threads", json()))) {
@@ -199,8 +211,9 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
   // esta GPU no la tienen, se arranca sin ella)
   if (!kv_quant.empty() && !kv_quant_failed_) cmd.insert(cmd.end(), {"-ctk", kv_quant, "-ctv", kv_quant});
   cmd.push_back("-np");
-  // un solo slot tambien con la variante de GPU forzada a CPU (-ngl 0): si no, cada slot se queda con medio contexto
-  int np = var == "cpu" || var == "system" || single || ngl == 0 ? 1 : 2;
+  // un solo slot tambien con la variante de GPU forzada a CPU (-ngl 0): si no, cada slot se queda con medio contexto.
+  // En el movil, uno siempre: un solo usuario, y con dos slots la GPU o la NPU trabajaban con la mitad del contexto
+  int np = var == "cpu" || var == "system" || var == "embedded" || single || ngl == 0 ? 1 : 2;
   cmd.push_back(std::to_string(np));
   slots = np;
   if (mmproj.empty()) {
@@ -244,6 +257,16 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
         kv_quant_failed_ = true;
         auto it = std::find(cmd.begin(), cmd.end(), "-ctk");
         cmd.erase(it, it + 4);
+        proc_ = std::make_unique<proc::Process>();
+        if (proc_->start(cmd, po)) continue;
+      }
+      // llama-server antiguo sin «-ngl auto» (llama.cpp anterior a --fit): todas las capas, como antes
+      auto ngl_it = std::find(cmd.begin(), cmd.end(), "-ngl");
+      if (ngl_it != cmd.end() && *(ngl_it + 1) == "auto" &&
+          (contains(tail, "-ngl") || contains(tail, "gpu-layers") || contains(tail, "stoi"))) {
+        L.warning("Este llama-server no admite -ngl auto: se arranca con todas las capas en la GPU");
+        ngl_auto_failed_ = true;
+        *(ngl_it + 1) = "999";
         proc_ = std::make_unique<proc::Process>();
         if (proc_->start(cmd, po)) continue;
       }

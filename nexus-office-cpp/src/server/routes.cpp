@@ -453,6 +453,7 @@ void register_routes(App& app) {
     s.hw = hw::detect(s.config.str("llm.ollama_url", "http://127.0.0.1:11434"));
     hw::save(s.hw);
     s.profile = hw::build_profile(s.hw, s.config.str("hardware.profile_override"));
+    hw::profiles::aplicar_al_perfil(s);
     s.llm->rebuild();
     return json{{"hardware", s.hw.to_json()}, {"profile", s.profile}};
   }, true);
@@ -463,7 +464,8 @@ void register_routes(App& app) {
   app.post("/api/accel", [](Ctx& c) -> Out {
     json res;
     try {
-      res = sys2::accel_apply(c.app.S(), c.bs("engine", "auto"), c.bs("accel", "auto"), c.bb("remember", true));
+      res = sys2::accel_apply(c.app.S(), c.bs("engine", "auto"), c.bs("accel", "auto"), c.bb("remember", true),
+                              c.b("capas", nullptr));
     } catch (const std::invalid_argument& e) {
       throw HttpErr(400, e.what());
     }
