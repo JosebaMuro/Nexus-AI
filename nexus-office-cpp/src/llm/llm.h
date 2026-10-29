@@ -2,6 +2,7 @@
 // razonamiento (<think>) y gestor que elige backend y modelo.
 // Mensajes: {"role": "system|user|assistant", "content": str, "images": [base64...]}.
 #pragma once
+#include <condition_variable>
 #include <atomic>
 #include <functional>
 #include <map>
@@ -163,6 +164,10 @@ class LlamaServerBackend : public OpenAICompatBackend {
   std::atomic<int> slots{0};   // -np del llama-server en marcha (0: aun no arrancado); cada slot tiene n_ctx/slots
   // Android: la NPU o la GPU no arrancan con el driver del movil; el gestor cambia gpu_layers/device del perfil
   std::function<void(const json&)> set_llm_opts;
+  // antes de cargar el modelo en la GPU (p. ej. el sd-server de imagen suelta la VRAM que tenga ocupada)
+  std::function<void()> before_gpu_start;
+  // memoria de GPU que ocupa (GB, estimada por el GGUF y la cache) o 0 si esta parado o en la CPU
+  double gpu_gb();
 
  private:
   void ensure_once(const std::string& model, const json& opts);
@@ -179,6 +184,7 @@ class LlamaServerBackend : public OpenAICompatBackend {
   std::string gpu_error_;
   bool kv_quant_failed_ = false;   // este llama-server no arranca con la cache KV cuantizada
   bool ngl_auto_failed_ = false;   // este llama-server es anterior a «-ngl auto»
+  double gpu_gb_ = 0;
   std::recursive_mutex mu_;
 };
 
@@ -273,6 +279,12 @@ class LLMManager {
   std::vector<std::string> backend_names();
   std::set<std::string> native_off;
   std::atomic<int> inflight{0};
+  // GPU compartida con el modelo de imagen: lend_gpu para llama-server si ocupa la GPU y las peticiones al LLM local
+  // esperan hasta return_gpu (o hasta media.gpu_espera_max segundos). Devuelve la VRAM que se ha liberado (GB).
+  double lend_gpu(const std::string& why);
+  void return_gpu();
+  double llm_gpu_gb();   // VRAM que ocupa ahora el LLM local (0 si no esta en la GPU)
+  std::function<void()> before_llm_gpu_start;   // lo pone el motor de imagen
   // "peer:<nodo>": inferencia en otro nodo de la red cooperativa
   std::function<void(const std::string&, const json&, const Opts&, const Sink&)> remote;
   std::pair<std::string, std::string> last_used;
@@ -286,6 +298,10 @@ class LLMManager {
   std::recursive_mutex mu_;
   std::vector<std::pair<std::string, std::shared_ptr<Backend>>> backends_;
   std::map<std::string, std::pair<double, bool>> avail_;
+  std::mutex lend_mu_;
+  std::condition_variable lend_cv_;
+  int lent_ = 0;
+  void wait_gpu_back();
 };
 
 }  // namespace nx::llm

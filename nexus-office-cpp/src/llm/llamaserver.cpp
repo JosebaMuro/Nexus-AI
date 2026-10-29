@@ -69,6 +69,12 @@ void LlamaServerBackend::stop() {
   }
   proc_.reset();
   key_.clear();
+  gpu_gb_ = 0;
+}
+
+double LlamaServerBackend::gpu_gb() {
+  std::lock_guard<std::recursive_mutex> lk(mu_);
+  return proc_ && proc_->running() ? gpu_gb_ : 0;
 }
 
 void LlamaServerBackend::ensure(const std::string& model, const json& opts_in) {
@@ -178,6 +184,14 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
   std::lock_guard<std::recursive_mutex> lk(mu_);
   if (proc_ && proc_->running() && key_ == key) return;
   stop();
+  bool on_gpu = ngl != 0 && var != "cpu" && var != "embedded";
+  if (on_gpu && before_gpu_start) {
+    try {
+      before_gpu_start();
+    } catch (const std::exception& e) {
+      L.warning("Antes de cargar en la GPU: ", e.what());
+    }
+  }
   port = net::free_port(8181);
   std::vector<std::string> cmd = {S(exe),
                                   "-m",
@@ -297,6 +311,12 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
         L.warning("Se pidio ", jstr(eff, "requested"), " pero el modelo ha quedado en ", jstr(eff, "device"), " (",
                   jstr(eff, "detail").empty() ? var : jstr(eff, "detail"), ")");
       effective_ = eff;
+      // VRAM ocupada: el GGUF (y el proyector) mas la cache de contexto; con -ngl parcial, la parte que ha entrado
+      if (on_gpu && eff["requested"] != "CPU") {
+        double gb = (fsize(P(path)) + (mmproj.empty() ? 0 : fsize(P(mmproj)))) / 1073741824.0;
+        gb += jnum(opts.value("n_ctx", json(4096)), 4096) / 8192.0 * (kv_quant.empty() ? 1.0 : 0.5) + 0.6;
+        gpu_gb_ = gb;
+      }
       return;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(500));

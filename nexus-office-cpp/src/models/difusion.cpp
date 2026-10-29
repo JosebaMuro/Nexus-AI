@@ -1,6 +1,7 @@
 // Modelos de imagen en GGUF para stable-diffusion.cpp (ver models.h): que arquitectura son, si traen todo (SD 1.x,
 // SDXL convertidos con sd-cli) o solo el modelo de difusion (Flux, Z-Image, Qwen-Image, SD3, Chroma...), y donde
 // estan las piezas que les faltan (VAE y codificadores de texto).
+#include <optional>
 #include <set>
 
 #include "models/models.h"
@@ -63,7 +64,53 @@ std::string arch_from_tensors(const std::vector<std::string>& t) {
   return "";
 }
 
+// codificador de texto LLM que espera cada arquitectura: familia (general.architecture del GGUF) y tamano oculto.
+// Un LLM de otro tamano (p. ej. el Qwen3-8B del chat para Z-Image, que pide Qwen3-4B) hace fallar a sd.cpp al cargar
+// o da imagenes sin relacion con el prompt.
+struct LlmNeed {
+  std::set<std::string> archs;
+  int dim = 0;
+  std::string desc;
+};
+
+std::optional<LlmNeed> llm_need(const std::string& arch, const std::string& model_name) {
+  std::string n = lower(model_name);
+  if (arch == "z_image") return LlmNeed{{"qwen3"}, 2560, "Qwen3-4B"};
+  if (arch == "qwen_image") return LlmNeed{{"qwen2vl", "qwen25vl"}, 3584, "Qwen2.5-VL-7B"};
+  if (arch == "flux2") {
+    if (contains(n, "klein")) {
+      if (Rx(R"((^|[\W_])(9|8)b([\W_]|$))", Rx::I).test(n)) return LlmNeed{{"qwen3"}, 4096, "Qwen3-8B"};
+      return LlmNeed{{"qwen3"}, 2560, "Qwen3-4B"};
+    }
+    return LlmNeed{{"mistral3", "llama", "mistral"}, 5120, "Mistral-Small-3.2-24B"};
+  }
+  return std::nullopt;
+}
+
+// 1 compatible, 0 no se sabe (no es GGUF o no trae los datos), -1 es otro LLM
+int llm_fits(const fs::path& f, const LlmNeed& need, std::string* what = nullptr) {
+  if (suffix_lower(f) != ".gguf") return 0;
+  json meta;
+  try {
+    meta = gguf_metadata(f, 96);
+  } catch (const std::exception&) {
+    return 0;
+  }
+  std::string ga = lower(jstr(meta, "general.architecture"));
+  if (ga.empty()) return 0;
+  json dim = meta.value(ga + ".embedding_length", json());
+  if (what) *what = ga + (dim.is_number() ? " de " + std::to_string(dim.get<long long>()) : std::string());
+  if (!need.archs.count(ga)) return -1;
+  if (dim.is_number() && dim.get<long long>() != need.dim) return -1;
+  return 1;
+}
+
 }  // namespace
+
+std::string llm_encoder_for(const std::string& arch, const std::string& model_name) {
+  auto need = llm_need(arch, model_name);
+  return need ? need->desc : "";
+}
 
 json diffusion_info(const json& meta, const std::vector<std::string>& tensors, const std::string& name) {
   std::string ga = lower(jstr(meta, "general.architecture"));
@@ -136,11 +183,14 @@ json find_components(const fs::path& model, const json& dinfo, const json& confi
     if (piece == "clip_l") return Rx(R"(clip[_-]?l([\W_]|$))", Rx::I);
     if (piece == "clip_g") return Rx(R"(clip[_-]?g([\W_]|$))", Rx::I);
     if (piece == "t5xxl") return Rx(R"(t5[_-]?xxl|t5[_-]v1[_.]1[_-]xxl|umt5)", Rx::I);
-    // codificador de texto con un LLM
-    if (arch == "z_image") return Rx(R"(qwen[_-]?3[_-]?4b|qwen3[_-]4b)", Rx::I);
+    // codificador de texto con un LLM: por nombre se buscan los candidatos y la cabecera GGUF decide si sirve
+    if (arch == "z_image") return Rx(R"(qwen[_-]?3)", Rx::I);
     if (arch == "qwen_image") return Rx(R"(qwen[_-]?2[._]?5[_-]?vl)", Rx::I);
     return Rx(R"(mistral|qwen[_-]?3)", Rx::I);
   };
+  std::string model_name = S(model.filename()) + " " + S(model.parent_path().filename());
+  auto need = llm_need(arch, model_name);
+  json rejected = json::array();
   for (auto& piece : dinfo.value("necesita", json::array())) {
     std::string pc = piece.get<std::string>();
     std::string set = configured.is_object() ? jstr(configured, pc) : "";
@@ -150,15 +200,33 @@ json find_components(const fs::path& model, const json& dinfo, const json& confi
     }
     Rx rx = pattern(pc);
     const fs::path* best = nullptr;
+    int best_score = -1;
     for (auto& c : cands) {
-      std::string n = S(c.filename());
-      if (!rx.test(n) || contains(lower(n), "mmproj")) continue;
+      std::string n = S(c.filename()), ln = lower(n);
+      if (!rx.test(n) || contains(ln, "mmproj")) continue;
       // la VAE no puede ser otro modelo de difusion; se prefiere la de la misma carpeta
-      if (pc == "vae" && (contains(lower(n), "diffusion") || contains(lower(n), "unet"))) continue;
-      if (!best || (c.parent_path() == model.parent_path() && best->parent_path() != model.parent_path())) best = &c;
+      if (pc == "vae" && (contains(ln, "diffusion") || contains(ln, "unet"))) continue;
+      int score = c.parent_path() == model.parent_path() ? 4 : 0;
+      if (pc == "llm" && need) {
+        std::string what;
+        int fits = llm_fits(c, *need, &what);
+        if (fits < 0) {
+          rejected.push_back(n + " (" + what + ")");
+          continue;
+        }
+        if (fits > 0) score += 8;
+        // el codificador de referencia es el Instruct; un Thinking tambien vale, pero despues
+        if (contains(ln, "instruct")) score += 2;
+        if (contains(ln, "thinking")) score -= 1;
+      }
+      if (score > best_score) {
+        best = &c;
+        best_score = score;
+      }
     }
     if (best) out[pc] = S(*best);
   }
+  if (!rejected.empty()) out["_descartados"] = rejected;
   return out;
 }
 

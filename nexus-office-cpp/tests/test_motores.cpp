@@ -29,7 +29,7 @@ fs::path tmpdir(const std::string& name) {
 
 // GGUF v3 minimo: claves de texto y nombres de tensores (sin datos)
 void gguf(const fs::path& p, const std::vector<std::pair<std::string, std::string>>& kv,
-          const std::vector<std::string>& tensors) {
+          const std::vector<std::string>& tensors, const std::vector<std::pair<std::string, uint32_t>>& nums = {}) {
   std::string b = "GGUF";
   auto u32 = [&](uint32_t v) { b.append((const char*)&v, 4); };
   auto u64 = [&](uint64_t v) { b.append((const char*)&v, 8); };
@@ -39,11 +39,16 @@ void gguf(const fs::path& p, const std::vector<std::pair<std::string, std::strin
   };
   u32(3);
   u64(tensors.size());
-  u64(kv.size());
+  u64(kv.size() + nums.size());
   for (auto& [k, v] : kv) {
     str(k);
     u32(8);
     str(v);
+  }
+  for (auto& [k, v] : nums) {
+    str(k);
+    u32(4);
+    u32(v);
   }
   for (auto& t : tensors) {
     str(t);
@@ -154,6 +159,26 @@ TEST("imagen gguf: el catalogo lo reconoce y sd-cli recibe el modelo con sus pie
   CHECK(has_seq(p.model_args, "--vae", S(d / "z" / "ae.safetensors")));
   p = media::sd_plan(zm, json::object(), "cpu", {"--llm", "--qwen2vl"});
   CHECK(has(p.model_args, "--llm"));
+
+  // el codificador LLM se elige por su cabecera GGUF: el Qwen3-8B del chat no sirve para Z-Image (pide Qwen3-4B)
+  fs::path z2 = d / "z2" / "z_image_turbo-Q4_K.gguf";
+  gguf(z2, {{"general.architecture", "lumina2"}}, {"cap_embedder.0.weight"});
+  write_file(d / "z2" / "ae.safetensors", "x");
+  gguf(d / "z2" / "Qwen3-8B-Q4_K_M.gguf", {{"general.architecture", "qwen3"}}, {}, {{"qwen3.embedding_length", 4096}});
+  json zm2 = {{"id", "z2"}, {"path", S(z2)}, {"format", "gguf"}};
+  p = media::sd_plan(zm2, json::object(), "cpu", {"--llm"});
+  CHECK(!has(p.model_args, "--llm"));
+  CHECK(contains(p.error, "Qwen3-4B") && contains(p.error, "Qwen3-8B-Q4_K_M.gguf"));
+  // un Qwen3 de 4B con otro nombre (el LLM del chat) si encaja
+  gguf(d / "z2" / "mi-chat-qwen3.gguf", {{"general.architecture", "qwen3"}}, {}, {{"qwen3.embedding_length", 2560}});
+  p = media::sd_plan(zm2, json::object(), "cpu", {"--llm"});
+  CHECK(p.error.empty());
+  CHECK(has_seq(p.model_args, "--llm", S(d / "z2" / "mi-chat-qwen3.gguf")));
+  // FLUX.2 klein 4B tambien usa Qwen3-4B; FLUX.2 dev, Mistral Small
+  CHECK_EQ(models::llm_encoder_for("flux2", "flux-2-klein-4b-Q4_K.gguf"), std::string("Qwen3-4B"));
+  CHECK_EQ(models::llm_encoder_for("flux2", "flux-2-klein-9b-Q4_K.gguf"), std::string("Qwen3-8B"));
+  CHECK_EQ(models::llm_encoder_for("flux2", "flux2-dev-Q4_K_M.gguf"), std::string("Mistral-Small-3.2-24B"));
+  CHECK(models::llm_encoder_for("sdxl", "x").empty());
 
   CHECK_EQ(media::sd_flags("  --vae-tiling   x\n  --flash-attn on|off\n -t N").size(), size_t(2));
 }
