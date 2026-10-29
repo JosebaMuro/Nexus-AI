@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
-# Nexus-Office 2.6.0-cpp: la oficina para pymes reescrita en C++ (misma interfaz web, mismos datos).
-project(NexusOfficeCpp VERSION 2.6.0 LANGUAGES C CXX)
+# Nexus-Office 2.7.0-cpp: la oficina para pymes reescrita en C++ (misma interfaz web, mismos datos).
+project(NexusOfficeCpp VERSION 2.7.0 LANGUAGES C CXX)
 
-set(NEXUS_VERSION "2.6.0-cpp")
+set(NEXUS_VERSION "2.7.0-cpp")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
