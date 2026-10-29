@@ -167,7 +167,8 @@ jobs:
           RT=$PWD/nexus-office-cpp/.cache/desktop-runtimes/$T
           PK=$PWD/packs/runtimes            # variantes pesadas: van en un zip aparte (Nexus-Office-runtime-*.zip)
           mkdir -p "$RT" "$PK" w
-          LT=${LLAMA_TAG:-$(gh release view -R ggml-org/llama.cpp --json tagName -q .tagName)}
+          # la Release marcada como «latest» de llama.cpp no siempre es la de los binarios (bNNNN): la ultima bNNNN
+          LT=${LLAMA_TAG:-$(gh release list -R ggml-org/llama.cpp --limit 30 --json tagName -q '.[].tagName' | grep -m1 -E '^b[0-9]+$')}
           ST=${SD_TAG:-$(gh release view -R leejet/stable-diffusion.cpp --json tagName -q .tagName)}
           echo "llama.cpp $LT · stable-diffusion.cpp $ST"
           # poner <destino> <rt> <variante> <repo> <tag> <patron> [patron de cudart]

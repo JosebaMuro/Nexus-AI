@@ -292,9 +292,21 @@ json ImageEngine::generate(const std::string& prompt, const std::string& negativ
     try {
       return sdcpp(sd->exe, sd->variant, m, english(prompt), negative, size, steps, seed, out);
     } catch (const std::exception& e) {
-      L.warning("sd.cpp fallo (", e.what(), "); usando el compositor procedural");
       std::string msg = trim(e.what());
       why = "stable-diffusion.cpp fallo: " + uright(msg, 300);
+      // una GPU que no arranca (Metal virtual, driver roto...): antes del compositor se prueba en la CPU
+      auto cpu = starts_with(sd->variant, "cpu") ? std::nullopt : rt_.exe("sd", profile_(), "cpu");
+      if (cpu && starts_with(cpu->variant, "cpu")) {
+        L.warning("sd.cpp fallo en ", sd->variant, " (", uright(msg, 200), "); se reintenta en la CPU");
+        try {
+          json r = sdcpp(cpu->exe, cpu->variant, m, english(prompt), negative, size, steps, seed, out);
+          r["note"] = "La GPU (" + sd->variant + ") no pudo generar la imagen; se ha hecho en la CPU";
+          return r;
+        } catch (const std::exception& e2) {
+          why = "stable-diffusion.cpp fallo en " + sd->variant + " y en la CPU: " + uright(trim(e2.what()), 300);
+        }
+      }
+      L.warning("sd.cpp fallo (", uright(why, 300), "); usando el compositor procedural");
     }
   }
   std::string text = idea.empty() ? prompt : idea;
@@ -338,7 +350,7 @@ bool ImageEngine::via_server(const fs::path& cli, const SdPlan& plan, const json
   std::string mode = config_.str("media.sd_servidor", "auto");
   if (mode == "no" || mode == "off" || !is_file(exe)) return false;
   std::lock_guard<std::mutex> lk(mu_);
-  std::string key = join(plan.model_args, "|") + "|" + join(plan.perf_args, "|");
+  std::string key = S(exe) + "|" + join(plan.model_args, "|") + "|" + join(plan.perf_args, "|");
   if (!(server_ && server_->running() && server_key_ == key)) {
     stop_server();
     server_port_ = net::free_port(7861);

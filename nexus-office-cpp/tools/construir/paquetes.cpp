@@ -179,7 +179,7 @@ void tar_tree(archive::TarGzWriter& tar, const fs::path& dir, const std::string&
     all.push_back(*it);
   std::sort(all.begin(), all.end(), [](auto& a, auto& b) { return a.path().generic_string() < b.path().generic_string(); });
   for (auto& e : all) {
-    std::string name = arc + "/" + fs::relative(e.path(), dir).generic_string();
+    std::string name = arc + "/" + e.path().lexically_relative(dir).generic_string();
     if (e.is_symlink(ec))
       tar.add_symlink(name, fs::read_symlink(e.path(), ec).generic_string(), mtime);
     else if (e.is_directory(ec))
