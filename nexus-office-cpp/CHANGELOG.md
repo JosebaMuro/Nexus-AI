@@ -36,6 +36,9 @@
 - El contexto se reparte en tokens según el `n_ctx` real del modelo y del equipo, no con un número fijo de mensajes.
 - La petición actual ya no se puede descartar al ajustar el contexto (antes, con resultados de herramientas largos,
   podía quedarse fuera la propia pregunta).
+- Con GPU, llama-server reparte el contexto entre dos conversaciones a la vez: el reparto usa ya lo que le toca a cada
+  una (antes se contaba el doble y el servidor rechazaba la petición). Las definiciones de herramientas también cuentan,
+  y si aun así el servidor dice que no cabe, se reajusta con sus cifras y se reintenta.
 - Panel **🧵 HILO** en el chat y API `/api/sessions/{id}/hilo`. Las conversaciones se abren enteras (hasta 1000 mensajes).
 
 ## Nexus-Office 2.3.0-cpp

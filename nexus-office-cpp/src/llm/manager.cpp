@@ -71,6 +71,21 @@ json fit_context(json msgs, int n_ctx, int reply_tokens) {
   return msgs;
 }
 
+int approx_tokens(const json& messages) {
+  double s = 0;
+  for (auto& m : messages) s += msg_tokens(m);
+  return (int)s;
+}
+
+int LLMManager::request_ctx(const std::string& b, int n_ctx) {
+  if (b != "llamaserver") return n_ctx;
+  auto ls = std::dynamic_pointer_cast<LlamaServerBackend>(backend("llamaserver"));
+  int slots = ls ? ls->slots.load() : 0;
+  if (slots <= 0)   // aun sin arrancar: con GPU arranca con 2 slots
+    slots = (int)jnum(llm_profile().value("gpu_layers", json(0)), 0) != 0 ? 2 : 1;
+  return std::max(512, n_ctx / std::max(1, slots));
+}
+
 LLMManager::LLMManager(Config& config, models::Catalog& catalog, json& profile, hw::Monitor* monitor,
                        runtimes::RuntimeManager* rt)
     : config_(config), catalog_(catalog), profile_(profile), monitor_(monitor), rt_(rt) {
@@ -298,17 +313,38 @@ void LLMManager::stream(json messages, const std::string& spec, Opts opts, const
     if (bname == "llamaserver" && budget > 0)
       full["extra_body"] = {{"reasoning_budget_tokens", budget}, {"reasoning_budget_message", REASONING_STOP}};
   }
+  int fit_ctx = 0, tools_tok = 0;
+  json original;   // antes de ajustar (con las marcas "keep") para poder reajustar
   if (bname == "llamaserver" || bname == "llamacpp" || bname == "ollama" || motores::info(bname)) {
-    int n_ctx = (int)jnum(full["n_ctx"], 4096);
-    int cap = thinking ? n_ctx / 2 : n_ctx / 3;
+    fit_ctx = request_ctx(bname, (int)jnum(full["n_ctx"], 4096));
+    int cap = thinking ? fit_ctx / 2 : fit_ctx / 3;
     int mt = truthy(full["max_tokens"]) ? (int)jnum(full["max_tokens"]) : 1024;
     full["max_tokens"] = std::min(mt, std::max(256, cap));
-    messages = fit_context(messages, n_ctx, full["max_tokens"].get<int>());
+    // las definiciones de herramientas nativas tambien ocupan contexto
+    tools_tok = full.contains("tool_specs") ? (int)(ulen(full["tool_specs"].dump()) / 3.2) : 0;
+    original = messages;
+    messages = fit_context(messages, fit_ctx - tools_tok, full["max_tokens"].get<int>());
   }
   Opts o2{full, opts.on_reasoning};
   ++inflight;
   try {
-    b->stream_chat(messages, model, o2, out);
+    try {
+      b->stream_chat(messages, model, o2, out);
+    } catch (const std::exception& e) {
+      // la estimacion se quedo corta (plantilla, idioma, imagenes): se reajusta con lo que dice el servidor y se reintenta
+      static const Rx OVER(R"("n_prompt_tokens"\s*:\s*(\d+).*?"n_ctx"\s*:\s*(\d+))", Rx::S);
+      const std::string err = e.what();
+      auto m = fit_ctx ? OVER.search(err) : std::nullopt;
+      if (!m) throw;
+      double real = std::stod(m->str(1)), avail = std::stod(m->str(2));
+      double est = approx_tokens(messages) + tools_tok;
+      double ratio = std::max(1.05, real / std::max(1.0, est));
+      int reply = full["max_tokens"].get<int>();
+      int budget = (int)((avail - reply) / ratio * 0.92) - tools_tok;
+      L.warning("Peticion de ", (int)real, " tokens para un contexto de ", (int)avail, ": se reajusta y se reintenta");
+      messages = fit_context(original, std::max(256, budget) + reply + 48, reply);
+      b->stream_chat(messages, model, o2, out);
+    }
   } catch (const std::exception& e) {
     --inflight;
     static const Rx OOM(R"(out of memory|failed to allocate|cudaMalloc|insufficient memory|bad_alloc|OOM)", Rx::I);

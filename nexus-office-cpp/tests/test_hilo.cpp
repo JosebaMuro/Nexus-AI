@@ -100,3 +100,77 @@ TEST("hilo: resumen progresivo y notas fijas") {
   h.olvidar("s2");
   CHECK(jstr(h.estado("s2"), "notas").empty());
 }
+
+#include <httplib.h>
+
+#include <thread>
+
+#include "core/config.h"
+#include "core/services.h"
+#include "util/net.h"
+
+// el servidor dice que la peticion no cabe (como llama-server): se reajusta con sus cifras y se reintenta una vez,
+// sin perder la pregunta actual
+TEST("hilo: si el servidor dice que no cabe, se reajusta y se reintenta") {
+  httplib::Server srv;
+  std::vector<json> peticiones;
+  std::mutex mu;
+  srv.Get("/api/version", [](const httplib::Request&, httplib::Response& res) {
+    res.set_content(R"({"version":"0.9"})", "application/json");
+  });
+  srv.Get("/api/tags", [](const httplib::Request&, httplib::Response& res) {
+    res.set_content(R"({"models":[{"name":"fake"}]})", "application/json");
+  });
+  srv.Post("/api/chat", [&](const httplib::Request& req, httplib::Response& res) {
+    json body = jparse(req.body);
+    size_t chars = 0;
+    for (auto& m : body["messages"]) chars += ulen(jstr(m, "content"));
+    bool primera;
+    {
+      std::lock_guard<std::mutex> lk(mu);
+      peticiones.push_back(body);
+      primera = peticiones.size() == 1;
+    }
+    if (primera) {   // el servidor cuenta el doble de tokens de los que estimamos
+      res.status = 400;
+      int real = (int)(chars / 3.2 * 2);
+      res.set_content(cat(R"({"error":{"code":400,"message":"request exceeds the available context size",)",
+                          R"("type":"exceed_context_size_error","n_prompt_tokens":)", real, R"(,"n_ctx":4096}})"),
+                      "application/json");
+      return;
+    }
+    res.set_content(R"({"message":{"content":"respuesta"},"done":true,"eval_count":1})", "application/x-ndjson");
+  });
+  int port = srv.bind_to_any_port("127.0.0.1");
+  std::thread th([&] { srv.listen_after_bind(); });
+  auto dir = std::filesystem::temp_directory_path() / ("nexus-hilo-" + std::to_string(::time(nullptr)));
+  std::filesystem::create_directories(dir);
+  set_env("NEXUS_DATA_DIR", S(dir));
+  reset_config();
+  {
+    Services s(false);
+    s.config.set("llm.ollama_url", "http://127.0.0.1:" + std::to_string(port));
+    s.llm->rebuild();
+    s.llm->update_llm_profile({{"n_ctx", 4096}});
+    json msgs = json::array();
+    msgs.push_back({{"role", "system"}, {"content", "Eres un asistente."}});
+    for (int i = 0; i < 30; ++i) msgs.push_back({{"role", i % 2 ? "assistant" : "user"}, {"content", relleno(i)}});
+    msgs.push_back({{"role", "user"}, {"content", "PREGUNTA ACTUAL"}, {"keep", true}});
+    std::string out;
+    llm::Opts o;
+    s.llm->stream(msgs, "ollama:fake", o, [&](const std::string& p) { out += p; });
+    CHECK_EQ(out, std::string("respuesta"));
+    CHECK_EQ(peticiones.size(), (size_t)2);
+    if (peticiones.size() == 2) {
+      auto& seg = peticiones[1]["messages"];
+      CHECK(seg.size() < peticiones[0]["messages"].size());
+      CHECK_EQ(jstr(seg.back(), "content"), std::string("PREGUNTA ACTUAL"));
+      size_t chars = 0;
+      for (auto& m : seg) chars += ulen(jstr(m, "content"));
+      CHECK(chars / 3.2 * 2 < 4096);   // con la cuenta del servidor ya cabe
+    }
+    s.shutdown();
+  }
+  srv.stop();
+  th.join();
+}
