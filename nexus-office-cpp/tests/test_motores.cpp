@@ -252,7 +252,7 @@ TEST("runtimes: paquete sin conexion junto al programa, una sola vez") {
   std::filesystem::create_directories(zip.parent_path());
   {
     archive::ZipWriter z(zip);
-    z.add_bytes("runtimes/llama/cuda13/llama-server", "#!/bin/sh\n");
+    z.add_bytes(sys::is_windows() ? "runtimes/llama/cuda13/llama-server.exe" : "runtimes/llama/cuda13/llama-server", "#!/bin/sh\n");
     z.add_bytes("runtimes/llama/cuda13/libggml-cuda.so", "x");
     CHECK(z.close());
   }
