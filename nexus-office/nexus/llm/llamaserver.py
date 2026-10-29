@@ -93,7 +93,7 @@ class LlamaServerBackend(OpenAICompatBackend):
             exe = Path(os.environ["NEXUS_RUNTIME_LLAMA_GPU" if device and os.environ.get("NEXUS_RUNTIME_LLAMA_GPU")
                                   else "NEXUS_RUNTIME_LLAMA_CPU"])
             if android_accel.is_gpu_exe(exe):
-                env = android_accel.gpu_env(str(exe.parent))
+                env = android_accel.gpu_env(str(exe.parent), npu=android_accel.is_npu_dev(device))
             else:
                 ngl, device = 0, ""
         if variant == "cpu":

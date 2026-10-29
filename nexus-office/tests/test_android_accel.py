@@ -338,3 +338,22 @@ def test_autoajuste_mide_la_gpu_si_la_npu_fallo(tmp_path, monkeypatch):
     assert t.step()["gpu"] == "HTP0"
     s.profile["llm"]["device"] = "GPUOpenCL"     # llamaserver paso a la GPU
     assert t.step()["gpu"] == "GPUOpenCL" and s.profile["llm"]["device"] == "GPUOpenCL"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="script de shell")
+def test_sonda_sin_npu_si_el_backend_hexagon_se_cae(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path / "nexus"))
+    (tmp_path / "nexus").mkdir()
+    monkeypatch.setenv("NEXUS_DEVICE_INFO", str(tmp_path / "no.json"))
+    monkeypatch.setattr(aa, "props", lambda: {"ro.build.fingerprint": "f1"})
+    libs = tmp_path / "lib"
+    libs.mkdir()
+    (libs / "libggml-hexagon.so").write_bytes(b"\x7fELF")
+    exe = libs / aa.GPU_EXE    # aborta salvo con GGML_HEXAGON_DEVICES=0
+    exe.write_text("#!/bin/sh\n[ \"$GGML_HEXAGON_DEVICES\" = 0 ] || { echo 'ggml-hex: abort'; exit 134; }\n"
+                   f"cat <<'EOF'\n{LIST_ADRENO}EOF\n")
+    exe.chmod(exe.stat().st_mode | stat.S_IEXEC)
+    r = aa.detect(str(libs))
+    assert r["gpu"]["use"]["dev"] == "GPUOpenCL" and "abort" in r["gpu"]["npu_broken"]
+    assert aa.gpu_env(str(libs), npu=False)["GGML_HEXAGON_DEVICES"] == "0"
+    assert "GGML_HEXAGON_DEVICES" not in aa.gpu_env(str(libs))
