@@ -173,7 +173,15 @@ int main_motor(const std::vector<std::string>& argv) {
     return 3;
   }
   c.lib = *lib;
-  if (c.dispatch.empty()) c.dispatch = c.lib.parent_path();
+  if (c.dispatch.empty()) {
+    // NPU: las bibliotecas «dispatch» del fabricante van junto a LiteRT-LM o en vendors/<fabricante>/dispatch
+    c.dispatch = c.lib.parent_path();
+    for (auto& d : glob(c.lib.parent_path() / "vendors", "dispatch", true))
+      if (is_dir(d)) {
+        c.dispatch = d;
+        break;
+      }
+  }
   int port = std::atoi(a["puerto"].c_str());
   std::unique_ptr<Motor> m;
   double t0 = now();
@@ -327,6 +335,10 @@ void MotorBackend::ensure(const std::string& model, const json& opts) {
     po.cwd = lib->parent_path();
     po.output_file = log_path;
     po.env = runtimes::lib_env(*lib);
+    // ONNX Runtime GenAI busca libonnxruntime.so(.1) a su lado; los paquetes la traen con la version en el nombre
+    if (motor_ == "onnx" && !sys::is_windows())
+      for (auto& o : glob(lib->parent_path(), "libonnxruntime.*"))
+        if (!contains(S(o.filename()), "genai") && !contains(S(o.filename()), "providers")) po.env["ORT_LIB_PATH"] = S(o);
     if (sys::is_android()) {
       // NPU: las bibliotecas del fabricante (QNN, NeuroPilot...) estan en /vendor
       po.env["LD_LIBRARY_PATH"] = S(lib->parent_path()) + ":/vendor/lib64:/system/vendor/lib64:/system/lib64";

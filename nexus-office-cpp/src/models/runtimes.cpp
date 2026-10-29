@@ -6,6 +6,7 @@
 #endif
 
 #include "util/archive.h"
+#include "util/crypto.h"
 #include "util/http.h"
 #include "util/log.h"
 #include "util/proc.h"
@@ -188,6 +189,65 @@ std::optional<fs::path> bundled_exe(const std::string& runtime, const std::strin
 }
 
 RuntimeManager::RuntimeManager() : root_(paths::sub({"runtimes"})) {}
+
+json RuntimeManager::import_pack(const fs::path& zip) {
+  if (!is_file(zip)) throw std::runtime_error("No existe " + S(zip));
+  fs::path tmp = paths::sub({"cache"}) / ("paquete-" + std::to_string((long long)(now() * 1000)));
+  rm_rf(tmp);
+  if (!archive::extract(zip, tmp)) {
+    rm_rf(tmp);
+    throw std::runtime_error("No se pudo abrir " + S(zip.filename()));
+  }
+  // runtimes/<rt>/<variante> (o <rt>/<variante> si se comprimio sin la carpeta de arriba)
+  fs::path base = is_dir(tmp / "runtimes") ? tmp / "runtimes" : tmp;
+  json out = json::array();
+  std::error_code ec;
+  for (auto& r : fs::directory_iterator(base, ec)) {
+    if (!r.is_directory()) continue;
+    std::string rt = S(r.path().filename());
+    for (auto& v : fs::directory_iterator(r.path(), ec)) {
+      if (!v.is_directory()) continue;
+      fs::path dest = root_ / rt / v.path().filename();
+      rm_rf(dest);
+      mkdirs(dest.parent_path());
+      fs::rename(v.path(), dest, ec);
+      if (ec) {   // otra unidad: se copia
+        ec.clear();
+        fs::copy(v.path(), dest, fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+      }
+#ifndef _WIN32
+      for (auto& f : glob(dest, "*", true))
+        if (is_file(f) && S(f.filename()).find('.') == std::string::npos)
+          fs::permissions(f, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec, fs::perm_options::add, ec);
+#endif
+      out.push_back(rt + "/" + S(v.path().filename()));
+    }
+  }
+  rm_rf(tmp);
+  if (out.empty()) throw std::runtime_error(S(zip.filename()) + " no trae runtimes/<runtime>/<variante>");
+  L.info("Paquete de runtimes importado: ", S(zip.filename()), " -> ", jdump(out));
+  return out;
+}
+
+json RuntimeManager::import_found() {
+  json done = jparse(read_text(root_ / "paquetes.json"));
+  if (!done.is_object()) done = json::object();
+  json out = json::array();
+  for (auto& dir : {paths::root(), paths::root().parent_path(), paths::sub({"paquetes"})})
+    for (auto& z : glob(dir, "Nexus-Office-runtime-*.zip")) {
+      std::string key = cat(S(z.filename()), "|", fsize(z));
+      if (done.contains(key)) continue;
+      try {
+        for (auto& v : import_pack(z)) out.push_back(v);
+        done[key] = now();
+        mkdirs(root_);
+        write_file(root_ / "paquetes.json", jdump(done));
+      } catch (const std::exception& e) {
+        L.warning("No se pudo importar ", S(z), ": ", e.what());
+      }
+    }
+  return out;
+}
 
 std::optional<fs::path> RuntimeManager::find_exe(const std::string& runtime, const std::string& variant) {
   return find_in(root_ / runtime / variant, runtime);

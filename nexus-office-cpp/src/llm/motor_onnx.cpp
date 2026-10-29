@@ -61,6 +61,7 @@ struct Api {
   R(OGA_CALL* create_stream)(const OgaTokenizer*, OgaTokenizerStream**) = nullptr;
   void(OGA_CALL* destroy_stream)(OgaTokenizerStream*) = nullptr;
   R(OGA_CALL* stream_decode)(OgaTokenizerStream*, int32_t, const char**) = nullptr;
+  void(OGA_CALL* register_ep)(const char*, const char*) = nullptr;   // opcional (0.9+)
 
   // lanza si la llamada devolvio error
   void check(R r, const std::string& what) const {
@@ -106,9 +107,26 @@ void load(Api& a, const fs::path& lib) {
   need("OgaCreateTokenizerStream", a.create_stream);
   need("OgaDestroyTokenizerStream", a.destroy_stream);
   need("OgaTokenizerStreamDecode", a.stream_decode);
+  a.lib.get("OgaRegisterExecutionProviderLibrary", a.register_ep);
   if (!missing.empty())
     throw std::runtime_error("ONNX Runtime GenAI incompatible (le falta " + missing[0] + "): se necesita la 0.8 o posterior");
   L.info("ONNX Runtime GenAI cargado (", S(lib), ")");
+  // proveedores que van como «plugin» (QNN de onnxruntime-qnn 2.x, CUDA, TensorRT-RTX...): se registran los que
+  // haya junto a la biblioteca para que el proveedor del modelo los encuentre. Se reconocen por CreateEpFactories.
+  if (!a.register_ep) return;
+  for (auto& f : glob(lib.parent_path(), "*onnxruntime_providers_*")) {
+    std::string n = S(f.filename());
+    if (!is_file(f) || contains(n, "_shared") || !(ends_with(n, ".dll") || ends_with(n, ".so") || ends_with(n, ".dylib")))
+      continue;
+    static std::vector<std::unique_ptr<DynLib>> keep;
+    auto probe = std::make_unique<DynLib>();
+    if (!probe->open(f) || !probe->sym("CreateEpFactories")) continue;
+    std::string reg = stem(f);
+    if (starts_with(reg, "lib")) reg = reg.substr(3);
+    a.register_ep(reg.c_str(), S(f).c_str());
+    keep.push_back(std::move(probe));
+    L.info("Proveedor plugin registrado: ", reg);
+  }
 }
 
 class Onnx : public Motor {

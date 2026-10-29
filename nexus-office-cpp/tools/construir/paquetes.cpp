@@ -10,6 +10,7 @@
 //   .cache/cpp/<target>/Nexus-Office/                carpeta instalada por «cmake --install» en cada sistema (cpp.yml)
 //   .cache/desktop-runtimes/<target>/llama|sd/       llama-server y sd-cli
 //   .cache/desktop-runtimes/<target>/piper|whisper/  voz: piper (rhasspy/piper) y whisper-cli (whisper.cpp)
+//   .cache/desktop-runtimes/<target>/litert|onnx/    motores LiteRT-LM (Google) y ONNX Runtime GenAI (Microsoft)
 //   .cache/drivers/<target>/                         drivers USB-serie (Windows y macOS)
 // Salida en dist/ (NEXUS_DIST):
 //   windows/  Nexus-Office-Setup-<ver>-windows-x64.exe / -arm64.exe     instalador grafico (NSIS; makensis)
@@ -43,7 +44,7 @@ const std::vector<std::pair<std::string, Target>> TARGETS = {
     {"macos-arm64", {"macos", "", ""}},
     {"macos-x86_64", {"macos", "", ""}},
 };
-const char* RUNTIMES[] = {"llama", "sd", "piper", "whisper"};
+const char* RUNTIMES[] = {"llama", "sd", "piper", "whisper", "litert", "onnx"};
 const std::set<std::string> EXECUTABLES = {"nexus-office", "llama-server", "sd-cli", "piper", "whisper-cli", "espeak-ng"};
 const std::string APP_ID = "ai.nexus.NexusOfficeCpp";
 const std::string FLATHUB = "https://dl.flathub.org/repo/flathub.flatpakrepo";

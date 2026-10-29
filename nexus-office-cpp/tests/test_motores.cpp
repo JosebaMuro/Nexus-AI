@@ -8,6 +8,7 @@
 #include "media/media.h"
 #include "models/models.h"
 #include "models/runtimes.h"
+#include "util/archive.h"
 #include "util/dynlib.h"
 #include "util/fs.h"
 #include "util/rx.h"
@@ -241,4 +242,28 @@ TEST("motores: sin biblioteca no arrancan y el catalogo reconoce sus modelos") {
   write_file(d / "phi" / "config.json", "{}");
   json g = models::classify(d / "phi");
   CHECK(jstr(g, "format") == "onnx-genai" && jstr(g, "kind") == "llm");
+}
+
+TEST("runtimes: paquete sin conexion junto al programa, una sola vez") {
+  auto d = tmpdir("pack");
+  set_env("NEXUS_DATA_DIR", S(d / "datos"));
+  reset_config();
+  fs::path zip = d / "datos" / "paquetes" / "Nexus-Office-runtime-cuda13-2.5.0-cpp-linux-x86_64.zip";
+  std::filesystem::create_directories(zip.parent_path());
+  {
+    archive::ZipWriter z(zip);
+    z.add_bytes("runtimes/llama/cuda13/llama-server", "#!/bin/sh\n");
+    z.add_bytes("runtimes/llama/cuda13/libggml-cuda.so", "x");
+    CHECK(z.close());
+  }
+  runtimes::RuntimeManager rm;
+  json v = rm.import_found();
+  CHECK_EQ(v, json::array({"llama/cuda13"}));
+  CHECK(rm.find_exe("llama", "cuda13").has_value());
+  CHECK(rm.import_found().empty());   // ya importado
+  try {
+    rm.import_pack(d / "no-existe.zip");
+    CHECK(false);
+  } catch (const std::runtime_error&) {
+  }
 }

@@ -871,6 +871,7 @@ const char* HELP =
     "  nexus-office firmware grabar luces|reloj|pico [--puerto P] [--modelo esp8266|esp32c3...] [--wifi RED --clave C]\n"
     "  nexus-office comprobar [--sin-reparar] [--rapido] [--json]   comprueba y repara la instalacion y los datos\n"
     "  nexus-office motor litert|onnx --modelo RUTA --puerto N [--acelerador cpu|gpu|npu|dml|qnn]   (lo usa el LLM)\n"
+    "  nexus-office importar-runtime <Nexus-Office-runtime-...zip>   runtimes sin conexion (CUDA 13, ROCm, SYCL...)\n"
     "  nexus-office --version\n";
 
 }  // namespace
@@ -890,6 +891,16 @@ int run_main(std::vector<std::string> argv) {
   if (cmd == "servicio") return service::main(argv);
   // motor de inferencia aparte de llama.cpp (LiteRT-LM, ONNX Runtime GenAI) en su propio proceso: lo arranca el LLM
   if (cmd == "motor") return motores::main_motor(argv);
+  if (cmd == "importar-runtime") {   // paquete de runtimes sin conexion (Nexus-Office-runtime-*.zip)
+    if (argv.empty()) die("uso: nexus-office importar-runtime <Nexus-Office-runtime-...zip>", 2);
+    try {
+      runtimes::RuntimeManager rm;
+      for (auto& a : argv) std::printf("%s: %s\n", a.c_str(), jdump(rm.import_pack(P(a))).c_str());
+    } catch (const std::exception& e) {
+      die(e.what(), 1);
+    }
+    return 0;
+  }
   if (cmd == "run") return cmd_run(parse(argv, {"host", "port", "motor", "acelerador"}));
   if (cmd == "detect") return cmd_detect();
   if (cmd == "pull") {
