@@ -523,7 +523,7 @@ AgentManager::Presupuesto AgentManager::presupuesto(const AgentSpec& spec, const
   Presupuesto p;
   auto [b, model] = s.llm->select(spec.model);
   bool local = b == "llamaserver" || b == "llamacpp" || b == "ollama" || b == "builtin";
-  p.n_ctx = local ? (int)jnum(s.llm->llm_profile().value("n_ctx", json(4096)), 4096)
+  p.n_ctx = local ? s.llm->request_ctx(b, (int)jnum(s.llm->llm_profile().value("n_ctx", json(4096)), 4096))
                   : (int)s.config.num("hilo.ctx_remoto", 32768);
   p.n_ctx = std::max(p.n_ctx, 1024);
   int mt = spec.max_tokens.value_or((int)s.config.num("llm.max_tokens", 1024));

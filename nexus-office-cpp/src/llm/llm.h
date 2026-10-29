@@ -160,6 +160,7 @@ class LlamaServerBackend : public OpenAICompatBackend {
   std::string gpu_error();   // por que la GPU elegida no arranco (y se sigue en la CPU)
   std::string variant;
   int port = 0;
+  std::atomic<int> slots{0};   // -np del llama-server en marcha (0: aun no arrancado); cada slot tiene n_ctx/slots
   // Android: la NPU o la GPU no arrancan con el driver del movil; el gestor cambia gpu_layers/device del perfil
   std::function<void(const json&)> set_llm_opts;
 
@@ -244,6 +245,7 @@ std::optional<std::pair<std::string, json>> detect_intent(const std::string& tex
 // ---------------------------------------------------------------- gestor
 extern const char* REASONING_STOP;
 json fit_context(json messages, int n_ctx, int reply_tokens);
+int approx_tokens(const json& messages);   // estimacion (caracteres / 3.2) como la de fit_context
 
 class LLMManager {
  public:
@@ -256,6 +258,8 @@ class LLMManager {
   // perfil de llama.cpp (hilos, contexto, GPU) con el cerrojo del gestor: lo cambia el autoajuste en vivo
   json llm_profile();
   void update_llm_profile(const json& changes);
+  // contexto que tiene de verdad cada peticion: llama-server con varios slots reparte n_ctx entre ellos
+  int request_ctx(const std::string& backend, int n_ctx);
   bool reasoning_model(const std::string& backend, const std::string& model);
   bool thinking_only(const std::string& backend, const std::string& model);
   void stream(json messages, const std::string& spec, Opts opts, const Sink& out);

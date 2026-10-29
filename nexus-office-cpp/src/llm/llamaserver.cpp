@@ -200,7 +200,9 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
   if (!kv_quant.empty() && !kv_quant_failed_) cmd.insert(cmd.end(), {"-ctk", kv_quant, "-ctv", kv_quant});
   cmd.push_back("-np");
   // un solo slot tambien con la variante de GPU forzada a CPU (-ngl 0): si no, cada slot se queda con medio contexto
-  cmd.push_back(var == "cpu" || var == "system" || single || ngl == 0 ? "1" : "2");
+  int np = var == "cpu" || var == "system" || single || ngl == 0 ? 1 : 2;
+  cmd.push_back(std::to_string(np));
+  slots = np;
   if (mmproj.empty()) {
     cmd.push_back("--cache-reuse");
     cmd.push_back("256");
