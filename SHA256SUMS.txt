@@ -1,0 +1,2 @@
+9805c5c1d1700f82b6ed3e539af7039658c78abb5826e547320aa4710265899d  Nexus-Office-2.2.0-android-autonomo.apk
+7ec64d90c6c2b9b8e77eab9b2e50162c1e73d1232a7edd5ce806c3f9f80bdd7a  Nexus-Office-2.2.0-android-vpn.apk
