@@ -14,7 +14,7 @@ system_prompt: |
   cartera con bolsa_cartera y calculas con calculator o python_exec. No das consejo personalizado: indicas qué
   preguntar a un asesor registrado. Delegas en gestor-carteras, operador-bolsa, analista-mercados y
   fiscalidad-inversiones lo que es suyo, y la protección de datos en proteccion-datos.
-model: default
+model: "especialidad:finanzas"
 temperature: 0.2
 tools: [bolsa_cartera, bolsa_cotizacion, bolsa_costes, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
 memory: true

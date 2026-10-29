@@ -40,7 +40,30 @@ persona en la mesa, con sus comisiones, horquilla y horarios. En cada ciclo (60 
 Su **diario** explica por qué compra, vende o espera. En la vista Bolsa se ven en vivo su curva de patrimonio y el
 **gráfico de cada orden activa** (precio, límite, stop, ejecución y objetivo). Se ajusta o se para en la vista Bolsa o
 con `POST /api/bolsa/agente` (`activo`, `intervalo_s`, `riesgo_pct`, `max_posiciones`, `max_peso_pct`,
-`reserva_pct`, `universo`, `capital`); `GET /api/bolsa/agente` da su estado. Nunca opera con dinero real.
+`reserva_pct`, `universo`, `capital`, `ia`, `ia_modelo`); `GET /api/bolsa/agente` da su estado. Nunca opera con dinero real.
+
+## IA especializada en finanzas (2.7)
+La oficina de bolsa trae tres modelos de IA entrenados con textos financieros, todos GGUF y 100 % sin conexión una vez
+descargados (vista Modelos, «◆ para tu oficina», o `nexus-office modelos --descargar`):
+
+| Modelo (`id`) | Tamaño | Para qué equipo |
+|---|---|---|
+| Finanzas 1.5B (`finanzas-qwen-1.5b`, WiroAI-Finance-Qwen-1.5B) | 1,1 GB | móviles y equipos sin GPU (4 GB de RAM) |
+| Fin-R1 7B (`fin-r1-7b`, SUFE-AIFLM-Lab) | 4,4 GB | PC con 12 GB de RAM o GPU de 6 GB; razona paso a paso |
+| Qwen3.8 27B Finanzas (`qwen3.8-27b-finanzas`) | 16 GB | GPU de 24 GB o 32 GB de RAM; con visión (lee gráficos e informes) |
+
+- Los cinco agentes de la mesa (analista, gestor, operador, riesgos y fiscalidad) tienen `model: especialidad:finanzas`:
+  usan la IA financiera instalada que mejor va en el equipo (la más grande que cabe sin ir justa) y, si no hay
+  ninguna, el modelo general. El resto de la oficina sigue con el general. Con llama.cpp cambiar de modelo lo
+  recarga: la primera respuesta tras pasar de un agente a otro tarda unos segundos más.
+- El **agente autónomo** consulta a esa IA antes de cada compra: le pasa los indicadores del valor y su patrimonio, y
+  ella responde comprar o esperar con un motivo que queda en el diario (tipo `ia`). Su opinión sobre un valor vale 4
+  horas para no recargar el modelo en cada ciclo. Sin IA, o con «La IA financiera revisa cada compra» apagado
+  (`bolsa.agente.ia = false`), decide solo con sus reglas.
+- Elección de la IA (`ia_especializada.finanzas` o `ia_modelo` en `POST /api/bolsa/agente`): `auto` (por hardware),
+  el id de uno de los modelos, o `no` para usar siempre el general.
+
+La IA financiera es apoyo al análisis: no es asesoramiento financiero y la mesa sigue siendo simulada.
 
 ## Agentes
 

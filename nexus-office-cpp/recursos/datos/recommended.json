@@ -276,5 +276,50 @@
     "min_vram_gb": 6,
     "sector_only": true,
     "desc": "Especializado en programacion, scripts, redes y configuracion de sistemas."
+  },
+  {
+    "id": "finanzas-qwen-1.5b",
+    "kind": "llm",
+    "name": "Finanzas 1.5B · bolsa (móvil y equipos modestos)",
+    "params_b": 1.5,
+    "repo": "mradermacher/WiroAI-Finance-Qwen-1.5B-GGUF",
+    "file": "WiroAI-Finance-Qwen-1.5B.Q4_K_M.gguf",
+    "size_mb": 1066,
+    "min_ram_gb": 4,
+    "min_vram_gb": 2,
+    "sector_only": true,
+    "especialidad": "finanzas",
+    "desc": "Qwen2.5 1.5B ajustado con textos financieros (WiroAI-Finance). Ligero: cabe en el móvil y en equipos sin GPU. Es apoyo al análisis, nunca asesoramiento."
+  },
+  {
+    "id": "fin-r1-7b",
+    "kind": "llm",
+    "name": "Fin-R1 7B · razonamiento financiero",
+    "reasoning": true,
+    "params_b": 7,
+    "repo": "bartowski/SUFE-AIFLM-Lab_Fin-R1-GGUF",
+    "file": "SUFE-AIFLM-Lab_Fin-R1-Q4_K_M.gguf",
+    "size_mb": 4466,
+    "min_ram_gb": 12,
+    "min_vram_gb": 6,
+    "sector_only": true,
+    "especialidad": "finanzas",
+    "desc": "Fin-R1 (SUFE-AIFLM-Lab, base Qwen2.5 7B) entrenado para razonar sobre finanzas: valoración, ratios, riesgo y análisis de mercado. Es apoyo al análisis, nunca asesoramiento."
+  },
+  {
+    "id": "qwen3.8-27b-finanzas",
+    "kind": "llm",
+    "name": "Qwen3.8 27B Finanzas · alto rendimiento",
+    "vision": true,
+    "params_b": 27,
+    "repo": "mradermacher/Qwen3.8-27B-finance-GGUF",
+    "file": "Qwen3.8-27B-finance.Q4_K_M.gguf",
+    "mmproj": "Qwen3.8-27B-finance.mmproj-Q8_0.gguf",
+    "size_mb": 16632,
+    "min_ram_gb": 32,
+    "min_vram_gb": 20,
+    "sector_only": true,
+    "especialidad": "finanzas",
+    "desc": "Qwen3.8 27B ajustado para finanzas, con visión: lee gráficos de cotización, informes y cuentas. Para GPU de 24 GB o equipos con 32 GB de RAM. Es apoyo al análisis, nunca asesoramiento."
   }
 ]

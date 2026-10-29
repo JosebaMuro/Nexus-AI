@@ -255,6 +255,9 @@ class LLMManager {
   void rebuild();
   bool is_available(const std::string& name);
   std::pair<std::string, std::string> select(const std::string& spec = "default");
+  // modelo instalado de una especialidad («finanzas»...) que mejor va en este equipo; "" si no hay ninguno.
+  // config ia_especializada.<esp>: auto (por hardware), no (siempre el general) o el id de un modelo concreto
+  std::string especialista(const std::string& esp);
   json status();
   json options(const json& agent_opts = json::object());
   // perfil de llama.cpp (hilos, contexto, GPU) con el cerrojo del gestor: lo cambia el autoajuste en vivo

@@ -1,5 +1,15 @@
 # Cambios
 
+## Nexus-Office 2.7.0-cpp
+
+### IA especializada para la bolsa
+- Tres modelos financieros GGUF en el catálogo de la oficina de bolsa, elegidos según el equipo: Finanzas 1.5B
+  (móvil), Fin-R1 7B (PC) y Qwen3.8 27B Finanzas con visión (GPU de 24 GB).
+- Los agentes de la mesa usan `model: especialidad:finanzas`: la IA financiera instalada que mejor va o, si no hay,
+  la general (`ia_especializada.finanzas`: auto, un modelo o no).
+- El agente autónomo pide a esa IA que revise cada compra (comprar o esperar, con su motivo en el diario); se apaga
+  con «La IA financiera revisa cada compra» o `bolsa.agente.ia = false`.
+
 ## Nexus-Office 2.6.0-cpp
 
 ### Velocidad con GPU dedicada y con NPU

@@ -244,6 +244,11 @@
             <label class="muted">Peso máx. por valor (%) <input class="input" id="ba-peso" type="number" min="1" max="100" style="width:80px"></label>
             <label class="muted">Liquidez de reserva (%) <input class="input" id="ba-reserva" type="number" min="0" max="90" style="width:80px"></label>
             <label class="muted">Cada (s) <input class="input" id="ba-int" type="number" min="15" style="width:80px"></label></div>
+          <div class="row" style="margin-top:8px"><label class="muted"><input type="checkbox" id="ba-ia"> La IA financiera revisa cada compra</label>
+            <select class="input sm" id="ba-iamodelo" style="width:auto" title="Qué IA especializada usan el agente y los agentes de bolsa">
+              <option value="auto">IA financiera: la mejor instalada para este equipo</option><option value="finanzas-qwen-1.5b">Finanzas 1.5B (móvil)</option>
+              <option value="fin-r1-7b">Fin-R1 7B</option><option value="qwen3.8-27b-finanzas">Qwen3.8 27B Finanzas</option><option value="no">Sin especializada: la IA general</option></select>
+            <span class="muted" id="ba-ia-info"></span></div>
           <div class="row" style="margin-top:8px"><input class="input" id="ba-universo" placeholder="Universo: símbolos separados por comas (vacío = todo el catálogo)" style="flex:1 1 300px;min-width:0"><button class="btn sm primary" id="ba-save">GUARDAR</button></div>
         </details>
       </div>

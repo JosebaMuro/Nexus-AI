@@ -1271,13 +1271,16 @@
     $("#ba-diario").innerHTML = a.diario.length ? a.diario.map((e) => `<div class="e ${esc(e.tipo)}"><div class="t">${new Date(e.ts * 1000).toLocaleString("es-ES")} · ${esc(e.tipo)}${e.simbolo ? " · " + esc(e.simbolo) : ""}</div>${esc(e.texto)}</div>`).join("") : '<p class="muted">Todavía sin decisiones.</p>';
     if (a.error) $("#ba-diario").insertAdjacentHTML("afterbegin", `<div class="e error">${esc(a.error)}</div>`);
     const c = a.ajustes; $("#ba-riesgo").value = c.riesgo_pct; $("#ba-maxpos").value = c.max_posiciones; $("#ba-peso").value = c.max_peso_pct; $("#ba-reserva").value = c.reserva_pct; $("#ba-int").value = c.intervalo_s;
+    $("#ba-ia").checked = c.ia !== false; if (a.ia && a.ia.eleccion) $("#ba-iamodelo").value = a.ia.eleccion;
+    $("#ba-ia-info").innerHTML = !a.ia ? "sin IA instalada: decide solo con sus reglas" : !a.ia.modelo ? "sin modelo de IA: decide solo con sus reglas"
+      : a.ia.especializada ? `revisa: <b>${esc(a.ia.modelo)}</b>` : `revisa la IA general (${esc(a.ia.modelo)}); descarga una financiera en Modelos (◆ para tu oficina)`;
     if (document.activeElement !== $("#ba-universo")) $("#ba-universo").value = (c.universo || []).join(", ");
   }
   $("#ba-toggle").onclick = guard(async () => { await api("/api/bolsa/agente", { body: { activo: !liveState.agent?.configurado } }); bolsaAgent(); });
   $("#ba-cycle").onclick = guard(async () => { toast("El agente está analizando el mercado…"); await api("/api/bolsa/agente", { body: { ciclo: true } }); await loaders.bolsa(); });
   $("#ba-view").onclick = () => { if (!liveState.agent) return; bolsaState.cartera = liveState.agent.cartera; local.set("nexus_bolsa_cartera", bolsaState.cartera); refreshView(); };
   $("#ba-save").onclick = guard(async () => {
-    await api("/api/bolsa/agente", { body: { riesgo_pct: Number($("#ba-riesgo").value), max_posiciones: Number($("#ba-maxpos").value), max_peso_pct: Number($("#ba-peso").value), reserva_pct: Number($("#ba-reserva").value), intervalo_s: Number($("#ba-int").value), universo: $("#ba-universo").value.split(/[,\s]+/).filter(Boolean) } });
+    await api("/api/bolsa/agente", { body: { riesgo_pct: Number($("#ba-riesgo").value), max_posiciones: Number($("#ba-maxpos").value), max_peso_pct: Number($("#ba-peso").value), reserva_pct: Number($("#ba-reserva").value), intervalo_s: Number($("#ba-int").value), ia: $("#ba-ia").checked, ia_modelo: $("#ba-iamodelo").value, universo: $("#ba-universo").value.split(/[,\s]+/).filter(Boolean) } });
     toast("Ajustes del agente guardados"); bolsaAgent(); });
   $("#bo-cartera").onchange = () => { bolsaState.cartera = Number($("#bo-cartera").value); local.set("nexus_bolsa_cartera", bolsaState.cartera); refreshView(); };
   $("#bo-quote").onclick = guard(bolsaQuote);
@@ -1346,7 +1349,7 @@
     ed.innerHTML = `<h3>${a.id ? "Editar agente · " + esc(a.name) : "Nuevo agente"}</h3><div class="grid g3">
       <label class="field">ID<input class="input" name="id" value="${esc(a.id)}" ${a.id ? "readonly" : ""}></label>
       <label class="field">Nombre<input class="input" name="name" value="${esc(a.name)}"></label>
-      <label class="field">Modelo<input class="input" name="model" value="${esc(a.model)}" placeholder="default · ollama:… · peer:…"></label>
+      <label class="field">Modelo<input class="input" name="model" value="${esc(a.model)}" placeholder="default · especialidad:finanzas · ollama:… · peer:…"></label>
       <label class="field">Temperatura<input class="input" name="temperature" type="number" step="0.1" min="0" max="2" value="${a.temperature ?? ""}"></label>
       <label class="field">Máx. tokens<input class="input" name="max_tokens" type="number" value="${a.max_tokens ?? ""}"></label>
       <label class="field">Icono / color<div class="row"><input class="input" name="icon" value="${esc(a.icon)}" style="width:70px"><input type="color" name="color" value="${esc(a.color)}"></div></label>
@@ -1383,7 +1386,7 @@
     $("#rec-profile").textContent = `perfil ${rec.profile.tier} · hasta ${rec.profile.max_model_b}B · ideal ${rec.profile.recommended_model_b}B`;
     const active = Object.values(m.active);
     const items = rec.items.slice().sort((a, b) => (b.sector ? 1 : 0) - (a.sector ? 1 : 0));   // los de tu oficina, primero
-    $("#rec-grid").innerHTML = items.map((r) => `<div class="item col" style="gap:6px"><div class="row"><span class="tag accent">${r.kind}</span><b style="flex:1">${esc(r.name)}</b>${r.best ? '<span class="tag ok">★ recomendado</span>' : ""}${r.sector ? '<span class="tag warn">◆ para tu oficina</span>' : ""}</div>
+    $("#rec-grid").innerHTML = items.map((r) => `<div class="item col" style="gap:6px"><div class="row"><span class="tag accent">${r.kind}</span><b style="flex:1">${esc(r.name)}</b>${r.best ? '<span class="tag ok">★ recomendado</span>' : ""}${r.best_especialidad ? `<span class="tag ok">★ IA ${esc(r.especialidad)} para este equipo</span>` : ""}${r.sector ? '<span class="tag warn">◆ para tu oficina</span>' : ""}</div>
       ${r.sector ? `<div class="d"><b>Para tu oficina:</b> ${esc(r.sector)}</div>` : ""}<div class="d">${esc(r.desc)}</div><div class="row mono muted"><span class="tag ${r.fit}">${FIT[r.fit]}</span><span>${r.size_mb >= 1000 ? (r.size_mb / 1024).toFixed(1) + " GB" : r.size_mb + " MB"}</span>${r.vision ? '<span class="tag">visión</span>' : ""}${r.baseline ? '<span class="tag">base CPU</span>' : ""}</div>
       <div>${r.installed ? (active.includes(r.id) ? '<span class="tag ok">● activo</span>' : `<button class="btn sm" data-act="${r.id}">ACTIVAR</button>`) : `<button class="btn sm ${r.fit === "no_cabe" ? "danger" : "primary"}" data-rec="${r.id}">DESCARGAR</button>`}</div></div>`).join("");
     $("#catalog-list").innerHTML = m.catalog.map((c) => `<div class="item row"><span class="tag accent">${c.kind}</span><div style="flex:1"><div class="t">${esc(c.name)}</div><div class="d mono">${c.format} · ${fmtB(c.size)} · ${esc(c.source)}${c.vision ? " · visión" : ""}${c.meta?.quant ? " · " + c.meta.quant : ""}</div></div>

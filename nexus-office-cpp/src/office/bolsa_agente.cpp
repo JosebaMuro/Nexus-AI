@@ -26,6 +26,7 @@ const double UMBRAL_COMPRA = 0.9;
 const double RSI_MAX_COMPRA = 80;          // no compra lo sobrecomprado
 const double ESPERA_RECOMPRA_S = 6 * 3600;  // tras vender un valor no lo vuelve a comprar en 6 horas
 const size_t MIN_PUNTOS = 30;
+const double VIGENCIA_IA_S = 4 * 3600;     // la opinion de la IA sobre un valor vale 4 horas (no recarga el modelo)
 
 const char* SCHEMA = R"(
 CREATE TABLE IF NOT EXISTS agente_estado (clave TEXT PRIMARY KEY, valor TEXT);
@@ -159,7 +160,8 @@ void AgenteBolsa::put(const std::string& k, const json& v) {
 
 json AgenteBolsa::cfg() {
   json d = {{"activo", true},         {"intervalo_s", 60},     {"capital", 10000.0}, {"riesgo_pct", 1.0},
-            {"max_posiciones", 8},    {"max_peso_pct", 20.0},  {"reserva_pct", 10.0}, {"universo", json::array()}};
+            {"max_posiciones", 8},    {"max_peso_pct", 20.0},  {"reserva_pct", 10.0}, {"universo", json::array()},
+            {"ia", true}};
   json a = ajustes_();
   if (a.is_object())
     for (auto it = a.begin(); it != a.end(); ++it)
@@ -475,6 +477,8 @@ std::vector<std::string> AgenteBolsa::abrir(long long cid, const json& analisis,
     double qty = std::min({riesgo_eur / dist_eur, total * jnum(c["max_peso_pct"]) / 100 / px_eur, libre * 0.97 / px_eur});
     qty = jstr(inst, "mercado") == "CRIPTO" ? std::floor(qty * 1e4) / 1e4 : std::floor(qty);
     if (qty <= 0 || qty * px_eur < 150) continue;   // operaciones minusculas: la comision se come el beneficio
+    json ia = truthy(c["ia"]) ? consultar_ia(sym, an, inst, total, libre) : json();
+    if (ia.is_object() && jstr(ia, "decision") == "esperar") continue;
     json o;
     try {
       o = b.ordenar(sym, "compra", qty, "mercado", nullptr, nullptr, "dia", cid, ORIGEN_AGENTE);
@@ -495,6 +499,7 @@ std::vector<std::string> AgenteBolsa::abrir(long long cid, const json& analisis,
       motivo += std::string(": precio ") + (jnum(an["factores"]["tendencia"]) > 0 ? "sobre" : "bajo") +
                 " su media de 50, momento " + fmt("%+.1f", jnum(an["roc20"]) * 100) + " % en 20 sesiones, RSI " +
                 fmt("%.0f", jnum(an["rsi"]));
+    if (ia.is_object() && !jstr(ia, "motivo").empty()) motivo += ". IA financiera: " + jstr(ia, "motivo");
     if (jstr(o, "estado") == "ejecutada") {
       diario("compra", sym,
              "Compra " + gg(qty) + " a " + g4(entrada) + ". " + motivo + ". Stop " + g4(stop) + ", objetivo " + g4(objetivo) + ".",
@@ -528,6 +533,45 @@ std::vector<std::string> AgenteBolsa::abrir(long long cid, const json& analisis,
     }
   }
   return hechos;
+}
+
+json AgenteBolsa::consultar_ia(const std::string& sym, const json& an, const json& inst, double total, double libre) {
+  if (!comite) return nullptr;
+  json previas = get("ia_veredictos", json::object());
+  if (!previas.is_object()) previas = json::object();
+  if (previas.contains(sym) && now() - jnum(previas[sym]["ts"]) < VIGENCIA_IA_S) return previas[sym];
+  json consulta = {{"simbolo", sym},
+                   {"nombre", inst.value("nombre", json(sym))},
+                   {"mercado", inst.value("mercado", json(""))},
+                   {"divisa", inst.value("divisa", json(""))},
+                   {"precio", an["precio"]},
+                   {"datos_reales", an.value("real", false)},
+                   {"sma20", rnd(jnum(an["sma20"]), 4)},
+                   {"sma50", rnd(jnum(an["sma50"]), 4)},
+                   {"rsi", an["rsi"].is_number() ? json(rnd(jnum(an["rsi"]), 1)) : json(nullptr)},
+                   {"roc20_pct", rnd(jnum(an["roc20"]) * 100, 2)},
+                   {"volatilidad_diaria_pct", rnd(jnum(an["vol_diaria"]) * 100, 2)},
+                   {"atr", rnd(jnum(an["atr"]), 4)},
+                   {"puntuacion", an["puntuacion"]},
+                   {"patrimonio_eur", rnd(total, 2)},
+                   {"efectivo_libre_eur", rnd(libre, 2)}};
+  json v;
+  try {
+    v = comite(consulta);
+  } catch (const std::exception& e) {   // sin IA el agente sigue con sus reglas
+    L.debug(std::string("IA financiera no disponible: ") + e.what());
+    return nullptr;
+  }
+  if (!v.is_object() || (jstr(v, "decision") != "comprar" && jstr(v, "decision") != "esperar")) return nullptr;
+  v["ts"] = now();
+  previas[sym] = v;
+  for (auto it = previas.begin(); it != previas.end();)   // solo las vigentes
+    it = now() - jnum(it.value()["ts"]) > VIGENCIA_IA_S ? previas.erase(it) : std::next(it);
+  put("ia_veredictos", previas);
+  if (jstr(v, "decision") == "esperar")
+    diario("ia", sym, "No compra: la IA financiera (" + jstr(v, "modelo") + ") aconseja esperar. " + jstr(v, "motivo"),
+           {{"modelo", v["modelo"]}});
+  return v;
 }
 
 json AgenteBolsa::estado() {
@@ -568,8 +612,45 @@ json AgenteBolsa::estado() {
           {"ranking", rk.is_array() ? rk : json::array()},
           {"ultimo_ciclo", ultimo_ciclo},
           {"error", ultimo_error},
+          {"ia", ia_info ? ia_info() : json(nullptr)},
+          {"ia_veredictos", get("ia_veredictos", json::object())},
           {"datos", b.datos ? b.datos->estado() : json{{"en_linea", false}, {"fuentes", json::object()}}},
           {"aviso", AVISO}};
+}
+
+// ---------------------------------------------------------------- comite de la IA financiera
+std::string pregunta_ia(const json& consulta) {
+  return "Eres el analista de riesgos de una mesa de bolsa SIMULADA (sin dinero real). El sistema de reglas quiere "
+         "COMPRAR este valor. Revisa los datos técnicos y di si la compra es razonable ahora o si conviene esperar "
+         "(sobrecompra, tendencia débil, volatilidad excesiva, momento que se agota, posición demasiado grande para "
+         "el patrimonio...). No inventes noticias ni datos que no estén aquí.\n\nDatos:\n" +
+         consulta.dump(2) +
+         "\n\nResponde SOLO con un objeto JSON en una línea, en español: "
+         "{\"decision\": \"comprar\" o \"esperar\", \"motivo\": \"una frase de menos de 25 palabras\"}";
+}
+
+json veredicto_ia(const std::string& respuesta) {
+  // el ultimo objeto {...} que traiga "decision" (los modelos que razonan pueden escribir antes otras llaves)
+  size_t fin = respuesta.rfind('}');
+  while (fin != std::string::npos) {
+    size_t ini = respuesta.rfind('{', fin);
+    while (ini != std::string::npos) {
+      json j = jparse(respuesta.substr(ini, fin - ini + 1));
+      if (!j.is_discarded() && j.is_object() && j.contains("decision")) {
+        std::string d = lower(trim(jstr(j, "decision")));
+        if (d != "comprar" && d != "esperar") return nullptr;
+        return {{"decision", d}, {"motivo", uleft(trim(jstr(j, "motivo")), 240)}};
+      }
+      if (ini == 0) break;
+      ini = respuesta.rfind('{', ini - 1);
+    }
+    if (fin == 0) break;
+    fin = respuesta.rfind('}', fin - 1);
+  }
+  std::string t = lower(respuesta);   // sin JSON: una respuesta clara en texto tambien vale
+  bool c = contains(t, "comprar"), e = contains(t, "esperar");
+  if (c == e) return nullptr;
+  return {{"decision", c ? "comprar" : "esperar"}, {"motivo", ""}};
 }
 
 // ---------------------------------------------------------------- hilo
@@ -611,6 +692,8 @@ void AgenteBolsa::run() {
   running_ = false;
 }
 
+std::function<void(AgenteBolsa&)> al_crear_agente;
+
 namespace {
 std::mutex g_amu;
 std::map<Bolsa*, std::unique_ptr<AgenteBolsa>> g_agentes;
@@ -624,6 +707,7 @@ AgenteBolsa& agente() {
     json j = get_config().get("bolsa.agente", json::object());
     return j.is_object() ? j : json::object();
   });
+  if (al_crear_agente && !a->comite) al_crear_agente(*a);
   return *a;
 }
 
