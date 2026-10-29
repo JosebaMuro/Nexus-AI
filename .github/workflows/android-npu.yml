@@ -1,0 +1,58 @@
+name: llama.cpp Android con GPU y NPU
+
+# Compila el llama-server de la app autonoma de Nexus-Office con GPU (Vulkan/OpenCL) y NPU (Hexagon de Snapdragon)
+# dentro de la imagen de Qualcomm (NDK r28b + Hexagon SDK 6.6) y deja las bibliotecas en la rama android-npu-libs,
+# de donde las toma packaging/build_apk_autonomo.py (via .cache/android-runtime/lib).
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - nexus-office/packaging/build_android_gpu.sh
+      - .github/workflows/android-npu.yml
+
+permissions:
+  contents: write
+
+env:
+  LLAMA_PY: 0.3.36          # el mismo llama.cpp que packaging/build_android_runtime.sh
+  IMAGE: ghcr.io/snapdragon-toolchain/arm64-android:v0.7
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Cabeceras de Vulkan, OpenCL y SPIR-V y fuente de llama.cpp
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q opencl-c-headers libvulkan-dev spirv-headers
+          url=$(curl -fs https://pypi.org/pypi/llama-cpp-python/$LLAMA_PY/json | python3 -c 'import json,sys;print(json.load(sys.stdin)["urls"][0]["url"])')
+          curl -fL -o /tmp/lcp.tar.gz "$url" && mkdir -p /tmp/src && tar xzf /tmp/lcp.tar.gz -C /tmp/src
+
+      - name: Compilar en la imagen de Qualcomm
+        run: |
+          docker pull -q $IMAGE
+          mkdir -p /tmp/out
+          docker run --rm --user root -v "$PWD":/repo:ro -v /tmp/src:/src -v /tmp/out:/out \
+            -v /usr/include:/hdr:ro -v /usr/share/cmake/SPIRV-Headers:/spirv:ro $IMAGE bash -c '
+              set -e
+              for t in python3 ninja cmake; do command -v $t >/dev/null || { apt-get update -q && apt-get install -y -q python3 ninja-build cmake; break; }; done
+              export ANDROID_NDK_HOME=${ANDROID_NDK_ROOT:-/opt/android-ndk-r28b}
+              export HEXAGON_SDK_ROOT=${HEXAGON_SDK_ROOT:-/opt/hexagon/6.6.0.0}
+              export NEXUS_GPU_HEADERS=/hdr NEXUS_SPIRV_CMAKE=/spirv
+              echo "NDK $ANDROID_NDK_HOME · Hexagon SDK $HEXAGON_SDK_ROOT · tools ${HEXAGON_TOOLS_ROOT:-?}"
+              bash /repo/nexus-office/packaging/build_android_gpu.sh /src/llama_cpp_python-'$LLAMA_PY'/vendor/llama.cpp /out/lib /tmp/w
+              chmod -R a+rX /out'
+          sudo chown -R "$(id -u):$(id -g)" /tmp/out   # el contenedor escribe como root
+          ls -la /tmp/out/lib
+
+      - name: Dejar las bibliotecas en la rama android-npu-libs
+        run: |
+          cd /tmp/out
+          echo "llama.cpp de llama-cpp-python $LLAMA_PY · $IMAGE · commit $GITHUB_SHA" > lib/VERSIONS-gpu.txt
+          tar czf android-gpu-npu-libs.tar.gz lib && sha256sum android-gpu-npu-libs.tar.gz > SHA256SUMS.txt
+          rm -rf lib && git init -q -b android-npu-libs && git add . \
+            && git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm "llama.cpp Android GPU+NPU ($GITHUB_SHA)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" android-npu-libs

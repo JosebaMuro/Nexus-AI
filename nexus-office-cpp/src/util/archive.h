@@ -1,0 +1,109 @@
+// ZIP (miniz) y tar/tar.gz: lectura de entradas (docx, xlsx, epub...) y extraccion segura.
+#pragma once
+#include <cstdio>
+#include <optional>
+#include <string_view>
+#include <string>
+#include <vector>
+
+#include "util/fs.h"
+
+namespace nx::archive {
+
+struct Entry {
+  std::string name;
+  uint64_t size = 0;
+  bool dir = false;
+  uint64_t comp_size = 0;
+  bool encrypted = false;
+  bool symlink = false;
+};
+
+class Zip {
+ public:
+  explicit Zip(const fs::path& p);
+  explicit Zip(std::string data, bool in_memory);
+  ~Zip();
+  Zip(const Zip&) = delete;
+  Zip& operator=(const Zip&) = delete;
+  bool ok() const { return ok_; }
+  std::vector<Entry> entries() const;
+  bool has(const std::string& name) const;
+  std::optional<std::string> read(const std::string& name, size_t max_bytes = 512u << 20) const;
+  bool extract_all(const fs::path& dest) const;   // ignora rutas fuera de dest
+
+ private:
+  void* z_ = nullptr;
+  std::string mem_;
+  bool ok_ = false;
+};
+
+// gzip -> bytes (zlib.decompress con cabecera gzip)
+std::optional<std::string> gunzip(const std::string& data);
+// bzip2 y xz -> bytes (nullopt si no es valido o pasa de max_bytes)
+std::optional<std::string> bunzip2(const std::string& data, size_t max_bytes = 512u << 20);
+std::optional<std::string> unxz(const std::string& data, size_t max_bytes = 512u << 20);
+// deflate crudo o con cabecera zlib
+std::optional<std::string> inflate(const std::string& data, bool zlib_header);
+// crea un zip (para exportaciones); files: (nombre en el zip, bytes)
+bool write_zip(const fs::path& dest, const std::vector<std::pair<std::string, std::string>>& files);
+// tar.gz en memoria: (nombre, bytes, modo) por fichero (nombres de hasta 255 bytes, formato ustar)
+struct TarFile {
+  std::string name, data;
+  int mode = 0644;
+};
+std::string write_targz(const std::vector<TarFile>& files);
+
+// tar.gz por partes, directo al disco (paquetes de varios GB): formato GNU con nombres largos (@LongLink)
+class TarGzWriter {
+ public:
+  explicit TarGzWriter(const fs::path& dest, int level = 6);
+  ~TarGzWriter();
+  TarGzWriter(const TarGzWriter&) = delete;
+  TarGzWriter& operator=(const TarGzWriter&) = delete;
+  bool ok() const { return ok_; }
+  // mtime < 0: ahora
+  bool add_dir(const std::string& name, int mode = 0755, int64_t mtime = -1);
+  bool add_file(const std::string& name, const fs::path& src, int mode = 0644, int64_t mtime = -1);
+  bool add_bytes(const std::string& name, std::string_view data, int mode = 0644, int64_t mtime = -1);
+  bool add_symlink(const std::string& name, const std::string& target, int64_t mtime = -1);
+  bool close();                     // escribe el final; false si algo fallo
+
+ private:
+  bool header(const std::string& name, char type, uint64_t size, int mode, int64_t mtime, const std::string& link = "");
+  bool put(const void* data, size_t n);
+  void* comp_ = nullptr;            // tdefl_compressor
+  std::FILE* f_ = nullptr;
+  uint32_t crc_ = 0;
+  uint64_t size_ = 0;
+  bool ok_ = false;
+  bool closed_ = false;
+};
+
+// zip directo al disco; append = anadir entradas a un zip existente (APK de aapt2)
+class ZipWriter {
+ public:
+  explicit ZipWriter(const fs::path& dest, bool append = false);
+  ~ZipWriter();
+  ZipWriter(const ZipWriter&) = delete;
+  ZipWriter& operator=(const ZipWriter&) = delete;
+  bool ok() const { return ok_; }
+  // level: 0 sin comprimir (stored), 1-9, -1 por defecto
+  bool add_file(const std::string& name, const fs::path& src, int level = 9);
+  bool add_bytes(const std::string& name, std::string_view data, int level = 9);
+  uint64_t count() const { return count_; }
+  uint64_t bytes() const { return bytes_; }   // sin comprimir
+  bool close();
+
+ private:
+  void* z_ = nullptr;
+  bool ok_ = false;
+  bool closed_ = false;
+  uint64_t count_ = 0, bytes_ = 0;
+};
+
+// .tar, .tar.gz, .tgz
+bool extract_tar(const fs::path& archive, const fs::path& dest);
+bool extract(const fs::path& archive, const fs::path& dest);   // por extension
+
+}  // namespace nx::archive

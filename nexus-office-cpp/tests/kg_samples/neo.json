@@ -1,0 +1,1 @@
+{"results": [{"data": [{"graph": {"nodes": [{"id": "1", "labels": ["Cliente"], "properties": {"name": "ACME"}}, {"id": "2", "labels": ["Pedido"], "properties": {"name": "P-1"}}], "relationships": [{"id": "9", "type": "HIZO", "startNode": "1", "endNode": "2", "properties": {}}]}}]}]}

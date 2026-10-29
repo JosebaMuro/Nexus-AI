@@ -1,0 +1,10 @@
+id: fontaneria-climatizacion
+name: "Fontanería y climatización"
+sector: "Instalaciones · agua, calefacción y aire acondicionado"
+assistant_name: "Oficina Instalaciones"
+icon: "≈"
+description: "Instaladora de fontanería, calefacción, aerotermia y aire acondicionado con servicio de averías y mantenimiento."
+agents: [fontanero, climatizacion, electricista, recepcion, presupuestos, administracion, compras, prl]
+coordinator:
+  context: |
+    La empresa instala y mantiene fontanería, calefacción, aerotermia y aire acondicionado, atiende averías urgentes y tiene contratos de mantenimiento con particulares y comunidades.

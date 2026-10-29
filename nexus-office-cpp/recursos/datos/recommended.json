@@ -1,0 +1,280 @@
+[
+  {
+    "id": "qwen3.5-0.8b",
+    "kind": "llm",
+    "name": "Qwen3.5 0.8B · móviles y equipos muy justos",
+    "vision": true,
+    "reasoning": true,
+    "params_b": 0.8,
+    "repo": "unsloth/Qwen3.5-0.8B-GGUF",
+    "file": "Qwen3.5-0.8B-Q4_K_M.gguf",
+    "mmproj": "mmproj-F16.gguf",
+    "size_mb": 738,
+    "min_ram_gb": 2,
+    "desc": "El mas pequeno con vision y razonamiento: moviles de 4-6 GB, Raspberry Pi y CPU antiguas."
+  },
+  {
+    "id": "qwen3.5-2b",
+    "kind": "llm",
+    "name": "Qwen3.5 2B · base CPU",
+    "vision": true,
+    "reasoning": true,
+    "params_b": 2,
+    "repo": "unsloth/Qwen3.5-2B-GGUF",
+    "file": "Qwen3.5-2B-Q4_K_M.gguf",
+    "mmproj": "mmproj-F16.gguf",
+    "size_mb": 1948,
+    "min_ram_gb": 3,
+    "baseline": true,
+    "desc": "Ve imagenes, documentos y video, razona paso a paso y usa herramientas. Multilingue (201 idiomas). Linea base: CPU de 2-4 nucleos y moviles."
+  },
+  {
+    "id": "qwen3.5-4b",
+    "kind": "llm",
+    "name": "Qwen3.5 4B · equilibrado",
+    "vision": true,
+    "reasoning": true,
+    "params_b": 4,
+    "repo": "unsloth/Qwen3.5-4B-GGUF",
+    "file": "Qwen3.5-4B-Q4_K_M.gguf",
+    "mmproj": "mmproj-F16.gguf",
+    "size_mb": 3412,
+    "min_ram_gb": 8,
+    "min_vram_gb": 4,
+    "desc": "Razonamiento, vision y uso de herramientas mucho mejores. CPU de 6+ nucleos, GPU de 4 GB o movil de gama alta."
+  },
+  {
+    "id": "qwen3.5-9b",
+    "kind": "llm",
+    "name": "Qwen3.5 9B · alto rendimiento",
+    "vision": true,
+    "reasoning": true,
+    "params_b": 9,
+    "repo": "unsloth/Qwen3.5-9B-GGUF",
+    "file": "Qwen3.5-9B-Q4_K_M.gguf",
+    "mmproj": "mmproj-F16.gguf",
+    "size_mb": 6598,
+    "min_ram_gb": 16,
+    "min_vram_gb": 8,
+    "desc": "Calidad alta en razonamiento, matematicas, documentos y vision. Recomendado con GPU de 8 GB o mas."
+  },
+  {
+    "id": "qwen3-vl-2b-thinking",
+    "kind": "llm",
+    "name": "Qwen3-VL 2B Thinking · base CPU",
+    "vision": true,
+    "previous": true,
+    "reasoning": true,
+    "params_b": 2,
+    "repo": "Qwen/Qwen3-VL-2B-Thinking-GGUF",
+    "file": "Qwen3VL-2B-Thinking-Q4_K_M.gguf",
+    "mmproj": "mmproj-Qwen3VL-2B-Thinking-Q8_0.gguf",
+    "size_mb": 1480,
+    "min_ram_gb": 3,
+    "desc": "Ve imagenes (OCR, graficos) y razona paso a paso antes de responder. Multilingue (espanol) y con herramientas. El mas ligero con vision y razonamiento: CPU de 2-4 nucleos y moviles."
+  },
+  {
+    "id": "qwen3-vl-4b-thinking",
+    "kind": "llm",
+    "name": "Qwen3-VL 4B Thinking · equilibrado",
+    "vision": true,
+    "previous": true,
+    "reasoning": true,
+    "params_b": 4,
+    "repo": "Qwen/Qwen3-VL-4B-Thinking-GGUF",
+    "file": "Qwen3VL-4B-Thinking-Q4_K_M.gguf",
+    "mmproj": "mmproj-Qwen3VL-4B-Thinking-Q8_0.gguf",
+    "size_mb": 2815,
+    "min_ram_gb": 10,
+    "min_vram_gb": 4,
+    "desc": "Razonamiento y vision mucho mejores. CPU de 6+ nucleos, GPU de 4 GB o movil de gama alta."
+  },
+  {
+    "id": "qwen3-vl-8b-thinking",
+    "kind": "llm",
+    "name": "Qwen3-VL 8B Thinking · alto rendimiento",
+    "vision": true,
+    "previous": true,
+    "reasoning": true,
+    "params_b": 8,
+    "repo": "Qwen/Qwen3-VL-8B-Thinking-GGUF",
+    "file": "Qwen3VL-8B-Thinking-Q4_K_M.gguf",
+    "mmproj": "mmproj-Qwen3VL-8B-Thinking-Q8_0.gguf",
+    "size_mb": 5512,
+    "min_ram_gb": 16,
+    "min_vram_gb": 7,
+    "desc": "Calidad alta en razonamiento, matematicas y vision. Recomendado con GPU de 8 GB o mas."
+  },
+  {
+    "id": "sdxs-512",
+    "kind": "image",
+    "name": "SDXS-512 · imagen en CPU (1 paso)",
+    "params_b": 0.3,
+    "repo": "concedo/sdxs-512-tinySDdistilled-GGUF",
+    "file": "sdxs-512-tinySDdistilled_Q8_0.gguf",
+    "size_mb": 651,
+    "min_ram_gb": 4,
+    "baseline": true,
+    "gen": {
+      "steps": 1,
+      "cfg": 1.0,
+      "size": 512
+    },
+    "desc": "Destilado de un paso: segundos por imagen en CPU."
+  },
+  {
+    "id": "sd-turbo",
+    "kind": "image",
+    "name": "SD-Turbo · calidad media",
+    "params_b": 0.9,
+    "repo": "Green-Sky/SD-Turbo-GGUF",
+    "file": "sd_turbo-f16-q8_0.gguf",
+    "size_mb": 1930,
+    "min_ram_gb": 8,
+    "gen": {
+      "steps": 2,
+      "cfg": 1.0,
+      "size": 512
+    },
+    "desc": "Mas detalle; ~4x mas lento que SDXS en CPU."
+  },
+  {
+    "id": "sdxl-turbo",
+    "kind": "image",
+    "name": "SDXL-Turbo · alta calidad",
+    "params_b": 3.5,
+    "repo": "OlegSkutte/sdxl-turbo-GGUF",
+    "file": "sd_xl_turbo_1.0.q8_0.gguf",
+    "size_mb": 3909,
+    "min_ram_gb": 16,
+    "min_vram_gb": 6,
+    "gen": {
+      "steps": 2,
+      "cfg": 1.0,
+      "size": 512
+    },
+    "desc": "Para GPU de 6 GB o mas."
+  },
+  {
+    "id": "z-image-turbo",
+    "kind": "image",
+    "name": "Z-Image-Turbo · fotorrealista (GGUF)",
+    "params_b": 6,
+    "repo": "leejet/Z-Image-Turbo-GGUF",
+    "file": "z_image_turbo-Q4_K.gguf",
+    "size_mb": 6300,
+    "min_ram_gb": 16,
+    "min_vram_gb": 8,
+    "componentes": {
+      "vae": {
+        "repo": "Comfy-Org/z_image_turbo",
+        "file": "split_files/vae/ae.safetensors",
+        "size_mb": 320
+      },
+      "llm": {
+        "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+        "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+        "size_mb": 2500
+      }
+    },
+    "gen": {
+      "steps": 8,
+      "cfg": 1.0,
+      "size": 1024,
+      "sampler": "euler"
+    },
+    "desc": "Solo el modelo de difusion en GGUF; se descargan con el la VAE y el codificador Qwen3-4B. Texto legible en la imagen."
+  },
+  {
+    "id": "flux1-schnell",
+    "kind": "image",
+    "name": "FLUX.1-schnell · 4 pasos (GGUF)",
+    "params_b": 12,
+    "repo": "leejet/FLUX.1-schnell-gguf",
+    "file": "flux1-schnell-q4_k.gguf",
+    "size_mb": 10300,
+    "min_ram_gb": 24,
+    "min_vram_gb": 12,
+    "componentes": {
+      "vae": {
+        "repo": "Comfy-Org/z_image_turbo",
+        "file": "split_files/vae/ae.safetensors",
+        "size_mb": 320
+      },
+      "clip_l": {
+        "repo": "comfyanonymous/flux_text_encoders",
+        "file": "clip_l.safetensors",
+        "size_mb": 246
+      },
+      "t5xxl": {
+        "repo": "city96/t5-v1_1-xxl-encoder-gguf",
+        "file": "t5-v1_1-xxl-encoder-Q4_K_M.gguf",
+        "size_mb": 2900
+      }
+    },
+    "gen": {
+      "steps": 4,
+      "cfg": 1.0,
+      "size": 1024,
+      "sampler": "euler"
+    },
+    "desc": "Flux en GGUF con sus piezas (VAE, clip_l y T5-XXL). Para GPU de 12 GB o mas; con menos, parte va a la RAM."
+  },
+  {
+    "id": "qwen3-embedding-0.6b",
+    "kind": "embed",
+    "name": "Qwen3-Embedding 0.6B · documentación (CPU)",
+    "params_b": 0.6,
+    "repo": "Qwen/Qwen3-Embedding-0.6B-GGUF",
+    "file": "Qwen3-Embedding-0.6B-Q8_0.gguf",
+    "size_mb": 639,
+    "min_ram_gb": 4,
+    "baseline": true,
+    "dims": 1024,
+    "instructions": true,
+    "desc": "Embeddings especializados en buscar, clasificar y organizar documentación (100+ idiomas, español incluido, hasta 32k tokens). Ordena tu biblioteca y decide qué es conocimiento común y qué es de cada agente. Ligero en CPU: los documentos se indexan al momento y la precisión semántica se completa en segundo plano."
+  },
+  {
+    "id": "piper-es-davefx",
+    "kind": "tts",
+    "name": "Piper · voz espanola (davefx)",
+    "params_b": 0.02,
+    "repo": "rhasspy/piper-voices",
+    "file": "es/es_ES/davefx/medium/es_ES-davefx-medium.onnx",
+    "extra": [
+      "es/es_ES/davefx/medium/es_ES-davefx-medium.onnx.json"
+    ],
+    "size_mb": 61,
+    "min_ram_gb": 1,
+    "baseline": true,
+    "desc": "Voz neuronal offline y rapida en CPU (requiere paquete piper-tts)."
+  },
+  {
+    "id": "medgemma-4b",
+    "kind": "llm",
+    "name": "MedGemma 4B · salud (Google)",
+    "vision": true,
+    "params_b": 4,
+    "repo": "unsloth/medgemma-4b-it-GGUF",
+    "file": "medgemma-4b-it-Q4_K_M.gguf",
+    "mmproj": "mmproj-F16.gguf",
+    "size_mb": 3300,
+    "min_ram_gb": 8,
+    "min_vram_gb": 4,
+    "sector_only": true,
+    "desc": "Entrenado con textos e imagenes medicas: terminologia clinica, informes y documentacion sanitaria. Es apoyo para el profesional colegiado, nunca un diagnostico."
+  },
+  {
+    "id": "qwen2.5-coder-7b",
+    "kind": "llm",
+    "name": "Qwen2.5-Coder 7B · informática",
+    "params_b": 7,
+    "repo": "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
+    "file": "qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+    "size_mb": 4680,
+    "min_ram_gb": 12,
+    "min_vram_gb": 6,
+    "sector_only": true,
+    "desc": "Especializado en programacion, scripts, redes y configuracion de sistemas."
+  }
+]

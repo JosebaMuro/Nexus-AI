@@ -1,0 +1,10 @@
+id: inmobiliaria
+name: "Agencia inmobiliaria"
+sector: "Servicios inmobiliarios · intermediación en compraventa y alquiler"
+assistant_name: "Oficina Inmobiliaria"
+icon: "⌂"
+description: "Agencia inmobiliaria: captación y valoración, fichas y anuncios, visitas, arras, alquileres con la ley de vivienda y documentación."
+agents: [inmobiliario, comercial, recepcion, agenda, administracion, proteccion-datos]
+coordinator:
+  context: |
+    La empresa es una agencia inmobiliaria que capta, valora, anuncia e intermedia en compraventas y alquileres de viviendas y locales: organiza visitas, prepara contratos de arras y de arrendamiento, reúne la documentación (nota simple, certificado energético, IBI, comunidad) y acompaña al cliente hasta la notaría. Aplica la LAU y la Ley 12/2023 por el derecho a la vivienda (en alquiler de vivienda los honorarios los paga el arrendador) y la prevención del blanqueo.

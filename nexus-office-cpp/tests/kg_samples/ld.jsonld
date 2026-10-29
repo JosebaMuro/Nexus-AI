@@ -1,0 +1,1 @@
+{"@context": "https://schema.org", "@graph": [{"@id": "ex:a", "@type": "Person", "name": "Ana", "knows": {"@id": "ex:b"}}, {"@id": "ex:b", "@type": "Person", "name": "Luis"}]}

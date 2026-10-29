@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Nexus-Office</title>
+<meta name="description" content="Agente de IA multimodal portable con memoria, aprendizaje y sistema de agentes">
+<meta name="theme-color" content="#04060c">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/css/nexus.css">
+<script src="/static/js/device.js"></script>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div class="bg-grid"></div>
+<div class="vignette"></div>
+<div class="scanlines"></div>
+
+<div class="app">
+  <header class="topbar">
+    <div class="logo" data-text="Nexus-Office">Nexus-Office<small id="ver">v1</small></div>
+    <div class="pills">
+      <button class="pill pill-menu" data-menu="ia" title="Motor y modelo de IA"><span class="dot live" id="dot-llm"></span>IA <b id="pill-llm">…</b><i>▾</i></button>
+      <button class="pill pill-menu" data-menu="perfil" title="Perfil de hardware, acelerador y GPU"><span class="dot ok"></span>PERFIL <b id="pill-profile">…</b><i>▾</i></button>
+      <button class="pill pill-menu" data-menu="memoria" title="Memoria, conocimiento y embeddings"><span class="dot" id="dot-mem"></span>MEMORIA <b id="pill-mem">…</b><i>▾</i></button>
+      <button class="pill pill-menu" data-menu="red" title="Red COOP, red local y acceso remoto"><span class="dot" id="dot-net"></span>RED <b id="pill-net">off</b><i>▾</i></button>
+      <span class="pill hidden" id="pill-tune"><span class="dot warn"></span><b id="pill-tune-t"></b></span>
+    </div>
+    <div class="mode-switch" role="group" aria-label="Nivel de acceso">
+      <button id="mode-user" class="on">USUARIO</button>
+      <button id="mode-admin">ADMIN</button>
+    </div>
+  </header>
+
+  <nav class="rail" id="rail">
+    <button data-view="chat" data-pri class="on"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg><span class="tip">CHAT</span></button>
+    <button data-view="lounge" data-pri><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="3.5" r="1.6"/><circle cx="20" cy="9" r="1.6"/><circle cx="17" cy="19" r="1.6"/><circle cx="7" cy="19" r="1.6"/><circle cx="4" cy="9" r="1.6"/></svg><span class="tip">SALÓN</span><span class="badge hidden" id="badge-lounge"></span></button>
+    <button data-view="memory" data-pri><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="12" cy="17" r="2.5"/><path d="M7.5 7.2l3.3 8M16.7 8.6l-3.6 6.6M8 6.2h8"/></svg><span class="tip">NÚCLEO</span></button>
+    <button data-view="studio" data-pri><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.3"/></svg><span class="tip">ESTUDIO</span></button>
+    <button data-view="bolsa"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><path d="M7 5v12M17 4v10M12 8v10"/><rect x="5.5" y="8" width="3" height="6"/><rect x="10.5" y="10" width="3" height="5"/><rect x="15.5" y="6" width="3" height="5"/></svg><span class="tip">BOLSA</span></button>
+    <button data-view="agents"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.3"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M14.5 14.5c3.5-.6 6.5 1.5 6.5 5"/></svg><span class="tip">AGENTES</span></button>
+    <button data-view="models"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span class="tip">MODELOS</span></button>
+    <button data-view="tools"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><span class="tip">HERRAMIENTAS</span><span class="badge hidden" id="badge-tools"></span></button>
+    <button data-view="devices"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span class="tip">DISPOSITIVOS</span></button>
+    <button data-view="net"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span class="tip">RED COOP</span></button>
+    <button data-view="system"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/><rect x="9.5" y="9.5" width="5" height="5"/></svg><span class="tip">SISTEMA</span></button>
+    <button id="rail-more" class="more" aria-label="Más secciones"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span class="tip">MÁS</span><span class="badge hidden" id="badge-more"></span></button>
+    <div class="spacer"></div>
+    <button data-view="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="tip">AJUSTES</span></button>
+  </nav>
+
+  <main>
+    <!-- ================= CHAT ================= -->
+    <section class="view on" id="view-chat">
+      <div class="chat-layout">
+        <div class="chat-col">
+          <div class="chat-head">
+            <select class="input" id="agent-select" title="Agente"></select>
+            <select class="input" id="session-select" title="Conversación"></select>
+            <button class="btn ghost sm" id="new-chat" title="Nueva conversación">+<span class="lbl"> NUEVA</span></button>
+            <button class="btn ghost sm" id="hilo-btn" title="Hilo del proyecto: notas fijas y resumen de lo hablado">🧵<span class="lbl"> HILO</span></button>
+            <button class="icon-btn sm" id="avatar-toggle" title="Mostrar u ocultar el avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></button>
+            <span class="muted mono" id="chat-model" style="margin-left:auto"></span>
+          </div>
+          <div class="messages" id="messages"></div>
+          <div class="live hidden" id="live" role="dialog" aria-label="Modo en vivo">
+            <div class="live-orb" id="live-orb"><span></span><span></span><span></span></div>
+            <div class="live-state" id="live-state">PREPARANDO…</div>
+            <div class="live-heard" id="live-heard"></div>
+            <div class="live-said" id="live-said"></div>
+            <div class="live-engine muted mono" id="live-engine"></div>
+            <div class="row live-ctl">
+              <button class="btn sm" id="live-pause">PAUSAR</button>
+              <label class="muted" title="Si hablas mientras responde, se calla y te escucha"><input type="checkbox" id="live-barge" checked> interrumpir hablando</label>
+              <button class="btn sm danger" id="live-end">TERMINAR</button>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="attachments" id="attachments"></div>
+            <div class="composer-box">
+              <button class="icon-btn" id="btn-attach" title="Adjuntar imagen, documento o comprimido (ZIP, RAR, 7z) con un proyecto o documentación"><svg viewBox="0 0 24 24"><path d="M21 12.5l-8.5 8.5a5 5 0 0 1-7-7L14 5.5a3.3 3.3 0 0 1 4.7 4.7L10.2 18.7a1.7 1.7 0 0 1-2.4-2.4L15.5 8.6"/></svg></button>
+              <input type="file" id="file-attach" accept="image/*,.zip,.rar,.7z,.tar,.gz,.tgz,.bz2,.xz,.pdf,.docx,.odt,.ods,.odp,.pptx,.xlsx,.epub,.rtf,.txt,.md,.html,.htm,.csv,.json" multiple hidden>
+              <textarea id="input" rows="1" placeholder="Escribe a Nexus-Office… (Shift+Enter: nueva línea)"></textarea>
+              <button class="icon-btn" id="btn-enhance" title="Mejorar el prompt"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8zM19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9zM5 15l.7 1.6L7.3 17l-1.6.7L5 19.3l-.7-1.6L2.7 17l1.6-.4z"/></svg></button>
+              <button class="icon-btn" id="btn-speak" title="Leer respuestas en voz alta"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg></button>
+              <button class="icon-btn" id="btn-mic" title="Dictar un mensaje"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+              <button class="icon-btn live-btn" id="btn-live" title="Modo en vivo: conversación por voz, manos libres"><svg viewBox="0 0 24 24"><path d="M3 12h2M7 8v8M11 5v14M15 8v8M19 10v4M21 12h0"/></svg></button>
+              <button class="send" id="btn-send" title="Enviar"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-6.5z"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <aside class="avatar-col">
+          <div class="avatar-wrap" id="avatar-wrap">
+            <canvas id="avatar"></canvas>
+            <div class="avatar-hud"><span id="hud-left">GRAFO · 0 NODOS</span><span id="hud-right">--</span></div>
+            <div class="avatar-state"><div class="s" id="avatar-state">EN LÍNEA</div><div class="n" id="avatar-sub">núcleo cognitivo</div></div>
+          </div>
+          <div class="side-stats">
+            <div class="stat"><span class="v" id="ss-cpu">--</span><span class="k">CPU</span></div>
+            <div class="stat"><span class="v" id="ss-ram">--</span><span class="k">RAM</span></div>
+            <div class="stat"><span class="v" id="ss-tps">--</span><span class="k">TOK/S</span></div>
+          </div>
+          <canvas class="spark" id="spark"></canvas>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ================= SALON VIRTUAL ================= -->
+    <section class="view" id="view-lounge">
+      <div class="view-title">SALÓN VIRTUAL DE AGENTES</div>
+      <div class="seg lounge-tabs" id="lounge-tabs"><button data-ltab="salon" class="on">SALÓN</button><button data-ltab="despachos">DESPACHOS</button></div>
+      <div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr)">
+        <div class="panel" style="padding:0;overflow:hidden">
+          <div class="lounge-stage" id="lounge-stage"><canvas id="lounge-canvas"></canvas></div>
+          <div class="offices-stage hidden" id="offices-stage"><canvas id="offices-canvas"></canvas></div>
+          <div class="row lounge-meetbar" style="padding:12px 14px;border-top:1px solid var(--line)">
+            <input class="input" id="lounge-topic" placeholder="Tema para la reunión (opcional)" style="flex:1">
+            <button class="btn primary" id="lounge-meet">CONVOCAR REUNIÓN</button>
+          </div>
+        </div>
+        <div class="panel col">
+          <h3>Transcripción <span class="sub" id="lounge-count"></span></h3>
+          <div class="lounge-log" id="lounge-log"></div>
+          <div class="row"><input class="input" id="lounge-say" placeholder="Habla en el salón…" style="flex:1"><button class="btn" id="lounge-say-btn">DECIR</button></div>
+        </div>
+      </div>
+      <div class="grid g2" style="margin-top:16px">
+        <div class="panel"><h3>Directorio de habilidades aprendidas <span class="sub">éxitos por tema</span></h3><div id="lounge-skills"></div></div>
+        <div class="panel"><h3>Carencias y nuevos agentes propuestos</h3><div id="lounge-gaps" class="list"></div><div id="lounge-proposals" class="list" style="margin-top:10px"></div></div>
+      </div>
+    </section>
+
+    <!-- ================= MEMORIA / GRAFO ================= -->
+    <section class="view" id="view-memory">
+      <div class="view-title">NÚCLEO COGNITIVO · MEMORIA Y CONOCIMIENTO</div>
+      <div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(280px,1fr)">
+        <div class="panel" style="padding:0">
+          <div class="graph-stage"><canvas id="graph-canvas"></canvas>
+            <select class="input graph-scope" id="graph-scope" title="Grafo a mostrar: el general con el subgrafo de cada agente, solo el general o el grafo individual de un agente"></select>
+            <div class="legend" id="legend"></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="panel">
+            <h3>Estadísticas</h3>
+            <div class="grid g3" id="mem-stats"></div>
+          </div>
+          <div class="panel col">
+            <h3>Enseñar algo</h3>
+            <textarea class="input" id="mem-new" placeholder="Ej.: Mi proyecto se llama Atlas y usa Python"></textarea>
+            <div class="row"><select class="input" id="mem-kind" style="width:auto"><option value="fact">hecho</option><option value="preference">preferencia</option><option value="note">nota</option></select><button class="btn primary" id="mem-add">MEMORIZAR</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h3>Recuerdos <span class="sub"><input class="input" id="mem-search" placeholder="Buscar semánticamente…" style="width:260px"></span></h3>
+        <div class="row" id="mem-filters" style="margin-bottom:10px"></div>
+        <div class="list" id="mem-list"></div>
+      </div>
+      <div class="panel col" style="margin-top:16px">
+        <h3>Biblioteca RAG <span class="sub" id="rag-stats"></span></h3>
+        <div class="row"><span class="muted">Importar en</span><select class="input" id="rag-target" title="General: lo consultan todos los agentes. Un agente: solo él, y se incorpora a su grafo individual" style="width:auto"></select></div>
+        <div class="row"><input class="input" id="rag-url" placeholder="https://…  →  PDF estructurado + biblioteca + conocimiento" style="flex:1"><button class="btn primary" id="rag-url-go">PROCESAR URL</button></div>
+        <div class="row"><input class="input" id="rag-crawl" placeholder="https://docs…  →  rastrear la documentación y aprenderla" style="flex:1"><input class="input" id="rag-crawl-max" type="number" min="1" max="100000" value="40" title="Máximo de páginas en total. Si no cabe en un lote, se rastrea por lotes correlativos y reanudables" style="width:6.5em"><select class="input" id="rag-crawl-scope" title="Ámbito del rastreo" style="width:auto"><option value="path">esta sección</option><option value="domain" title="Todas las páginas, documentos y subdominios, sin límite, y un grafo de conocimiento multicapa importable en un agente">todo el dominio + grafo</option></select><button class="btn primary" id="rag-crawl-go">RASTREAR</button></div>
+        <div id="rag-jobs" class="list"></div>
+        <div class="row"><button class="btn sm" id="rag-kg-import" title="Paquete .zip de conocimiento de un dominio (descargado con ⬇ ZIP aquí o en otro Nexus-Office). Va al grafo elegido en «Importar en»">IMPORTAR CONOCIMIENTO DE DOMINIO (.zip)</button><input type="file" id="rag-kg-file" accept=".zip" hidden></div>
+        <div class="drop" id="rag-drop">Suelta aquí documentos (PDF, Word, OpenDocument, PowerPoint, Excel, EPUB, RTF, HTML, TXT, MD, código…) o comprimidos ZIP, RAR, 7z o tar.gz con un proyecto o documentación (o haz clic). Puedes soltar muchos a la vez: se leen en paralelo.</div>
+        <input type="file" id="rag-file" hidden multiple>
+        <div id="rag-progress"></div>
+        <input class="input" id="rag-search" placeholder="Buscar en los documentos…">
+        <div class="list" id="rag-list"></div>
+      </div>
+    </section>
+
+    <!-- ================= ESTUDIO ================= -->
+    <section class="view" id="view-studio">
+      <div class="view-title">ESTUDIO CREATIVO</div>
+      <div class="grid g2">
+        <div class="panel col">
+          <h3>Generar imagen <span class="sub" id="img-engine"></span></h3>
+          <textarea class="input" id="img-prompt" placeholder="a futuristic city at night, neon lights, rain, cinematic"></textarea>
+          <div class="row"><select class="input" id="img-style" style="width:auto" title="Estilo"><option value="">estilo libre</option></select>
+            <button class="btn" id="img-enh" title="Mejorar el prompt (estilo, detalle, calidad, traduccion)">✨ MEJORAR</button></div>
+          <div class="row"><input class="input" id="img-neg" placeholder="Prompt negativo (opcional)" style="flex:1"><button class="btn primary" id="img-go">GENERAR</button></div>
+          <div id="img-result"></div>
+        </div>
+        <div class="panel col">
+          <h3>Componer música <span class="sub">procedural · WAV + MIDI</span></h3>
+          <textarea class="input" id="mus-prompt" placeholder="épica y cinematográfica / relajante lo-fi / cyberpunk electrónica"></textarea>
+          <div class="row"><label class="field" style="flex-direction:row;align-items:center;gap:8px">DURACIÓN <input class="input" id="mus-sec" type="number" value="20" min="6" max="90" style="width:80px"></label><button class="btn" id="mus-enh">✨ MEJORAR</button><button class="btn primary" id="mus-go">COMPONER</button></div>
+          <div id="mus-result"></div>
+        </div>
+        <div class="panel col">
+          <h3>Analizar imagen <span class="sub" id="vision-engine"></span></h3>
+          <div class="drop" id="ana-drop">Suelta una imagen o haz clic para elegirla</div>
+          <input type="file" id="ana-file" accept="image/*" hidden>
+          <input class="input" id="ana-q" placeholder="Pregunta sobre la imagen (opcional)">
+          <div id="ana-result"></div>
+        </div>
+        <div class="panel"><h3>Galería</h3><div class="gallery" id="gallery"></div></div>
+      </div>
+    </section>
+
+    <!-- ================= BOLSA (mesa simulada) ================= -->
+    <section class="view" id="view-bolsa">
+      <div class="view-title">MESA DE BOLSA <span class="sub" id="bolsa-modo"></span></div>
+      <div class="panel" style="margin-bottom:16px"><div class="row" style="flex-wrap:nowrap;align-items:flex-start"><span class="tag warn">AVISO</span><span class="muted" id="bolsa-aviso"></span></div></div>
+      <div class="grid g4" id="bolsa-stats"></div>
+      <div class="grid g2" style="margin-top:16px">
+        <div class="panel"><h3>Nueva orden</h3>
+          <div class="row"><select class="input" id="bo-cartera" style="flex:1 1 200px;min-width:0"></select></div>
+          <div class="row" style="margin-top:8px"><input class="input" id="bo-sym" list="bo-syms" placeholder="Valor (SAN.MC, AAPL, VWCE.DE, BTC-EUR…)" style="flex:1 1 200px;min-width:0" autocomplete="off"><datalist id="bo-syms"></datalist>
+            <button class="btn sm" id="bo-quote">COTIZAR</button></div>
+          <div id="bo-q" style="margin-top:8px"></div>
+          <div class="row" style="margin-top:8px">
+            <select class="input" id="bo-lado" style="flex:1 1 110px;min-width:0"><option value="compra">Compra</option><option value="venta">Venta</option></select>
+            <input class="input" id="bo-qty" type="number" min="0" step="any" placeholder="Cantidad" style="flex:1 1 110px;min-width:0">
+            <select class="input" id="bo-tipo" style="flex:1 1 140px;min-width:0"><option value="mercado">A mercado</option><option value="limitada">Limitada</option><option value="stop">Stop</option><option value="stop_limitada">Stop limitada</option></select></div>
+          <div class="row" style="margin-top:8px">
+            <input class="input" id="bo-lim" type="number" step="any" placeholder="Precio límite" style="flex:1 1 110px;min-width:0">
+            <input class="input" id="bo-stop" type="number" step="any" placeholder="Precio stop" style="flex:1 1 110px;min-width:0">
+            <select class="input" id="bo-val" style="flex:1 1 140px;min-width:0"><option value="dia">Válida el día</option><option value="hasta_cancelar">Hasta cancelar (90 días)</option></select></div>
+          <div class="row" style="margin-top:10px"><button class="btn" id="bo-fees">VER GASTOS</button><button class="btn primary" id="bo-send">ENVIAR ORDEN</button></div>
+          <div id="bo-fees-box" class="muted" style="margin-top:8px"></div>
+        </div>
+        <div class="panel"><h3>Mercados <span class="sub">hora local de cada bolsa</span></h3><div id="bolsa-mercados" style="overflow-x:auto"></div></div>
+      </div>
+      <div class="panel" style="margin-top:16px" id="bolsa-agente"><h3>Agente autónomo <span class="sub" id="ba-sub">opera solo en su cartera simulada con datos reales</span></h3>
+        <div class="row" style="margin-bottom:10px"><span id="ba-state"></span><span id="ba-datos"></span><span class="spacer"></span>
+          <button class="btn sm" id="ba-toggle">PAUSAR</button><button class="btn sm" id="ba-cycle">ANALIZAR AHORA</button><button class="btn sm" id="ba-view">VER SU CARTERA</button></div>
+        <div class="grid g4" id="ba-stats"></div>
+        <div class="grid g2" style="margin-top:12px">
+          <div><div class="muted" style="margin-bottom:4px">Patrimonio de la cartera del agente</div><canvas id="ba-curve" class="live-chart" style="height:170px"></canvas>
+            <div class="muted" style="margin:10px 0 4px">Lo que ve ahora (mejores puntuaciones)</div><div id="ba-rank" style="overflow-x:auto"></div></div>
+          <div><div class="muted" style="margin-bottom:4px">Diario de decisiones</div><div id="ba-diario" class="ba-diario"></div></div>
+        </div>
+        <details style="margin-top:10px"><summary class="muted">Ajustes del agente</summary>
+          <div class="row" style="margin-top:8px">
+            <label class="muted">Riesgo por operación (%) <input class="input" id="ba-riesgo" type="number" step="0.1" min="0.1" max="5" style="width:90px"></label>
+            <label class="muted">Máx. posiciones <input class="input" id="ba-maxpos" type="number" min="1" max="30" style="width:80px"></label>
+            <label class="muted">Peso máx. por valor (%) <input class="input" id="ba-peso" type="number" min="1" max="100" style="width:80px"></label>
+            <label class="muted">Liquidez de reserva (%) <input class="input" id="ba-reserva" type="number" min="0" max="90" style="width:80px"></label>
+            <label class="muted">Cada (s) <input class="input" id="ba-int" type="number" min="15" style="width:80px"></label></div>
+          <div class="row" style="margin-top:8px"><input class="input" id="ba-universo" placeholder="Universo: símbolos separados por comas (vacío = todo el catálogo)" style="flex:1 1 300px;min-width:0"><button class="btn sm primary" id="ba-save">GUARDAR</button></div>
+        </details>
+      </div>
+      <div class="panel" style="margin-top:16px"><h3>Órdenes activas en tiempo real <span class="sub" id="bl-sub"></span></h3><div class="grid g2" id="bolsa-live"></div></div>
+      <div class="panel" style="margin-top:16px"><h3>Posiciones</h3><div id="bolsa-pos" style="overflow-x:auto"></div></div>
+      <div class="panel" style="margin-top:16px"><h3>Órdenes</h3><div id="bolsa-ord" style="overflow-x:auto"></div></div>
+      <div class="panel" style="margin-top:16px"><h3>Operaciones <span class="sub">gastos y ganancia realizada (FIFO)</span></h3><div id="bolsa-ops" style="overflow-x:auto"></div></div>
+      <div class="grid g2" style="margin-top:16px">
+        <div class="panel"><h3>Carteras</h3>
+          <div class="row"><input class="input" id="bc-nombre" placeholder="Nombre" style="flex:1 1 160px;min-width:0"><input class="input" id="bc-cap" type="number" min="0" value="10000" style="flex:1 1 110px;min-width:0" title="Capital inicial (€)"></div>
+          <div class="row" style="margin-top:8px"><select class="input" id="bc-tarifa" style="flex:1 1 200px;min-width:0"></select>
+            <select class="input" id="bc-modo" style="flex:1 1 140px;min-width:0"><option value="simulado">Simulada (sin dinero)</option><option value="real">Real (seguimiento, requiere admin)</option></select></div>
+          <div class="row" style="margin-top:10px"><button class="btn primary" id="bc-new">+ NUEVA CARTERA</button><button class="btn" id="bc-reset">REINICIAR LA ACTUAL</button></div>
+          <p class="muted" style="margin-top:8px">En una cartera real nada se ejecuta solo: cada orden espera a que la confirmes tú y luego la ejecutas en tu bróker. Nexus-Office no se conecta a ningún bróker.</p>
+        </div>
+        <div class="panel"><h3>Precios reales o activos propios</h3>
+          <p class="muted">Pega cierres «fecha;cierre» (o un CSV con columnas Date y Close) para anclar el valor a datos reales y usar su volatilidad.</p>
+          <div class="row"><input class="input" id="bi-sym" placeholder="Valor" style="flex:1 1 120px;min-width:0"><button class="btn" id="bi-import">IMPORTAR CIERRES</button></div>
+          <textarea class="input" id="bi-csv" rows="4" style="margin-top:8px;width:100%" placeholder="2026-10-15;6,12&#10;2026-10-16;6,18"></textarea>
+          <div class="row" style="margin-top:10px"><input class="input" id="bn-sym" placeholder="Nuevo valor" style="flex:1 1 100px;min-width:0"><input class="input" id="bn-name" placeholder="Nombre" style="flex:1 1 120px;min-width:0">
+            <select class="input" id="bn-mkt" style="flex:1 1 120px;min-width:0"></select><input class="input" id="bn-px" type="number" step="any" placeholder="Precio" style="flex:1 1 90px;min-width:0"><button class="btn" id="bn-add">AÑADIR</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= DISPOSITIVOS ================= -->
+    <section class="view" id="view-devices">
+      <div class="view-title">DISPOSITIVOS <span class="sub">luces LED, reloj y avatar de bolsillo siguen a Nexus</span></div>
+      <div class="panel"><h3>Modos <span class="sub" id="dv-modo"></span></h3><div class="row" id="dv-modos" style="flex-wrap:wrap"></div>
+        <p class="muted" style="margin-top:8px">Se pueden cambiar desde aquí, desde el móvil o desde el reloj indistintamente.</p></div>
+      <div class="panel" style="margin-top:16px"><h3>Luces LED <span class="sub">NexusLED en ESP32 con tiras WS2812/SK6812</span></h3>
+        <div class="row"><button class="btn primary" id="dv-scan">BUSCAR EN LA RED</button><input class="input" id="dv-ip" placeholder="IP del ESP32 (p. ej. 192.168.1.50)" style="flex:1 1 200px;min-width:0"><button class="btn" id="dv-add">AÑADIR</button></div>
+        <div id="dv-found" style="margin-top:8px"></div>
+        <div class="grid g2" id="dv-leds" style="margin-top:10px"></div></div>
+      <div class="grid g2" style="margin-top:16px">
+        <div class="panel"><h3>Reloj y avatar de bolsillo <span class="sub">conectados ahora</span></h3><div id="dv-clients"></div>
+          <div class="muted" style="margin:10px 0 4px">Imágenes que Nexus genera para la pantalla de tinta del Pico W:</div><div class="row" id="dv-pico" style="flex-wrap:wrap;gap:6px"></div></div>
+        <div class="panel"><h3>Firmware <span class="sub">grabar el ESP32 o el Pico W por USB</span></h3><div id="dv-fw"><span class="muted">Cargando…</span></div></div>
+      </div>
+    </section>
+
+    <!-- ================= AGENTES ================= -->
+    <section class="view" id="view-agents">
+      <div class="view-title">SISTEMA DE AGENTES</div>
+      <div class="row admin-only" style="margin-bottom:14px"><button class="btn primary" id="agent-new">+ NUEVO AGENTE</button><span class="muted">Personaliza prompt, modelo, herramientas, memoria y delegación.</span></div>
+      <div class="panel" id="office-panel" style="margin-bottom:16px"></div>
+      <div class="grid g3" id="agents-grid"></div>
+      <div class="panel admin-only hidden" id="agent-editor" style="margin-top:16px"></div>
+    </section>
+
+    <!-- ================= MODELOS ================= -->
+    <section class="view" id="view-models">
+      <div class="view-title">GESTOR DE MODELOS</div>
+      <div class="panel"><h3>Recomendados para tu hardware <span class="sub" id="rec-profile"></span></h3><div class="grid g3" id="rec-grid"></div></div>
+      <div class="grid g2" style="margin-top:16px">
+        <div class="panel"><h3>Instalados</h3><div class="list" id="catalog-list"></div></div>
+        <div class="panel"><h3>Descargas</h3><div class="list" id="jobs-list"><span class="muted">Sin descargas activas</span></div></div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h3>Explorar repositorios <span class="sub">Hugging Face · Ollama · ModelScope · Civitai · Kaggle — cualquier modelo; ★ = recomendado para tu equipo</span></h3>
+        <div class="row"><select class="input" id="src-select" style="width:auto"></select>
+          <select class="input" id="src-kind" style="width:auto"><option value="">todo</option><option value="llm">LLM (GGUF)</option><option value="image">imagen</option><option value="stt">voz→texto</option><option value="tts">texto→voz</option></select>
+          <input class="input" id="src-q" placeholder="Buscar modelos…" style="flex:1"><button class="btn primary" id="src-go">BUSCAR</button></div>
+        <div class="grid g2" style="margin-top:12px"><div class="list" id="src-results"></div><div class="list" id="src-files"></div></div>
+      </div>
+      <div class="panel admin-only col" style="margin-top:16px">
+        <h3>Importar modelo local · Modelo externo</h3>
+        <div class="row"><input class="input" id="imp-path" placeholder="C:\ruta\modelo.gguf  o carpeta" style="flex:1"><label class="row muted"><span class="switch"><input type="checkbox" id="imp-copy"><span></span></span>copiar</label><button class="btn" id="imp-go">IMPORTAR</button></div>
+        <div class="row"><input class="input" id="spec-in" placeholder="ollama:qwen3-vl:2b · openai:gpt-4o-mini · peer:NODO" style="flex:1"><button class="btn" id="spec-go">USAR COMO LLM</button></div>
+      </div>
+    </section>
+
+    <!-- ================= HERRAMIENTAS ================= -->
+    <section class="view" id="view-tools">
+      <div class="view-title">HERRAMIENTAS SUPERVISADAS</div>
+      <div class="grid g2">
+        <div class="panel"><h3>Aprobaciones pendientes</h3><div class="list" id="pending-list"><span class="muted">Nada pendiente</span></div></div>
+        <div class="panel"><h3>Política de supervisión</h3><div id="policy-box"></div></div>
+      </div>
+      <div class="panel" style="margin-top:16px"><h3>Repositorio de herramientas</h3><div id="tools-table"></div></div>
+      <div class="panel admin-only" style="margin-top:16px"><h3>Propuestas de los agentes <span class="sub">revisión humana obligatoria</span></h3><div class="list" id="proposals-list"></div></div>
+      <div class="panel admin-only" style="margin-top:16px"><h3>Auditoría</h3><div id="audit-table" style="max-height:340px;overflow:auto"></div></div>
+    </section>
+
+    <!-- ================= RED COOPERATIVA ================= -->
+    <section class="view" id="view-net">
+      <div class="view-title">RED COOPERATIVA · LAN VIRTUAL</div>
+      <div class="grid g2">
+        <div class="panel col">
+          <h3>Este nodo <span class="sub" id="net-state"></span></h3>
+          <dl class="kv" id="net-kv"></dl>
+          <div class="row"><button class="btn primary" id="net-start">ACTIVAR</button><button class="btn danger" id="net-stop">DESACTIVAR</button>
+            <button class="btn admin-only" id="net-create">CREAR RED</button><button class="btn admin-only" id="net-invite">INVITACIÓN</button></div>
+          <div id="net-invite-box"></div>
+          <div class="row"><input class="input" id="net-code" placeholder="Pega un código NEXUS1:… para unirte" style="flex:1"><button class="btn" id="net-join">UNIRSE</button></div>
+          <div class="admin-only col">
+            <div class="setting"><div class="lbl"><b>Aceptar conexiones entrantes</b><small>Necesitas puerto accesible, Tailscale o ZeroTier</small></div><label class="switch"><input type="checkbox" data-cfg="coop.listen"><span></span></label></div>
+            <div class="setting"><div class="lbl"><b>Ofrecer inferencia a la red</b><small>Otros nodos pueden usar tu modelo</small></div><label class="switch"><input type="checkbox" data-cfg="coop.allow_remote_inference"><span></span></label></div>
+            <div class="setting"><div class="lbl"><b>Ofrecer agentes a la red</b><small>Herramientas con supervisión reforzada</small></div><label class="switch"><input type="checkbox" data-cfg="coop.allow_remote_agents"><span></span></label></div>
+            <div class="setting"><div class="lbl"><b>Aceptar memoria compartida</b></div><label class="switch"><input type="checkbox" data-cfg="coop.share_memory"><span></span></label></div>
+            <div class="setting"><div class="lbl"><b>Aceptar herramientas compartidas</b><small>Entran como propuestas a revisar</small></div><label class="switch"><input type="checkbox" data-cfg="coop.share_tools"><span></span></label></div>
+            <label class="field">Nodos a los que conectar (ws://ip:puerto, uno por línea)<textarea class="input" id="net-peers"></textarea></label>
+            <label class="field">Mis URLs públicas (van en la invitación)<textarea class="input" id="net-public"></textarea></label>
+            <button class="btn" id="net-save">GUARDAR RED</button>
+          </div>
+        </div>
+        <div class="panel col">
+          <h3>Mapa de la red <span class="sub" id="net-count"></span></h3>
+          <div class="net-map"><canvas id="net-canvas"></canvas></div>
+          <div class="list" id="net-peers-list"></div>
+        </div>
+      </div>
+      <div class="panel col" style="margin-top:16px">
+        <h3>Conectar dispositivos <span class="sub">móvil (app Android / PWA), tablet, consola o TV</span></h3>
+        <div id="lan-box" class="col"><span class="muted">…</span></div>
+      </div>
+      <div class="panel col admin-only" style="margin-top:16px">
+        <h3>Acceso remoto por internet <span class="sub">TLS 1.3 · solo dispositivos emparejados</span></h3>
+        <div id="remote-box" class="col"><span class="muted">…</span></div>
+      </div>
+      <div class="panel col admin-only" style="margin-top:16px">
+        <h3>VPN cifrada para la app Android <span class="sub">WireGuard · Windows, Linux y macOS</span></h3>
+        <div id="vpn-box" class="col"><span class="muted">…</span></div>
+      </div>
+      <div class="panel col" style="margin-top:16px">
+        <h3>Chat de la LAN</h3>
+        <div class="lan-chat" id="lan-chat"></div>
+        <div class="row"><input class="input" id="lan-input" placeholder="Mensaje para todos los nodos…" style="flex:1"><button class="btn" id="lan-send">ENVIAR</button></div>
+      </div>
+    </section>
+
+    <!-- ================= SISTEMA ================= -->
+    <section class="view" id="view-system">
+      <div class="view-title">SISTEMA · HARDWARE Y RENDIMIENTO</div>
+      <div class="grid g4" id="hw-cards"></div>
+      <div class="grid g2" style="margin-top:16px">
+        <div class="panel"><h3>Monitor en vivo <span class="sub" id="mon-session"></span></h3><canvas class="chart" id="mon-chart"></canvas>
+          <div class="row mono muted" style="margin-top:6px"><span style="color:var(--accent)">━ CPU</span><span style="color:var(--accent2)">━ RAM</span><span style="color:var(--ok)">━ GPU</span></div></div>
+        <div class="panel"><h3>Perfil óptimo seleccionado</h3><dl class="kv" id="profile-kv"></dl></div>
+      </div>
+      <div class="grid g2" style="margin-top:16px">
+        <div class="panel"><h3>Autoajuste adaptativo <span class="sub">se aplica en cada arranque</span></h3><div class="list" id="tune-list"></div></div>
+        <div class="panel"><h3>Runtimes nativos <span class="sub">llama.cpp · stable-diffusion.cpp</span></h3><div id="runtimes-box"></div></div>
+      </div>
+      <div class="panel" style="margin-top:16px"><h3>Arranque automático <span class="sub">Nexus-Office como servicio: se inicia solo al encender el equipo</span></h3><div id="service-box"><span class="muted">Comprobando…</span></div></div>
+      <div class="panel" style="margin-top:16px"><h3>Comprobación y autorreparación <span class="sub">se revisa todo en cada arranque y se arregla solo</span></h3><div id="salud-box"><span class="muted">Comprobando…</span></div></div>
+      <div class="panel" style="margin-top:16px"><h3>Descargas <span class="sub">instaladores para los equipos y móviles de la oficina</span></h3><div id="downloads-box"><span class="muted">Comprobando…</span></div></div>
+      <div class="panel" style="margin-top:16px"><h3>Drivers de la tarjeta gráfica <span class="sub">actualización oficial, siempre confirmada por ti</span></h3><div id="drivers-box"><span class="muted">Comprobando…</span></div></div>
+      <div class="panel admin-only" style="margin-top:16px"><h3>Historial de sesiones</h3><div id="history-table"></div></div>
+      <div class="panel admin-only" style="margin-top:16px"><h3>Registro <span class="sub"><button class="btn sm" id="accel-open">MOTOR Y CPU/GPU/NPU</button> <button class="btn sm" id="redetect">RE-DETECTAR HARDWARE</button> <button class="btn danger sm" id="shutdown">APAGAR NEXUS-OFFICE</button></span></h3><pre class="code" id="logs"></pre></div>
+    </section>
+
+    <!-- ================= AJUSTES ================= -->
+    <section class="view" id="view-settings">
+      <div class="view-title">AJUSTES</div>
+      <div class="grid g2">
+        <div class="panel"><h3>Personalización</h3><div id="user-settings"></div></div>
+        <div class="panel col" style="grid-column:1/-1"><h3>Editor de temas <span class="sub">cambia por completo la estética; vista previa en vivo</span></h3>
+          <div class="theme-presets" id="theme-presets"></div>
+          <div class="theme-grid" id="theme-colors"></div>
+          <div class="theme-grid" id="theme-shape"></div>
+          <div class="row"><button class="btn primary" id="theme-save">GUARDAR TEMA</button><button class="btn ghost" id="theme-reset">RESTABLECER</button>
+            <button class="btn" id="theme-export">EXPORTAR JSON</button><button class="btn" id="theme-import">IMPORTAR JSON</button><input type="file" id="theme-file" accept=".json" hidden></div>
+        </div>
+        <div class="panel admin-only col" style="grid-column:1/-1" id="kg-panel"><h3>Gestor de conocimiento <span class="sub">grafo general (común) y memoria propia de cada agente · importar grafos · leer ZIP · embeddings</span></h3>
+          <div id="kg-admin" class="col"></div>
+        </div>
+        <div class="panel admin-only col" style="grid-column:1/-1" id="prof-panel"><h3>Profesor <span class="sub">agente que enseña con una IA online: Gemini, ChatGPT, Perplexity, Claude…</span></h3>
+          <div class="muted">Pon la clave de API de tu cuenta y prueba la conexión. La clave se guarda en este equipo y nunca se muestra. Sin clave el Profesor usa el modelo local, y la IA online nunca sustituye a los demás agentes.</div>
+          <div id="prof-box" class="col"></div>
+        </div>
+        <div class="panel admin-only col" style="grid-column:1/-1" id="router-panel"><h3>Asistente del router <span class="sub">abre el puerto para conectarte desde la app Android fuera de casa</span></h3>
+          <div class="muted">Busca tu router, abre su configuración y te dice exactamente qué regla crear. Solo lee: no inicia sesión ni cambia nada en el router.</div>
+          <div id="router-box" class="col"><div class="row"><button class="btn primary" id="router-scan">BUSCAR MI ROUTER</button></div></div>
+        </div>
+        <div class="panel admin-only col"><h3>Administración</h3>
+          <div class="row"><input class="input pin-input" id="pin-change" type="password" placeholder="NUEVO PIN" style="flex:1;font-size:16px"><button class="btn" id="pin-change-btn">CAMBIAR PIN</button></div>
+          <div class="row"><button class="btn" id="accel-open-ajustes">MOTOR, CPU/GPU/NPU Y CAPAS EN LA GPU</button></div>
+          <div id="admin-settings"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="sheet hidden" id="more-sheet"><div class="sheet-card"><div class="sheet-grip"></div><div class="sheet-grid" id="more-grid"></div><div class="sheet-extra" id="more-extra"></div></div></div>
+<div id="approvals"></div>
+<div id="toasts"></div>
+
+<dialog id="hwp-dialog" class="hwp-dialog">
+  <h2>PERFILES DE HARDWARE</h2>
+  <p class="muted" style="margin:0 0 10px">Junta en un nombre el motor, el acelerador, la GPU, el modelo y dónde se carga cada cosa (VRAM o RAM).</p>
+  <div class="hwp-body">
+    <div class="hwp-list" id="hwp-list"></div>
+    <form class="hwp-form" id="hwp-form" onsubmit="return false">
+      <label>Nombre<input class="input" name="nombre" required maxlength="40"></label>
+      <label>Descripción<input class="input" name="descripcion" maxlength="120"></label>
+      <div class="hwp-grid">
+        <label>Motor<select class="input" name="motor"><option value="auto">Automático</option><option value="llamaserver">llama-server</option><option value="llamacpp">llama.cpp incluido</option></select></label>
+        <label>Acelerador<select class="input" name="acelerador"><option value="auto">Automático</option><option value="cpu">CPU</option><option value="gpu">GPU</option><option value="npu">NPU</option></select></label>
+        <label>GPU<select class="input" name="gpu"></select></label>
+        <label>Modelo de texto<select class="input" name="modelo"></select></label>
+        <label>Capas en la GPU<select class="input" name="capas_sel"><option value="auto">Automático (lo que quepa)</option><option value="todas">Todas: modelo entero en la VRAM</option><option value="ninguna">Ninguna: todo en la RAM</option><option value="n">Número de capas…</option></select></label>
+        <label>Número de capas<input class="input" name="capas_n" type="number" min="1" max="999" value="20"></label>
+        <label>Caché de contexto (KV)<select class="input" name="kv"><option value="auto">Automático</option><option value="vram">En la VRAM (más rápido)</option><option value="ram">En la RAM (deja VRAM para capas)</option></select></label>
+        <label>Contexto (tokens)<input class="input" name="contexto" type="number" min="-1" step="512" title="0 = automático · -1 = el máximo"></label>
+        <label>Hilos<input class="input" name="hilos" type="number" min="-100" max="256" title="0 = automático · negativo = porcentaje (-50 = la mitad)"></label>
+        <label>Lote<input class="input" name="lote" type="number" min="0" step="64" title="0 = automático"></label>
+      </div>
+      <label class="hwp-check"><input type="checkbox" name="mlock"> Fijar el modelo en la RAM (mlock: no se va al disco)</label>
+      <div class="muted" id="hwp-note" style="font-size:.8rem"></div>
+      <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn danger sm" id="hwp-del" type="button">BORRAR</button>
+        <button class="btn sm" id="hwp-new" type="button">NUEVO</button><button class="btn" id="hwp-save" type="button">GUARDAR</button>
+        <button class="btn primary" id="hwp-use" type="button">GUARDAR Y USAR</button></div>
+    </form>
+  </div>
+  <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="hwp-close">CERRAR</button></div>
+</dialog>
+<dialog id="hilo-dialog" class="avlib-dialog">
+  <h2>HILO DEL PROYECTO</h2>
+  <p class="muted" style="margin:0 0 10px">En conversaciones largas el agente no ve todos los mensajes a la vez: lo antiguo se resume aquí y entra siempre en su contexto, junto con tus notas fijas y los fragmentos anteriores que vengan al caso.</p>
+  <div class="muted mono" id="hilo-info" style="font-size:.8rem;margin-bottom:6px"></div>
+  <label class="muted" for="hilo-notas">NOTAS FIJAS (objetivo, decisiones, datos que nunca debe olvidar)</label>
+  <textarea class="input" id="hilo-notas" rows="5" placeholder="Ej.: Proyecto Atlas: tienda online en C++. Base de datos SQLite. Entrega el 15 de noviembre."></textarea>
+  <label class="muted" for="hilo-resumen" style="margin-top:8px;display:block">RESUMEN DE LO HABLADO (se actualiza solo; puedes corregirlo)</label>
+  <textarea class="input" id="hilo-resumen" rows="9"></textarea>
+  <div class="row" style="justify-content:flex-end;margin-top:10px;flex-wrap:wrap">
+    <button class="btn ghost" id="hilo-resumir" title="Resume ya todo menos los últimos mensajes">RESUMIR AHORA</button>
+    <button class="btn ghost" id="hilo-cerrar">CERRAR</button>
+    <button class="btn primary" id="hilo-guardar">GUARDAR</button>
+  </div>
+</dialog>
+
+<dialog id="avlib-dialog" class="avlib-dialog">
+  <h2>AVATARES 3D GRATUITOS</h2>
+  <p class="muted" style="margin:0 0 10px">Descárgalos una vez y úsalos siempre, también sin conexión. Respeta la licencia de cada uno.</p>
+  <div class="row" style="flex-wrap:wrap"><select class="input" id="avlib-src" style="width:auto"></select>
+    <input class="input" id="avlib-q" placeholder="Buscar (chica, robot, anime, zombi…)" style="flex:1 1 160px;min-width:0"><button class="btn primary" id="avlib-go">BUSCAR</button></div>
+  <div class="muted" id="avlib-info" style="margin:6px 0;font-size:.8rem"></div>
+  <div class="avlib-grid" id="avlib-res"></div>
+  <div class="row" style="justify-content:center;margin-top:8px"><button class="btn sm" id="avlib-prev">‹ ANTERIOR</button><span class="muted mono" id="avlib-page"></span><button class="btn sm" id="avlib-next">SIGUIENTE ›</button></div>
+  <h3 style="margin:14px 0 6px">Mis avatares descargados</h3>
+  <div class="avlib-grid" id="avlib-mine"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="avlib-close">CERRAR</button></div>
+</dialog>
+<dialog id="accel-dialog" class="accel-dialog">
+  <h2>MOTOR Y ACELERADOR</h2>
+  <p class="muted" id="accel-hw">Detectando…</p>
+  <div class="accel-group"><div class="lbl">Motor llama</div><div class="accel-opts" id="accel-engines"></div></div>
+  <div class="accel-group"><div class="lbl">Acelerar la IA con</div><div class="accel-opts" id="accel-accels"></div></div>
+  <div class="accel-group"><div class="lbl">Capas del modelo en la GPU / NPU</div>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><select class="input" id="accel-capas" style="flex:1;min-width:200px"><option value="auto">Automático (las que quepan)</option><option value="todas">Todas: modelo entero en la GPU/NPU</option><option value="ninguna">Ninguna: todo en la CPU</option><option value="n">Número de capas…</option></select>
+    <input class="input" id="accel-capas-n" type="number" min="1" max="999" value="20" style="width:110px" title="Capas en la GPU/NPU; el resto va en la CPU"></div>
+    <small class="muted" id="accel-capas-info">Menos capas deja VRAM libre para el contexto; más capas va más rápido si caben.</small></div>
+  <div class="accel-note" id="accel-note"></div>
+  <div class="accel-result" id="accel-result"></div>
+  <label class="row muted" style="gap:8px;flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" id="accel-remember" checked style="margin-top:3px"> Recordar y no volver a preguntar al abrir (se cambia en Sistema)</label>
+  <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" id="accel-test">PROBAR</button><button class="btn primary" id="accel-go">ARRANCAR</button></div>
+</dialog>
+
+<dialog id="pin-dialog">
+  <h2 id="pin-title">ACCESO ADMINISTRADOR</h2>
+  <p class="muted" id="pin-help">Introduce el PIN de administrador.</p>
+  <form method="dialog" class="col" id="pin-form">
+    <input class="input pin-input" id="pin-input" type="password" inputmode="numeric" autocomplete="off" required minlength="4">
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" value="cancel" formnovalidate>CANCELAR</button><button class="btn primary" value="ok">ENTRAR</button></div>
+  </form>
+</dialog>
+
+<script type="importmap">{"imports": {"three": "/static/vendor/three.module.min.js", "three/addons/": "/static/vendor/addons/"}}</script>
+<script src="/static/js/themes.js"></script>
+<script src="/static/js/avatar.js"></script>
+<script type="module" src="/static/js/avatar3d.js"></script>
+<script src="/static/js/lounge.js"></script>
+<script src="/static/js/offices.js"></script>
+<script src="/static/js/app.js"></script>
+<script src="/static/js/kgadmin.js"></script>
+</body>
+</html>

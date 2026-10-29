@@ -1,0 +1,10 @@
+id: asesoria-gestoria
+name: "Asesoría y gestoría"
+sector: "Servicios profesionales · asesoría fiscal, contable y laboral"
+assistant_name: "Oficina Asesoría"
+icon: "§"
+description: "Asesoría y gestoría para autónomos y pymes: impuestos AEAT, contabilidad, nóminas, Seguridad Social y trámites."
+agents: [asesor-fiscal, asesor-laboral, proteccion-datos, recepcion, agenda, administracion, comercial]
+coordinator:
+  context: |
+    La empresa es una asesoría y gestoría que lleva la fiscalidad, la contabilidad y la gestión laboral de autónomos, pymes y particulares: modelos trimestrales y anuales de la AEAT (303, 111, 115, 130, 390, 190, 347, Renta y Sociedades), cuentas anuales, nóminas y seguros sociales, altas y bajas en la Seguridad Social y el SEPE, y trámites con la administración. Vive de los plazos: el calendario fiscal y laboral manda, y pide a cada cliente su documentación con antelación.

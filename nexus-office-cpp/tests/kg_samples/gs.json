@@ -1,0 +1,1 @@
+{"vertices": [{"id": 1, "label": "persona", "properties": {"name": [{"value": "Marko"}]}}, {"id": 2, "label": "software", "properties": {"name": [{"value": "lop"}]}}], "edges": [{"id": 7, "outV": 1, "inV": 2, "label": "created"}]}

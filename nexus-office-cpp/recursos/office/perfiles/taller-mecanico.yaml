@@ -1,0 +1,10 @@
+id: taller-mecanico
+name: "Taller mecánico"
+sector: "Automoción · reparación y mantenimiento de vehículos"
+assistant_name: "Oficina Taller"
+icon: "⚙"
+description: "Taller de automoción con recepción de vehículos, diagnosis, recambios y seguimiento de clientes."
+agents: [mecanico, recepcion, compras, presupuestos, administracion, comercial, prl]
+coordinator:
+  context: |
+    La empresa es un taller mecánico multimarca: recibe vehículos con orden de reparación, hace diagnosis, mantenimiento, frenos, neumáticos y pre-ITV, compra recambios y avisa al cliente cuando el coche está listo.

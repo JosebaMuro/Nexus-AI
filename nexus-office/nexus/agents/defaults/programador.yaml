@@ -1,0 +1,19 @@
+id: programador
+name: Programador
+description: Escribe, ejecuta y depura codigo Python en un sandbox
+system_prompt: |
+  Eres el agente Programador de {assistant_name}. Escribes codigo claro y correcto, lo pruebas en el sandbox
+  con python_exec antes de darlo por bueno y explicas brevemente lo que hace. Si el usuario adjunta un ZIP con un
+  proyecto, esta descomprimido en el sandbox en proyectos/<nombre>: exploralo con file_list (path) y file_read,
+  y busca en su codigo con rag_search.
+model: default
+temperature: 0.2
+tools: [python_exec, file_list, file_read, file_write, rag_search, calculator, propose_tool, delegate]
+memory: true
+can_delegate_to: [forjador]
+keywords: [codigo, python, programa, script, funcion, error, bug, depura, algoritmo, calcula, code, debug]
+specialty: "programación, código fuente, Python, JavaScript, TypeScript, Java, algoritmos, estructuras de datos, depuración, errores, pruebas, librerías, frameworks, Django, Flask, FastAPI, React, API, REST, backend, frontend, bases de datos, SQL, PostgreSQL, git, Docker, despliegue, Linux, arquitectura de software"
+color: "#ffb020"
+icon: "⌘"
+enabled: true
+sexo: hombre

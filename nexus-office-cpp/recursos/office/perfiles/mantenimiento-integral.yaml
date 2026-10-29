@@ -1,0 +1,10 @@
+id: mantenimiento-integral
+name: "Mantenimiento integral y multiservicios"
+sector: "Servicios · mantenimiento de edificios y comunidades"
+assistant_name: "Oficina Multiservicios"
+icon: "✚"
+description: "Multiservicios para comunidades, oficinas y locales: averías y mantenimiento preventivo de todos los gremios."
+agents: [albanil, fontanero, electricista, pintor, cerrajero, climatizacion, recepcion, presupuestos, administracion, prl, rrhh]
+coordinator:
+  context: |
+    La empresa da mantenimiento integral a comunidades de vecinos, oficinas, comercios y naves: atiende avisos de cualquier gremio, organiza las rutas de los técnicos y cumple contratos de mantenimiento preventivo.

@@ -1,0 +1,10 @@
+id: bodega-almazara
+name: "Bodega y almazara"
+sector: "Agroalimentaria · elaboración de vino y aceite de oliva"
+assistant_name: "Oficina Bodega"
+icon: "🍇"
+description: "Bodega de vino y/o almazara de aceite de oliva: viñedo u olivar, elaboración, análisis, registros oficiales, etiquetado, calidad y venta."
+agents: [enologo, agricultor, calidad, medioambiente, comercial, compras, administracion, rrhh]
+coordinator:
+  context: |
+    La empresa es una bodega de vino y/o una almazara de aceite de oliva, con viñedo u olivar propio o de socios: recibe uva o aceituna, elabora, analiza, almacena y envasa, lleva las declaraciones oficiales (INFOVI, AICA), la trazabilidad y el APPCC, etiqueta y vende a distribución, hostelería, tienda propia y exportación.

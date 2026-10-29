@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+data/
+venv/
+runtime/
+wheelhouse/
+bundled/
+.pytest_cache/
+!tests/data/
+dist/

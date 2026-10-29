@@ -1,0 +1,483 @@
+name: Nexus-Office C++ (instaladores y pruebas con modelo real)
+
+# Entrega de la edicion C++ (nexus-office-cpp, 2.1):
+#  1. cpp.yml compila y prueba nexus-office en cada sistema nativo (artefactos cpp-<plataforma>)
+#  2. voz: whisper-cli (whisper.cpp) compilado en cada sistema y piper (rhasspy/piper) precompilado
+#  3. paquetes: .exe (NSIS), .run, .deb, AppImage, Flatpak y macOS con «nexus-construir paquetes»; llama-server y
+#     sd-cli salen de los instaladores de la Release BASE (los mismos motores, sin recompilarlos)
+#  4. humo: cada instalador se instala en su sistema y se prueba con modelos reales («nexus-construir humo»)
+#  5. android: nexus-office con el NDK, APK autonoma («nexus-construir apk», firma temporal) y prueba en el emulador
+# nexus-construir es la herramienta de construccion en C++ (nexus-office-cpp/tools/construir): sale de cpp.yml.
+# Las APK quedan, en trozos, en la rama «apk-cpp-sin-firmar»; la firma definitiva se pone fuera de GitHub y
+# cpp-publicar.yml publica la Release.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/cpp-entrega.yml
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  BASE: v2.0.0
+  GH_TOKEN: ${{ github.token }}
+  PIPER: "2023.11.14-2"
+  WHISPER: v1.7.6
+  PIPER_PHONEMIZE: "2023.11.14-4"
+  # motores aparte de llama.cpp; LLAMA_TAG y SD_TAG vacios = la ultima Release oficial
+  LITERT: "0.19.0"
+  ORT_GENAI: "0.18.0"
+  ORT_GENAI_DML: "0.14.1"
+  ORT_GENAI_QNN: "0.13.2"
+  DIRECTML: "1.15.4"
+  LLAMA_TAG: ""
+  SD_TAG: ""
+
+jobs:
+  cpp:
+    uses: ./.github/workflows/cpp.yml
+
+  voz:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x86_64, os: ubuntu-22.04, piper: piper_linux_x86_64.tar.gz }
+          - { target: linux-aarch64, os: ubuntu-22.04-arm, piper: piper_linux_aarch64.tar.gz }
+          - { target: macos-arm64, os: macos-latest, piper: piper_macos_aarch64.tar.gz }
+          - { target: macos-x86_64, os: macos-15-intel, piper: piper_macos_x64.tar.gz }
+          - { target: windows-x64, os: windows-latest, piper: piper_windows_amd64.zip }
+          - { target: windows-arm64, os: windows-11-arm, piper: piper_windows_amd64.zip }
+    runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - name: whisper.cpp
+        shell: bash
+        run: |
+          set -e
+          git clone -q --depth 1 --branch "$WHISPER" https://github.com/ggml-org/whisper.cpp w
+          X=""
+          case "${{ matrix.target }}" in
+            # x86_64: sin AVX2 ni FMA para que funcione tambien en procesadores antiguos
+            *x86_64|windows-x64) X="-DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_BMI2=OFF -DGGML_AVX=ON" ;;
+            # ggml no admite MSVC en ARM: Clang de Visual Studio (ClangCL)
+            windows-arm64) X="-T ClangCL -A ARM64" ;;
+          esac
+          L=(); [ "$RUNNER_OS" = Linux ] && L=("-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc")
+          cmake -S w -B wb -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_SERVER=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DCMAKE_POLICY_DEFAULT_CMP0091=NEW \
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded $X "${L[@]}"
+          cmake --build wb --config Release --parallel 4 --target whisper-cli
+          mkdir -p voz/whisper
+          f=$(find wb -type f \( -name whisper-cli -o -name whisper-cli.exe \) | head -1)
+          cp "$f" voz/whisper/
+          cp w/LICENSE voz/whisper/LICENSE.txt
+          ls -la voz/whisper
+          voz/whisper/whisper-cli* --help 2>&1 | head -3
+      - name: piper
+        shell: bash
+        run: |
+          set -e
+          curl -fsSL -o p.pkg "https://github.com/rhasspy/piper/releases/download/$PIPER/${{ matrix.piper }}"
+          mkdir -p px
+          case "${{ matrix.piper }}" in *.zip) unzip -q p.pkg -d px ;; *) tar -xzf p.pkg -C px ;; esac
+          mv px/piper voz/piper
+          if [ "$RUNNER_OS" = macOS ]; then
+            # el piper de macOS no trae sus bibliotecas (espeak-ng, piper_phonemize, onnxruntime): salen de
+            # piper-phonemize, con el que se compilo
+            case "${{ matrix.target }}" in macos-arm64) PP=macos_aarch64 ;; *) PP=macos_x64 ;; esac
+            curl -fsSL -o pp.tgz "https://github.com/rhasspy/piper-phonemize/releases/download/$PIPER_PHONEMIZE/piper-phonemize_$PP.tar.gz"
+            mkdir -p ppx && tar -xzf pp.tgz -C ppx
+            find ppx -name '*.dylib' -not -path '*.dSYM*' -exec cp -a {} voz/piper/ \;
+          fi
+          # los artefactos de Actions no guardan enlaces simbolicos (libespeak-ng.1.dylib -> ...): copias reales
+          for f in $(find voz -type l); do t=$(cd "$(dirname "$f")" && cd "$(dirname "$(readlink "$f")")" && pwd)/$(basename "$(readlink "$f")"); rm "$f"; cp -RL "$t" "$f"; done
+          find voz -name '*.dSYM' -prune -exec rm -rf {} +
+          ls voz/piper | head -30
+          if [ "$RUNNER_OS" = macOS ]; then
+            # el piper de macOS busca sus bibliotecas en @rpath sin tener rpath: se le pone su propia carpeta
+            install_name_tool -add_rpath @executable_path voz/piper/piper
+            codesign -f -s - voz/piper/piper
+            otool -L voz/piper/piper; otool -l voz/piper/piper | grep -A2 LC_RPATH
+            echo "Hola." | voz/piper/piper --help >/dev/null 2>&1 && echo "piper arranca" || { voz/piper/piper --help; exit 1; }
+          fi
+          echo "hola" | voz/piper/piper* --help 2>&1 | head -3 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voz-${{ matrix.target }}
+          path: voz/
+          retention-days: 7
+
+  paquetes:
+    needs: [cpp, voz]
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [windows-x64, windows-arm64, linux-x86_64, linux-aarch64, macos-arm64, macos-x86_64]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Liberar espacio
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost && df -h /
+      - uses: actions/checkout@v4
+      - name: Herramientas
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nsis flatpak p7zip-full >/dev/null
+      - uses: actions/download-artifact@v4
+        with:
+          name: construir-linux-x86_64
+          path: construir
+      - uses: actions/download-artifact@v4
+        with:
+          name: cpp-${{ matrix.target }}
+          path: nexus-office-cpp/.cache/cpp/${{ matrix.target }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: voz-${{ matrix.target }}
+          path: voz
+      - name: Motores de IA del instalador de la edicion Python (BASE)
+        run: |
+          set -e
+          T=${{ matrix.target }}; V=${BASE#v}
+          case $T in
+            windows-*) A=Nexus-Office-Setup-$V-$T.exe ;;
+            linux-*) A=Nexus-Office-$V-$T.run ;;
+            macos-*) A=Nexus-Office-$V-$T.tar.gz ;;
+          esac
+          gh release download "$BASE" -R "$GITHUB_REPOSITORY" -p "$A" -D old
+          mkdir -p x
+          case $A in
+            *.exe) 7z x -y -ox "old/$A" >/dev/null ;;
+            *.run) l=$(awk '/^__NEXUS_ARCHIVE__$/{print NR + 1; exit}' "old/$A"); tail -n +"$l" "old/$A" | tar -xz -C x --wildcards '*/bundled/runtimes/llama/*' '*/bundled/runtimes/sd/*' ;;
+            *.tar.gz) tar -xzf "old/$A" -C x --wildcards '*/bundled/runtimes/llama/*' '*/bundled/runtimes/sd/*' ;;
+          esac
+          rm -rf old
+          B=$(find x -type d -path '*bundled/runtimes' | head -1)
+          RT=nexus-office-cpp/.cache/desktop-runtimes/$T
+          mkdir -p "$RT"
+          cp -r "$B/llama" "$B/sd" "$RT/"
+          cp -r voz/piper voz/whisper "$RT/"
+          rm -rf x voz
+          find "$RT" -maxdepth 2 | head -40; du -sh "$RT"/*
+      - name: Runtimes por fabricante (llama.cpp y sd.cpp oficiales) y motores LiteRT-LM y ONNX Runtime GenAI
+        run: |
+          set -e
+          T=${{ matrix.target }}
+          RT=$PWD/nexus-office-cpp/.cache/desktop-runtimes/$T
+          PK=$PWD/packs/runtimes            # variantes pesadas: van en un zip aparte (Nexus-Office-runtime-*.zip)
+          mkdir -p "$RT" "$PK" w
+          # la Release marcada como «latest» de llama.cpp no siempre es la de los binarios (bNNNN): la ultima bNNNN
+          LT=${LLAMA_TAG:-$(gh release list -R ggml-org/llama.cpp --limit 30 --json tagName -q '.[].tagName' | grep -m1 -E '^b[0-9]+$')}
+          ST=${SD_TAG:-$(gh release view -R leejet/stable-diffusion.cpp --json tagName -q .tagName)}
+          echo "llama.cpp $LT · stable-diffusion.cpp $ST"
+          # poner <destino> <rt> <variante> <repo> <tag> <patron> [patron de cudart]
+          poner() {
+            local base=$1 rt=$2 v=$3 repo=$4 tag=$5 pat=$6 extra=$7 exe=llama-server
+            [ "$rt" = sd ] && exe=sd-cli
+            rm -rf ./w/p ./w/u ./w/c && mkdir -p w/p w/u w/c
+            if ! gh release download "$tag" -R "$repo" -p "$pat" -D w/p 2>/dev/null; then
+              echo "::warning::$T: no hay $pat en $repo $tag"; return 0
+            fi
+            for f in w/p/*; do case $f in *.zip) unzip -q -o "$f" -d w/u ;; *) tar -xzf "$f" -C w/u ;; esac; done
+            local e; e=$(find w/u -type f \( -name "$exe" -o -name "$exe.exe" \) | head -1)
+            [ -n "$e" ] || { echo "::warning::$T: $pat no trae $exe"; return 0; }
+            rm -rf "${base:?}/${rt:?}/${v:?}" && mkdir -p "$base/$rt/$v" && cp -a "$(dirname "$e")"/. "$base/$rt/$v/"
+            if [ -n "$extra" ] && gh release download "$tag" -R "$repo" -p "$extra" -D w/c 2>/dev/null; then
+              mkdir -p w/c/x
+              for f in w/c/*.*; do case $f in *.zip) unzip -q -o "$f" -d w/c/x ;; *) tar -xzf "$f" -C w/c/x ;; esac; done
+              find w/c/x -type f \( -name '*.dll' -o -name '*.so*' \) -exec cp {} "$base/$rt/$v/" \;
+            fi
+            echo "$T: $rt/$v <- $(ls w/p) $(du -sh "$base/$rt/$v" | cut -f1)"
+          }
+          # wheel de PyPI: copia las bibliotecas que casan con el patron
+          pypi() {  # pypi <paquete> <version|""> <patron del fichero> <dest> <patron de bibliotecas>
+            local url; url=$(curl -fsSL "https://pypi.org/pypi/$1${2:+/$2}/json" | jq -r --arg p "$3" '[.urls[] | select(.filename | test($p))][0].url')
+            [ "$url" != null ] || { echo "::warning::$T: sin $1 ($3) en PyPI"; return 0; }
+            rm -rf ./w/whl && mkdir -p w/whl "$4" && curl -fsSL -o w/whl/p.zip "$url" && unzip -q -o w/whl/p.zip -d w/whl/x
+            (cd w/whl/x && find . -type f -regextype posix-extended -regex "$5" -exec cp {} "$4/" \;)
+            echo "$T: $1 <- $(basename "$url")"
+          }
+          # paquete de NuGet: las DLL nativas de <rid>
+          nuget() {  # nuget <paquete> <version> <rid> <dest>
+            local id; id=$(echo "$1" | tr 'A-Z' 'a-z')
+            rm -rf ./w/nu && mkdir -p w/nu "$4"
+            curl -fsSL -o w/nu/p.zip "https://api.nuget.org/v3-flatcontainer/$id/$2/$id.$2.nupkg" && unzip -q -o w/nu/p.zip -d w/nu/x
+            cp w/nu/x/runtimes/$3/native/*.dll "$4/" 2>/dev/null || cp w/nu/x/bin/$3/*.dll "$4/" 2>/dev/null || \
+              echo "::warning::$T: $1 $2 no trae DLL para $3"
+            echo "$T: $1 $2 ($3)"
+          }
+          nuget_dep() {  # version de la dependencia <dep> en el nuspec de <paquete> <version>
+            local id; id=$(echo "$1" | tr 'A-Z' 'a-z')
+            curl -fsSL "https://api.nuget.org/v3-flatcontainer/$id/$2/$id.nuspec" \
+              | grep -o "id=\"$3\" version=\"[^\"]*\"" | head -1 | sed 's/.*version="\([^"]*\)".*/\1/; s/[][()]//g; s/,.*//'
+          }
+          G=ggml-org/llama.cpp; S=leejet/stable-diffusion.cpp
+          case $T in
+            windows-x64)
+              poner "$PK" llama cuda13 $G $LT 'llama-*-bin-win-cuda-13*-x64.zip' 'cudart-llama-bin-win-cuda-13*-x64.zip'
+              poner "$PK" llama sycl $G $LT 'llama-*-bin-win-sycl-x64.zip'
+              poner "$PK" llama rocm $G $LT 'llama-*-bin-win-rocm-*-x64.zip'
+              # sd.cpp nuevo: sd-server y los modelos GGUF de solo difusion (Flux, Z-Image, Qwen-Image...)
+              poner "$RT" sd cpu $S $ST 'sd-*-bin-win-avx2-x64.zip'
+              poner "$RT" sd cpu-compat $S $ST 'sd-*-bin-win-noavx-x64.zip'
+              poner "$RT" sd vulkan $S $ST 'sd-*-bin-win-vulkan-x64.zip'
+              poner "$RT" sd cuda $S $ST 'sd-*-bin-win-cuda12-x64.zip' 'cudart-sd-bin-win-cu12-x64.zip'
+              pypi litert-lm-api "$LITERT" 'win_amd64' "$RT/litert/todo" '.*\.dll'
+              # DirectML: cualquier GPU de Windows (NVIDIA, AMD, Intel) para los modelos ONNX
+              OV=$(nuget_dep Microsoft.ML.OnnxRuntimeGenAI.DirectML $ORT_GENAI_DML Microsoft.ML.OnnxRuntime.DirectML)
+              nuget Microsoft.ML.OnnxRuntimeGenAI.DirectML $ORT_GENAI_DML win-x64 "$RT/onnx/dml"
+              nuget Microsoft.ML.OnnxRuntime.DirectML $OV win-x64 "$RT/onnx/dml"
+              nuget Microsoft.AI.DirectML $DIRECTML x64-win "$RT/onnx/dml" ;;
+            windows-arm64)
+              # Snapdragon X Elite/Plus: GPU Adreno por OpenCL (llama.cpp) y NPU Hexagon por QNN (ONNX Runtime)
+              poner "$RT" llama opencl-adreno $G $LT 'llama-*-bin-win-opencl-adreno-arm64.zip'
+              poner "$RT" llama vulkan $G $LT 'llama-*-bin-win-vulkan-arm64.zip'
+              OV=$(nuget_dep Microsoft.ML.OnnxRuntimeGenAI.QNN $ORT_GENAI_QNN Microsoft.ML.OnnxRuntime.QNN)
+              nuget Microsoft.ML.OnnxRuntimeGenAI.QNN $ORT_GENAI_QNN win-arm64 "$RT/onnx/qnn"
+              nuget Microsoft.ML.OnnxRuntime.QNN $OV win-arm64 "$RT/onnx/qnn" ;;
+            linux-x86_64)
+              poner "$PK" llama cuda13 $G $LT 'llama-*-bin-ubuntu-cuda-13*-x64.tar.gz' 'cudart-llama-*-bin-ubuntu-cuda-13*-x64.tar.gz'
+              poner "$PK" llama rocm $G $LT 'llama-*-bin-ubuntu-rocm-*-x64.tar.gz'
+              poner "$PK" llama sycl $G $LT 'llama-*-bin-ubuntu-sycl-fp16-x64.tar.gz'
+              poner "$RT" sd cpu $S $ST 'sd-*-bin-Linux-*-x86_64.zip'
+              poner "$RT" sd vulkan $S $ST 'sd-*-bin-Linux-*-x86_64-vulkan.zip'
+              pypi litert-lm-api "$LITERT" 'manylinux.*_x86_64' "$RT/litert/todo" '.*\.so.*'
+              pypi onnxruntime-genai "$ORT_GENAI" 'cp313-manylinux.*_x86_64' "$RT/onnx/cpu" '.*/libonnxruntime-genai\.so.*'
+              pypi onnxruntime "" 'cp313-cp313-manylinux.*_x86_64' "$RT/onnx/cpu" '.*/capi/libonnxruntime\.so.*' ;;
+            linux-aarch64)
+              poner "$RT" llama vulkan $G $LT 'llama-*-bin-ubuntu-vulkan-arm64.tar.gz'
+              # placas y portatiles Snapdragon con Linux: CPU, GPU Adreno y NPU Hexagon en el mismo paquete
+              poner "$RT" llama snapdragon $G $LT 'llama-*-bin-linux-arm64-snapdragon.tar.gz'
+              poner "$RT" sd cpu $S $ST 'sd-*-bin-Linux-*-aarch64.zip'
+              pypi litert-lm-api "$LITERT" 'manylinux.*_aarch64' "$RT/litert/todo" '.*\.so.*'
+              pypi onnxruntime-genai "$ORT_GENAI" 'cp313-manylinux.*_aarch64' "$RT/onnx/cpu" '.*/libonnxruntime-genai\.so.*'
+              pypi onnxruntime "" 'cp313-cp313-manylinux.*_aarch64' "$RT/onnx/cpu" '.*/capi/libonnxruntime\.so.*' ;;
+            macos-arm64)
+              poner "$RT" sd metal $S $ST 'sd-*-bin-Darwin-*-arm64.zip'
+              pypi litert-lm-api "$LITERT" 'macosx.*arm64' "$RT/litert/todo" '.*\.dylib'
+              pypi onnxruntime-genai "$ORT_GENAI" 'cp313-macosx.*arm64' "$RT/onnx/cpu" '.*/libonnxruntime-genai\.dylib'
+              pypi onnxruntime "" 'cp313-macosx.*arm64' "$RT/onnx/cpu" '.*/capi/libonnxruntime.*\.dylib' ;;
+          esac
+          # ONNX Runtime GenAI busca libonnxruntime.so(.1) / .dylib sin la version completa
+          for f in "$RT"/onnx/*/libonnxruntime.so.*; do [ -e "$f" ] || continue; cp -n "$f" "$(dirname "$f")/libonnxruntime.so"; cp -n "$f" "$(dirname "$f")/libonnxruntime.so.1" || true; done
+          for f in "$RT"/onnx/*/libonnxruntime.*.dylib; do [ -e "$f" ] && cp -n "$f" "$(dirname "$f")/libonnxruntime.dylib"; done
+          for d in "$RT"/litert/* "$RT"/onnx/*; do [ -d "$d" ] && ls -la "$d"; done
+          # paquetes de las variantes pesadas (limite de 2 GB por fichero de la Release)
+          V=$(sed -n 's/^set(NEXUS_VERSION "\([^"]*\)").*/\1/p' nexus-office-cpp/CMakeLists.txt)
+          mkdir -p packs/out
+          for r in "$PK"/*/*; do
+            [ -d "$r" ] || continue
+            v=$(basename "$r"); rt=$(basename "$(dirname "$r")")
+            Z=$PWD/packs/out/Nexus-Office-runtime-$v-$V-$T.zip
+            (cd packs && zip -q -r -9 "$Z" "runtimes/$rt/$v")
+            s=$(stat -c %s "$Z")
+            if [ "$s" -gt 2040109465 ]; then echo "::warning::$T: $rt/$v ocupa $((s/1048576)) MB: no cabe en la Release"; rm -f "$Z"; fi
+          done
+          rm -rf ./w ./packs/runtimes; ls -la packs/out; du -sh "$RT"/*
+      - name: Drivers USB-serie (CH340/CH9102, CP210x, FTDI) para grabar las placas ESP sin internet
+        if: startsWith(matrix.target, 'windows') || startsWith(matrix.target, 'macos')
+        run: |
+          T=${{ matrix.target }}; D=nexus-office-cpp/.cache/drivers/$T; mkdir -p "$D"
+          # baja el primer zip que responda y comprueba que trae lo que hace falta (.inf en Windows, .pkg/.dmg en macOS)
+          bajar() {
+            local dir=$1 patron=$2; shift 2
+            for u in "$@"; do
+              rm -rf tmpdrv && mkdir tmpdrv
+              if curl -fsSL --max-time 120 -A "Mozilla/5.0" -o tmpdrv/d.zip "$u" && (cd tmpdrv && unzip -q -o d.zip >/dev/null 2>&1; true) \
+                 && [ -n "$(find tmpdrv -iname "$patron" | head -1)" ]; then
+                rm -f tmpdrv/d.zip; mkdir -p "$D/$dir"; cp -r tmpdrv/. "$D/$dir/"; echo "driver $dir: $u"; return 0
+              fi
+            done
+            echo "::warning::sin driver $dir para $T: Nexus-Office dira de donde bajarlo"
+          }
+          case $T in
+            windows-*)
+              bajar cp210x '*.inf' https://www.silabs.com/documents/public/software/CP210x_Universal_Windows_Driver.zip
+              bajar ftdi '*.inf' https://ftdichip.com/wp-content/uploads/2025/03/CDM-v2.12.36.20-WHQL-Certified.zip \
+                https://ftdichip.com/wp-content/uploads/2023/09/CDM-v2.12.36.4-WHQL-Certified.zip
+              bajar ch34x '*.inf' https://www.wch.cn/download/file?id=5 https://www.wch-ic.com/download/file?id=5
+              bajar ch343 '*.inf' https://www.wch.cn/download/file?id=314 https://www.wch-ic.com/download/file?id=314 ;;
+            macos-*)
+              bajar cp210x '*.dmg' https://www.silabs.com/documents/public/software/Mac_OSX_VCP_Driver.zip
+              bajar ch34x '*.pkg' https://www.wch.cn/download/file?id=178 https://www.wch-ic.com/download/file?id=178 ;;
+          esac
+          rm -rf tmpdrv; find "$D" -maxdepth 3 | head -40
+      - name: Construir
+        run: chmod +x construir/nexus-construir && cd nexus-office-cpp && ../construir/nexus-construir paquetes --targets ${{ matrix.target }}
+      - name: Lista
+        run: |
+          mkdir -p nexus-office-cpp/dist/runtimes && mv packs/out/*.zip nexus-office-cpp/dist/runtimes/ 2>/dev/null || true
+          ls -la nexus-office-cpp/dist/*/ && df -h /
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instalador-cpp-${{ matrix.target }}
+          path: |
+            nexus-office-cpp/dist/windows/
+            nexus-office-cpp/dist/linux/
+            nexus-office-cpp/dist/macos/
+            nexus-office-cpp/dist/runtimes/
+          retention-days: 7
+          compression-level: 0
+
+  humo:
+    needs: paquetes
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x86_64, os: ubuntu-24.04 }
+          - { target: linux-aarch64, os: ubuntu-24.04-arm }
+          # la GPU paravirtual de la maquina virtual de macOS devuelve texto sin sentido con Metal: el chat va en CPU
+          - { target: macos-arm64, os: macos-latest, accel: cpu }
+          - { target: macos-x86_64, os: macos-15-intel }
+          - { target: windows-x64, os: windows-latest }
+          - { target: windows-arm64, os: windows-11-arm }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: construir-${{ matrix.target }}
+          path: construir
+      - name: nexus-construir
+        shell: bash
+        run: |
+          chmod +x construir/nexus-construir* || true
+          f=$(ls construir/nexus-construir*); echo "C=$PWD/$f" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          name: instalador-cpp-${{ matrix.target }}
+          path: inst
+      - name: Instalar (.run)
+        if: runner.os == 'Linux'
+        run: |
+          ls -laR inst
+          sh inst/*/Nexus-Office-*-${{ matrix.target }}.run "$HOME/nxc" --modelos=no
+          echo "NX=$HOME/nxc" >> "$GITHUB_ENV"
+      - name: Instalar (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p "$HOME/nxa" && tar -xzf inst/*/Nexus-Office-*-${{ matrix.target }}.tar.gz -C "$HOME/nxa"
+          cd "$HOME/nxa"/Nexus-Office && ./install.sh --modelos=no
+          echo "NX=$HOME/nxa/Nexus-Office" >> "$GITHUB_ENV"
+      - name: Instalar (Windows, instalador grafico en silencio)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem inst -Recurse -Filter "Nexus-Office-Setup-*.exe" | Select-Object -First 1
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList '/S', '/MODELOS=no', '/D=C:\nxc' -Wait -PassThru
+          "instalador: codigo $($p.ExitCode)"
+          Get-ChildItem C:\nxc | Format-Table Name, Length
+          if (!(Test-Path C:\nxc\nexus-office.exe) -or !(Test-Path C:\nxc\nexus-office-w.exe)) { throw "instalacion incompleta" }
+          "NX=C:\nxc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Probar con modelos reales (chat, selector, voz, imagen y servicio)
+        shell: bash
+        run: |
+          "$C" humo "$NX" --acelerador "${{ matrix.accel || 'auto' }}"
+      - name: Probar el .deb
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y -qq ./inst/*/nexus-office-c_*.deb >/dev/null
+          nexus-office-c --version
+          "$C" humo /opt/nexus-office-c --sin-imagen --sin-servicio
+          sudo apt-get remove -y -qq nexus-office-c >/dev/null
+      - name: Probar la AppImage
+        if: runner.os == 'Linux'
+        run: |
+          cd "$RUNNER_TEMP" && chmod +x "$GITHUB_WORKSPACE"/inst/*/*.AppImage
+          "$GITHUB_WORKSPACE"/inst/*/Nexus-Office-*-${{ matrix.target }}.AppImage --appimage-extract >/dev/null
+          "$C" humo "$RUNNER_TEMP/squashfs-root/nexus" --sin-imagen --sin-servicio
+      - name: Probar el Flatpak
+        if: matrix.target == 'linux-x86_64'
+        run: |
+          sudo apt-get install -y -qq flatpak >/dev/null
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive inst/*/Nexus-Office-*-linux-x86_64.flatpak
+          flatpak run ai.nexus.NexusOfficeCpp --version
+
+  android:
+    needs: cpp
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: construir-linux-x86_64
+          path: construir
+      - name: nexus-office para Android (NDK, ARM64)
+        run: |
+          set -e
+          NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"; echo "NDK: $NDK"
+          cmake -S nexus-office-cpp -B abuild -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DANDROID_STL=c++_static -DNEXUS_BUILD_TESTS=OFF
+          cmake --build abuild --parallel 4
+          cmake --install abuild --prefix aout/Nexus-Office --strip
+          file aout/Nexus-Office/nexus-office; ls -la aout/Nexus-Office
+      - name: llama-server de la APK autonoma de la edicion Python (BASE)
+        run: |
+          set -e
+          gh release download "$BASE" -R "$GITHUB_REPOSITORY" -p "Nexus-Office-${BASE#v}-android-autonomo.apk" -D old
+          mkdir -p alibs && (cd alibs && unzip -q -j ../old/*.apk 'lib/arm64-v8a/libllama-server*.so')
+          ls -la alibs; rm -rf old
+      - name: APK autonoma (firma temporal)
+        run: |
+          set -e
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          JAR=$(ls -d "$ANDROID_HOME"/platforms/android-* | sort -V | grep -E 'android-3[4-9]$' | head -1)/android.jar
+          export PATH="$BT:$PATH" NEXUS_ANDROID_JAR="$JAR"
+          # GPU y NPU del movil: llama-server-gpu y los backends de ggml (Vulkan, OpenCL, Hexagon) de android-npu-libs
+          git fetch -q --depth 1 origin android-npu-libs
+          git show FETCH_HEAD:android-gpu-npu-libs.tar.gz > npu.tgz
+          (git show FETCH_HEAD:SHA256SUMS.txt | grep android-gpu-npu-libs.tar.gz | sed 's|  .*|  npu.tgz|' | sha256sum -c -)
+          mkdir -p glibs && tar xzf npu.tgz -C glibs
+          # LiteRT-LM (Google) para los .litertlm: CPU y GPU del movil (y la NPU con el dispatch del fabricante)
+          U=$(curl -fsSL "https://pypi.org/pypi/litert-lm-api/$LITERT/json" | jq -r '[.urls[] | select(.filename | test("android.*arm64"))][0].url')
+          curl -fsSL -o lt.whl "$U" && unzip -q -o -j lt.whl '*/liblitert-lm.so' -d glibs/lib && ls -la glibs/lib/liblitert-lm.so
+          chmod +x construir/nexus-construir
+          (cd nexus-office-cpp && ../construir/nexus-construir apk --exe ../aout/Nexus-Office/nexus-office --libs ../alibs --recursos ../aout/Nexus-Office --gpu-libs ../glibs/lib)
+          "$BT/apksigner" verify --print-certs nexus-office-cpp/dist-apk/*.apk | head -4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-cpp
+          path: nexus-office-cpp/dist-apk/
+          retention-days: 7
+      - name: Dejar la APK en la rama apk-cpp-sin-firmar
+        run: |
+          set -e
+          mkdir ../apk && cp nexus-office-cpp/dist-apk/*.apk ../apk/
+          cd ../apk && for f in *.apk; do split -b 90m -d -a 3 "$f" "$f."; rm "$f"; done
+          (cd "$GITHUB_WORKSPACE/nexus-office-cpp/dist-apk" && sha256sum *.apk) > SHA256SUMS.txt
+          echo "${{ github.run_id }}" > RUN.txt
+          git init -q -b apk-cpp-sin-firmar && git add -A
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm "APK C++ ${GITHUB_SHA::8} (firma temporal)"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" apk-cpp-sin-firmar
+
+  android-emulador:
+    needs: android
+    runs-on: ubuntu-24.04
+    steps:
+      - name: KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk-cpp
+          path: apk
+      - name: Arrancar la APK en Android 11 (x86_64 con traduccion de ARM64)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096
+          script: |
+            unzip -q -o -j apk/*.apk lib/arm64-v8a/libnexusoffice.so -d nx && adb push nx/libnexusoffice.so /data/local/tmp/nx && adb shell chmod 755 /data/local/tmp/nx
+            adb shell /data/local/tmp/nx --version; adb shell /data/local/tmp/nx detect | head -30 || true
+            adb install -r apk/*.apk
+            adb shell am start -n ai.nexus.office.cpp/ai.nexus.office.autonomo.MainActivity
+            adb forward tcp:8775 tcp:8775
+            ok=0; for i in $(seq 80); do if curl -sf http://127.0.0.1:8775/api/ping; then ok=1; break; fi; sleep 3; done; echo; test $ok = 1 || { adb logcat -d | grep -iE "nexus|translation|AndroidRuntime|FATAL|linker" | tail -120; adb shell dumpsys notification --noredact | grep -iE -A4 "ai.nexus" | head -60; adb shell dumpsys activity services ai.nexus.office.cpp | head -40; }; test $ok = 1
+            curl -sf http://127.0.0.1:8775/api/status | head -c 600; echo
+            curl -sf -X POST http://127.0.0.1:8775/api/accel/test -H 'Content-Type: application/json' -d '{}' | head -c 400; echo

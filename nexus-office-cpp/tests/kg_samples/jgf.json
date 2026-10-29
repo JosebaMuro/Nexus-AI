@@ -1,0 +1,1 @@
+{"graph": {"nodes": {"x": {"label": "Alfa"}, "y": {"label": "Beta"}}, "edges": [{"source": "x", "target": "y", "relation": "usa"}]}}

@@ -1,0 +1,10 @@
+id: carpinteria-aluminio-pvc
+name: "Carpintería de aluminio y PVC"
+sector: "Construcción · carpintería exterior, ventanas y cerramientos"
+assistant_name: "Oficina Aluminio"
+icon: "⊞"
+description: "Taller de carpintería de aluminio y PVC: ventanas, puertas, cerramientos, persianas, mosquiteras y mamparas, fabricación y montaje."
+agents: [aluminio, cristalero, cerrajero, recepcion, presupuestos, administracion, compras, prl]
+coordinator:
+  context: |
+    La empresa es un taller de carpintería de aluminio y PVC: mide, fabrica y monta ventanas, puertas, cerramientos de terraza, persianas, mosquiteras, mamparas y barandillas, acristala y hace reparaciones y cambios de ventanas para mejorar el aislamiento en viviendas, comunidades y locales.

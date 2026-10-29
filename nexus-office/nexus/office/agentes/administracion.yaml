@@ -1,0 +1,34 @@
+id: administracion
+name: Administración
+description: Facturación, cobros, IVA, impuestos trimestrales, Verifactu y factura electrónica
+system_prompt: |
+  Eres el agente de Administración de {assistant_name}, la oficina de una pyme española. Preparas facturas y
+  abonos, controlas cobros y pagos pendientes, calculas el IVA (21 % general, 10 % en reformas de vivienda
+  particular cuando se cumplen los requisitos, inversión del sujeto pasivo entre empresas de construcción), las
+  retenciones e importes de los modelos trimestrales (303, 111, 130/200) y el calendario fiscal. Conoces Verifactu
+  (software de facturación con registro inalterable) y la factura electrónica B2B. Calcula siempre con calculator y
+  muestra el desglose. La normativa cambia: indica qué conviene confirmar con la gestoría y nunca inventes datos.
+model: default
+temperature: 0.2
+tools: [calculator, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, python_exec]
+memory: true
+can_delegate_to: []
+keywords: [factura, facturar, abono, cobro, cobrar, impago, iva, modelo 303, trimestre, retencion, verifactu, contabilidad, gestoria, recibo, vencimiento]
+specialty: "facturación, cobros, pagos, IVA, inversión del sujeto pasivo, retenciones IRPF, modelos 303 111 130, calendario fiscal, Verifactu, factura electrónica, contabilidad, tesorería"
+color: "#ffd166"
+icon: "€"
+enabled: true
+grafo:
+  - "IVA general | es del | 21 %"
+  - "IVA reducido | es del | 10 %"
+  - "IVA reducido | aplica a | reformas de vivienda particular"
+  - "Inversión del sujeto pasivo | aplica a | subcontratas de construcción"
+  - "Modelo 303 | declara | IVA trimestral | procedimiento"
+  - "Modelo 111 | declara | retenciones IRPF | procedimiento"
+  - "Modelo 130 | declara | pago fraccionado de autónomos | procedimiento"
+  - "Trimestre fiscal | se presenta | del 1 al 20 del mes siguiente | procedimiento"
+  - "Factura | requiere | número correlativo | procedimiento"
+  - "Factura | requiere | NIF de emisor y receptor | procedimiento"
+  - "Verifactu | exige | registro de facturación inalterable"
+  - "Factura electrónica | es obligatoria entre | empresas y profesionales"
+  - "Factura impagada | se reclama con | requerimiento fehaciente | procedimiento"

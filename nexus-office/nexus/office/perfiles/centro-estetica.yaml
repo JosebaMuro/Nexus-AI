@@ -1,0 +1,10 @@
+id: centro-estetica
+name: "Centro de estética"
+sector: "Servicios personales · estética y belleza"
+assistant_name: "Oficina Estética"
+icon: "❀"
+description: "Centro de estética con cabinas y cita previa: tratamientos, bonos, fichas y consentimientos, agenda y ventas."
+agents: [esteticista, agenda, recepcion, compras, administracion, comercial, calidad]
+coordinator:
+  context: |
+    La empresa es un centro de estética: tratamientos faciales y corporales, depilación, manicura, pedicura, pestañas y cejas con cita previa; vende bonos y cosmética, guarda fichas de cliente y consentimientos informados (datos de salud, RGPD) y no realiza tratamientos médicos, que corresponden a un médico en centro sanitario autorizado.

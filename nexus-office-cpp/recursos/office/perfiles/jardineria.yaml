@@ -1,0 +1,10 @@
+id: jardineria
+name: "Jardinería y paisajismo"
+sector: "Servicios · diseño y mantenimiento de jardines"
+assistant_name: "Oficina Jardinería"
+icon: "❦"
+description: "Empresa de diseño, ejecución y mantenimiento de jardines, riego automático y tratamientos fitosanitarios."
+agents: [jardinero, fontanero, recepcion, presupuestos, administracion, compras, prl]
+coordinator:
+  context: |
+    La empresa diseña, ejecuta y mantiene jardines de particulares, comunidades y empresas: podas, césped, riego automático y tratamientos fitosanitarios con personal acreditado; gran parte de su trabajo son contratos de mantenimiento periódicos.

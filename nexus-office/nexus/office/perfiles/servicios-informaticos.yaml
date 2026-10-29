@@ -1,0 +1,10 @@
+id: servicios-informaticos
+name: "Servicios informáticos"
+sector: "Tecnología · soporte, mantenimiento y ciberseguridad para empresas"
+assistant_name: "Oficina Informática"
+icon: "⌨"
+description: "Empresa de servicios informáticos: incidencias y tickets, contratos de mantenimiento, redes, copias, ciberseguridad y venta de equipos."
+agents: [informatico, proteccion-datos, recepcion, agenda, presupuestos, compras, administracion]
+coordinator:
+  context: |
+    La empresa es un servicio técnico informático que da soporte y mantenimiento a pymes y particulares: atiende incidencias en remoto y en visita, gestiona contratos de mantenimiento con SLA, instala redes, servidores y puestos, copias de seguridad y ciberseguridad, migraciones a la nube y vende y repara equipos. Al acceder a los sistemas de sus clientes actúa como encargado del tratamiento.

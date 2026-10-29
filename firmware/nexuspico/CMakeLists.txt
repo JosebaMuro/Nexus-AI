@@ -1,0 +1,23 @@
+# NexusPico para el Pico W con el Pico SDK (C++17, sin MicroPython):
+#   export PICO_SDK_PATH=/ruta/al/pico-sdk        (2.1.0, con sus submodulos)
+#   cmake -S firmware/nexuspico -B build-pico && cmake --build build-pico -j
+#   -> build-pico/nexuspico.uf2 (se copia a la unidad RPI-RP2)
+cmake_minimum_required(VERSION 3.13)
+set(PICO_BOARD pico_w CACHE STRING "placa")
+if(NOT PICO_SDK_PATH)
+  set(PICO_SDK_PATH $ENV{PICO_SDK_PATH} CACHE PATH "ruta al pico-sdk")
+endif()
+include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+project(nexuspico C CXX ASM)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+pico_sdk_init()
+
+add_executable(nexuspico nexuspico.cpp third_party/dhcpserver/dhcpserver.c)
+target_include_directories(nexuspico PRIVATE ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/third_party/dhcpserver)
+target_compile_options(nexuspico PRIVATE -Wall $<$<COMPILE_LANGUAGE:CXX>:-Wno-psabi>)
+target_link_libraries(nexuspico pico_stdlib pico_cyw43_arch_lwip_poll pico_flash hardware_spi hardware_flash hardware_watchdog)
+pico_enable_stdio_usb(nexuspico 1)
+pico_enable_stdio_uart(nexuspico 0)
+pico_set_program_name(nexuspico "NexusPico")
+pico_add_extra_outputs(nexuspico)

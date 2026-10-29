@@ -1,0 +1,5 @@
+nodedef>name VARCHAR,label VARCHAR
+n1,Uno
+n2,Dos
+edgedef>node1 VARCHAR,node2 VARCHAR,weight DOUBLE
+n1,n2,2.0

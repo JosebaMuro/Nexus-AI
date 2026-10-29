@@ -1,0 +1,10 @@
+id: optica
+name: "Óptica"
+sector: "Salud · establecimiento de óptica y optometría"
+assistant_name: "Oficina Óptica"
+icon: "◎"
+description: "Óptica con gabinete y tienda: citas de revisión, encargos al laboratorio, garantías, ventas y stock de monturas."
+agents: [optico, agenda, dependiente, compras, administracion, comercial, calidad]
+coordinator:
+  context: |
+    La empresa es una óptica, establecimiento sanitario con óptico-optometrista colegiado al frente: hace revisiones visuales con cita, vende gafas graduadas, de sol y lentes de contacto, encarga lentes al laboratorio, gestiona garantías y stock de monturas. Las decisiones clínicas son siempre del óptico-optometrista; la oficina da soporte de gestión.

@@ -1,0 +1,10 @@
+id: agricultura
+name: "Explotación agrícola"
+sector: "Agro · agricultura, cultivos y cooperativas"
+assistant_name: "Oficina Agrícola"
+icon: "❦"
+description: "Explotación agrícola o cooperativa: cultivos de secano y regadío, tratamientos, cuaderno de explotación, PAC, maquinaria y venta de la cosecha."
+agents: [agricultor, mecanico, medioambiente, administracion, compras, comercial, prl]
+coordinator:
+  context: |
+    La empresa es una explotación agrícola (o una pequeña cooperativa) con cultivos de secano y regadío: planifica siembras, riegos, abonados y tratamientos, lleva el cuaderno digital de explotación, presenta la solicitud única de la PAC, mantiene tractores y aperos, compra insumos y vende la cosecha.

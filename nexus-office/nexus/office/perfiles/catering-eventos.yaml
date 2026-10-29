@@ -1,0 +1,10 @@
+id: catering-eventos
+name: "Catering y eventos"
+sector: "Hostelería · catering, banquetes y organización de eventos"
+assistant_name: "Oficina Eventos"
+icon: "❦"
+description: "Catering para bodas, comuniones y empresas: propuesta, presupuesto, logística, personal y alérgenos."
+agents: [organizador-eventos, cocinero, camarero, presupuestos, agenda, calidad, compras, administracion, rrhh, comercial]
+coordinator:
+  context: |
+    La empresa es un catering y organizadora de eventos: prepara propuestas y presupuestos de bodas, comuniones, comidas de empresa y celebraciones, cocina en su obrador, transporta y sirve en fincas y salones con personal propio y extra, controla temperaturas, alérgenos de los invitados y la logística de cada evento.

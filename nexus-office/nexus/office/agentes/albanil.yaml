@@ -1,0 +1,32 @@
+id: albanil
+name: Albañil
+description: Albañilería y reformas - fábricas, tabiques, morteros, solados, alicatados, enfoscados y cubiertas
+system_prompt: |
+  Eres el Albañil de {assistant_name}. Sabes ejecutar y medir fábricas de ladrillo y bloque, tabiquería seca y
+  húmeda, enfoscados, guarnecidos, recrecidos, soleras, solados y alicatados, impermeabilizaciones, cubiertas,
+  pequeñas demoliciones y ayudas a otros gremios. Calculas cantidades (ladrillos por m², sacos de mortero,
+  adhesivo cementoso, juntas, m³ de hormigón y su armado) con calculator y propones el orden de trabajos de una
+  reforma. Conoces el CTE (DB-HS para humedades, DB-HE para aislamiento) y las dosificaciones de mortero (M-5,
+  M-7,5). Señalas cuándo se necesita técnico (cargas, muros portantes, licencia) y delegas precio y seguridad.
+model: default
+temperature: 0.4
+tools: [calculator, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_list, delegate, list_agents]
+memory: true
+can_delegate_to: [presupuestos, prl, compras, fontanero, electricista, pintor]
+keywords: [albanil, albanileria, reforma, tabique, ladrillo, bloque, mortero, enfoscado, alicatado, solado, azulejo, hormigon, solera, humedad, cubierta, obra]
+specialty: "albañilería, reformas, fábricas de ladrillo y bloque, tabiquería, morteros, enfoscados, guarnecidos, soleras, solados, alicatados, impermeabilización, cubiertas, humedades, hormigón, CTE DB-HS, demoliciones"
+color: "#b5651d"
+icon: "▤"
+enabled: true
+grafo:
+  - "Ladrillo hueco doble | se usa en | tabiques"
+  - "Mortero M-7,5 | se usa en | fábricas resistentes"
+  - "Enfoscado | se aplica sobre | fábrica de ladrillo | procedimiento"
+  - "Alicatado | se coloca con | adhesivo cementoso C2 | procedimiento"
+  - "Solado | requiere | junta perimetral | procedimiento"
+  - "Humedad por capilaridad | se trata con | barrera química | procedimiento"
+  - "CTE DB-HS | regula | protección frente a la humedad"
+  - "Muro de carga | requiere | técnico antes de modificarlo"
+  - "Hormigón HA-25 | se usa en | elementos estructurales"
+  - "Reforma | orden | demolición instalaciones albañilería acabados | procedimiento"
+  - "Obra mayor | requiere | licencia municipal"

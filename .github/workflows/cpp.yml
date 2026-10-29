@@ -1,0 +1,145 @@
+name: Nexus-Office C++ (compilar y probar)
+
+# Edicion C++ de Nexus-Office (nexus-office-cpp/): compila y pasa las pruebas en cada sistema nativo y prueba la
+# interfaz web en Chromium. Cada compilacion deja la carpeta instalada (ejecutable + nexus/) como artefacto
+# «cpp-<plataforma>» y la herramienta de construccion como «construir-<plataforma>», que usa cpp-entrega.yml.
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    paths:
+      - nexus-office-cpp/**
+      - .github/workflows/cpp.yml
+
+permissions:
+  contents: read
+
+jobs:
+  compilar:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux en 22.04 (glibc 2.35): funciona tambien en Debian 12 y Raspberry Pi OS de 64 bits
+          - { target: linux-x86_64, os: ubuntu-22.04 }
+          - { target: linux-aarch64, os: ubuntu-22.04-arm }
+          - { target: macos-arm64, os: macos-latest }
+          - { target: macos-x86_64, os: macos-15-intel }
+          - { target: windows-x64, os: windows-latest }
+          - { target: windows-arm64, os: windows-11-arm }
+    runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilador (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq g++-12 >/dev/null
+          echo "CC=gcc-12" >> "$GITHUB_ENV" && echo "CXX=g++-12" >> "$GITHUB_ENV"
+      - name: Configurar
+        shell: bash
+        run: cmake -S nexus-office-cpp -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Compilar
+        shell: bash
+        run: cmake --build build --config Release --parallel 4
+      - name: Pruebas
+        shell: bash
+        env:
+          NEXUS_ONLINE_TESTS: "1"   # cotizaciones reales de la bolsa con la pila TLS de cada sistema
+        run: ctest --test-dir build -C Release --output-on-failure --timeout 900
+      - name: Instalar en una carpeta
+        shell: bash
+        run: |
+          cmake --install build --config Release --prefix out/Nexus-Office --strip
+          ls -la out/Nexus-Office
+          EXE=out/Nexus-Office/nexus-office; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
+          "$EXE" --version
+          "$EXE" detect | head -40
+      - name: Motores LiteRT-LM y ONNX Runtime GenAI con sus bibliotecas reales
+        if: matrix.target != 'macos-x86_64' && matrix.target != 'windows-arm64'
+        shell: bash
+        run: |
+          # carga cada biblioteca oficial y abre un modelo falso: tiene que fallar al abrir el modelo (codigo 4),
+          # no al cargar la biblioteca ni por una version de la API que no casa
+          EXE=$PWD/out/Nexus-Office/nexus-office; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
+          whl() { curl -fsSL "https://pypi.org/pypi/$1/json" | jq -r --arg p "$2" '[.urls[] | select(.filename | test($p))][0].url'; }
+          case "${{ matrix.target }}" in
+            linux-x86_64) LP='manylinux.*_x86_64'; OP='cp313-cp313-manylinux.*_x86_64' ;;
+            linux-aarch64) LP='manylinux.*_aarch64'; OP='cp313-cp313-manylinux.*_aarch64' ;;
+            macos-arm64) LP='macosx.*arm64'; OP='cp313-cp313-macosx.*arm64' ;;
+            windows-x64) LP='win_amd64'; OP='cp313-cp313-win_amd64' ;;
+          esac
+          mkdir -p mot/lt mot/ox mot/m && echo no > mot/m/falso.litertlm && echo '{"model":{"type":"phi3"}}' > mot/m/genai_config.json
+          curl -fsSL -o mot/lt.whl "$(whl litert-lm-api "$LP")" && unzip -q -o mot/lt.whl -d mot/lt
+          curl -fsSL -o mot/og.whl "$(whl onnxruntime-genai "$OP")" && unzip -q -o mot/og.whl -d mot/ox
+          curl -fsSL -o mot/or.whl "$(whl onnxruntime "$OP")" && unzip -q -o mot/or.whl -d mot/ox
+          probar() {
+            local m=$1 lib=$2 modelo=$3
+            set +e; "$EXE" motor "$m" --modelo "$modelo" --puerto 18999 --lib "$lib" > mot/$m.txt 2>&1; local rc=$?; set -e
+            cat mot/$m.txt
+            if [ $rc -ne 4 ] || grep -qE "no se pudo cargar|incompatible" mot/$m.txt; then echo "::error::$m: codigo $rc"; return 1; fi
+          }
+          LT=$(find mot/lt -type f \( -name 'liblitert-lm.so' -o -name 'litert-lm.dll' -o -name 'liblitert-lm.dylib' \) | head -1)
+          probar litert "$LT" mot/m/falso.litertlm
+          OG=$(find mot/ox -type f \( -name 'libonnxruntime-genai.so' -o -name 'onnxruntime-genai.dll' -o -name 'libonnxruntime-genai.dylib' \) | head -1)
+          # junto a su libonnxruntime, como en los instaladores
+          for f in $(find mot/ox -path '*capi*' -type f \( -name 'libonnxruntime.so*' -o -name 'onnxruntime.dll' -o -name 'libonnxruntime*.dylib' \)); do cp "$f" "$(dirname "$OG")/"; done
+          for f in "$(dirname "$OG")"/libonnxruntime.so.*; do [ -e "$f" ] && cp "$f" "$(dirname "$OG")/libonnxruntime.so.1"; done
+          for f in "$(dirname "$OG")"/libonnxruntime.*.dylib; do [ -e "$f" ] && cp "$f" "$(dirname "$OG")/libonnxruntime.dylib"; done
+          export ORT_LIB_PATH=$(ls "$(dirname "$OG")"/libonnxruntime.so.1 "$(dirname "$OG")"/libonnxruntime.dylib 2>/dev/null | head -1)
+          probar onnx "$OG" mot/m
+      - name: Herramienta de construccion
+        shell: bash
+        run: |
+          mkdir -p construir
+          f=$(find build -type f \( -name nexus-construir -o -name nexus-construir.exe \) | head -1)
+          cp "$f" construir/
+          construir/nexus-construir* --version
+      - name: Datos y manuales con nexus-construir
+        if: matrix.target == 'linux-x86_64'
+        run: |
+          set -e
+          C=$PWD/construir/nexus-construir
+          # src/gen/data.cpp debe estar al dia con recursos/datos/*.json
+          (cd nexus-office-cpp && "$C" datos) && git diff --exit-code nexus-office-cpp/src/gen/data.cpp
+          NEXUS_CHROMIUM=$(command -v google-chrome || command -v chromium) "$C" pdf manuales
+          ls -la manuales && test "$(head -c 5 manuales/Manual-de-usuario.pdf)" = "%PDF-"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpp-${{ matrix.target }}
+          path: out/
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: construir-${{ matrix.target }}
+          path: construir/
+          retention-days: 7
+
+  interfaz:
+    needs: compilar
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cpp-linux-x86_64
+          path: cpp
+      - name: Arrancar Nexus-Office
+        run: |
+          chmod +x cpp/Nexus-Office/nexus-office
+          NEXUS_DATA_DIR=$RUNNER_TEMP/cpp nohup cpp/Nexus-Office/nexus-office run --no-browser --port 8790 > cpp.log 2>&1 &
+          for i in $(seq 60); do curl -sf localhost:8790/api/ping && break; sleep 2; done
+      - name: Interfaz web en Chromium
+        run: |
+          npm i --no-save playwright@1.48.2 >/dev/null && npx playwright install --with-deps chromium >/dev/null
+          mkdir -p capturas && node nexus-office-cpp/tests/ui_smoke.js http://127.0.0.1:8790 capturas
+      - name: Registros
+        if: always()
+        run: tail -50 cpp.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-interfaz
+          path: capturas/
+          retention-days: 7
