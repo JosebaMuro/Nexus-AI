@@ -539,14 +539,15 @@ std::string ModelManager::download_recommended(const std::string& rec_id) {
     // modelos de imagen GGUF de solo difusion: VAE y codificadores de texto, que suelen estar en otros repositorios
     json comps = json::object();
     size_t n_main = files.size();
-    for (auto& [k, v] : rec.value("componentes", json::object()).items()) {
+    const json componentes = rec.value("componentes", json::object());   // items() de un temporal queda colgando
+    for (auto& [k, v] : componentes.items()) {
       fs::path d = dest("huggingface", jstr(v, "repo"), jstr(v, "file"));
       files.push_back({hf->download_url(jstr(v, "repo"), jstr(v, "file")), d, {}, (uint64_t)(jnum(v.value("size_mb", json(0))) * 1048576)});
       comps[k] = S(d);
     }
     for (size_t i = 0; i < n_main; ++i) {
       double comp_mb = 0;
-      for (auto& [k, v] : rec.value("componentes", json::object()).items()) comp_mb += jnum(v.value("size_mb", json(0)));
+      for (auto& [k, v] : componentes.items()) comp_mb += jnum(v.value("size_mb", json(0)));
       files[i].size = (uint64_t)(std::max(1.0, jnum(rec["size_mb"]) - comp_mb) * 1048576 / n_main);
     }
     fs::path main = files[0].dest;

@@ -454,7 +454,8 @@ void CoopNode::handle(const json& msg) {
       if (!s_.config.flag("coop.allow_remote_inference", true)) throw PermissionError("este nodo no ofrece inferencia remota");
       notify({{"type", "remote_use"}, {"from", who()}, {"what", "LLM"}});
       json opts = json::object();
-      for (auto& [k, v] : body.value("opts", json::object()).items())
+      const json req_opts = body.value("opts", json::object());   // items() de un temporal queda colgando
+      for (auto& [k, v] : req_opts.items())
         if (k == "temperature" || k == "max_tokens") opts[k] = v;
       json messages = body.value("messages", json::array());
       respond_stream(msg, [this, opts, messages](const std::function<void(const std::string&)>& out) {
