@@ -10,6 +10,14 @@
 - El agente autónomo pide a esa IA que revise cada compra (comprar o esperar, con su motivo en el diario); se apaga
   con «La IA financiera revisa cada compra» o `bolsa.agente.ia = false`.
 
+### El LLM y el modelo de imagen se entienden
+- Comparten la GPU: desde la 2.6 el LLM llenaba la VRAM y el modelo de imagen se quedaba sin memoria (minutos en la
+  CPU o imagen sin IA). Ahora el prompt se prepara con el LLM antes y, si los dos no caben, el LLM deja la GPU
+  mientras se genera la imagen y vuelve a cargarse después; si caben, siguen los dos. Si aún así falta memoria, se
+  repite en la GPU antes de pasar a la CPU (`media.gpu_compartida`: auto, siempre o no).
+- El LLM que usan Z-Image, Qwen-Image y FLUX.2 para leer el prompt se comprueba en la cabecera GGUF (familia y
+  tamaño): un LLM del chat que no encaja ya no se usa, y el aviso dice cuál descargar.
+
 ## Nexus-Office 2.6.0-cpp
 
 ### Velocidad con GPU dedicada y con NPU
