@@ -127,11 +127,12 @@ std::pair<std::string, const GPU*> choose_accelerator(const HardwareInfo& hw, co
   const GPU* gpu = best_gpu(hw);
   if (!ov.empty()) return {ov, gpu};
   const json& rt = hw.runtimes;
-  if (!gpu) return {"cpu", nullptr};
-  if (android()) {
+  if (android()) {   // antes de mirar la GPU: la sonda puede ver solo la NPU (HTP0) sin nombre de GPU
     std::string b = rt.contains("android_accel") ? jstr(rt["android_accel"], "gpu_backend") : "";
+    if (!gpu && b != "hexagon") return {"cpu", nullptr};
     return {b.empty() ? "cpu" : b, gpu};
   }
+  if (!gpu) return {"cpu", nullptr};
   if (gpu->vendor == "nvidia") {
     // VRAM 0 = tarjeta vista en Linux sin nvidia-smi (nouveau/NVK o driver sin instalar): CUDA no funcionaria,
     // pero Vulkan si si el llama-server de Vulkan la ve (Mesa NVK)
@@ -141,6 +142,10 @@ std::pair<std::string, const GPU*> choose_accelerator(const HardwareInfo& hw, co
   if (gpu->vendor == "apple") return {"metal", gpu};
   if (gpu->integrated) {
     if (gpu->vendor == "intel" && has_str(rt.value("openvino_devices", json()), "GPU")) return {"openvino", gpu};
+    // APU de AMD con graficos RDNA (Radeon 680M/780M/890M, Strix Halo 8050S/8060S): con Vulkan el modelo va mas
+    // rapido que en la CPU si hay memoria compartida de sobra
+    static const Rx RDNA_APU(R"(\b(6[68]0M|7[48]0M|8[4-9]0M|80[4-6]0S|Radeon\s*8\d{2}0S))", Rx::I);
+    if (gpu->vendor == "amd" && hw.ram_gb >= 16 && RDNA_APU.test(gpu->name) && vulkan_ok(hw, *gpu)) return {"vulkan", gpu};
     return {"cpu", gpu};
   }
   if (gpu->vendor == "amd") return {sys::is_linux() ? "rocm" : "vulkan", gpu};
@@ -158,7 +163,7 @@ static double tier_at_most(double b) {
 json build_profile(const HardwareInfo& hw, const std::string& ov) {
   auto [acc, gpu] = choose_accelerator(hw, ov);
   static const std::set<std::string> OFF = {"cuda", "rocm", "vulkan", "metal", "xpu", "opencl", "hexagon"};
-  bool gpu_offload = OFF.count(acc) && gpu != nullptr;
+  bool gpu_offload = OFF.count(acc) && (gpu != nullptr || acc == "hexagon");
   double ram = hw.ram_gb;
   double cpu_budget = std::max(0.5, std::min(ram * 0.5, ram - 3.0));
   double vram_gpu = gpu ? gpu->vram_gb : 0.0;
@@ -215,6 +220,9 @@ json build_profile(const HardwareInfo& hw, const std::string& ov) {
   }
   std::string wheel = acc == "cuda" ? "cu124" : acc == "metal" ? "metal" : acc == "vulkan" || acc == "xpu" ? "vulkan"
                       : acc == "rocm" ? "rocm" : acc == "opencl" ? "opencl" : "cpu";
+  // cache KV en 8 bits (la mitad de memoria, perdida inapreciable) cuando la memoria va justa: moviles, equipos de
+  // 8 GB o menos y GPU de poca VRAM
+  bool tight = android() || ram < 12 || (gpu_offload && gpu && !gpu->integrated && vram_gpu < 8);
   json llm = {{"max_model_b", pynum(max_b)},
               {"recommended_model_b", pynum(recommended_b)},
               {"quant", budget < 24 ? "Q4_K_M" : "Q5_K_M"},
@@ -228,6 +236,9 @@ json build_profile(const HardwareInfo& hw, const std::string& ov) {
   if (android())
     llm["device"] = gpu_offload && hw.runtimes.contains("android_accel") ? jstr(hw.runtimes["android_accel"], "gpu_device")
                                                                           : "";
+  // hilos del procesado del prompt: todos los logicos (la generacion va mejor solo con los fisicos)
+  llm["n_threads_batch"] = android() ? n_threads : std::max(n_threads, hw.cores_logical);
+  llm["kv_quant"] = tight ? "q8_0" : "";
   llm["llamacpp_wheel"] = wheel;
   llm["flash_attn"] = acc == "cuda" || acc == "metal";
   std::string hint;
@@ -238,9 +249,16 @@ json build_profile(const HardwareInfo& hw, const std::string& ov) {
            (gpu_offload ? "GPU" : "CPU");
   else hint = "Instala el runtime '" + npu->runtime_hint + "' para usar la NPU";
   std::string stt_model = acc == "cuda" ? (vram >= 4 ? "small" : "base") : (phys >= 4 ? "base" : "tiny");
+  std::string soc;
+  if (android() && hw.runtimes.contains("android_accel") && hw.runtimes["android_accel"].is_object()) {
+    json sc = hw.runtimes["android_accel"].value("soc", json::object());
+    if (sc.is_object()) soc = lower(jstr(sc, "model") + " " + jstr(sc, "platform") + " " + jstr(sc, "name"));
+  }
   return {
       {"id", cat(acc, "-", gpu ? gpu->vendor : "cpu", "-", gpu && gpu->integrated ? "igpu" : gpu ? "dgpu" : "only")},
       {"accelerator", acc},
+      {"compute_capability", gpu ? gpu->compute_capability : ""},
+      {"gpu_present", gpu != nullptr},
       {"device_name", gpu && acc != "cpu" ? gpu->name : hw.cpu_name},
       {"vram_gb", vram},
       {"ram_gb", ram},
@@ -265,18 +283,21 @@ json build_profile(const HardwareInfo& hw, const std::string& ov) {
         {"runtime", npu ? npu->runtime_hint : ""},
         {"ready", npu_ready || llm_npu},
         {"offload", npu_ready ? json::array({"embeddings", "stt"}) : llm_npu ? json::array({"llm"}) : json::array()},
-        {"hint", hint}}},
+        {"hint", hint},
+        {"soc", soc}}},
   };
 }
 
 // ---------------------------------------------------------------- selector de inicio
-const std::vector<std::string> ENGINES = {"auto", "llamaserver", "llamacpp"};
+const std::vector<std::string> ENGINES = {"auto", "llamaserver", "llamacpp", "litert", "onnx"};
 const std::vector<std::string> ACCELS = {"auto", "cpu", "gpu", "npu"};
 
 std::string engine_label(const std::string& e) {
   if (e == "auto") return "Automático";
   if (e == "llamaserver") return "llama-server (llama.cpp, proceso aparte)";
   if (e == "llamacpp") return "llama.cpp integrado (llama-cpp-python)";
+  if (e == "litert") return "LiteRT-LM (Google: Pixel/Tensor, NPU Snapdragon y MediaTek, modelos .litertlm)";
+  if (e == "onnx") return "ONNX Runtime GenAI (DirectML y NPU en Windows, modelos ONNX)";
   return e;
 }
 
@@ -455,6 +476,9 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
   const json& base = profile["llm"];
   json llm = base;
   json overrides = state.value("overrides", json::object());
+  // con todas las capas pedidas (-1) llama.cpp ya mete en la VRAM las que caben (-ngl auto): un numero fijo que dejo
+  // una version anterior (28 o 24 capas tras un pico de VRAM) sacaba capas a la CPU para siempre y no se recuperaba
+  if (jnum(base.value("gpu_layers", json(0))) == -1) overrides.erase("gpu_layers");
   for (auto it = overrides.begin(); it != overrides.end(); ++it) llm[it.key()] = it.value();
   auto I = [&](const char* k) { return (int)jnum(llm[k]); };
   auto B = [&](const char* k) { return (int)jnum(base[k]); };
@@ -482,8 +506,7 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
     llm["n_ctx"] = std::max(std::min(MIN_CTX, B("n_ctx")), I("n_ctx") / 2);
     llm["n_batch"] = std::max(std::min(MIN_BATCH, B("n_batch")), I("n_batch") / 2);
     int gl = I("gpu_layers");
-    if (gl != 0 && gl != -1) llm["gpu_layers"] = (int)(gl * 0.75);
-    else if (gl == -1 && last.is_object() && truthy(last.value("oom_errors", json(0)))) llm["gpu_layers"] = 24;
+    if (gl != 0 && gl != -1) llm["gpu_layers"] = (int)(gl * 0.75);   // con -1, llama.cpp ajusta las capas solo
     reasons.push_back("Cierre inesperado o falta de memoria en la sesion anterior: contexto y lote reducidos");
   } else if (last.is_object()) {
     double ram = L(last, "peak_ram_pct"), vram = L(last, "peak_vram_pct");
@@ -497,13 +520,15 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
       llm["n_batch"] = std::min(B("n_batch"), I("n_batch") * 2);
       reasons.push_back(cat("Sesion estable (RAM ", fnum(ram, 0), "%): recuperando contexto ", I("n_ctx"), " y lote ",
                             I("n_batch")));
-    } else if (ram < 65 && L(last, "llm_calls") >= 3 && I("n_ctx") < B("max_ctx")) {
+    } else if (ram < 65 && L(last, "llm_calls") >= 3 && I("n_ctx") < B("max_ctx") &&
+               (I("gpu_layers") == 0 || !truthy(profile.value("vram_gb", json(0))) || (vram > 0 && vram < 75))) {
+      // con GPU dedicada la cache KV va en la VRAM: crecer el contexto mirando solo la RAM la desbordaba
       llm["n_ctx"] = std::min(B("max_ctx"), (int)(I("n_ctx") * 1.5) / 256 * 256);
       reasons.push_back(cat("Holgura de RAM (", fnum(ram, 0), "%): contexto ampliado a ", I("n_ctx")));
     }
     int gl = I("gpu_layers");
-    if (vram > 95 && gl != 0) {
-      llm["gpu_layers"] = gl == -1 ? 28 : std::max(0, (int)(gl * 0.8));
+    if (vram > 95 && gl > 0) {
+      llm["gpu_layers"] = std::max(0, (int)(gl * 0.8));
       reasons.push_back(cat("VRAM al ", fnum(vram, 0), "%: menos capas en GPU (", I("gpu_layers"), ")"));
     } else if (vram > 0 && vram < 70 && gl > 0) {
       llm["gpu_layers"] = (int)(gl * 1.25) + 1;

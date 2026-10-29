@@ -16,6 +16,7 @@
 #include "gen/data.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
+#include "llm/motores.h"
 #include "hardware/hw_profiles.h"
 #include "media/avatares.h"
 #include "rag/browser.h"
@@ -452,6 +453,7 @@ void register_routes(App& app) {
     s.hw = hw::detect(s.config.str("llm.ollama_url", "http://127.0.0.1:11434"));
     hw::save(s.hw);
     s.profile = hw::build_profile(s.hw, s.config.str("hardware.profile_override"));
+    hw::profiles::aplicar_al_perfil(s);
     s.llm->rebuild();
     return json{{"hardware", s.hw.to_json()}, {"profile", s.profile}};
   }, true);
@@ -462,7 +464,8 @@ void register_routes(App& app) {
   app.post("/api/accel", [](Ctx& c) -> Out {
     json res;
     try {
-      res = sys2::accel_apply(c.app.S(), c.bs("engine", "auto"), c.bs("accel", "auto"), c.bb("remember", true));
+      res = sys2::accel_apply(c.app.S(), c.bs("engine", "auto"), c.bs("accel", "auto"), c.bb("remember", true),
+                              c.b("capas", nullptr));
     } catch (const std::invalid_argument& e) {
       throw HttpErr(400, e.what());
     }
@@ -592,6 +595,7 @@ void register_routes(App& app) {
       bundled[rt] = runtimes::bundled_variants(rt);
       recommended[rt] = runtimes::candidates(s.profile, rt);
     }
+    json motores_rt = motores::estado();
     std::string variant;
     if (auto b = std::dynamic_pointer_cast<llm::LlamaServerBackend>(s.llm->backend("llamaserver"))) variant = b->variant;
     return json{{"installed", s.runtimes->installed()},
@@ -599,7 +603,8 @@ void register_routes(App& app) {
                 {"bundled", bundled},
                 {"recommended", recommended},
                 {"descriptions", {{"llama", "LLM / multimodal (llama-server)"}, {"sd", "Generacion de imagen (sd.cpp)"}}},
-                {"active", {{"llama", variant}}}};
+                {"active", {{"llama", variant}}},
+                {"motores", motores_rt}};
   });
 
   app.post("/api/runtimes/install", [](Ctx& c) -> Out {
@@ -620,12 +625,53 @@ void register_routes(App& app) {
     return json{{"started", true}};
   });
 
+  // paquete de runtimes sin conexion (Nexus-Office-runtime-*.zip de la Release) ya copiado al equipo
+  app.post("/api/runtimes/importar", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    json v;
+    try {
+      v = s.runtimes->import_pack(P(c.bs("ruta")));
+    } catch (const std::exception& e) {
+      throw HttpErr(400, e.what());
+    }
+    s.llm->rebuild();
+    return json{{"importados", v}};
+  }, true);
+
   // ------------------------------------------------------------------ sesiones / memoria
   app.get("/api/sessions", [](Ctx& c) -> Out { return json(c.app.S().memory->sessions()); });
-  app.get("/api/sessions/{sid}", [](Ctx& c) -> Out { return json(c.app.S().memory->history(c.p("sid"), 200)); });
+  app.get("/api/sessions/{sid}", [](Ctx& c) -> Out { return json(c.app.S().memory->history(c.p("sid"), 1000)); });
   app.del("/api/sessions/{sid}", [](Ctx& c) -> Out {
     c.app.S().memory->delete_session(c.p("sid"));
+    c.app.S().hilo->olvidar(c.p("sid"));
     return json{{"ok", true}};
+  });
+  // hilo de la conversacion: resumen progresivo y notas fijas del proyecto
+  app.get("/api/sessions/{sid}/hilo", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    json st = s.hilo->estado(c.p("sid"));
+    st["n_ctx"] = s.llm->llm_profile().value("n_ctx", json());
+    return st;
+  });
+  app.put("/api/sessions/{sid}/hilo", [](Ctx& c) -> Out {
+    if (!c.body.is_object()) throw HttpErr(422, "Se esperaba un objeto JSON");
+    json cambios = json::object();
+    for (const char* k : {"notas", "resumen"})
+      if (c.body.contains(k)) cambios[k] = uleft(c.bs(k), 20000);
+    Services& s = c.app.S();
+    s.memory->ensure_session(c.p("sid"));
+    s.hilo->guardar(c.p("sid"), cambios);
+    return s.hilo->estado(c.p("sid"));
+  });
+  app.post("/api/sessions/{sid}/hilo/resumir", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    int n_ctx = (int)jnum(s.llm->llm_profile().value("n_ctx", json(4096)), 4096);
+    int budget = std::max(512, n_ctx * 45 / 100);
+    bool todo = truthy(c.b("todo", false));   // todo menos los dos ultimos mensajes
+    int n = s.hilo->plegar(c.p("sid"), todo ? 0 : budget / 2, budget * 3 / 10, s.hilo->llm_complete);
+    json st = s.hilo->estado(c.p("sid"));
+    st["plegados_ahora"] = n;
+    return st;
   });
 
   app.post("/api/feedback", [](Ctx& c) -> Out {

@@ -1,5 +1,66 @@
 # Cambios
 
+## Nexus-Office 2.6.0-cpp
+
+### Velocidad con GPU dedicada y con NPU
+- llama-server arranca con `-ngl auto`: llama.cpp pone en la VRAM todas las capas que caben con el contexto. Con 999
+  fijo, un modelo que no cabía hacía que CUDA fallase y todo fuera a la CPU (Linux) o que la VRAM se desbordase a
+  la RAM compartida (Windows). Con un llama-server antiguo se vuelve a 999 solo.
+- El autoajuste ya no deja el modelo en 28 o 24 capas para siempre tras un pico de VRAM, descarta ese valor si lo
+  guardó una versión anterior y no agranda el contexto si la VRAM va llena.
+- Si la GPU no arranca, el paso a la CPU se recuerda en la sesión (antes se recargaba el modelo dos veces en cada
+  respuesta).
+- Móvil: un solo slot de llama-server con GPU o NPU (todo el contexto para una conversación) y NPU Hexagon usable
+  aunque la sonda no dé nombre de GPU.
+- ARM: se cuentan todos los núcleos (un Snapdragon X de 12 núcleos se veía como de 4).
+
+### Capas en la GPU / NPU
+- Nueva opción en *MOTOR Y CPU/GPU/NPU* (y en *Ajustes → Administración*): automático, todas, ninguna o un número de
+  capas. Se guarda en `hardware.capas` y la respeta también el autoajuste del móvil.
+
+## Nexus-Office 2.5.0-cpp
+
+### Motores para cada acelerador
+- **LiteRT-LM** (Google): modelos `.litertlm` en CPU, GPU y NPU (Google Tensor, Snapdragon 8 Elite, Dimensity, Intel).
+  Va también en la APK autónoma.
+- **ONNX Runtime GenAI** (Microsoft): modelos ONNX con DirectML (cualquier GPU en Windows), QNN (NPU de los
+  Snapdragon X en Windows ARM), OpenVINO, CUDA y CPU.
+- Cada motor corre en un proceso aparte y prueba NPU → GPU → CPU; se elige solo por el formato del modelo.
+
+### Runtimes por fabricante
+- llama.cpp con **CUDA 13** para las RTX 50, **ROCm** (AMD), **SYCL** (Intel Arc), **OpenCL Adreno** (Snapdragon X
+  en Windows) y el paquete **Snapdragon** de Linux ARM (CPU, Adreno y Hexagon). Los nombres de las Releases oficiales
+  de 2026 ya se reconocen al descargar.
+- Las variantes pesadas van en paquetes aparte de la Release (`Nexus-Office-runtime-*.zip`) que se importan sin
+  conexión.
+- Las APU de AMD con Radeon 680M/780M/890M o Strix Halo usan Vulkan con 16 GB o más.
+
+### Imagen con GGUF
+- Los GGUF de **Flux, Z-Image, SD3, Qwen-Image, Chroma**... se reconocen como modelos de imagen. Si son solo el
+  modelo de difusión, Nexus-Office busca sus piezas (VAE, clip_l, clip_g, T5-XXL o el LLM codificador) y dice cuál
+  falta. En *Modelos* hay **Z-Image-Turbo** y **FLUX.1-schnell** en GGUF que se descargan con todas sus piezas.
+- **sd-server** mantiene el modelo cargado entre imágenes y stable-diffusion.cpp se actualiza en los instaladores.
+- Ajustes según la VRAM: atención rápida, codificadores en la CPU, pesos por partes y VAE por teselas.
+- Si la GPU no consigue generar la imagen (por ejemplo, Metal en una máquina virtual), se reintenta en la CPU
+  antes de recurrir a la imagen compuesta sin IA.
+
+### Rendimiento
+- Caché KV cuantizada (q8_0) cuando el modelo va justo de memoria, con vuelta atrás si la build no lo admite.
+- Hilos de lectura del prompt aparte de los de generación.
+
+## Nexus-Office 2.4.0-cpp
+
+### Conversaciones largas sin perder el hilo
+- Cada conversación tiene un hilo: resumen progresivo de lo antiguo, notas fijas del proyecto y recuperación de los
+  mensajes anteriores que vienen al caso. Antes solo se veían los 12 últimos mensajes y lo demás se perdía.
+- El contexto se reparte en tokens según el `n_ctx` real del modelo y del equipo, no con un número fijo de mensajes.
+- La petición actual ya no se puede descartar al ajustar el contexto (antes, con resultados de herramientas largos,
+  podía quedarse fuera la propia pregunta).
+- Con GPU, llama-server reparte el contexto entre dos conversaciones a la vez: el reparto usa ya lo que le toca a cada
+  una (antes se contaba el doble y el servidor rechazaba la petición). Las definiciones de herramientas también cuentan,
+  y si aun así el servidor dice que no cabe, se reajusta con sus cifras y se reintenta.
+- Panel **🧵 HILO** en el chat y API `/api/sessions/{id}/hilo`. Las conversaciones se abren enteras (hasta 1000 mensajes).
+
 ## Nexus-Office 2.3.0-cpp
 
 ### Todo el proyecto en C++

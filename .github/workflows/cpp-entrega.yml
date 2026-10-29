@@ -26,6 +26,14 @@ env:
   PIPER: "2023.11.14-2"
   WHISPER: v1.7.6
   PIPER_PHONEMIZE: "2023.11.14-4"
+  # motores aparte de llama.cpp; LLAMA_TAG y SD_TAG vacios = la ultima Release oficial
+  LITERT: "0.19.0"
+  ORT_GENAI: "0.18.0"
+  ORT_GENAI_DML: "0.14.1"
+  ORT_GENAI_QNN: "0.13.2"
+  DIRECTML: "1.15.4"
+  LLAMA_TAG: ""
+  SD_TAG: ""
 
 jobs:
   cpp:
@@ -152,6 +160,121 @@ jobs:
           cp -r voz/piper voz/whisper "$RT/"
           rm -rf x voz
           find "$RT" -maxdepth 2 | head -40; du -sh "$RT"/*
+      - name: Runtimes por fabricante (llama.cpp y sd.cpp oficiales) y motores LiteRT-LM y ONNX Runtime GenAI
+        run: |
+          set -e
+          T=${{ matrix.target }}
+          RT=$PWD/nexus-office-cpp/.cache/desktop-runtimes/$T
+          PK=$PWD/packs/runtimes            # variantes pesadas: van en un zip aparte (Nexus-Office-runtime-*.zip)
+          mkdir -p "$RT" "$PK" w
+          # la Release marcada como «latest» de llama.cpp no siempre es la de los binarios (bNNNN): la ultima bNNNN
+          LT=${LLAMA_TAG:-$(gh release list -R ggml-org/llama.cpp --limit 30 --json tagName -q '.[].tagName' | grep -m1 -E '^b[0-9]+$')}
+          ST=${SD_TAG:-$(gh release view -R leejet/stable-diffusion.cpp --json tagName -q .tagName)}
+          echo "llama.cpp $LT · stable-diffusion.cpp $ST"
+          # poner <destino> <rt> <variante> <repo> <tag> <patron> [patron de cudart]
+          poner() {
+            local base=$1 rt=$2 v=$3 repo=$4 tag=$5 pat=$6 extra=$7 exe=llama-server
+            [ "$rt" = sd ] && exe=sd-cli
+            rm -rf ./w/p ./w/u ./w/c && mkdir -p w/p w/u w/c
+            if ! gh release download "$tag" -R "$repo" -p "$pat" -D w/p 2>/dev/null; then
+              echo "::warning::$T: no hay $pat en $repo $tag"; return 0
+            fi
+            for f in w/p/*; do case $f in *.zip) unzip -q -o "$f" -d w/u ;; *) tar -xzf "$f" -C w/u ;; esac; done
+            local e; e=$(find w/u -type f \( -name "$exe" -o -name "$exe.exe" \) | head -1)
+            [ -n "$e" ] || { echo "::warning::$T: $pat no trae $exe"; return 0; }
+            rm -rf "${base:?}/${rt:?}/${v:?}" && mkdir -p "$base/$rt/$v" && cp -a "$(dirname "$e")"/. "$base/$rt/$v/"
+            if [ -n "$extra" ] && gh release download "$tag" -R "$repo" -p "$extra" -D w/c 2>/dev/null; then
+              mkdir -p w/c/x
+              for f in w/c/*.*; do case $f in *.zip) unzip -q -o "$f" -d w/c/x ;; *) tar -xzf "$f" -C w/c/x ;; esac; done
+              find w/c/x -type f \( -name '*.dll' -o -name '*.so*' \) -exec cp {} "$base/$rt/$v/" \;
+            fi
+            echo "$T: $rt/$v <- $(ls w/p) $(du -sh "$base/$rt/$v" | cut -f1)"
+          }
+          # wheel de PyPI: copia las bibliotecas que casan con el patron
+          pypi() {  # pypi <paquete> <version|""> <patron del fichero> <dest> <patron de bibliotecas>
+            local url; url=$(curl -fsSL "https://pypi.org/pypi/$1${2:+/$2}/json" | jq -r --arg p "$3" '[.urls[] | select(.filename | test($p))][0].url')
+            [ "$url" != null ] || { echo "::warning::$T: sin $1 ($3) en PyPI"; return 0; }
+            rm -rf ./w/whl && mkdir -p w/whl "$4" && curl -fsSL -o w/whl/p.zip "$url" && unzip -q -o w/whl/p.zip -d w/whl/x
+            (cd w/whl/x && find . -type f -regextype posix-extended -regex "$5" -exec cp {} "$4/" \;)
+            echo "$T: $1 <- $(basename "$url")"
+          }
+          # paquete de NuGet: las DLL nativas de <rid>
+          nuget() {  # nuget <paquete> <version> <rid> <dest>
+            local id; id=$(echo "$1" | tr 'A-Z' 'a-z')
+            rm -rf ./w/nu && mkdir -p w/nu "$4"
+            curl -fsSL -o w/nu/p.zip "https://api.nuget.org/v3-flatcontainer/$id/$2/$id.$2.nupkg" && unzip -q -o w/nu/p.zip -d w/nu/x
+            cp w/nu/x/runtimes/$3/native/*.dll "$4/" 2>/dev/null || cp w/nu/x/bin/$3/*.dll "$4/" 2>/dev/null || \
+              echo "::warning::$T: $1 $2 no trae DLL para $3"
+            echo "$T: $1 $2 ($3)"
+          }
+          nuget_dep() {  # version de la dependencia <dep> en el nuspec de <paquete> <version>
+            local id; id=$(echo "$1" | tr 'A-Z' 'a-z')
+            curl -fsSL "https://api.nuget.org/v3-flatcontainer/$id/$2/$id.nuspec" \
+              | grep -o "id=\"$3\" version=\"[^\"]*\"" | head -1 | sed 's/.*version="\([^"]*\)".*/\1/; s/[][()]//g; s/,.*//'
+          }
+          G=ggml-org/llama.cpp; S=leejet/stable-diffusion.cpp
+          case $T in
+            windows-x64)
+              poner "$PK" llama cuda13 $G $LT 'llama-*-bin-win-cuda-13*-x64.zip' 'cudart-llama-bin-win-cuda-13*-x64.zip'
+              poner "$PK" llama sycl $G $LT 'llama-*-bin-win-sycl-x64.zip'
+              poner "$PK" llama rocm $G $LT 'llama-*-bin-win-rocm-*-x64.zip'
+              # sd.cpp nuevo: sd-server y los modelos GGUF de solo difusion (Flux, Z-Image, Qwen-Image...)
+              poner "$RT" sd cpu $S $ST 'sd-*-bin-win-avx2-x64.zip'
+              poner "$RT" sd cpu-compat $S $ST 'sd-*-bin-win-noavx-x64.zip'
+              poner "$RT" sd vulkan $S $ST 'sd-*-bin-win-vulkan-x64.zip'
+              poner "$RT" sd cuda $S $ST 'sd-*-bin-win-cuda12-x64.zip' 'cudart-sd-bin-win-cu12-x64.zip'
+              pypi litert-lm-api "$LITERT" 'win_amd64' "$RT/litert/todo" '.*\.dll'
+              # DirectML: cualquier GPU de Windows (NVIDIA, AMD, Intel) para los modelos ONNX
+              OV=$(nuget_dep Microsoft.ML.OnnxRuntimeGenAI.DirectML $ORT_GENAI_DML Microsoft.ML.OnnxRuntime.DirectML)
+              nuget Microsoft.ML.OnnxRuntimeGenAI.DirectML $ORT_GENAI_DML win-x64 "$RT/onnx/dml"
+              nuget Microsoft.ML.OnnxRuntime.DirectML $OV win-x64 "$RT/onnx/dml"
+              nuget Microsoft.AI.DirectML $DIRECTML x64-win "$RT/onnx/dml" ;;
+            windows-arm64)
+              # Snapdragon X Elite/Plus: GPU Adreno por OpenCL (llama.cpp) y NPU Hexagon por QNN (ONNX Runtime)
+              poner "$RT" llama opencl-adreno $G $LT 'llama-*-bin-win-opencl-adreno-arm64.zip'
+              poner "$RT" llama vulkan $G $LT 'llama-*-bin-win-vulkan-arm64.zip'
+              OV=$(nuget_dep Microsoft.ML.OnnxRuntimeGenAI.QNN $ORT_GENAI_QNN Microsoft.ML.OnnxRuntime.QNN)
+              nuget Microsoft.ML.OnnxRuntimeGenAI.QNN $ORT_GENAI_QNN win-arm64 "$RT/onnx/qnn"
+              nuget Microsoft.ML.OnnxRuntime.QNN $OV win-arm64 "$RT/onnx/qnn" ;;
+            linux-x86_64)
+              poner "$PK" llama cuda13 $G $LT 'llama-*-bin-ubuntu-cuda-13*-x64.tar.gz' 'cudart-llama-*-bin-ubuntu-cuda-13*-x64.tar.gz'
+              poner "$PK" llama rocm $G $LT 'llama-*-bin-ubuntu-rocm-*-x64.tar.gz'
+              poner "$PK" llama sycl $G $LT 'llama-*-bin-ubuntu-sycl-fp16-x64.tar.gz'
+              poner "$RT" sd cpu $S $ST 'sd-*-bin-Linux-*-x86_64.zip'
+              poner "$RT" sd vulkan $S $ST 'sd-*-bin-Linux-*-x86_64-vulkan.zip'
+              pypi litert-lm-api "$LITERT" 'manylinux.*_x86_64' "$RT/litert/todo" '.*\.so.*'
+              pypi onnxruntime-genai "$ORT_GENAI" 'cp313-manylinux.*_x86_64' "$RT/onnx/cpu" '.*/libonnxruntime-genai\.so.*'
+              pypi onnxruntime "" 'cp313-cp313-manylinux.*_x86_64' "$RT/onnx/cpu" '.*/capi/libonnxruntime\.so.*' ;;
+            linux-aarch64)
+              poner "$RT" llama vulkan $G $LT 'llama-*-bin-ubuntu-vulkan-arm64.tar.gz'
+              # placas y portatiles Snapdragon con Linux: CPU, GPU Adreno y NPU Hexagon en el mismo paquete
+              poner "$RT" llama snapdragon $G $LT 'llama-*-bin-linux-arm64-snapdragon.tar.gz'
+              poner "$RT" sd cpu $S $ST 'sd-*-bin-Linux-*-aarch64.zip'
+              pypi litert-lm-api "$LITERT" 'manylinux.*_aarch64' "$RT/litert/todo" '.*\.so.*'
+              pypi onnxruntime-genai "$ORT_GENAI" 'cp313-manylinux.*_aarch64' "$RT/onnx/cpu" '.*/libonnxruntime-genai\.so.*'
+              pypi onnxruntime "" 'cp313-cp313-manylinux.*_aarch64' "$RT/onnx/cpu" '.*/capi/libonnxruntime\.so.*' ;;
+            macos-arm64)
+              poner "$RT" sd metal $S $ST 'sd-*-bin-Darwin-*-arm64.zip'
+              pypi litert-lm-api "$LITERT" 'macosx.*arm64' "$RT/litert/todo" '.*\.dylib'
+              pypi onnxruntime-genai "$ORT_GENAI" 'cp313-macosx.*arm64' "$RT/onnx/cpu" '.*/libonnxruntime-genai\.dylib'
+              pypi onnxruntime "" 'cp313-macosx.*arm64' "$RT/onnx/cpu" '.*/capi/libonnxruntime.*\.dylib' ;;
+          esac
+          # ONNX Runtime GenAI busca libonnxruntime.so(.1) / .dylib sin la version completa
+          for f in "$RT"/onnx/*/libonnxruntime.so.*; do [ -e "$f" ] || continue; cp -n "$f" "$(dirname "$f")/libonnxruntime.so"; cp -n "$f" "$(dirname "$f")/libonnxruntime.so.1" || true; done
+          for f in "$RT"/onnx/*/libonnxruntime.*.dylib; do [ -e "$f" ] && cp -n "$f" "$(dirname "$f")/libonnxruntime.dylib"; done
+          for d in "$RT"/litert/* "$RT"/onnx/*; do [ -d "$d" ] && ls -la "$d"; done
+          # paquetes de las variantes pesadas (limite de 2 GB por fichero de la Release)
+          V=$(sed -n 's/^set(NEXUS_VERSION "\([^"]*\)").*/\1/p' nexus-office-cpp/CMakeLists.txt)
+          mkdir -p packs/out
+          for r in "$PK"/*/*; do
+            [ -d "$r" ] || continue
+            v=$(basename "$r"); rt=$(basename "$(dirname "$r")")
+            Z=$PWD/packs/out/Nexus-Office-runtime-$v-$V-$T.zip
+            (cd packs && zip -q -r -9 "$Z" "runtimes/$rt/$v")
+            s=$(stat -c %s "$Z")
+            if [ "$s" -gt 2040109465 ]; then echo "::warning::$T: $rt/$v ocupa $((s/1048576)) MB: no cabe en la Release"; rm -f "$Z"; fi
+          done
+          rm -rf ./w ./packs/runtimes; ls -la packs/out; du -sh "$RT"/*
       - name: Drivers USB-serie (CH340/CH9102, CP210x, FTDI) para grabar las placas ESP sin internet
         if: startsWith(matrix.target, 'windows') || startsWith(matrix.target, 'macos')
         run: |
@@ -183,7 +306,9 @@ jobs:
       - name: Construir
         run: chmod +x construir/nexus-construir && cd nexus-office-cpp && ../construir/nexus-construir paquetes --targets ${{ matrix.target }}
       - name: Lista
-        run: ls -la nexus-office-cpp/dist/*/ && df -h /
+        run: |
+          mkdir -p nexus-office-cpp/dist/runtimes && mv packs/out/*.zip nexus-office-cpp/dist/runtimes/ 2>/dev/null || true
+          ls -la nexus-office-cpp/dist/*/ && df -h /
       - uses: actions/upload-artifact@v4
         with:
           name: instalador-cpp-${{ matrix.target }}
@@ -191,6 +316,7 @@ jobs:
             nexus-office-cpp/dist/windows/
             nexus-office-cpp/dist/linux/
             nexus-office-cpp/dist/macos/
+            nexus-office-cpp/dist/runtimes/
           retention-days: 7
           compression-level: 0
 
@@ -304,6 +430,9 @@ jobs:
           git show FETCH_HEAD:android-gpu-npu-libs.tar.gz > npu.tgz
           (git show FETCH_HEAD:SHA256SUMS.txt | grep android-gpu-npu-libs.tar.gz | sed 's|  .*|  npu.tgz|' | sha256sum -c -)
           mkdir -p glibs && tar xzf npu.tgz -C glibs
+          # LiteRT-LM (Google) para los .litertlm: CPU y GPU del movil (y la NPU con el dispatch del fabricante)
+          U=$(curl -fsSL "https://pypi.org/pypi/litert-lm-api/$LITERT/json" | jq -r '[.urls[] | select(.filename | test("android.*arm64"))][0].url')
+          curl -fsSL -o lt.whl "$U" && unzip -q -o -j lt.whl '*/liblitert-lm.so' -d glibs/lib && ls -la glibs/lib/liblitert-lm.so
           chmod +x construir/nexus-construir
           (cd nexus-office-cpp && ../construir/nexus-construir apk --exe ../aout/Nexus-Office/nexus-office --libs ../alibs --recursos ../aout/Nexus-Office --gpu-libs ../glibs/lib)
           "$BT/apksigner" verify --print-certs nexus-office-cpp/dist-apk/*.apk | head -4

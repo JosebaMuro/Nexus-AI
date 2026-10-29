@@ -61,6 +61,7 @@
             <select class="input" id="agent-select" title="Agente"></select>
             <select class="input" id="session-select" title="Conversación"></select>
             <button class="btn ghost sm" id="new-chat" title="Nueva conversación">+<span class="lbl"> NUEVA</span></button>
+            <button class="btn ghost sm" id="hilo-btn" title="Hilo del proyecto: notas fijas y resumen de lo hablado">🧵<span class="lbl"> HILO</span></button>
             <button class="icon-btn sm" id="avatar-toggle" title="Mostrar u ocultar el avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></button>
             <span class="muted mono" id="chat-model" style="margin-left:auto"></span>
           </div>
@@ -420,6 +421,7 @@
         </div>
         <div class="panel admin-only col"><h3>Administración</h3>
           <div class="row"><input class="input pin-input" id="pin-change" type="password" placeholder="NUEVO PIN" style="flex:1;font-size:16px"><button class="btn" id="pin-change-btn">CAMBIAR PIN</button></div>
+          <div class="row"><button class="btn" id="accel-open-ajustes">MOTOR, CPU/GPU/NPU Y CAPAS EN LA GPU</button></div>
           <div id="admin-settings"></div>
         </div>
       </div>
@@ -460,6 +462,21 @@
   </div>
   <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="hwp-close">CERRAR</button></div>
 </dialog>
+<dialog id="hilo-dialog" class="avlib-dialog">
+  <h2>HILO DEL PROYECTO</h2>
+  <p class="muted" style="margin:0 0 10px">En conversaciones largas el agente no ve todos los mensajes a la vez: lo antiguo se resume aquí y entra siempre en su contexto, junto con tus notas fijas y los fragmentos anteriores que vengan al caso.</p>
+  <div class="muted mono" id="hilo-info" style="font-size:.8rem;margin-bottom:6px"></div>
+  <label class="muted" for="hilo-notas">NOTAS FIJAS (objetivo, decisiones, datos que nunca debe olvidar)</label>
+  <textarea class="input" id="hilo-notas" rows="5" placeholder="Ej.: Proyecto Atlas: tienda online en C++. Base de datos SQLite. Entrega el 15 de noviembre."></textarea>
+  <label class="muted" for="hilo-resumen" style="margin-top:8px;display:block">RESUMEN DE LO HABLADO (se actualiza solo; puedes corregirlo)</label>
+  <textarea class="input" id="hilo-resumen" rows="9"></textarea>
+  <div class="row" style="justify-content:flex-end;margin-top:10px;flex-wrap:wrap">
+    <button class="btn ghost" id="hilo-resumir" title="Resume ya todo menos los últimos mensajes">RESUMIR AHORA</button>
+    <button class="btn ghost" id="hilo-cerrar">CERRAR</button>
+    <button class="btn primary" id="hilo-guardar">GUARDAR</button>
+  </div>
+</dialog>
+
 <dialog id="avlib-dialog" class="avlib-dialog">
   <h2>AVATARES 3D GRATUITOS</h2>
   <p class="muted" style="margin:0 0 10px">Descárgalos una vez y úsalos siempre, también sin conexión. Respeta la licencia de cada uno.</p>
@@ -477,6 +494,10 @@
   <p class="muted" id="accel-hw">Detectando…</p>
   <div class="accel-group"><div class="lbl">Motor llama</div><div class="accel-opts" id="accel-engines"></div></div>
   <div class="accel-group"><div class="lbl">Acelerar la IA con</div><div class="accel-opts" id="accel-accels"></div></div>
+  <div class="accel-group"><div class="lbl">Capas del modelo en la GPU / NPU</div>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><select class="input" id="accel-capas" style="flex:1;min-width:200px"><option value="auto">Automático (las que quepan)</option><option value="todas">Todas: modelo entero en la GPU/NPU</option><option value="ninguna">Ninguna: todo en la CPU</option><option value="n">Número de capas…</option></select>
+    <input class="input" id="accel-capas-n" type="number" min="1" max="999" value="20" style="width:110px" title="Capas en la GPU/NPU; el resto va en la CPU"></div>
+    <small class="muted" id="accel-capas-info">Menos capas deja VRAM libre para el contexto; más capas va más rápido si caben.</small></div>
   <div class="accel-note" id="accel-note"></div>
   <div class="accel-result" id="accel-result"></div>
   <label class="row muted" style="gap:8px;flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" id="accel-remember" checked style="margin-top:3px"> Recordar y no volver a preguntar al abrir (se cambia en Sistema)</label>

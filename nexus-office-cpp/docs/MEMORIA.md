@@ -54,6 +54,36 @@ Lo importado se fusiona con lo que ya hay: los nodos con el mismo nombre se unen
 
 El informe muestra los temas, qué fue a cada grafo y lo que se aprendió.
 
+## Conversaciones largas: el hilo del proyecto
+
+Un modelo local solo ve a la vez lo que cabe en su contexto (`n_ctx`, de 2048 a 16384 tokens según el equipo). Antes
+se le pasaban los últimos 12 mensajes recortados a 3000 caracteres y, si no cabían, se tiraban los más antiguos sin
+más: en una conversación larga sobre un proyecto el agente perdía el objetivo, las decisiones y los datos del principio.
+Ahora cada conversación tiene su **hilo** (`src/memory/hilo.cpp`):
+
+- **Presupuesto en tokens por turno.** Se parte del contexto real del modelo (`n_ctx` del perfil de hardware, que el
+  autoajuste sube o baja según la RAM libre; `hilo.ctx_remoto` para la nube y OpenAI) y se reserva la respuesta, la
+  pregunta, las herramientas y un margen para sus pasos. El prompt de sistema (perfil, memorias, documentos) se queda
+  como mucho con el 45 % de lo libre; el resto es para la conversación.
+- **Mensajes recientes literales**, de lo más nuevo hacia atrás, hasta llenar su parte. El último siempre entra.
+- **Resumen progresivo.** Cuando lo no resumido ya no cabe, un proceso de fondo pliega los mensajes más antiguos en el
+  resumen del hilo, por tandas y cuando el LLM queda libre (no retrasa la respuesta). Con LLM el resumen se ordena en
+  *Objetivo, Decisiones, Datos, Hecho, Pendiente*; sin LLM es extractivo y conserva el arranque del proyecto.
+- **Notas fijas del proyecto.** Lo que el usuario escribe en **🧵 HILO** (junto a *+ NUEVA*) entra siempre.
+- **Recuperación de lo antiguo.** Los trozos de mensajes que ya no entran literales y tienen que ver con la pregunta
+  vuelven al prompt como *fragmentos anteriores*, aunque sean de hace cientos de mensajes.
+- **La petición actual nunca se pierde.** Si aun así no cabe (resultados de herramientas enormes), se quita primero la
+  conversación anterior, después se recortan por el medio los mensajes largos y solo al final la cola del sistema.
+
+En el chat aparece la etiqueta *🧵 hilo: N anteriores* cuando una respuesta usa el hilo. El panel **🧵 HILO** muestra
+cuántos mensajes van resumidos, deja corregir el resumen, escribir las notas y **RESUMIR AHORA**.
+
+```yaml
+hilo:
+  ctx_remoto: 32768   # contexto supuesto para la nube / OpenAI
+  max_tokens: 24000   # tope de la parte de la conversacion
+```
+
 ## Modelo de embeddings: Qwen3-Embedding 0.6B
 
 Los embeddings convierten un texto en un vector que representa su significado. Nexus-Office los usa para buscar en la biblioteca y en la memoria, decidir qué es común y qué es de cada agente, agrupar documentos por temas y encontrar duplicados.

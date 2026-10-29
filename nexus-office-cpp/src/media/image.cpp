@@ -1,6 +1,7 @@
 // Imagen (media/image.py): generacion (stable-diffusion.cpp > arte procedural sin modelo) y analisis
 // (LLM multimodal > estadisticas de la imagen).
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <thread>
 
@@ -9,9 +10,12 @@
 #include "models/models.h"
 #include "models/runtimes.h"
 #include "util/crypto.h"
+#include "util/http.h"
 #include "util/log.h"
+#include "util/net.h"
 #include "util/proc.h"
 #include "util/rx.h"
+#include "util/sysinfo.h"
 #include "util/text.h"
 
 #include "stb_image.h"
@@ -124,10 +128,114 @@ std::string Canvas::png() const {
 
 bool Canvas::save_png(const fs::path& p) const { return write_file(p, png()); }
 
+// ======================================================================== stable-diffusion.cpp
+std::set<std::string> sd_flags(const std::string& help) {
+  static const Rx OPT(R"((--[a-z0-9][a-z0-9_-]+))");
+  std::set<std::string> out;
+  for (auto& m : OPT.finditer(help)) out.insert(m.str(1));
+  return out;
+}
+
+SdPlan sd_plan(const json& model, const json& profile, const std::string& variant, const std::set<std::string>& flags,
+               int size) {
+  SdPlan p;
+  fs::path path = P(jstr(model, "path"));
+  auto has = [&](const char* f) { return flags.empty() || flags.count(f) > 0; };
+  json dif = model.value("difusion", json());
+  if (!dif.is_object() && jstr(model, "format") == "gguf") dif = models::diffusion_info(path);   // modelos de antes
+  p.arch = dif.is_object() ? jstr(dif, "arch") : "";
+  double need_gb = (is_file(path) ? fsize(path) : 0) / 1073741824.0;
+  if (dif.is_object() && truthy(dif.value("solo_difusion", json(false)))) {
+    p.model_args = {"--diffusion-model", S(path)};
+    p.piezas = models::find_components(path, dif, model.value("componentes", json::object()));
+    std::vector<std::string> missing;
+    for (auto& n : dif.value("necesita", json::array())) {
+      std::string piece = n.get<std::string>();
+      if (!p.piezas.contains(piece)) {
+        missing.push_back(piece);
+        continue;
+      }
+      std::string f = jstr(p.piezas, piece);
+      need_gb += fsize(P(f)) / 1073741824.0;
+      // el codificador LLM (Z-Image, Qwen-Image) se llamaba --qwen2vl en las versiones antiguas de sd.cpp
+      std::string flag = piece == "llm" ? (has("--llm") || !flags.count("--qwen2vl") ? "--llm" : "--qwen2vl")
+                                        : "--" + piece;
+      p.model_args.insert(p.model_args.end(), {flag, f});
+    }
+    if (!missing.empty()) {
+      static const std::map<std::string, std::string> DESC = {
+          {"vae", "la VAE (p. ej. ae.safetensors)"}, {"clip_l", "el codificador clip_l"}, {"clip_g", "el codificador clip_g"},
+          {"t5xxl", "el codificador T5-XXL"}, {"llm", "el codificador de texto (un LLM: Qwen3-4B en Z-Image)"}};
+      std::vector<std::string> d;
+      for (auto& m : missing) d.push_back(DESC.count(m) ? DESC.at(m) : m);
+      p.error = "El modelo " + jstr(model, "id") + " (" + p.arch + ") es solo el modelo de difusion y le falta " +
+                join(d, ", ") + ": descargalo en Modelos y ponlo en la misma carpeta";
+    }
+  } else {
+    p.model_args = {"-m", S(path)};
+    json comps = model.value("componentes", json::object());
+    if (comps.is_object() && !jstr(comps, "vae").empty() && is_file(P(jstr(comps, "vae"))))
+      p.model_args.insert(p.model_args.end(), {"--vae", jstr(comps, "vae")});
+  }
+  // ajustes por hardware
+  bool gpu = !starts_with(variant, "cpu") && variant != "system";
+  double vram = jnum(profile.value("vram_gb", json(0))), ram = jnum(profile.value("ram_gb", json(0)));
+  bool metal = jstr(profile, "accelerator") == "metal";
+  if (gpu) {
+    // atencion rapida (menos memoria): las versiones nuevas la ponen solas (--flash-attn auto); las de antes, a mano
+    if (flags.count("--diffusion-fa") && !flags.count("--flash-attn")) p.perf_args.push_back("--diffusion-fa");
+    double room = metal ? ram * 0.65 : vram * 0.9;
+    // modelo + codificadores no caben en la VRAM: los codificadores van a la RAM y, si aun asi no cabe, los pesos se
+    // suben a la GPU por partes. Las versiones con --auto-fit ya reparten solas entre VRAM, RAM y disco.
+    if (room > 0 && need_gb > room && !flags.count("--auto-fit")) {
+      if (has("--clip-on-cpu") && p.model_args[0] == "--diffusion-model") p.perf_args.push_back("--clip-on-cpu");
+      if (has("--offload-to-cpu")) p.perf_args.push_back("--offload-to-cpu");
+    }
+    if ((size >= 1024 || (room > 0 && room < 6)) && has("--vae-tiling")) p.perf_args.push_back("--vae-tiling");
+  } else {
+    int threads = (int)jnum(profile.value("llm", json::object()).value("n_threads", json(0)), 0);
+    if (threads > 0) p.perf_args.insert(p.perf_args.end(), {"-t", std::to_string(threads)});
+    if (size >= 1024 && has("--vae-tiling")) p.perf_args.push_back("--vae-tiling");
+  }
+  json gen = model.value("gen", json::object());
+  if (gen.is_object() && !jstr(gen, "sampler").empty() && has("--sampling-method"))
+    p.perf_args.insert(p.perf_args.end(), {"--sampling-method", jstr(gen, "sampler")});
+  return p;
+}
+
 // ======================================================================== ImageEngine
 ImageEngine::ImageEngine(Config& config, models::Catalog& catalog, runtimes::RuntimeManager& rt, ProfileGetter profile,
                          llm::LLMManager* llm)
-    : config_(config), catalog_(catalog), rt_(rt), profile_(std::move(profile)), llm_(llm) {}
+    : config_(config), catalog_(catalog), rt_(rt), profile_(std::move(profile)), llm_(llm) {
+  // el sd-server se para tras unos minutos sin uso: libera la memoria del modelo de imagen para el LLM
+  idle_ = std::thread([this] {
+    while (!quit_) {
+      std::this_thread::sleep_for(std::chrono::seconds(2));
+      std::lock_guard<std::mutex> lk(mu_);
+      double mins = config_.num("media.sd_servidor_minutos", 10);
+      if (server_ && server_used_ > 0 && now() - server_used_ > mins * 60) {
+        L.info("sd-server sin uso desde hace ", fnum(mins, 0), " min: se para para liberar memoria");
+        stop_server();
+      }
+    }
+  });
+}
+
+ImageEngine::~ImageEngine() {
+  quit_ = true;
+  if (idle_.joinable()) idle_.join();
+  std::lock_guard<std::mutex> lk(mu_);
+  stop_server();
+}
+
+void ImageEngine::stop_server() {
+  if (server_ && server_->running()) {
+    server_->terminate();
+    if (!server_->wait(10)) server_->kill();
+  }
+  server_.reset();
+  server_key_.clear();
+}
 
 json ImageEngine::model() {
   std::string mid = config_.str("media.image_model", "");
@@ -141,9 +249,32 @@ json ImageEngine::model() {
 json ImageEngine::status() {
   json m = model();
   auto sd = rt_.exe("sd", profile_());
-  return {{"model", m.is_null() ? json() : m["id"]},
-          {"runtime", sd ? json(sd->variant) : json()},
-          {"engine", !m.is_null() && sd ? "sd.cpp" : "escena"}};
+  json st = {{"model", m.is_null() ? json() : m["id"]},
+             {"runtime", sd ? json(sd->variant) : json()},
+             {"engine", !m.is_null() && sd ? "sd.cpp" : "escena"}};
+  if (!m.is_null() && sd) {
+    SdPlan plan = sd_plan(m, profile_(), sd->variant, flags_of(sd->exe));
+    st["arch"] = plan.arch;
+    st["piezas"] = plan.piezas;
+    if (!plan.error.empty()) st["falta"] = plan.error;
+    std::lock_guard<std::mutex> lk(mu_);
+    st["servidor"] = server_ && server_->running();
+  }
+  return st;
+}
+
+const std::set<std::string>& ImageEngine::flags_of(const fs::path& exe) {
+  std::lock_guard<std::mutex> lk(mu_);
+  std::string k = S(exe);
+  if (!flags_.count(k)) {
+    proc::Options o;
+    o.cwd = exe.parent_path();
+    o.capture = true;
+    o.env = runtimes::lib_env(exe);
+    auto r = proc::run({k, "--help"}, 30, o);
+    flags_[k] = sd_flags(r.out + "\n" + r.err);
+  }
+  return flags_[k];
 }
 
 json ImageEngine::generate(const std::string& prompt, const std::string& negative, std::optional<int> size,
@@ -161,9 +292,21 @@ json ImageEngine::generate(const std::string& prompt, const std::string& negativ
     try {
       return sdcpp(sd->exe, sd->variant, m, english(prompt), negative, size, steps, seed, out);
     } catch (const std::exception& e) {
-      L.warning("sd.cpp fallo (", e.what(), "); usando el compositor procedural");
       std::string msg = trim(e.what());
-      why = "stable-diffusion.cpp fallo: " + uright(msg, 200);
+      why = "stable-diffusion.cpp fallo: " + uright(msg, 300);
+      // una GPU que no arranca (Metal virtual, driver roto...): antes del compositor se prueba en la CPU
+      auto cpu = starts_with(sd->variant, "cpu") ? std::nullopt : rt_.exe("sd", profile_(), "cpu");
+      if (cpu && starts_with(cpu->variant, "cpu")) {
+        L.warning("sd.cpp fallo en ", sd->variant, " (", uright(msg, 200), "); se reintenta en la CPU");
+        try {
+          json r = sdcpp(cpu->exe, cpu->variant, m, english(prompt), negative, size, steps, seed, out);
+          r["note"] = "La GPU (" + sd->variant + ") no pudo generar la imagen; se ha hecho en la CPU";
+          return r;
+        } catch (const std::exception& e2) {
+          why = "stable-diffusion.cpp fallo en " + sd->variant + " y en la CPU: " + uright(trim(e2.what()), 300);
+        }
+      }
+      L.warning("sd.cpp fallo (", uright(why, 300), "); usando el compositor procedural");
     }
   }
   std::string text = idea.empty() ? prompt : idea;
@@ -201,6 +344,69 @@ std::string ImageEngine::english(const std::string& prompt) {
   return prompt::translate_rules(prompt);
 }
 
+bool ImageEngine::via_server(const fs::path& cli, const SdPlan& plan, const json& req, const fs::path& out,
+                             std::string& why) {
+  fs::path exe = cli.parent_path() / P(std::string("sd-server") + (sys::is_windows() ? ".exe" : ""));
+  std::string mode = config_.str("media.sd_servidor", "auto");
+  if (mode == "no" || mode == "off" || !is_file(exe)) return false;
+  std::lock_guard<std::mutex> lk(mu_);
+  std::string key = S(exe) + "|" + join(plan.model_args, "|") + "|" + join(plan.perf_args, "|");
+  if (!(server_ && server_->running() && server_key_ == key)) {
+    stop_server();
+    server_port_ = net::free_port(7861);
+    std::vector<std::string> cmd = {S(exe)};
+    cmd.insert(cmd.end(), plan.model_args.begin(), plan.model_args.end());
+    for (size_t i = 0; i < plan.perf_args.size(); ++i) {
+      // -t (hilos) vale igual; las opciones de muestreo van en cada peticion
+      if (plan.perf_args[i] == "--sampling-method") {
+        ++i;
+        continue;
+      }
+      cmd.push_back(plan.perf_args[i]);
+    }
+    cmd.insert(cmd.end(), {"--listen-ip", "127.0.0.1", "--listen-port", std::to_string(server_port_)});
+    proc::Options po;
+    po.cwd = exe.parent_path();
+    po.env = runtimes::lib_env(exe);
+    po.output_file = paths::logs_dir() / "sd-server.log";
+    server_ = std::make_unique<proc::Process>();
+    if (!server_->start(cmd, po)) {
+      why = "sd-server no arranca: " + server_->error();
+      server_.reset();
+      return false;
+    }
+    double t0 = now();
+    bool up = false;
+    while (now() - t0 < 900 && server_->running()) {
+      // el servidor responde cuando ha cargado el modelo
+      if (http::get(cat("http://127.0.0.1:", server_port_, "/sdapi/v1/sd-models"), {}, 2).status == 200) {
+        up = true;
+        break;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    if (!up) {
+      std::string tail = read_text(paths::logs_dir() / "sd-server.log");
+      why = "sd-server no cargo el modelo: " + uright(valid_utf8(tail), 300);
+      stop_server();
+      return false;
+    }
+    server_key_ = key;
+    L.info("sd-server listo con el modelo cargado en ", fnum(now() - t0, 1), "s");
+  }
+  auto r = http::post_json(cat("http://127.0.0.1:", server_port_, "/sdapi/v1/txt2img"), req, {}, 1800);
+  server_used_ = now();
+  json j = r.json_body();
+  if (r.status != 200 || !j.is_object() || !j.contains("images") || !j["images"].is_array() || j["images"].empty()) {
+    why = cat("sd-server respondio ", r.status, ": ", uleft(r.body, 200));
+    if (!server_->running()) stop_server();
+    return false;
+  }
+  std::string b64 = j["images"][0].get<std::string>();
+  if (auto comma = b64.find("base64,"); comma != std::string::npos) b64 = b64.substr(comma + 7);
+  return write_file(out, b64decode(b64));
+}
+
 json ImageEngine::sdcpp(const fs::path& exe, const std::string& variant, const json& model, const std::string& prompt,
                         const std::string& negative, std::optional<int> size_opt, std::optional<int> steps_opt,
                         long long seed, const fs::path& out) {
@@ -212,24 +418,40 @@ json ImageEngine::sdcpp(const fs::path& exe, const std::string& variant, const j
                  ? (int)jnum(gen["size"])
                  : (int)jnum(prof["image"]["resolution"], 512);
   int steps = steps_opt && *steps_opt ? *steps_opt : truthy(gen.value("steps", json())) ? (int)jnum(gen["steps"]) : 4;
-  int threads = variant == "cpu" ? (int)jnum(prof["llm"]["n_threads"], 0) : 0;
-  std::vector<std::string> cmd = {S(exe),          "-m", jstr(model, "path"), "-p", prompt, "--steps", std::to_string(steps),
-                                  "--cfg-scale",   pyfloat(jnum(gen.value("cfg", json(1.0)), 1.0)),
-                                  "-W",            std::to_string(size), "-H", std::to_string(size), "-s",
-                                  std::to_string(seed), "-o", S(out)};
-  if (!negative.empty()) cmd.insert(cmd.end(), {"-n", negative});
-  if (threads)
-    cmd.insert(cmd.end(), {"-t", std::to_string(std::max(threads, (int)std::max(1u, std::thread::hardware_concurrency())))});
+  double cfg = jnum(gen.value("cfg", json(1.0)), 1.0);
+  SdPlan plan = sd_plan(model, prof, variant, flags_of(exe), size);
+  if (!plan.error.empty()) throw std::runtime_error(plan.error);
   double t0 = now();
-  auto r = proc::run(cmd, 900, {.cwd = exe.parent_path(), .capture = true});
-  if (!r.ok() || !path_exists(out)) {
-    std::string msg = !r.err.empty() ? r.err : r.out;
-    if (!r.started) msg = "no se pudo iniciar sd-cli";
-    if (r.timed_out) msg = "tiempo agotado";
-    throw std::runtime_error(uright(msg, 400));
+  std::string why;
+  json req = {{"prompt", prompt}, {"negative_prompt", negative}, {"width", size}, {"height", size},
+              {"steps", steps},   {"cfg_scale", cfg},          {"seed", seed}};
+  if (!jstr(gen, "sampler").empty()) req["sampler_name"] = jstr(gen, "sampler");
+  std::string engine = "sd.cpp (" + variant + ")";
+  if (via_server(exe, plan, req, out, why)) {
+    engine = "sd.cpp servidor (" + variant + ")";
+  } else {
+    if (!why.empty()) L.warning(why, ": se usa sd-cli");
+    std::vector<std::string> cmd = {S(exe)};
+    cmd.insert(cmd.end(), plan.model_args.begin(), plan.model_args.end());
+    cmd.insert(cmd.end(), {"-p", prompt, "--steps", std::to_string(steps), "--cfg-scale", pyfloat(cfg), "-W",
+                           std::to_string(size), "-H", std::to_string(size), "-s", std::to_string(seed), "-o", S(out)});
+    cmd.insert(cmd.end(), plan.perf_args.begin(), plan.perf_args.end());
+    if (!negative.empty()) cmd.insert(cmd.end(), {"-n", negative});
+    proc::Options po;
+    po.cwd = exe.parent_path();
+    po.capture = true;
+    po.env = runtimes::lib_env(exe);
+    auto r = proc::run(cmd, 1800, po);
+    if (!r.ok() || !path_exists(out)) {
+      std::string msg = !r.err.empty() ? r.err : r.out;
+      if (!r.started) msg = "no se pudo iniciar sd-cli";
+      if (r.timed_out) msg = "tiempo agotado";
+      throw std::runtime_error(uright(msg, 400));
+    }
   }
-  return {{"engine", "sd.cpp (" + variant + ")"},
+  return {{"engine", engine},
           {"model", model["id"]},
+          {"arch", plan.arch},
           {"url", "/outputs/images/" + S(out.filename())},
           {"path", S(out)},
           {"seed", seed},

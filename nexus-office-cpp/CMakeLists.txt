@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
-# Nexus-Office 2.3.0-cpp: la oficina para pymes reescrita en C++ (misma interfaz web, mismos datos).
-project(NexusOfficeCpp VERSION 2.3.0 LANGUAGES C CXX)
+# Nexus-Office 2.6.0-cpp: la oficina para pymes reescrita en C++ (misma interfaz web, mismos datos).
+project(NexusOfficeCpp VERSION 2.6.0 LANGUAGES C CXX)
 
-set(NEXUS_VERSION "2.3.0-cpp")
+set(NEXUS_VERSION "2.6.0-cpp")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -128,7 +128,7 @@ target_include_directories(nexus_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${T
 target_include_directories(nexus_core PRIVATE ${NEXUS_FLASHER})
 target_compile_definitions(nexus_core PUBLIC NEXUS_VERSION="${NEXUS_VERSION}" CPPHTTPLIB_THREAD_POOL_COUNT=16
                            ${NX_TLS_DEFS})
-target_link_libraries(nexus_core PUBLIC nx_sqlite3 nx_miniz nx_pcre2 nx_bz2 nx_xz nx_webp ${NX_TLS_LIBS} Threads::Threads)
+target_link_libraries(nexus_core PUBLIC nx_sqlite3 nx_miniz nx_pcre2 nx_bz2 nx_xz nx_webp ${NX_TLS_LIBS} Threads::Threads ${CMAKE_DL_LIBS})
 if(WIN32)
   target_compile_definitions(nexus_core PUBLIC _WIN32_WINNT=0x0A00 NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE
                              _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS)

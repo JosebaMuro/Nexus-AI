@@ -160,12 +160,14 @@ class LlamaServerBackend : public OpenAICompatBackend {
   std::string gpu_error();   // por que la GPU elegida no arranco (y se sigue en la CPU)
   std::string variant;
   int port = 0;
+  std::atomic<int> slots{0};   // -np del llama-server en marcha (0: aun no arrancado); cada slot tiene n_ctx/slots
   // Android: la NPU o la GPU no arrancan con el driver del movil; el gestor cambia gpu_layers/device del perfil
   std::function<void(const json&)> set_llm_opts;
 
  private:
   void ensure_once(const std::string& model, const json& opts);
   json gpu_failed(const std::string& reason, const std::string& device);
+  std::string ngl_arg(int ngl, const std::string& var) const;   // valor de -ngl (gpu_layers -1 = todas las que quepan)
   runtimes::RuntimeManager* rt_;
   Resolver resolve_;
   std::function<json()> profile_;
@@ -175,6 +177,8 @@ class LlamaServerBackend : public OpenAICompatBackend {
   json effective_ = json::object();
   json gpu_ = json::object();
   std::string gpu_error_;
+  bool kv_quant_failed_ = false;   // este llama-server no arranca con la cache KV cuantizada
+  bool ngl_auto_failed_ = false;   // este llama-server es anterior a «-ngl auto»
   std::recursive_mutex mu_;
 };
 
@@ -243,6 +247,7 @@ std::optional<std::pair<std::string, json>> detect_intent(const std::string& tex
 // ---------------------------------------------------------------- gestor
 extern const char* REASONING_STOP;
 json fit_context(json messages, int n_ctx, int reply_tokens);
+int approx_tokens(const json& messages);   // estimacion (caracteres / 3.2) como la de fit_context
 
 class LLMManager {
  public:
@@ -255,6 +260,8 @@ class LLMManager {
   // perfil de llama.cpp (hilos, contexto, GPU) con el cerrojo del gestor: lo cambia el autoajuste en vivo
   json llm_profile();
   void update_llm_profile(const json& changes);
+  // contexto que tiene de verdad cada peticion: llama-server con varios slots reparte n_ctx entre ellos
+  int request_ctx(const std::string& backend, int n_ctx);
   bool reasoning_model(const std::string& backend, const std::string& model);
   bool thinking_only(const std::string& backend, const std::string& model);
   void stream(json messages, const std::string& spec, Opts opts, const Sink& out);

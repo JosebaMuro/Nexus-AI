@@ -90,6 +90,31 @@ json gguf_metadata(const fs::path& p, size_t max_keys) {
   return meta;
 }
 
+std::vector<std::string> gguf_tensor_names(const fs::path& p, size_t max) {
+  std::vector<std::string> out;
+  try {
+    Reader r;
+    r.f.open(p, std::ios::binary);
+    char magic[4];
+    r.f.read(magic, 4);
+    if (!r.f || std::memcmp(magic, "GGUF", 4) != 0) return out;
+    r.rd<uint32_t>();
+    uint64_t n_tensors = r.rd<uint64_t>(), n_kv = r.rd<uint64_t>();
+    for (uint64_t i = 0; i < n_kv; ++i) {
+      r.str();
+      r.value(r.rd<uint32_t>());
+    }
+    for (uint64_t i = 0; i < std::min<uint64_t>(n_tensors, max); ++i) {
+      out.push_back(r.str());
+      uint32_t dims = r.rd<uint32_t>();
+      if (dims > 8) break;
+      r.f.seekg((std::streamoff)(8 * dims + 4 + 8), std::ios::cur);   // dimensiones, tipo y desplazamiento
+    }
+  } catch (const std::exception&) {
+  }
+  return out;
+}
+
 json gguf_summarize(const fs::path& p) {
   json m;
   try {

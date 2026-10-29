@@ -156,6 +156,71 @@
     "desc": "Para GPU de 6 GB o mas."
   },
   {
+    "id": "z-image-turbo",
+    "kind": "image",
+    "name": "Z-Image-Turbo · fotorrealista (GGUF)",
+    "params_b": 6,
+    "repo": "leejet/Z-Image-Turbo-GGUF",
+    "file": "z_image_turbo-Q4_K.gguf",
+    "size_mb": 6300,
+    "min_ram_gb": 16,
+    "min_vram_gb": 8,
+    "componentes": {
+      "vae": {
+        "repo": "Comfy-Org/z_image_turbo",
+        "file": "split_files/vae/ae.safetensors",
+        "size_mb": 320
+      },
+      "llm": {
+        "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+        "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+        "size_mb": 2500
+      }
+    },
+    "gen": {
+      "steps": 8,
+      "cfg": 1.0,
+      "size": 1024,
+      "sampler": "euler"
+    },
+    "desc": "Solo el modelo de difusion en GGUF; se descargan con el la VAE y el codificador Qwen3-4B. Texto legible en la imagen."
+  },
+  {
+    "id": "flux1-schnell",
+    "kind": "image",
+    "name": "FLUX.1-schnell · 4 pasos (GGUF)",
+    "params_b": 12,
+    "repo": "leejet/FLUX.1-schnell-gguf",
+    "file": "flux1-schnell-q4_k.gguf",
+    "size_mb": 10300,
+    "min_ram_gb": 24,
+    "min_vram_gb": 12,
+    "componentes": {
+      "vae": {
+        "repo": "Comfy-Org/z_image_turbo",
+        "file": "split_files/vae/ae.safetensors",
+        "size_mb": 320
+      },
+      "clip_l": {
+        "repo": "comfyanonymous/flux_text_encoders",
+        "file": "clip_l.safetensors",
+        "size_mb": 246
+      },
+      "t5xxl": {
+        "repo": "city96/t5-v1_1-xxl-encoder-gguf",
+        "file": "t5-v1_1-xxl-encoder-Q4_K_M.gguf",
+        "size_mb": 2900
+      }
+    },
+    "gen": {
+      "steps": 4,
+      "cfg": 1.0,
+      "size": 1024,
+      "sampler": "euler"
+    },
+    "desc": "Flux en GGUF con sus piezas (VAE, clip_l y T5-XXL). Para GPU de 12 GB o mas; con menos, parte va a la RAM."
+  },
+  {
     "id": "qwen3-embedding-0.6b",
     "kind": "embed",
     "name": "Qwen3-Embedding 0.6B · documentación (CPU)",

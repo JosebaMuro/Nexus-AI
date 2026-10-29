@@ -24,6 +24,7 @@
 #include <unistd.h>
 #endif
 
+#include "llm/motores.h"
 #include "agents/agents.h"
 #include "coop/coop.h"
 #include "core/config.h"
@@ -125,8 +126,8 @@ int cmd_run(const Args& a) {
   std::string motor = a.get("motor"), accel = a.get("acelerador");
   if (!motor.empty() || !accel.empty()) {   // eleccion por linea de comandos: no preguntar
     if (!motor.empty()) {
-      if (motor != "auto" && motor != "llamaserver") {
-        std::printf("  La edicion C++ usa llama-server; '%s' no esta disponible (se usa llamaserver).\n", motor.c_str());
+      if (motor != "auto" && motor != "llamaserver" && !motores::info(motor)) {
+        std::printf("  Motor '%s' desconocido (llamaserver, litert u onnx): se usa llamaserver.\n", motor.c_str());
         motor = "llamaserver";
       }
       cfg.set("llm.engine", motor);
@@ -850,8 +851,8 @@ int cmd_cleanup(const Args& a) {
 
 const char* HELP =
     "Nexus-Office " NEXUS_VERSION " - oficina de IA local para pymes (edicion C++)\n\n"
-    "  nexus-office run [--host H] [--port P] [--no-browser] [--motor auto|llamaserver] [--acelerador auto|cpu|gpu|npu]\n"
-    "                   [--sin-comprobar]   (al arrancar comprueba y repara ficheros, base de datos, modelos y motor)\n"
+    "  nexus-office run [--host H] [--port P] [--no-browser] [--motor auto|llamaserver|litert|onnx]\n"
+    "                   [--acelerador auto|cpu|gpu|npu] [--sin-comprobar]   (al arrancar comprueba y repara ficheros, base de datos, modelos y motor)\n"
     "  nexus-office detect                      detecta el hardware y muestra el perfil\n"
     "  nexus-office pull <id|auto>              descarga un modelo recomendado\n"
     "  nexus-office modelos [--descargar] [--todos]   elige (y descarga) el modelo de IA de cada tipo\n"
@@ -869,6 +870,8 @@ const char* HELP =
     "  nexus-office firmware drivers [--instalar|--simular]   instala los drivers CH340/CP210x/FTDI que falten\n"
     "  nexus-office firmware grabar luces|reloj|pico [--puerto P] [--modelo esp8266|esp32c3...] [--wifi RED --clave C]\n"
     "  nexus-office comprobar [--sin-reparar] [--rapido] [--json]   comprueba y repara la instalacion y los datos\n"
+    "  nexus-office motor litert|onnx --modelo RUTA --puerto N [--acelerador cpu|gpu|npu|dml|qnn]   (lo usa el LLM)\n"
+    "  nexus-office importar-runtime <Nexus-Office-runtime-...zip>   runtimes sin conexion (CUDA 13, ROCm, SYCL...)\n"
     "  nexus-office --version\n";
 
 }  // namespace
@@ -886,6 +889,18 @@ int run_main(std::vector<std::string> argv) {
   if (starts_with(cmd, "--")) cmd = "run";   // "nexus-office --no-browser" = run --no-browser
   else argv.erase(argv.begin());
   if (cmd == "servicio") return service::main(argv);
+  // motor de inferencia aparte de llama.cpp (LiteRT-LM, ONNX Runtime GenAI) en su propio proceso: lo arranca el LLM
+  if (cmd == "motor") return motores::main_motor(argv);
+  if (cmd == "importar-runtime") {   // paquete de runtimes sin conexion (Nexus-Office-runtime-*.zip)
+    if (argv.empty()) die("uso: nexus-office importar-runtime <Nexus-Office-runtime-...zip>", 2);
+    try {
+      runtimes::RuntimeManager rm;
+      for (auto& a : argv) std::printf("%s: %s\n", a.c_str(), jdump(rm.import_pack(P(a))).c_str());
+    } catch (const std::exception& e) {
+      die(e.what(), 1);
+    }
+    return 0;
+  }
   if (cmd == "run") return cmd_run(parse(argv, {"host", "port", "motor", "acelerador"}));
   if (cmd == "detect") return cmd_detect();
   if (cmd == "pull") {

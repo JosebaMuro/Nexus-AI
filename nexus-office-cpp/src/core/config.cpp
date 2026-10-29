@@ -34,7 +34,8 @@ const json& config_defaults() {
     "allow_agent_proposals": true, "sandbox_community_tools": true
   },
   "hardware": {"profile_override": "", "accel": "auto", "llama_variant": "", "adaptive_tuning": true,
-               "monitor_interval_s": 2.0, "perfil": "auto", "perfiles": [], "gpu": ""},
+               "monitor_interval_s": 2.0, "perfil": "auto", "perfiles": [], "gpu": "",
+               "capas": "auto"},
   "models": {"huggingface_token": "", "civitai_token": "", "kaggle_username": "", "kaggle_key": "",
              "modelscope_token": ""},
   "media": {"tts_engine": "auto", "stt_engine": "auto", "image_model": "", "music_engine": "auto",

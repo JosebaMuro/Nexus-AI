@@ -16,6 +16,8 @@ Eventos recibidos: `session`, `agent`, `state` (`thinking|tool|idle`), `token`, 
 | `GET /api/hardware`, `GET /api/monitor`, `POST /api/hardware/redetect` | Hardware, monitor en vivo, re-detección. |
 | `GET /api/runtimes`, `POST /api/runtimes/install` | Runtimes nativos. |
 | `GET /api/sessions`, `GET/DELETE /api/sessions/{id}` | Conversaciones. |
+| `GET/PUT /api/sessions/{id}/hilo` | Hilo de una conversación larga: resumen, notas fijas (`{"notas", "resumen"}`) y contadores. |
+| `POST /api/sessions/{id}/hilo/resumir` | Pliega ya en el resumen lo antiguo (`{"todo": true}`: todo menos los dos últimos mensajes). |
 | `POST /api/feedback` | `{message_id, score: 1|-1, comment}`. |
 | `GET/POST /api/memory`, `GET /api/memory/search?q=`, `DELETE /api/memory/{id}` | Memoria. |
 | `GET /api/graph?scope=` (`*` = general con el subgrafo de cada agente, por defecto; vacío = solo el general; id de agente = solo su grafo individual), `GET /api/graph/scopes` (tamaño y documentos de cada grafo), `DELETE /api/graph/{id}` | Grafo de conocimiento. |

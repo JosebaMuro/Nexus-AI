@@ -56,6 +56,39 @@ jobs:
           EXE=out/Nexus-Office/nexus-office; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
           "$EXE" --version
           "$EXE" detect | head -40
+      - name: Motores LiteRT-LM y ONNX Runtime GenAI con sus bibliotecas reales
+        if: matrix.target != 'macos-x86_64' && matrix.target != 'windows-arm64'
+        shell: bash
+        run: |
+          # carga cada biblioteca oficial y abre un modelo falso: tiene que fallar al abrir el modelo (codigo 4),
+          # no al cargar la biblioteca ni por una version de la API que no casa
+          EXE=$PWD/out/Nexus-Office/nexus-office; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
+          whl() { curl -fsSL "https://pypi.org/pypi/$1/json" | jq -r --arg p "$2" '[.urls[] | select(.filename | test($p))][0].url'; }
+          case "${{ matrix.target }}" in
+            linux-x86_64) LP='manylinux.*_x86_64'; OP='cp313-cp313-manylinux.*_x86_64' ;;
+            linux-aarch64) LP='manylinux.*_aarch64'; OP='cp313-cp313-manylinux.*_aarch64' ;;
+            macos-arm64) LP='macosx.*arm64'; OP='cp313-cp313-macosx.*arm64' ;;
+            windows-x64) LP='win_amd64'; OP='cp313-cp313-win_amd64' ;;
+          esac
+          mkdir -p mot/lt mot/ox mot/m && echo no > mot/m/falso.litertlm && echo '{"model":{"type":"phi3"}}' > mot/m/genai_config.json
+          curl -fsSL -o mot/lt.whl "$(whl litert-lm-api "$LP")" && unzip -q -o mot/lt.whl -d mot/lt
+          curl -fsSL -o mot/og.whl "$(whl onnxruntime-genai "$OP")" && unzip -q -o mot/og.whl -d mot/ox
+          curl -fsSL -o mot/or.whl "$(whl onnxruntime "$OP")" && unzip -q -o mot/or.whl -d mot/ox
+          probar() {
+            local m=$1 lib=$2 modelo=$3
+            set +e; "$EXE" motor "$m" --modelo "$modelo" --puerto 18999 --lib "$lib" > mot/$m.txt 2>&1; local rc=$?; set -e
+            cat mot/$m.txt
+            if [ $rc -ne 4 ] || grep -qE "no se pudo cargar|incompatible" mot/$m.txt; then echo "::error::$m: codigo $rc"; return 1; fi
+          }
+          LT=$(find mot/lt -type f \( -name 'liblitert-lm.so' -o -name 'litert-lm.dll' -o -name 'liblitert-lm.dylib' \) | head -1)
+          probar litert "$LT" mot/m/falso.litertlm
+          OG=$(find mot/ox -type f \( -name 'libonnxruntime-genai.so' -o -name 'onnxruntime-genai.dll' -o -name 'libonnxruntime-genai.dylib' \) | head -1)
+          # junto a su libonnxruntime, como en los instaladores
+          for f in $(find mot/ox -path '*capi*' -type f \( -name 'libonnxruntime.so*' -o -name 'onnxruntime.dll' -o -name 'libonnxruntime*.dylib' \)); do cp "$f" "$(dirname "$OG")/"; done
+          for f in "$(dirname "$OG")"/libonnxruntime.so.*; do [ -e "$f" ] && cp "$f" "$(dirname "$OG")/libonnxruntime.so.1"; done
+          for f in "$(dirname "$OG")"/libonnxruntime.*.dylib; do [ -e "$f" ] && cp "$f" "$(dirname "$OG")/libonnxruntime.dylib"; done
+          export ORT_LIB_PATH=$(ls "$(dirname "$OG")"/libonnxruntime.so.1 "$(dirname "$OG")"/libonnxruntime.dylib 2>/dev/null | head -1)
+          probar onnx "$OG" mot/m
       - name: Herramienta de construccion
         shell: bash
         run: |

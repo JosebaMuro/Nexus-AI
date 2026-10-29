@@ -1,6 +1,7 @@
 // Gestor de LLM (llm/manager.py): elige backend y modelo, presupuesto de razonamiento y medicion de rendimiento.
 #include "hardware/hardware.h"
 #include "llm/llm.h"
+#include "llm/motores.h"
 #include "models/models.h"
 #include "util/crypto.h"
 #include "util/log.h"
@@ -16,6 +17,9 @@ static double msg_tokens(const json& m) {
   return ulen(jstr(m, "content")) / 3.2 + 8 + 400.0 * m.value("images", json::array()).size();
 }
 
+// Ajusta los mensajes al contexto: nunca se pierden el sistema ni los marcados "keep" (la peticion actual).
+// Primero se quitan los mensajes intermedios mas antiguos; si aun no cabe, se recortan por el medio los mas largos
+// (resultados de herramientas) y, al final, la cola del sistema.
 json fit_context(json msgs, int n_ctx, int reply_tokens) {
   double budget = n_ctx - reply_tokens - 48;
   auto total = [&] {
@@ -23,13 +27,63 @@ json fit_context(json msgs, int n_ctx, int reply_tokens) {
     for (auto& m : msgs) s += msg_tokens(m);
     return s;
   };
-  while (total() > budget && msgs.size() > 2) msgs.erase(msgs.begin() + 1);
+  auto keep = [](const json& m) { return m.value("role", "") == "system" || truthy(m.value("keep", json())); };
+  auto anchor = [&] {   // la ultima peticion protegida; sin ninguna, el ultimo mensaje
+    for (size_t i = msgs.size(); i-- > 1;)
+      if (truthy(msgs[i].value("keep", json()))) return i;
+    return msgs.empty() ? (size_t)0 : msgs.size() - 1;
+  };
+  // 1) la conversacion anterior a la peticion, de lo mas antiguo a lo mas nuevo
+  auto drop_before = [&](bool upto_anchor) {
+    while (total() > budget) {
+      size_t lim = upto_anchor ? anchor() : msgs.size() - 1;
+      size_t i = 0;
+      while (i < lim && keep(msgs[i])) ++i;
+      if (i >= lim) break;
+      msgs.erase(msgs.begin() + (long)i);
+    }
+  };
+  drop_before(true);
+  // 2) recortar por el medio los mensajes largos (resultados de herramientas)
+  for (int guard = 0; total() > budget && guard < 8; ++guard) {
+    size_t big = 0;
+    double bt = 0;
+    for (size_t i = 0; i < msgs.size(); ++i)
+      if (msgs[i].value("role", "") != "system" && msg_tokens(msgs[i]) > bt) {
+        bt = msg_tokens(msgs[i]);
+        big = i;
+      }
+    double over = total() - budget;
+    if (bt < 400 || !msgs[big].contains("content")) break;
+    size_t chars = (size_t)std::max(1200.0, (bt - over) * 3.2);
+    std::string c = jstr(msgs[big], "content");
+    if (ulen(c) <= chars) break;
+    msgs[big]["content"] = uleft(c, chars * 2 / 3) + "\n[…]\n" + uright(c, chars / 3);
+  }
+  // 3) pasos intermedios de herramientas (el ultimo mensaje siempre se queda) y 4) la cola del sistema
+  drop_before(false);
   double over = total() - budget;
   if (over > 0 && !msgs.empty() && msgs[0]["role"] == "system") {
-    size_t keep = (size_t)std::max(400.0, (msg_tokens(msgs[0]) - over) * 3.2);
-    msgs[0]["content"] = uleft(jstr(msgs[0], "content"), keep);
+    size_t keep_chars = (size_t)std::max(400.0, (msg_tokens(msgs[0]) - over) * 3.2);
+    msgs[0]["content"] = uleft(jstr(msgs[0], "content"), keep_chars);
   }
+  for (auto& m : msgs) m.erase("keep");
   return msgs;
+}
+
+int approx_tokens(const json& messages) {
+  double s = 0;
+  for (auto& m : messages) s += msg_tokens(m);
+  return (int)s;
+}
+
+int LLMManager::request_ctx(const std::string& b, int n_ctx) {
+  if (b != "llamaserver") return n_ctx;
+  auto ls = std::dynamic_pointer_cast<LlamaServerBackend>(backend("llamaserver"));
+  int slots = ls ? ls->slots.load() : 0;
+  if (slots <= 0)   // aun sin arrancar: con GPU arranca con 2 slots
+    slots = (int)jnum(llm_profile().value("gpu_layers", json(0)), 0) != 0 ? 2 : 1;
+  return std::max(512, n_ctx / std::max(1, slots));
 }
 
 LLMManager::LLMManager(Config& config, models::Catalog& catalog, json& profile, hw::Monitor* monitor,
@@ -41,8 +95,10 @@ LLMManager::LLMManager(Config& config, models::Catalog& catalog, json& profile, 
 void LLMManager::rebuild() {
   std::lock_guard<std::recursive_mutex> lk(mu_);
   double timeout = config_.num("llm.request_timeout", 180);
-  for (auto& [n, b] : backends_)
+  for (auto& [n, b] : backends_) {
     if (n == "llamaserver") std::static_pointer_cast<LlamaServerBackend>(b)->stop();
+    if (auto mb = std::dynamic_pointer_cast<MotorBackend>(b)) mb->stop();
+  }
   backends_.clear();
   backends_.push_back({"llamaserver", std::make_shared<LlamaServerBackend>(
                                           rt_, resolver("gguf"), [this] { return profile_; },
@@ -51,6 +107,9 @@ void LLMManager::rebuild() {
     update_llm_profile(o);
   };
   backends_.push_back({"llamacpp", std::make_shared<UnavailableBackend>("llamacpp")});
+  // motores aparte de llama.cpp (LiteRT-LM, ONNX Runtime GenAI): NPU y GPU que llama.cpp no aprovecha
+  for (auto& m : motores::lista())
+    backends_.push_back({m.id, std::make_shared<MotorBackend>(m.id, resolver(m.formato), [this] { return profile_; })});
   backends_.push_back({"ollama", std::make_shared<OllamaBackend>(config_.str("llm.ollama_url"), timeout)});
   backends_.push_back({"openai", std::make_shared<OpenAICompatBackend>(config_.str("llm.openai_base_url"),
                                                                        config_.str("llm.openai_api_key"),
@@ -124,6 +183,8 @@ std::pair<std::string, std::string> LLMManager::select(const std::string& spec) 
   json entry = def.empty() ? json() : catalog_.get(def);
   std::string engine = config_.str("llm.engine", "auto");
   if (!entry.is_null()) {
+    std::string motor = motores::motor_de_formato(jstr(entry, "format"));
+    if (!motor.empty() && is_available(motor)) return {motor, jstr(entry, "id")};
     std::string b = jstr(entry, "format") == "gguf" ? "llamacpp" : "transformers";
     if (jstr(entry, "format") == "gguf") {
       if (engine == "llamaserver" || engine == "llamacpp") b = engine;
@@ -156,6 +217,10 @@ json LLMManager::status() {
     auto ms = backend("ollama")->models();
     model = ms.empty() ? "" : ms[0];
   }
+  if (motores::info(b) && model.empty()) {
+    auto ms = backend(b)->models();
+    model = ms.empty() ? "" : ms[0];
+  }
   if (b == "builtin") model = "nexus-core";
   json avail = json::object();
   for (auto& n : backend_names()) avail[n] = is_available(n);
@@ -183,6 +248,8 @@ json LLMManager::options(const json& agent_opts) {
             {"device", llm.value("device", json(""))},
             {"kv_ram", llm.value("kv_ram", json(false))},
             {"mlock", llm.value("mlock", json(false))},
+            {"n_threads_batch", llm.value("n_threads_batch", json(0))},
+            {"kv_quant", llm.value("kv_quant", json(""))},
             {"temperature", config_.get("llm.temperature", 0.7)},
             {"max_tokens", config_.get("llm.max_tokens", 1024)}};
   if (agent_opts.is_object())
@@ -246,17 +313,38 @@ void LLMManager::stream(json messages, const std::string& spec, Opts opts, const
     if (bname == "llamaserver" && budget > 0)
       full["extra_body"] = {{"reasoning_budget_tokens", budget}, {"reasoning_budget_message", REASONING_STOP}};
   }
-  if (bname == "llamaserver" || bname == "llamacpp" || bname == "ollama") {
-    int n_ctx = (int)jnum(full["n_ctx"], 4096);
-    int cap = thinking ? n_ctx / 2 : n_ctx / 3;
+  int fit_ctx = 0, tools_tok = 0;
+  json original;   // antes de ajustar (con las marcas "keep") para poder reajustar
+  if (bname == "llamaserver" || bname == "llamacpp" || bname == "ollama" || motores::info(bname)) {
+    fit_ctx = request_ctx(bname, (int)jnum(full["n_ctx"], 4096));
+    int cap = thinking ? fit_ctx / 2 : fit_ctx / 3;
     int mt = truthy(full["max_tokens"]) ? (int)jnum(full["max_tokens"]) : 1024;
     full["max_tokens"] = std::min(mt, std::max(256, cap));
-    messages = fit_context(messages, n_ctx, full["max_tokens"].get<int>());
+    // las definiciones de herramientas nativas tambien ocupan contexto
+    tools_tok = full.contains("tool_specs") ? (int)(ulen(full["tool_specs"].dump()) / 3.2) : 0;
+    original = messages;
+    messages = fit_context(messages, fit_ctx - tools_tok, full["max_tokens"].get<int>());
   }
   Opts o2{full, opts.on_reasoning};
   ++inflight;
   try {
-    b->stream_chat(messages, model, o2, out);
+    try {
+      b->stream_chat(messages, model, o2, out);
+    } catch (const std::exception& e) {
+      // la estimacion se quedo corta (plantilla, idioma, imagenes): se reajusta con lo que dice el servidor y se reintenta
+      static const Rx OVER(R"("n_prompt_tokens"\s*:\s*(\d+).*?"n_ctx"\s*:\s*(\d+))", Rx::S);
+      const std::string err = e.what();
+      auto m = fit_ctx ? OVER.search(err) : std::nullopt;
+      if (!m) throw;
+      double real = std::stod(m->str(1)), avail = std::stod(m->str(2));
+      double est = approx_tokens(messages) + tools_tok;
+      double ratio = std::max(1.05, real / std::max(1.0, est));
+      int reply = full["max_tokens"].get<int>();
+      int budget = (int)((avail - reply) / ratio * 0.92) - tools_tok;
+      L.warning("Peticion de ", (int)real, " tokens para un contexto de ", (int)avail, ": se reajusta y se reintenta");
+      messages = fit_context(original, std::max(256, budget) + reply + 48, reply);
+      b->stream_chat(messages, model, o2, out);
+    }
   } catch (const std::exception& e) {
     --inflight;
     static const Rx OOM(R"(out of memory|failed to allocate|cudaMalloc|insufficient memory|bad_alloc|OOM)", Rx::I);

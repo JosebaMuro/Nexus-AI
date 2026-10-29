@@ -80,6 +80,7 @@ json accel_options(Services& s) {
           {"perfil_hw", s.config.get("hardware.perfil", "auto")},
           {"engine", s.config.str("llm.engine", "auto")},
           {"accel", s.config.str("hardware.accel", "auto")},
+          {"capas", s.config.get("hardware.capas", "auto")},
           {"ask", truthy(s.config.get("startup.ask_accel", true))},
           {"engines", engines},
           {"accels", accels},
@@ -91,13 +92,17 @@ json accel_options(Services& s) {
           {"selected", s.llm->select().first}};
 }
 
-json accel_apply(Services& s, const std::string& engine, const std::string& accel, std::optional<bool> remember) {
+json accel_apply(Services& s, const std::string& engine, const std::string& accel, std::optional<bool> remember,
+                 const json& capas) {
   static const std::vector<std::string> E = {"auto", "llamaserver", "llamacpp"}, A = {"auto", "cpu", "gpu", "npu"};
   if (std::find(E.begin(), E.end(), engine) == E.end() || std::find(A.begin(), A.end(), accel) == A.end())
     throw std::invalid_argument("motor ('auto', 'llamaserver', 'llamacpp') y acelerador ('auto', 'cpu', 'gpu', 'npu')");
   std::vector<std::string> notes;
   if (engine == "llamacpp") notes.push_back("la edición C++ no incluye llama-cpp-python: se usa llama-server");
+  json capas_ok = capas.is_null() ? json() : hw::profiles::norm_capas(capas);   // invalid_argument -> 400
   auto [profile, p] = hw::build_for(s.hw, accel, accel == "auto" ? s.config.str("hardware.profile_override", "") : "");
+  if (!capas_ok.is_null()) s.config.set("hardware.capas", capas_ok);
+  hw::profiles::aplicar_capas(profile, s.config);
   s.profile = profile;
   s.config.set("llm.engine", engine);
   s.config.set("hardware.accel", accel);
@@ -111,6 +116,7 @@ json accel_apply(Services& s, const std::string& engine, const std::string& acce
           {"note", join(notes, "; ")},
           {"variant", p["variant"]},
           {"selected", s.llm->select().first},
+          {"capas", s.config.get("hardware.capas", "auto")},
           {"profile", {{"accelerator", profile["accelerator"]}, {"gpu_layers", profile["llm"]["gpu_layers"]}}}};
 }
 

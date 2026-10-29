@@ -32,6 +32,10 @@ void al_arrancar(Config& cfg);                    // antes de construir el perfi
 void aplicar_al_perfil(Services& s);              // despues: superpone el perfil activo
 json activar(const std::string& pid, Config& cfg, Services* s = nullptr);   // std::invalid_argument si no existe
 json elegir_gpu(Services& s, const std::string& gpu);
+// capas del modelo en la GPU o la NPU elegidas en la configuracion (hardware.capas): «auto», «todas», «ninguna» o un
+// numero. Van por encima del perfil activo; solo cuentan si hay GPU o NPU (si no, todo sigue en la CPU)
+json norm_capas(const json& v);                    // valor valido o std::invalid_argument
+void aplicar_capas(json& profile, Config& cfg);
 json gpus(Services& s);
 
 }  // namespace nx::hw::profiles

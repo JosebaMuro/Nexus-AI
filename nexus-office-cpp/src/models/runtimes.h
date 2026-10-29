@@ -33,6 +33,11 @@ class RuntimeManager {
   std::optional<Found> exe(const std::string& runtime, const json& profile, const std::string& preferred = "");
   fs::path install(const std::string& runtime, const std::string& variant);
   json progress();
+  // paquete de runtimes sin conexion (Nexus-Office-runtime-<variante>-<version>-<plataforma>.zip, con
+  // runtimes/<rt>/<variante>/ dentro): se copia a data/runtimes. Devuelve las variantes que trae.
+  json import_pack(const fs::path& zip);
+  // los paquetes que haya junto al programa, en su carpeta superior o en data/paquetes: se importan una vez
+  json import_found();
 
  private:
   fs::path root_;

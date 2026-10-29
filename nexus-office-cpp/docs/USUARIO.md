@@ -241,6 +241,7 @@ El modo **USUARIO** (arriba a la derecha) muestra solo lo necesario. Nada de lo 
 - **📎** adjunta imágenes (también puedes pegarlas): Nexus-Office las describe, lee texto (OCR) y responde preguntas sobre ellas.
 - **🎤** habla; **🔊** activa la lectura en voz alta de las respuestas.
 - **Modo en vivo** (botón de ondas junto al micrófono): conversación por voz manos libres. Hablas, Nexus-Office te escucha, responde en voz alta y vuelve a escuchar. Si hablas mientras responde, se calla y te atiende (*interrumpir hablando*). **PAUSAR** y **TERMINAR** abajo. Para ir rápido responde sin razonar y en frases cortas (como máximo `live.max_tokens`, 400 por defecto; `live.reasoning: true` le deja razonar un poco). Escucha con Whisper local si está instalado, con la voz del sistema en la app Android o con el reconocimiento del navegador (Chrome, Edge, Safari). El micrófono del navegador solo funciona en este mismo equipo o por https.
+- **Conversaciones largas (🧵 HILO)**: puedes llevar un proyecto en una misma conversación durante días. Lo que ya no cabe en la memoria de trabajo del modelo se resume solo y el agente lo sigue teniendo presente, junto con los mensajes antiguos que vengan al caso. En **🧵 HILO** ves ese resumen, puedes corregirlo y escribir **notas fijas** (objetivo, decisiones, datos clave) que el agente tendrá siempre en cuenta. **RESUMIR AHORA** lo pone al día al momento.
 - Bajo cada respuesta: **👍 / 👎** enseñan a Nexus-Office qué te gusta (aprende ejemplos, lecciones y la longitud preferida), **🔊** lee, **⧉** copia.
 - Las líneas verdes “⟡ aprendido” muestran lo que acaba de memorizar de ti.
 - Si un agente necesita una herramienta con riesgo, aparece una tarjeta **APROBACIÓN REQUERIDA**: tú decides.
@@ -268,6 +269,11 @@ El **agente de bolsa autónomo** gestiona su propia cartera simulada con esos da
 
 ### Modelos
 En modo usuario verás los **recomendados para tu equipo** con una etiqueta: *ideal*, *compatible*, *pesado* o *no cabe*. Si el instalador no pudo descargar el modelo elegido (por ejemplo, sin internet), pulsa **Descargar** en el marcado con ★ y después **Activar**. Descarga también el modelo de **embeddings** (Qwen3-Embedding, 639 MB): mejora la búsqueda en tu biblioteca y en la memoria y se activa solo.
+
+Para generar imágenes de más calidad hay **Z-Image-Turbo** y **FLUX.1-schnell** en GGUF: se descargan con sus piezas
+(VAE y codificadores de texto). Si copias a mano un GGUF de imagen que es solo el modelo de difusión, déjalo en la
+misma carpeta que sus piezas; *Imagen* te dice cuál falta. Los modelos `.litertlm` (LiteRT-LM, ideales en Pixel y
+Snapdragon) y las carpetas ONNX con `genai_config.json` también se pueden usar: Nexus-Office elige el motor solo.
 
 ### Ajustes
 Nombre del asistente, idioma, estilo de respuesta (breve/equilibrado/detallado), agente por defecto, memoria, voz, velocidad de voz, avatar y color de acento.

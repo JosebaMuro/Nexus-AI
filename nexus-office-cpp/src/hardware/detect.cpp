@@ -466,7 +466,7 @@ static void detect_android(HardwareInfo& info) {
 
 // GPU que ve de verdad el llama-server de GPU incluido (Vulkan/CUDA/ROCm): cuales funcionan con su driver
 static json llama_gpu_devices() {
-  for (const char* variant : {"cuda", "vulkan", "rocm"}) {
+  for (const char* variant : {"cuda", "cuda13", "vulkan", "rocm", "sycl", "opencl-adreno", "snapdragon"}) {
     auto exe = runtimes::RuntimeManager().find_exe("llama", variant);
     if (!exe) exe = runtimes::bundled_exe("llama", variant);
     if (!exe) continue;
