@@ -23,6 +23,8 @@
   falta. En *Modelos* hay **Z-Image-Turbo** y **FLUX.1-schnell** en GGUF que se descargan con todas sus piezas.
 - **sd-server** mantiene el modelo cargado entre imágenes y stable-diffusion.cpp se actualiza en los instaladores.
 - Ajustes según la VRAM: atención rápida, codificadores en la CPU, pesos por partes y VAE por teselas.
+- Si la GPU no consigue generar la imagen (por ejemplo, Metal en una máquina virtual), se reintenta en la CPU
+  antes de recurrir a la imagen compuesta sin IA.
 
 ### Rendimiento
 - Caché KV cuantizada (q8_0) cuando el modelo va justo de memoria, con vuelta atrás si la build no lo admite.
