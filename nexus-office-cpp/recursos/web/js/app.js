@@ -1969,6 +1969,11 @@
       const d = this.d = await api("/api/accel");
       if (!force && !d.ask) return;
       this.engine = d.engine; this.accel = d.accel;
+      const n = typeof d.capas === "number", sel = $("#accel-capas"), num = $("#accel-capas-n");
+      sel.value = n ? "n" : d.capas || "auto"; num.value = n ? d.capas : num.value; num.disabled = !n;
+      const tot = String((d.effective || {}).offloaded || "").split("/")[1];
+      $("#accel-capas-info").textContent = (tot ? `Este modelo tiene ${tot} capas. ` : "") + "Menos capas deja VRAM libre para el contexto; más capas va más rápido si caben.";
+      if (tot) num.max = tot;
       const h = d.hardware;
       $("#accel-hw").textContent = `${h.cpu} · ${h.cores} núcleos · ${h.ram_gb} GB` + (h.gpus.length ? ` · GPU: ${h.gpus.join(", ")}` : " · sin GPU") + (h.npus.length ? ` · NPU: ${h.npus.join(", ")}` : "");
       this.render(); this.result(d);
@@ -1989,7 +1994,8 @@
         (eff.device ? ` · el modelo está en <b>${esc(eff.device)}</b>${eff.offloaded ? ` (${esc(eff.offloaded)} capas)` : ""}${eff.detail ? ` · ${esc(eff.detail)}` : ""}${eff.ok === false ? ` <span class="tag warn">se pidió ${esc(eff.requested)}</span>` : ""}` : "") +
         (r.tokens_s ? ` · ${r.tokens_s} tok/s` : "") + (r.error ? `<div class="bad">${esc(r.error)}</div>` : "");
     },
-    async apply() { await api("/api/accel", { body: { engine: this.engine, accel: this.accel, remember: $("#accel-remember").checked } }); },
+    capas() { const v = $("#accel-capas").value; return v === "n" ? Math.max(1, +$("#accel-capas-n").value || 1) : v; },
+    async apply() { await api("/api/accel", { body: { engine: this.engine, accel: this.accel, remember: $("#accel-remember").checked, capas: this.capas() } }); },
   };
   $("#accel-go").onclick = guard(async () => { await Accel.apply(); $("#accel-dialog").close(); toast("Motor y acelerador aplicados"); loadStatus(); });
   $("#accel-test").onclick = guard(async () => {
@@ -1997,7 +2003,8 @@
     try { await Accel.apply(); const r = await api("/api/accel/test", { body: {} }); Accel.d = { ...Accel.d, ...r }; Accel.result(r); toast(r.ok ? "Prueba correcta" : "La prueba ha fallado", !r.ok); }
     finally { b.disabled = false; }
   });
-  $("#accel-open").onclick = guard(() => Accel.open(true));
+  $("#accel-open").onclick = $("#accel-open-ajustes").onclick = guard(() => Accel.open(true));
+  $("#accel-capas").onchange = (e) => { $("#accel-capas-n").disabled = e.target.value !== "n"; };
 
   /* ================================================================ barra superior: desplegables IA · PERFIL · MEMORIA · RED */
   // Cada pastilla abre su menu con lo que de verdad hay en este equipo (motores, modelos, perfiles, GPU...). En el movil

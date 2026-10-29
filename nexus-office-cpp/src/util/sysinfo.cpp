@@ -176,6 +176,10 @@ int cores_physical() {
   size_t len = sizeof n;
   if (sysctlbyname("hw.physicalcpu", &n, &len, nullptr, 0) == 0 && n > 0) return n;
   return cores_logical();
+#elif defined(__aarch64__) || defined(__arm__)
+  // ARM (moviles, Snapdragon X, Raspberry Pi) no tiene SMT, y core_id se repite en cada grupo de nucleos (big.LITTLE):
+  // contar pares (paquete, nucleo) daba 4 en un Snapdragon X de 12 nucleos
+  return cores_logical();
 #else
   // pares (paquete, nucleo) distintos en sysfs
   std::set<std::string> cores;

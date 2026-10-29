@@ -127,11 +127,12 @@ std::pair<std::string, const GPU*> choose_accelerator(const HardwareInfo& hw, co
   const GPU* gpu = best_gpu(hw);
   if (!ov.empty()) return {ov, gpu};
   const json& rt = hw.runtimes;
-  if (!gpu) return {"cpu", nullptr};
-  if (android()) {
+  if (android()) {   // antes de mirar la GPU: la sonda puede ver solo la NPU (HTP0) sin nombre de GPU
     std::string b = rt.contains("android_accel") ? jstr(rt["android_accel"], "gpu_backend") : "";
+    if (!gpu && b != "hexagon") return {"cpu", nullptr};
     return {b.empty() ? "cpu" : b, gpu};
   }
+  if (!gpu) return {"cpu", nullptr};
   if (gpu->vendor == "nvidia") {
     // VRAM 0 = tarjeta vista en Linux sin nvidia-smi (nouveau/NVK o driver sin instalar): CUDA no funcionaria,
     // pero Vulkan si si el llama-server de Vulkan la ve (Mesa NVK)
@@ -162,7 +163,7 @@ static double tier_at_most(double b) {
 json build_profile(const HardwareInfo& hw, const std::string& ov) {
   auto [acc, gpu] = choose_accelerator(hw, ov);
   static const std::set<std::string> OFF = {"cuda", "rocm", "vulkan", "metal", "xpu", "opencl", "hexagon"};
-  bool gpu_offload = OFF.count(acc) && gpu != nullptr;
+  bool gpu_offload = OFF.count(acc) && (gpu != nullptr || acc == "hexagon");
   double ram = hw.ram_gb;
   double cpu_budget = std::max(0.5, std::min(ram * 0.5, ram - 3.0));
   double vram_gpu = gpu ? gpu->vram_gb : 0.0;
@@ -475,6 +476,9 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
   const json& base = profile["llm"];
   json llm = base;
   json overrides = state.value("overrides", json::object());
+  // con todas las capas pedidas (-1) llama.cpp ya mete en la VRAM las que caben (-ngl auto): un numero fijo que dejo
+  // una version anterior (28 o 24 capas tras un pico de VRAM) sacaba capas a la CPU para siempre y no se recuperaba
+  if (jnum(base.value("gpu_layers", json(0))) == -1) overrides.erase("gpu_layers");
   for (auto it = overrides.begin(); it != overrides.end(); ++it) llm[it.key()] = it.value();
   auto I = [&](const char* k) { return (int)jnum(llm[k]); };
   auto B = [&](const char* k) { return (int)jnum(base[k]); };
@@ -502,8 +506,7 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
     llm["n_ctx"] = std::max(std::min(MIN_CTX, B("n_ctx")), I("n_ctx") / 2);
     llm["n_batch"] = std::max(std::min(MIN_BATCH, B("n_batch")), I("n_batch") / 2);
     int gl = I("gpu_layers");
-    if (gl != 0 && gl != -1) llm["gpu_layers"] = (int)(gl * 0.75);
-    else if (gl == -1 && last.is_object() && truthy(last.value("oom_errors", json(0)))) llm["gpu_layers"] = 24;
+    if (gl != 0 && gl != -1) llm["gpu_layers"] = (int)(gl * 0.75);   // con -1, llama.cpp ajusta las capas solo
     reasons.push_back("Cierre inesperado o falta de memoria en la sesion anterior: contexto y lote reducidos");
   } else if (last.is_object()) {
     double ram = L(last, "peak_ram_pct"), vram = L(last, "peak_vram_pct");
@@ -517,13 +520,15 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
       llm["n_batch"] = std::min(B("n_batch"), I("n_batch") * 2);
       reasons.push_back(cat("Sesion estable (RAM ", fnum(ram, 0), "%): recuperando contexto ", I("n_ctx"), " y lote ",
                             I("n_batch")));
-    } else if (ram < 65 && L(last, "llm_calls") >= 3 && I("n_ctx") < B("max_ctx")) {
+    } else if (ram < 65 && L(last, "llm_calls") >= 3 && I("n_ctx") < B("max_ctx") &&
+               (I("gpu_layers") == 0 || !truthy(profile.value("vram_gb", json(0))) || (vram > 0 && vram < 75))) {
+      // con GPU dedicada la cache KV va en la VRAM: crecer el contexto mirando solo la RAM la desbordaba
       llm["n_ctx"] = std::min(B("max_ctx"), (int)(I("n_ctx") * 1.5) / 256 * 256);
       reasons.push_back(cat("Holgura de RAM (", fnum(ram, 0), "%): contexto ampliado a ", I("n_ctx")));
     }
     int gl = I("gpu_layers");
-    if (vram > 95 && gl != 0) {
-      llm["gpu_layers"] = gl == -1 ? 28 : std::max(0, (int)(gl * 0.8));
+    if (vram > 95 && gl > 0) {
+      llm["gpu_layers"] = std::max(0, (int)(gl * 0.8));
       reasons.push_back(cat("VRAM al ", fnum(vram, 0), "%: menos capas en GPU (", I("gpu_layers"), ")"));
     } else if (vram > 0 && vram < 70 && gl > 0) {
       llm["gpu_layers"] = (int)(gl * 1.25) + 1;

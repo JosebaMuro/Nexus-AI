@@ -249,7 +249,9 @@ void LiveTuner::note(const std::string& msg) {
 
 bool LiveTuner::set_gpu(bool on) {
   json llm = s_.llm->llm_profile();
-  int want_l = on ? -1 : 0;
+  // las capas elegidas en la configuracion (hardware.capas) se respetan al volver a la GPU o la NPU
+  json capas = llm.value("capas_usuario", json("auto"));
+  int want_l = !on ? 0 : capas.is_number() ? capas.get<int>() : -1;
   std::string want_d = on ? gpu_device_ : "";
   if ((int)jnum(llm.value("gpu_layers", json(0))) == want_l && jstr(llm, "device") == want_d) return false;
   s_.llm->update_llm_profile({{"gpu_layers", want_l}, {"device", want_d}});
