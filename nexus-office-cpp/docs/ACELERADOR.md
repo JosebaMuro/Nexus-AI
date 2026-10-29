@@ -116,6 +116,21 @@ Si lo tienes instalado, Nexus-Office lo sigue usando cuando no hay otro motor.
   teselas con poca VRAM o imágenes grandes, y **sd-server** con el modelo cargado entre imagen e imagen (se libera
   tras `media.sd_servidor_minutos`, 10 por defecto).
 
+### LLM e imagen en la misma GPU (2.7)
+- Desde la 2.6 el LLM carga con `-ngl auto`, que llena la VRAM. Al pedir una imagen, sd.cpp se quedaba sin memoria,
+  repetía en la CPU (minutos, a veces pasado el tiempo de la herramienta) o acababa en la imagen compuesta sin IA.
+- Ahora el prompt se mejora y traduce con el LLM **antes**; después, si el modelo de imagen (difusión, VAE,
+  codificadores y memoria de trabajo) no cabe junto al LLM, el LLM **presta la GPU**: se para llama-server, se genera
+  la imagen, el sd-server suelta la VRAM y el LLM vuelve a cargarse en la siguiente respuesta. Las peticiones al LLM
+  local que lleguen mientras tanto esperan (máximo `media.gpu_espera_max`, 1800 s). Si caben los dos, siguen los dos
+  y sd.cpp reparte con la VRAM que deja el LLM. Si sd.cpp aún así se queda sin memoria, se presta la GPU y se repite
+  en la GPU antes de pasar a la CPU.
+- Cuando llama-server vuelve a la GPU, el sd-server que esté parado sin uso se cierra para dejarle la VRAM.
+- El codificador de texto LLM de Z-Image (Qwen3-4B), Qwen-Image (Qwen2.5-VL-7B) y FLUX.2 (klein: Qwen3-4B/8B;
+  dev: Mistral Small 3.2) se comprueba en la cabecera GGUF (familia y tamaño oculto). Un LLM del chat que no encaja
+  (p. ej. Qwen3-8B para Z-Image) ya no se pasa a sd.cpp; el aviso dice cuál falta. Un Qwen3-4B del chat con otro
+  nombre sí se aprovecha.
+
 ### Correcciones de velocidad (2.6)
 - **GPU dedicada**: llama-server arranca con `-ngl auto` en lugar de 999 capas fijas. llama.cpp (`--fit`) mete en
   la VRAM todas las capas que caben con el contexto pedido. Antes, si el modelo y la caché no cabían, CUDA en Linux
@@ -163,6 +178,8 @@ internet, *Sistema → Runtimes* los descarga de las Releases oficiales de llama
   `metal`, `openvino`, `opencl-adreno`, `snapdragon`).
 - `llm.motor_acelerador`: acelerador de LiteRT-LM u ONNX Runtime GenAI que se prueba primero.
 - `media.sd_servidor` (`no` para lanzar sd-cli en cada imagen) y `media.sd_servidor_minutos`.
+- `media.gpu_compartida`: `auto` (el LLM presta la GPU solo si no caben los dos), `siempre` o `no`; y
+  `media.gpu_espera_max` (segundos que espera el LLM a que vuelva la GPU).
 - `startup.ask_accel`: `true` para preguntar al arrancar.
 
 API: `GET /api/accel` (opciones, elección y dispositivo efectivo), `POST /api/accel` `{engine, accel, remember}`,

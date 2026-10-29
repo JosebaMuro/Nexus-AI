@@ -1,4 +1,7 @@
 // Gestor de LLM (llm/manager.py): elige backend y modelo, presupuesto de razonamiento y medicion de rendimiento.
+#include <chrono>
+#include <thread>
+
 #include "hardware/hardware.h"
 #include "llm/llm.h"
 #include "llm/motores.h"
@@ -105,6 +108,9 @@ void LLMManager::rebuild() {
                                           [this] { return config_.str("hardware.llama_variant"); })});
   std::static_pointer_cast<LlamaServerBackend>(backends_.back().second)->set_llm_opts = [this](const json& o) {
     update_llm_profile(o);
+  };
+  std::static_pointer_cast<LlamaServerBackend>(backends_.back().second)->before_gpu_start = [this] {
+    if (before_llm_gpu_start) before_llm_gpu_start();
   };
   backends_.push_back({"llamacpp", std::make_shared<UnavailableBackend>("llamacpp")});
   // motores aparte de llama.cpp (LiteRT-LM, ONNX Runtime GenAI): NPU y GPU que llama.cpp no aprovecha
@@ -328,8 +334,46 @@ bool LLMManager::thinking_only(const std::string& b, const std::string& model) {
   return R.test(ident);
 }
 
+double LLMManager::llm_gpu_gb() {
+  auto ls = std::dynamic_pointer_cast<LlamaServerBackend>(backend("llamaserver"));
+  return ls ? ls->gpu_gb() : 0;
+}
+
+double LLMManager::lend_gpu(const std::string& why) {
+  auto ls = std::dynamic_pointer_cast<LlamaServerBackend>(backend("llamaserver"));
+  {
+    std::lock_guard<std::mutex> lk(lend_mu_);
+    ++lent_;
+  }
+  double gb = ls ? ls->gpu_gb() : 0;
+  if (gb > 0) {
+    // una respuesta a medias (resumen del hilo, otro agente) termina antes; las nuevas ya esperan
+    for (double t0 = now(); inflight > 0 && now() - t0 < 120;) std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    L.info("Se para llama-server (", fnum(gb, 1), " GB en la GPU) mientras ", why);
+    ls->stop();
+  }
+  return gb;
+}
+
+void LLMManager::return_gpu() {
+  {
+    std::lock_guard<std::mutex> lk(lend_mu_);
+    if (lent_ > 0) --lent_;
+  }
+  lend_cv_.notify_all();
+}
+
+void LLMManager::wait_gpu_back() {
+  std::unique_lock<std::mutex> lk(lend_mu_);
+  if (!lent_) return;
+  L.info("El LLM espera a que el modelo de imagen devuelva la GPU");
+  lend_cv_.wait_for(lk, std::chrono::seconds((long long)config_.num("media.gpu_espera_max", 1800)),
+                    [this] { return lent_ == 0; });
+}
+
 void LLMManager::stream(json messages, const std::string& spec, Opts opts, const Sink& out) {
   auto [bname, model] = select(spec);
+  if (bname == "llamaserver") wait_gpu_back();
   if (bname == "peer") {
     if (!remote) throw std::runtime_error("Modo cooperativo no activo");
     opts.on_reasoning = nullptr;

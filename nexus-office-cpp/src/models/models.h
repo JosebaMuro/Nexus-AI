@@ -29,6 +29,9 @@ json diffusion_info(const fs::path& p);
 // piezas que necesita (vae, clip_l, clip_g, t5xxl, llm) buscadas junto al modelo y en la carpeta de modelos:
 // {pieza: ruta}; las que no aparecen se quedan fuera
 json find_components(const fs::path& model, const json& dinfo, const json& configured = json::object());
+// LLM que hace de codificador de texto para esa arquitectura ("Qwen3-4B" en Z-Image; "" si no usa LLM). Los LLM que
+// no encajan (otra familia u otro tamano) no se eligen y quedan en piezas["_descartados"].
+std::string llm_encoder_for(const std::string& arch, const std::string& model_name);
 
 // ---------------------------------------------------------------- catalogo recomendado
 const json& recommended_list();   // RECOMMENDED (incluye SECTOR)

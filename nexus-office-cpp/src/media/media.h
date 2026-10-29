@@ -104,6 +104,9 @@ class ImageEngine {
   void stop_server();
   const std::set<std::string>& flags_of(const fs::path& exe);
   bool vision_available();
+  // GPU compartida con el LLM: si el modelo de imagen no cabe junto al LLM en la VRAM, se le presta la GPU
+  bool must_lend(const std::string& variant, const SdPlan& plan, int size, double llm_gb);
+  double vram_taken_ = 0;   // VRAM que tiene el LLM mientras se genera (para repartir con sd_plan)
   std::mutex mu_;
   std::map<std::string, std::set<std::string>> flags_;
   std::unique_ptr<proc::Process> server_;

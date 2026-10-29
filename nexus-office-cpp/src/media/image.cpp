@@ -167,9 +167,17 @@ SdPlan sd_plan(const json& model, const json& profile, const std::string& varian
           {"vae", "la VAE (p. ej. ae.safetensors)"}, {"clip_l", "el codificador clip_l"}, {"clip_g", "el codificador clip_g"},
           {"t5xxl", "el codificador T5-XXL"}, {"llm", "el codificador de texto (un LLM: Qwen3-4B en Z-Image)"}};
       std::vector<std::string> d;
-      for (auto& m : missing) d.push_back(DESC.count(m) ? DESC.at(m) : m);
+      std::string enc = models::llm_encoder_for(p.arch, S(path.filename()) + " " + S(path.parent_path().filename()));
+      for (auto& m : missing)
+        d.push_back(m == "llm" && !enc.empty() ? "el codificador de texto (el LLM " + enc + " en GGUF)"
+                    : DESC.count(m)            ? DESC.at(m)
+                                               : m);
       p.error = "El modelo " + jstr(model, "id") + " (" + p.arch + ") es solo el modelo de difusion y le falta " +
                 join(d, ", ") + ": descargalo en Modelos y ponlo en la misma carpeta";
+      // habia LLM en la carpeta de modelos pero de otra familia o tamano: no se entienden con este modelo de imagen
+      if (p.piezas.contains("_descartados"))
+        p.error += ". Los LLM que hay (" + join(p.piezas["_descartados"].get<std::vector<std::string>>(), ", ") +
+                   ") no sirven como codificador: este modelo necesita " + (enc.empty() ? std::string("otro") : enc);
     }
   } else {
     p.model_args = {"-m", S(path)};
@@ -208,6 +216,15 @@ ImageEngine::ImageEngine(Config& config, models::Catalog& catalog, runtimes::Run
                          llm::LLMManager* llm)
     : config_(config), catalog_(catalog), rt_(rt), profile_(std::move(profile)), llm_(llm) {
   // el sd-server se para tras unos minutos sin uso: libera la memoria del modelo de imagen para el LLM
+  // el LLM va a cargar en la GPU: el sd-server parado sin uso suelta la VRAM (si esta generando, no se toca)
+  if (llm_)
+    llm_->before_llm_gpu_start = [this] {
+      std::unique_lock<std::mutex> lk(mu_, std::try_to_lock);
+      if (lk.owns_lock() && server_ && server_->running()) {
+        L.info("El LLM vuelve a la GPU: se para el sd-server para dejarle la VRAM");
+        stop_server();
+      }
+    };
   idle_ = std::thread([this] {
     while (!quit_) {
       std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -222,6 +239,7 @@ ImageEngine::ImageEngine(Config& config, models::Catalog& catalog, runtimes::Run
 }
 
 ImageEngine::~ImageEngine() {
+  if (llm_) llm_->before_llm_gpu_start = nullptr;
   quit_ = true;
   if (idle_.joinable()) idle_.join();
   std::lock_guard<std::mutex> lk(mu_);
@@ -289,17 +307,68 @@ json ImageEngine::generate(const std::string& prompt, const std::string& negativ
                                 : "El modelo " + jstr(m, "id") + " no es compatible con sd.cpp (" + jstr(m, "format") + ")";
   std::string fmt = jstr(m, "format");
   if (!m.is_null() && sd && (fmt == "gguf" || fmt == "safetensors" || fmt == "ckpt")) {
+    // el prompt en ingles se prepara con el LLM ANTES de que el modelo de imagen ocupe la GPU
+    const std::string en = english(prompt);
+    // el LLM y el modelo de imagen en la misma GPU: si no caben los dos, el LLM la presta mientras se genera y el
+    // sd-server la suelta al terminar. Antes se cargaban los dos, sd.cpp se quedaba sin VRAM y acababa en la CPU
+    // (minutos) o en la imagen sin IA.
+    bool lent = false;
+    auto lend = [&](const std::string& reason) {
+      if (lent || !llm_) return;
+      lent = true;
+      vram_taken_ = 0;
+      llm_->lend_gpu(reason);
+    };
+    struct Back {
+      ImageEngine* self;
+      bool& lent;
+      ~Back() {
+        self->vram_taken_ = 0;
+        if (!lent) return;
+        {
+          std::lock_guard<std::mutex> lk(self->mu_);
+          self->stop_server();
+        }
+        self->llm_->return_gpu();
+      }
+    } back{this, lent};
+    double llm_gb = llm_ && !starts_with(sd->variant, "cpu") && sd->variant != "system" ? llm_->llm_gpu_gb() : 0;
+    if (llm_gb > 0) {
+      SdPlan plan = sd_plan(m, profile_(), sd->variant, flags_of(sd->exe), size.value_or(512));
+      if (plan.error.empty() && must_lend(sd->variant, plan, size.value_or(512), llm_gb))
+        lend("se genera la imagen");
+      else
+        vram_taken_ = llm_gb;
+    }
+    static const Rx OOM(R"(out of memory|failed to allocate|cudaMalloc|ErrorOutOfDeviceMemory|insufficient memory|alloc.*buffer|bad_alloc|OOM)", Rx::I);
     try {
-      return sdcpp(sd->exe, sd->variant, m, english(prompt), negative, size, steps, seed, out);
+      return sdcpp(sd->exe, sd->variant, m, en, negative, size, steps, seed, out);
     } catch (const std::exception& e) {
       std::string msg = trim(e.what());
       why = "stable-diffusion.cpp fallo: " + uright(msg, 300);
+      // sin memoria en la GPU con el LLM cargado: se le pide la GPU y se repite en la GPU antes de ir a la CPU
+      if (!lent && llm_gb > 0 && OOM.test(msg)) {
+        L.warning("sd.cpp sin memoria en la GPU con el LLM cargado: se le presta la GPU y se repite");
+        {
+          std::lock_guard<std::mutex> lk(mu_);
+          stop_server();
+        }
+        lend("se repite la imagen sin memoria");
+        try {
+          json r = sdcpp(sd->exe, sd->variant, m, en, negative, size, steps, seed, out);
+          r["note"] = "El LLM ha dejado la GPU al modelo de imagen mientras se generaba";
+          return r;
+        } catch (const std::exception& e2) {
+          msg = trim(e2.what());
+          why = "stable-diffusion.cpp fallo: " + uright(msg, 300);
+        }
+      }
       // una GPU que no arranca (Metal virtual, driver roto...): antes del compositor se prueba en la CPU
       auto cpu = starts_with(sd->variant, "cpu") ? std::nullopt : rt_.exe("sd", profile_(), "cpu");
       if (cpu && starts_with(cpu->variant, "cpu")) {
         L.warning("sd.cpp fallo en ", sd->variant, " (", uright(msg, 200), "); se reintenta en la CPU");
         try {
-          json r = sdcpp(cpu->exe, cpu->variant, m, english(prompt), negative, size, steps, seed, out);
+          json r = sdcpp(cpu->exe, cpu->variant, m, en, negative, size, steps, seed, out);
           r["note"] = "La GPU (" + sd->variant + ") no pudo generar la imagen; se ha hecho en la CPU";
           return r;
         } catch (const std::exception& e2) {
@@ -316,6 +385,25 @@ json ImageEngine::generate(const std::string& prompt, const std::string& negativ
                            "descarga un modelo de imagen en Modelos (p. ej. SDXS-512 en CPU).";
   return {{"engine", "procedural"}, {"url", "/outputs/images/" + S(out.filename())}, {"path", S(out)},
           {"seed", seed},          {"note", note}};
+}
+
+bool ImageEngine::must_lend(const std::string& variant, const SdPlan& plan, int size, double llm_gb) {
+  std::string mode = config_.str("media.gpu_compartida", "auto");
+  if (mode == "no" || mode == "off" || starts_with(variant, "cpu") || variant == "system") return false;
+  if (mode == "siempre" || mode == "always") return true;
+  // lo que ocupa el modelo de imagen: sus ficheros (difusion, VAE, codificadores) y la memoria de trabajo
+  double need = 0;
+  for (auto& a : plan.model_args)
+    if (!starts_with(a, "-") && is_file(P(a))) need += fsize(P(a)) / 1073741824.0;
+  need += size >= 1024 ? 2.5 : 1.2;
+  json prof = profile_();
+  double vram = jnum(prof.value("vram_gb", json(0))), ram = jnum(prof.value("ram_gb", json(0)));
+  double room = jstr(prof, "accelerator") == "metal" ? ram * 0.65 : vram * 0.92;
+  if (room <= 0) return true;   // no se sabe cuanta VRAM hay: mejor no arriesgar
+  bool lend = need + llm_gb > room;
+  L.info("Imagen en la GPU: necesita ", fnum(need, 1), " GB, el LLM ocupa ", fnum(llm_gb, 1), " GB de ", fnum(room, 1),
+         lend ? ": el LLM deja la GPU mientras se genera" : ": caben los dos");
+  return lend;
 }
 
 std::string ImageEngine::english(const std::string& prompt) {
@@ -413,6 +501,9 @@ json ImageEngine::sdcpp(const fs::path& exe, const std::string& variant, const j
   json gen = model.value("gen", json::object());
   if (!gen.is_object()) gen = json::object();
   json prof = profile_();
+  // el LLM se queda en la GPU: sd.cpp reparte con lo que queda (codificadores a la CPU, pesos por partes...)
+  if (vram_taken_ > 0 && jnum(prof.value("vram_gb", json(0))) > 0)
+    prof["vram_gb"] = std::max(0.5, jnum(prof["vram_gb"]) - vram_taken_);
   int size = size_opt && *size_opt ? *size_opt
              : truthy(gen.value("size", json()))
                  ? (int)jnum(gen["size"])
