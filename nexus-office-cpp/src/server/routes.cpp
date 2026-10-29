@@ -1581,12 +1581,12 @@ void register_routes(App& app) {
     return B([&](bolsa::Bolsa&) { return bolsa::agente().estado(); });
   });
   // ajustes del agente autonomo (activo, intervalo_s, riesgo_pct, max_posiciones, max_peso_pct, reserva_pct,
-  // universo, capital). Siempre opera en simulacion.
+  // universo, capital, ia) e IA financiera (ia_modelo). Siempre opera en simulacion.
   app.post("/api/bolsa/agente", [B](Ctx& c) -> Out {
     Services& s = c.app.S();
     static const std::vector<std::pair<std::string, char>> allowed = {
         {"activo", 'b'}, {"intervalo_s", 'f'}, {"riesgo_pct", 'f'}, {"max_posiciones", 'i'}, {"max_peso_pct", 'f'},
-        {"reserva_pct", 'f'}, {"universo", 'l'}, {"capital", 'f'}};
+        {"reserva_pct", 'f'}, {"universo", 'l'}, {"capital", 'f'}, {"ia", 'b'}};
     for (auto& [k, typ] : allowed) {
       if (!c.has_b(k)) continue;
       json v = c.body[k];
@@ -1607,6 +1607,10 @@ void register_routes(App& app) {
         throw HttpErr(400, k + ": valor no valido");
       }
       s.config.set("bolsa.agente." + k, out);
+    }
+    if (c.has_b("ia_modelo")) {   // IA financiera: auto (por hardware), no (la general) o un modelo concreto
+      std::string m = trim(c.bs("ia_modelo", "auto"));
+      s.config.set("ia_especializada.finanzas", m.empty() ? "auto" : m);
     }
     auto& ag = bolsa::agente();
     if (c.has_b("activo") && c.body["activo"] == true) {

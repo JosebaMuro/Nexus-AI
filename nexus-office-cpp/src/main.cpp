@@ -184,6 +184,24 @@ int cmd_run(const Args& a) {
     });
   // siguen solos los rastreos de dominio completo que se cortaron (cierre, apagado)
   rag::crawl_jobs::resume_interrupted(s, [&app](const json& e) { app.broadcast(e); });
+  // la IA financiera (o la general si no hay) revisa cada compra del agente de bolsa antes de darla
+  bolsa::al_crear_agente = [&s](bolsa::AgenteBolsa& a) {
+    a.ia_info = [&s]() -> json {
+      std::string id = s.llm->especialista("finanzas"), eleccion = s.config.str("ia_especializada.finanzas", "auto");
+      if (!id.empty()) return {{"modelo", id}, {"especializada", true}, {"eleccion", eleccion}};
+      json m = s.llm->has_real_llm() ? s.llm->status()["model"] : json("");
+      return {{"modelo", m}, {"especializada", false}, {"eleccion", eleccion}};
+    };
+    a.comite = [&s](const json& consulta) -> json {
+      if (!s.llm->has_real_llm()) return nullptr;
+      std::string id = s.llm->especialista("finanzas");
+      llm::Opts o;
+      o.o = {{"max_tokens", 1200}, {"temperature", 0.1}};
+      json v = bolsa::veredicto_ia(s.llm->complete(bolsa::pregunta_ia(consulta), "especialidad:finanzas", o));
+      if (v.is_object()) v["modelo"] = id.empty() ? jstr(s.llm->status(), "model") : id;
+      return v;
+    };
+  };
   // el agente de bolsa autonomo trabaja solo, siempre en simulacion (con precios reales si hay conexion)
   if (cfg.flag("bolsa.agente.activo", true)) {
     try {
@@ -318,9 +336,20 @@ int cmd_models(const Args& a) {
       break;
     }
   }
+  for (auto& r : recs) {   // IA especializada de la oficina (p. ej. la financiera de la bolsa), elegida por hardware
+    if (!truthy(r.value("best_especialidad", json(false)))) continue;
+    bool inst = truthy(r.value("installed", json(false)));
+    char size[32];
+    std::snprintf(size, sizeof size, "%.1f GB", jnum(r.value("size_mb", json(0))) / 1024);
+    std::printf("  %-18s -> %s (%s)\n", ("IA " + jstr(r, "especialidad")).c_str(), jstr(r, "name").c_str(),
+                inst ? "ya instalado" : size);
+    chosen.push_back(r);
+  }
   std::vector<json> sector;
   for (auto& r : recs)
-    if (truthy(r.value("sector", json())) && !truthy(r.value("best", json(false)))) sector.push_back(r);
+    if (truthy(r.value("sector", json())) && !truthy(r.value("best", json(false))) &&
+        !truthy(r.value("best_especialidad", json(false))))
+      sector.push_back(r);
   if (!sector.empty()) {
     std::printf("  Sugeridos para tu oficina (en la app: Modelos > Recomendados):\n");
     static const std::map<std::string, std::string> HOW = {

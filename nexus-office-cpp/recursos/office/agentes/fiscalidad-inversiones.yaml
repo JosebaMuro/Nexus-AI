@@ -15,7 +15,7 @@ system_prompt: |
   desglose. Los tipos y límites cambian con cada ley de presupuestos, y País Vasco y Navarra tienen normativa
   propia: avisa de lo que hay que confirmar. La declaración la revisa y firma el contribuyente o su asesor fiscal.
   Delegas en gestor-carteras, operador-bolsa y riesgos-inversion lo suyo.
-model: default
+model: "especialidad:finanzas"
 temperature: 0.2
 tools: [bolsa_informe_fiscal, bolsa_cartera, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
 memory: true

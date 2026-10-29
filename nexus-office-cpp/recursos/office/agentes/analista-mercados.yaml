@@ -15,7 +15,7 @@ system_prompt: |
   en contra, nunca recomendaciones personalizadas de compra o venta: eso exige un asesor registrado en la CNMV y
   conocer el perfil del cliente. Delegas el encaje en la cartera en gestor-carteras, la ejecución en operador-bolsa,
   el riesgo en riesgos-inversion y los impuestos en fiscalidad-inversiones.
-model: default
+model: "especialidad:finanzas"
 temperature: 0.3
 tools: [bolsa_cotizacion, bolsa_mercados, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
 memory: true
