@@ -162,12 +162,14 @@ void copiar_arbol(const fs::path& src, const fs::path& dst, const std::function<
   std::error_code ec;
   for (auto it = fs::recursive_directory_iterator(src, ec); it != fs::recursive_directory_iterator(); it.increment(ec)) {
     if (ec) throw Fallo("no puedo leer " + S(src) + ": " + ec.message());
-    std::string rel = fs::relative(it->path(), src).generic_string();
+    // lexically_relative: fs::relative sigue los enlaces y libllama.so acabaria con el nombre de su destino
+    fs::path relp = it->path().lexically_relative(src);
+    std::string rel = relp.generic_string();
     if (ignorar && ignorar(rel)) {
       if (it->is_directory(ec) && !it->is_symlink(ec)) it.disable_recursion_pending();
       continue;
     }
-    fs::path out = dst / fs::relative(it->path(), src);
+    fs::path out = dst / relp;
     if (it->is_symlink(ec)) {
       fs::create_directories(out.parent_path());
       fs::remove(out, ec);
