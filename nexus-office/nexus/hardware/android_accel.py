@@ -133,15 +133,18 @@ def npu(s: dict, lib=vendor_lib) -> dict | None:
 DSP_DIRS = ("/vendor/dsp/cdsp", "/vendor/lib/rfsa/adsp", "/system/lib/rfsa/adsp", "/dsp")
 
 
-def gpu_env(libs: str) -> dict:
+def gpu_env(libs: str, npu: bool = True) -> dict:
     """Entorno de llama-server GPU: sus bibliotecas primero; despues las del sistema (Vulkan) y las del
     fabricante (libOpenCL.so de Adreno y libcdsprpc.so de Hexagon viven en /vendor/lib64). FastRPC busca los
-    programas de la NPU (libggml-htp-v*.so) en ADSP_LIBRARY_PATH, separado por ';'."""
+    programas de la NPU (libggml-htp-v*.so) en ADSP_LIBRARY_PATH, separado por ';'. Sin ``npu`` el backend Hexagon
+    no abre ninguna sesion en el DSP (GGML_HEXAGON_DEVICES=0): la GPU no depende de que la NPU funcione."""
     env = dict(os.environ)
     env.pop("LD_PRELOAD", None)
     paths = [libs] + [d for d in ("/system/lib64", "/vendor/lib64", "/system/vendor/lib64") if os.path.isdir(d)]
     env["LD_LIBRARY_PATH"] = ":".join(paths)
     env["ADSP_LIBRARY_PATH"] = ";".join([libs, *DSP_DIRS])
+    if not npu:
+        env["GGML_HEXAGON_DEVICES"] = "0"
     return env
 
 
@@ -197,6 +200,14 @@ def probe_gpu(libs: str, exe_name: str = GPU_EXE) -> dict:
     out = _run([str(exe), "--list-devices"], timeout=45, env=gpu_env(libs))
     devs = parse_devices(out)
     res = {"binary": True, "devices": devs}
+    if not devs and (Path(libs) / "libggml-hexagon.so").is_file():
+        # la sonda con la NPU no devolvio nada (el backend Hexagon puede abortar en algun Snapdragon): sin ella
+        out2 = _run([str(exe), "--list-devices"], timeout=45, env=gpu_env(libs, npu=False))
+        if parse_devices(out2):
+            devs = parse_devices(out2)
+            res = {"binary": True, "devices": devs, "npu_error": " | ".join(out.splitlines()[-3:])[-300:]
+                   or "la sonda con la NPU no respondio"}
+            out = out2
     if not devs:
         res["error"] = "ningun backend GPU (Vulkan/OpenCL) encontro una GPU utilizable"
         tail = [ln for ln in out.splitlines() if ln.strip() and "linker" not in ln][-4:]
@@ -237,7 +248,7 @@ def detect(libs: str | None = None, use_cache: bool = True) -> dict:
         cache = {"key": key}
     s = soc(p, info)
     devs = probe.get("devices", [])
-    broken, npu_broken = cache.get("gpu_broken", ""), cache.get("npu_broken", "")
+    broken, npu_broken = cache.get("gpu_broken", ""), cache.get("npu_broken", "") or probe.get("npu_error", "")
     use = pick(devs, npu=not npu_broken, gpu=not broken)
     gpus = [d for d in devs if d["backend"] != "hexagon"]
     gpu_dev = pick(gpus)
