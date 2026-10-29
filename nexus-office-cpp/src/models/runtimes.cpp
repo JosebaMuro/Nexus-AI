@@ -36,45 +36,76 @@ static std::string arch_tag() {
 std::string asset_pattern(const std::string& runtime, const std::string& variant) {
   std::string o = os_tag(), a = arch_tag();
   if (runtime == "llama") {
-    if (o == "win") {
-      std::string v = variant == "rocm" ? R"(rocm-[\d.]+)" : variant == "openvino" ? R"(openvino-[\d.]+)"
-                      : variant == "cuda" ? R"(cuda-12\.\d)" : re_escape(variant);
-      return R"(^llama-b\d+-bin-win-)" + v + "-" + a + R"(\.zip$)";
-    }
+    // nombres de las Releases oficiales de ggml-org/llama.cpp (2026): llama-bNNNN-bin-<so>-<variante>-<arq>
+    auto v_of = [&](const std::string& v) -> std::string {
+      if (v == "rocm") return R"(rocm-[\d.]+)";
+      if (v == "openvino") return R"(openvino-[\d.]+)";
+      if (v == "cuda") return R"(cuda-12\.\d)";
+      if (v == "cuda13") return R"(cuda-13\.\d)";
+      if (v == "sycl") return o == "win" ? "sycl" : "sycl-fp16";
+      if (v == "cpu-compat") return "cpu";
+      return re_escape(v);
+    };
+    if (o == "win") return R"(^llama-b\d+-bin-win-)" + v_of(variant) + "-" + a + R"(\.zip$)";
     if (o == "mac") return R"(^llama-b\d+-bin-macos-)" + a + R"(\.tar\.gz$)";
-    std::string v = variant == "cpu" ? "" : variant == "rocm" ? R"(rocm-[\d.]+-)" : variant == "openvino" ? R"(openvino-[\d.]+-)"
-                    : variant == "cuda" ? R"(cuda-12\.\d-)" : variant == "sycl" ? "sycl-fp16-" : variant + "-";
+    // Snapdragon en Linux ARM (CPU, GPU Adreno por OpenCL y NPU Hexagon en el mismo paquete)
+    if (variant == "snapdragon") return R"(^llama-b\d+-bin-linux-arm64-snapdragon\.tar\.gz$)";
+    std::string v = variant == "cpu" || variant == "cpu-compat" ? "" : v_of(variant) + "-";
     return R"(^llama-b\d+-bin-ubuntu-)" + v + a + R"(\.tar\.gz$)";
   }
   if (runtime == "sd") {
+    // leejet/stable-diffusion.cpp: sd-master-<commit>-bin-win-<build>-x64.zip, ...-Linux-Ubuntu-24.04-x86_64[-vulkan]
     if (o == "win") {
-      std::string v = variant == "cuda" ? "cuda12" : variant == "rocm" ? R"(rocm-[\d.]+)" : variant;
+      std::string v = variant == "cuda" ? "cuda12" : variant == "rocm" ? R"(rocm-[\d.]+)" : variant == "cpu" ? "avx2"
+                      : variant == "cpu-compat" ? "noavx" : variant;
       return R"(^sd-.*-bin-win-)" + v + R"(-x64\.zip$)";
     }
     if (o == "mac") return R"(^sd-.*-bin-Darwin-.*-arm64\.zip$)";
-    std::string v = variant == "cpu" ? "" : variant == "vulkan" ? "-vulkan" : variant == "rocm" ? R"(-rocm-[\d.]+)" : "-" + variant;
-    return R"(^sd-.*-bin-Linux-.*-x86_64)" + v + R"(\.zip$)";
+    std::string arch = a == "arm64" ? "(aarch64|arm64)" : "x86_64";
+    std::string v = variant == "cpu" || variant == "cpu-compat" ? "" : variant == "vulkan" ? "-vulkan"
+                    : variant == "rocm" ? R"(-rocm-[\d.]+)" : "-" + variant;
+    return R"(^sd-.*-bin-Linux-.*-)" + arch + v + R"(\.zip$)";
   }
   throw std::invalid_argument(runtime);
 }
 
-static std::string cudart_pattern(const std::string& runtime) {
-  if (os_tag() != "win") return "";
-  return runtime == "llama" ? R"(^cudart-llama-bin-win-cuda-12\.\d-x64\.zip$)" : R"(^cudart-sd-bin-win-cu12-x64\.zip$)";
+static std::string cudart_pattern(const std::string& runtime, const std::string& variant) {
+  std::string ver = variant == "cuda13" ? R"(13\.\d)" : R"(12\.\d)";
+  if (os_tag() == "win")
+    return runtime == "llama" ? R"(^cudart-llama-bin-win-cuda-)" + ver + "-" + arch_tag() + R"(\.zip$)"
+                              : R"(^cudart-sd-bin-win-cu12-x64\.zip$)";
+  if (os_tag() == "linux" && runtime == "llama")
+    return R"(^cudart-llama-b\d+-bin-ubuntu-cuda-)" + ver + "-" + arch_tag() + R"(\.tar\.gz$)";
+  return "";
 }
 
 std::vector<std::string> candidates(const json& profile, const std::string& runtime) {
   std::string acc = jstr(profile, "accelerator");
-  if (os_tag() == "mac") return {"metal"};
+  std::string a = arch_tag();
+  if (os_tag() == "mac") return a == "arm64" ? std::vector<std::string>{"metal", "cpu"} : std::vector<std::string>{"cpu"};
   std::string id = jstr(profile, "id");
   auto parts = split(id, "-");
   std::string vendor = parts.size() > 1 ? parts[1] : "cpu";
   bool igpu = ends_with(id, "igpu");
-  if (acc == "cuda") return {"cuda", "vulkan", "cpu"};
-  if (vendor == "amd" && !igpu) return {"vulkan", "rocm", "cpu"};
-  if (vendor == "intel" && !igpu)
-    return runtime == "llama" ? std::vector<std::string>{"vulkan", "sycl", "cpu"} : std::vector<std::string>{"vulkan", "cpu"};
-  if (vendor == "intel" && igpu && runtime == "llama") return {"cpu", "openvino", "vulkan"};
+  bool llama = runtime == "llama";
+  if (acc == "cuda") {
+    // Blackwell (RTX 50, capacidad 12.x) y posteriores: CUDA 13; las demas, CUDA 12 (drivers desde 2023)
+    double cc = std::atof(jstr(profile, "compute_capability").c_str());
+    if (llama && cc >= 10) return {"cuda13", "cuda", "vulkan", "cpu"};
+    return {"cuda", "vulkan", "cpu"};
+  }
+  if (vendor == "amd" && !igpu)
+    return os_tag() == "linux" ? std::vector<std::string>{"rocm", "vulkan", "cpu"} : std::vector<std::string>{"vulkan", "rocm", "cpu"};
+  // APU de AMD (Radeon 780M/890M, Strix Halo): Vulkan con la memoria compartida va mejor que la CPU
+  if (vendor == "amd" && igpu) return acc == "vulkan" ? std::vector<std::string>{"vulkan", "cpu"} : std::vector<std::string>{"cpu", "vulkan"};
+  if (vendor == "intel" && !igpu) return llama ? std::vector<std::string>{"vulkan", "sycl", "cpu"} : std::vector<std::string>{"vulkan", "cpu"};
+  if (vendor == "intel" && igpu && llama) return {"cpu", "openvino", "vulkan"};
+  if (vendor == "qualcomm") {
+    // Snapdragon X (Windows ARM): GPU Adreno por OpenCL; Linux ARM: paquete Snapdragon (CPU, Adreno y NPU Hexagon)
+    if (os_tag() == "win" && llama) return acc == "opencl" ? std::vector<std::string>{"opencl-adreno", "cpu"} : std::vector<std::string>{"cpu", "opencl-adreno"};
+    if (os_tag() == "linux" && llama) return acc == "hexagon" || acc == "opencl" ? std::vector<std::string>{"snapdragon", "cpu"} : std::vector<std::string>{"cpu", "snapdragon"};
+  }
+  if (acc == "vulkan") return {"vulkan", "cpu"};
   return {"cpu"};
 }
 
@@ -229,7 +260,7 @@ fs::path RuntimeManager::install(const std::string& runtime, const std::string& 
       throw std::runtime_error("No hay binario '" + variant + "' para " + os_tag() + "-" + arch_tag() +
                                " en las ultimas releases");
     std::vector<json> wanted = {assets[0]};
-    std::string cp = variant == "cuda" ? cudart_pattern(runtime) : "";
+    std::string cp = starts_with(variant, "cuda") ? cudart_pattern(runtime, variant) : "";
     if (!cp.empty()) {
       Rx c(cp);
       for (auto& a : rel["assets"])

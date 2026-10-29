@@ -157,10 +157,12 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
     gpu_ = sel.is_null() ? json::object() : sel;
   }
   bool kv_ram = truthy(opts.value("kv_ram", json(false))), mlock = truthy(opts.value("mlock", json(false)));
+  std::string kv_quant = jstr(opts, "kv_quant");
+  int threads_batch = (int)jnum(opts.value("n_threads_batch", json(0)), 0);
   std::string mmproj = entry.value("mmproj", json()).is_string() ? entry["mmproj"].get<std::string>() : "";
   std::string key = cat(S(exe), "|", path, "|", mmproj, "|", jdump(opts.value("n_ctx", json())), "|",
                         jdump(opts.value("n_threads", json())), "|", jdump(opts.value("n_batch", json())), "|", ngl, "|",
-                        device, "|", jdump(extra_env), "|", kv_ram, "|", mlock);
+                        device, "|", jdump(extra_env), "|", kv_ram, "|", mlock, "|", kv_quant, "|", threads_batch);
   std::lock_guard<std::recursive_mutex> lk(mu_);
   if (proc_ && proc_->running() && key_ == key) return;
   stop();
@@ -190,6 +192,12 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
   }
   if (kv_ram && ngl) cmd.push_back("--no-kv-offload");   // perfil de hardware: la cache KV en la RAM (mas capas en la VRAM)
   if (mlock) cmd.push_back("--mlock");                    // perfil de hardware: el modelo fijo en la RAM
+  // prompt con todos los hilos logicos; la generacion con los fisicos (-t)
+  if (threads_batch > 0 && threads_batch != (int)jnum(opts.value("n_threads", json(0)), 0))
+    cmd.insert(cmd.end(), {"-tb", std::to_string(threads_batch)});
+  // cache KV en 8 bits con la memoria justa: cabe el doble de contexto (necesita atencion rapida; si este binario o
+  // esta GPU no la tienen, se arranca sin ella)
+  if (!kv_quant.empty() && !kv_quant_failed_) cmd.insert(cmd.end(), {"-ctk", kv_quant, "-ctv", kv_quant});
   cmd.push_back("-np");
   // un solo slot tambien con la variante de GPU forzada a CPU (-ngl 0): si no, cada slot se queda con medio contexto
   cmd.push_back(var == "cpu" || var == "system" || single || ngl == 0 ? "1" : "2");
@@ -227,6 +235,16 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
     if (!proc_->running()) {
       std::string tail = read_text(log_path);
       tail = valid_utf8(tail.size() > 1500 ? tail.substr(tail.size() - 1500) : tail);
+      if (!kv_quant.empty() && !kv_quant_failed_ && std::find(cmd.begin(), cmd.end(), "-ctk") != cmd.end() &&
+          (contains(lower(tail), "quantized v cache") || contains(lower(tail), "flash_attn") ||
+           contains(tail, "-ctk") || contains(tail, "cache-type") || contains(lower(tail), "failed to create context"))) {
+        L.warning("llama-server no admite la cache KV en ", kv_quant, " aqui: se arranca sin ella");
+        kv_quant_failed_ = true;
+        auto it = std::find(cmd.begin(), cmd.end(), "-ctk");
+        cmd.erase(it, it + 4);
+        proc_ = std::make_unique<proc::Process>();
+        if (proc_->start(cmd, po)) continue;
+      }
       if (contains(tail, "--no-webui") || contains(tail, "invalid argument")) {
         auto it = std::find(cmd.begin(), cmd.end(), "--no-webui");
         if (it != cmd.end()) {
