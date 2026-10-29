@@ -38,7 +38,8 @@ static const std::vector<std::string> QUANT_RANK = {"Q4_K_M", "Q4_K_S", "Q5_K_M"
                                                     "Q8_0",   "Q3_K_M", "Q3_K_L", "Q2_K",   "F16",  "BF16"};
 static const std::map<std::string, std::string> EXT_FORMAT = {
     {".gguf", "gguf"}, {".safetensors", "safetensors"}, {".onnx", "onnx"}, {".ckpt", "ckpt"},
-    {".bin", "bin"},   {".pt", "pt"},                   {".pth", "pt"},    {".xml", "openvino"}};
+    {".bin", "bin"},   {".pt", "pt"},                   {".pth", "pt"},    {".xml", "openvino"},
+    {".litertlm", "litertlm"}};
 
 const std::map<std::string, std::string> ACTIVE_KEYS = {
     {"llm", "llm.default_model"}, {"image", "media.image_model"}, {"tts", "media.tts_model"}, {"embed", "memory.embed_model"}};
@@ -81,7 +82,7 @@ json annotate(json files, const json& profile, const std::string& source, const 
     f["quant"] = q ? upper(q->str(1)) : "";
     std::map<std::string, std::string> FMT = {{"gguf", "gguf"}, {"safetensors", "safetensors"}, {"onnx", "onnx"},
                                               {"bin", "bin"},   {"ckpt", "ckpt"},               {"pt", "pt"},
-                                              {"pth", "pt"},    {"xml", "openvino"}};
+                                              {"pth", "pt"},    {"xml", "openvino"},  {"litertlm", "litertlm"}};
     f["format"] = FMT.count(ext) ? FMT[ext] : ext;
     bool image_like = IMAGE_HINT().test(repo_l + " " + low);
     auto set = [&](const char* kind, std::vector<std::string> eng) {
@@ -92,6 +93,8 @@ json annotate(json files, const json& profile, const std::string& source, const 
     for (auto& x : files)
       if (jstr(x, "path") == p + ".json") has_json_sidecar = true;
     if (contains(low, "mmproj")) set("proyector", {"llama-server (vision)"});
+    else if (ext == "litertlm") set("llm", {"LiteRT-LM (CPU, GPU y NPU)"});
+    else if (ends_with(low, "genai_config.json")) set("llm", {"ONNX Runtime GenAI (DirectML, QNN, OpenVINO...)"});
     else if (ext == "gguf" && EMBED_HINT().test(repo_l + " " + low) && !has_mm)
       set("embed", {"llama-server (--embedding)", "llama-cpp-python"});
     else if (ext == "gguf") {
@@ -132,7 +135,9 @@ std::string slug(const std::string& text) {
 json classify(const fs::path& p, const std::string& hint) {
   json info = {{"format", "unknown"}, {"kind", "other"}};
   if (is_dir(p)) {
-    if (is_file(p / "config.json")) info = {{"format", "transformers"}, {"kind", "llm"}};
+    // ONNX Runtime GenAI antes que Transformers: sus carpetas tambien traen config.json
+    if (is_file(p / "genai_config.json")) info = {{"format", "onnx-genai"}, {"kind", "llm"}};
+    else if (is_file(p / "config.json")) info = {{"format", "transformers"}, {"kind", "llm"}};
     else if (is_file(p / "model_index.json")) info = {{"format", "diffusers"}, {"kind", "image"}};
     else if (!glob(p, "*.xml").empty()) info = {{"format", "openvino"}, {"kind", "llm"}};
     return info;
@@ -143,8 +148,13 @@ json classify(const fs::path& p, const std::string& hint) {
   if (info["format"] == "gguf") {
     json meta = gguf_summarize(p);
     info["meta"] = meta;
+    json dif = truthy(meta.value("is_projector", json(false))) ? json() : diffusion_info(p);
     if (truthy(meta.value("is_projector", json(false)))) info["kind"] = "projector";
-    else if (truthy(meta.value("is_embedding", json(false))) || EMBED_HINT().test(text)) info["kind"] = "embed";
+    else if (dif.is_object()) {
+      // GGUF de imagen (stable-diffusion.cpp): Flux, Z-Image, SD3... a menudo solo el modelo de difusion
+      info["kind"] = "image";
+      info["difusion"] = dif;
+    } else if (truthy(meta.value("is_embedding", json(false))) || EMBED_HINT().test(text)) info["kind"] = "embed";
     else if (truthy(meta.value("architecture", json("")))) info["kind"] = "llm";
     else if (IMAGE_HINT().test(text)) info["kind"] = "image";
   } else if ((info["format"] == "safetensors" || info["format"] == "ckpt") && IMAGE_HINT().test(text)) {
@@ -433,8 +443,45 @@ void ModelManager::pull_ollama(const std::string& jid, const std::string& name) 
   L.info("Modelo de Ollama instalado: ", name);
 }
 
+// fichero de un repositorio: el del catalogo si sigue ahi; si no (los repositorios cambian de nombres), el que mas se
+// le parece: misma extension, mismo comienzo y la cuantizacion preferida
+static std::string closest_file(const std::vector<std::string>& names, const std::string& file,
+                                const std::vector<std::string>& prefs) {
+  if (names.empty() || std::find(names.begin(), names.end(), file) != names.end()) return file;
+  std::string ext = lower(S(P(file).extension())), base = lower(S(P(file).filename()));
+  std::string head = base.substr(0, std::min<size_t>(base.size(), std::max<size_t>(3, base.find_first_of("-_."))));
+  std::vector<std::string> c;
+  for (auto& n : names) {
+    std::string ln = lower(S(P(n).filename()));
+    if (lower(S(P(n).extension())) == ext && starts_with(ln, head) && !contains(ln, "mmproj")) c.push_back(n);
+  }
+  std::sort(c.begin(), c.end());
+  for (auto& p : prefs)
+    for (auto& x : c)
+      if (contains(upper(x), p)) return x;
+  return c.empty() ? file : c[0];
+}
+
 json ModelManager::resolve_recommended(const json& rec) {
   std::string kind = jstr(rec, "kind");
+  if (kind == "image") {
+    json out = rec;
+    auto list = [&](const std::string& repo) {
+      std::vector<std::string> names;
+      try {
+        for (auto& f : sources["huggingface"]->files(repo)) names.push_back(jstr(f, "path"));
+      } catch (const std::exception& e) {
+        L.info("No se pudo listar ", repo, " (", e.what(), "): se usan los nombres del catalogo");
+      }
+      return names;
+    };
+    out["file"] = closest_file(list(jstr(rec, "repo")), jstr(rec, "file"), {"Q4_K", "Q4_0", "Q5_K", "Q8_0", "F16"});
+    json comps = rec.value("componentes", json::object());
+    if (comps.is_object())
+      for (auto& [k, v] : comps.items())
+        out["componentes"][k]["file"] = closest_file(list(jstr(v, "repo")), jstr(v, "file"), {"Q4_K_M", "Q4_K", "Q8_0", "FP8", "F16"});
+    return out;
+  }
   if ((kind != "llm" && kind != "embed") || !ends_with(jstr(rec, "file"), ".gguf")) return rec;
   std::vector<std::string> names;
   try {
@@ -489,14 +536,27 @@ std::string ModelManager::download_recommended(const std::string& rec_id) {
     if (!jstr(rec, "mmproj").empty()) extras.push_back(jstr(rec, "mmproj"));
     for (auto& e : rec.value("extra", json::array())) extras.push_back(e.get<std::string>());
     for (auto& e : extras) files.push_back({hf->download_url(repo, e), dest("huggingface", repo, e), {}, 0});
-    for (auto& f : files) f.size = (uint64_t)(jnum(rec["size_mb"]) * 1048576 / files.size());
+    // modelos de imagen GGUF de solo difusion: VAE y codificadores de texto, que suelen estar en otros repositorios
+    json comps = json::object();
+    size_t n_main = files.size();
+    for (auto& [k, v] : rec.value("componentes", json::object()).items()) {
+      fs::path d = dest("huggingface", jstr(v, "repo"), jstr(v, "file"));
+      files.push_back({hf->download_url(jstr(v, "repo"), jstr(v, "file")), d, {}, (uint64_t)(jnum(v.value("size_mb", json(0))) * 1048576)});
+      comps[k] = S(d);
+    }
+    for (size_t i = 0; i < n_main; ++i) {
+      double comp_mb = 0;
+      for (auto& [k, v] : rec.value("componentes", json::object()).items()) comp_mb += jnum(v.value("size_mb", json(0)));
+      files[i].size = (uint64_t)(std::max(1.0, jnum(rec["size_mb"]) - comp_mb) * 1048576 / n_main);
+    }
     fs::path main = files[0].dest;
     std::string mm = !jstr(rec, "mmproj").empty() ? S(files[1].dest) : "";
     run(jid, files, [=, this] {
       json entry = register_model(main, "huggingface", repo, jstr(rec, "kind"), mm, jstr(rec, "id"), jstr(rec, "name"),
                                   {{"gen", rec.value("gen", json())},
                                    {"vision", rec.value("vision", json(false))},
-                                   {"reasoning", rec.value("reasoning", json(false))}});
+                                   {"reasoning", rec.value("reasoning", json(false))},
+                                   {"componentes", comps.empty() ? json() : comps}});
       auto_activate(entry);
       return entry;
     });
@@ -540,7 +600,13 @@ json ModelManager::register_model(const fs::path& path, const std::string& sourc
                 {"repo", repo},
                 {"added", now()},
                 {"meta", info.value("meta", json::object())}};
-  for (auto& [ek, ev] : extra.items()) entry[ek] = ev;
+  if (info.contains("difusion")) {
+    entry["difusion"] = info["difusion"];
+    if (!truthy(entry.value("gen", json())) && truthy(info["difusion"].value("gen", json())))
+      entry["gen"] = info["difusion"]["gen"];
+  }
+  for (auto& [ek, ev] : extra.items())
+    if (!ev.is_null()) entry[ek] = ev;
   entry["vision"] = truthy(entry["vision"]) || !mmproj.empty();
   return catalog.add(entry);
 }

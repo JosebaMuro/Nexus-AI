@@ -16,6 +16,7 @@
 #include "gen/data.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
+#include "llm/motores.h"
 #include "hardware/hw_profiles.h"
 #include "media/avatares.h"
 #include "rag/browser.h"
@@ -592,6 +593,7 @@ void register_routes(App& app) {
       bundled[rt] = runtimes::bundled_variants(rt);
       recommended[rt] = runtimes::candidates(s.profile, rt);
     }
+    json motores_rt = motores::estado();
     std::string variant;
     if (auto b = std::dynamic_pointer_cast<llm::LlamaServerBackend>(s.llm->backend("llamaserver"))) variant = b->variant;
     return json{{"installed", s.runtimes->installed()},
@@ -599,7 +601,8 @@ void register_routes(App& app) {
                 {"bundled", bundled},
                 {"recommended", recommended},
                 {"descriptions", {{"llama", "LLM / multimodal (llama-server)"}, {"sd", "Generacion de imagen (sd.cpp)"}}},
-                {"active", {{"llama", variant}}}};
+                {"active", {{"llama", variant}}},
+                {"motores", motores_rt}};
   });
 
   app.post("/api/runtimes/install", [](Ctx& c) -> Out {
@@ -619,6 +622,19 @@ void register_routes(App& app) {
     }).detach();
     return json{{"started", true}};
   });
+
+  // paquete de runtimes sin conexion (Nexus-Office-runtime-*.zip de la Release) ya copiado al equipo
+  app.post("/api/runtimes/importar", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    json v;
+    try {
+      v = s.runtimes->import_pack(P(c.bs("ruta")));
+    } catch (const std::exception& e) {
+      throw HttpErr(400, e.what());
+    }
+    s.llm->rebuild();
+    return json{{"importados", v}};
+  }, true);
 
   // ------------------------------------------------------------------ sesiones / memoria
   app.get("/api/sessions", [](Ctx& c) -> Out { return json(c.app.S().memory->sessions()); });

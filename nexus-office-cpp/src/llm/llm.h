@@ -175,6 +175,7 @@ class LlamaServerBackend : public OpenAICompatBackend {
   json effective_ = json::object();
   json gpu_ = json::object();
   std::string gpu_error_;
+  bool kv_quant_failed_ = false;   // este llama-server no arranca con la cache KV cuantizada
   std::recursive_mutex mu_;
 };
 

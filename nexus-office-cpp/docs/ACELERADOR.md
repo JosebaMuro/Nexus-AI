@@ -50,11 +50,29 @@ No se ha podido probar con dos GPU físicas; la elección se ha probado con la s
 | Motor | Qué es | CPU | GPU | NPU | Visión |
 |---|---|---|---|---|---|
 | **Automático** | El mejor disponible (normalmente llama-server) | ✓ | ✓ | ✓ | ✓ |
-| **llama-server** | llama.cpp oficial como proceso aparte | ✓ | CUDA, Vulkan, Metal | OpenVINO (Intel), Hexagon (Android) | ✓ |
+| **llama-server** | llama.cpp oficial como proceso aparte | ✓ | CUDA 12/13, ROCm, SYCL, Vulkan, Metal, OpenCL (Adreno) | OpenVINO (Intel), Hexagon (Android y Linux Snapdragon) | ✓ |
+| **LiteRT-LM** (2.5) | Motor de Google para modelos `.litertlm` | ✓ | OpenCL/Vulkan/Metal/WebGPU | Google Tensor, Snapdragon, Dimensity, Intel (con el *dispatch* del fabricante) | — |
+| **ONNX Runtime GenAI** (2.5) | Motor de Microsoft para carpetas ONNX con `genai_config.json` | ✓ | DirectML (cualquier GPU en Windows), CUDA | QNN (Snapdragon X en Windows ARM), OpenVINO, VitisAI | — |
 
 llama-server va **incluido en los instaladores offline** con todas sus variantes: no se descarga nada al elegirlo.
 La opción **llama.cpp integrado** de la edición Python (llama-cpp-python dentro del programa) no existe en la edición
 C++: el selector la muestra como no disponible y llama-server, que es el mismo llama.cpp, hace su trabajo.
+
+### LiteRT-LM y ONNX Runtime GenAI (2.5)
+Son motores para los equipos y móviles donde llama.cpp no aprovecha el acelerador: los **Pixel** (Tensor), los
+**Snapdragon 8 Elite** y **Dimensity** con modelos `.litertlm` compilados para su NPU, y los portátiles **Snapdragon X
+Elite/Plus** con modelos ONNX para QNN. Se eligen solos por el formato del modelo: un `.litertlm` va a LiteRT-LM y
+una carpeta con `genai_config.json` a ONNX Runtime GenAI; los GGUF siguen en llama-server.
+
+- Cada motor corre en un proceso aparte (`nexus-office motor litert|onnx ...`) con la misma API que llama-server. Si
+  el driver de la NPU o de la GPU falla, cae ese proceso y no Nexus-Office, y se prueba el siguiente acelerador:
+  **NPU → GPU → CPU**.
+- LiteRT-LM solo intenta la NPU si el modelo está compilado para ese SoC (lleva `sm8750`, `mt6991`, `tensor_g4`... en
+  el nombre) y el equipo tiene NPU; si no, GPU y CPU. ONNX Runtime GenAI usa el proveedor para el que se exportó el
+  modelo y, si falla, la CPU. `llm.motor_acelerador` fuerza uno (`cpu`, `gpu`, `npu`, `dml`, `qnn`...).
+- Sus bibliotecas (`liblitert-lm.so`, `onnxruntime-genai.dll`...) no se enlazan al compilar: van en
+  `bundled/runtimes/litert|onnx/` y se cargan al ejecutar. En *Sistema → Runtimes* se ve si están (`motores`).
+- Aún no admiten imágenes ni herramientas: el chat se manda como texto.
 
 Ollama ya no aparece en el selector porque es otra aplicación que hay que instalar aparte y no viene en el paquete.
 Si lo tienes instalado, Nexus-Office lo sigue usando cuando no hay otro motor.
@@ -71,9 +89,29 @@ Si lo tienes instalado, Nexus-Office lo sigue usando cuando no hay otro motor.
     un contexto de hasta 4096 tokens.
   - **Snapdragon con Hexagon v73 o posterior** (app Android autónoma): llama.cpp en la NPU (HTP). Si el driver del
     móvil no lo permite, pasa solo a la GPU y luego a la CPU.
-  - **AMD Ryzen AI, Apple Neural Engine y Qualcomm en Windows**: llama.cpp no puede ejecutar ahí el modelo de texto.
-    El selector lo dice y usa la GPU (o la CPU). Esas NPU se siguen usando para embeddings y voz cuando su runtime
-    está instalado.
+  - **Snapdragon X Elite/Plus en Windows ARM**: ONNX Runtime GenAI con **QNN** en la NPU Hexagon (modelos ONNX
+    exportados para QNN); los GGUF van a la GPU Adreno por OpenCL.
+  - **Google Tensor, Snapdragon 8 Elite y Dimensity** (Android): LiteRT-LM con los modelos `.litertlm` de su SoC,
+    si el móvil trae las bibliotecas *dispatch* de su NPU; si no, la GPU del móvil.
+  - **AMD Ryzen AI y Apple Neural Engine**: llama.cpp no puede ejecutar ahí el modelo de texto. El selector lo dice y
+    usa la GPU (o la CPU).
+
+### Qué variante se usa en cada GPU (2.5)
+- **NVIDIA**: CUDA 12; las RTX 50 (Blackwell) y posteriores, CUDA 13 si está.
+- **AMD dedicada**: ROCm en Linux, Vulkan en Windows (y la otra si falla).
+- **AMD integrada** (Radeon 680M/780M/890M, Strix Halo 8050S/8060S) con 16 GB o más: Vulkan con la memoria
+  compartida; con menos, la CPU.
+- **Intel Arc**: Vulkan y SYCL; **Intel integrada**: CPU, OpenVINO y Vulkan.
+- **Qualcomm Adreno**: OpenCL en Windows ARM y el paquete Snapdragon (CPU, Adreno y Hexagon) en Linux ARM.
+- **Apple Silicon**: Metal.
+
+### Ajustes automáticos de rendimiento (2.5)
+- Con poca memoria para el modelo, la caché KV va cuantizada a **q8_0** (la mitad de memoria); si esa build de
+  llama-server no lo admite, se vuelve a arrancar sin ello.
+- Hilos para leer el prompt (`-tb`) aparte de los de generar.
+- Modelos de imagen: atención rápida, codificadores en la CPU y pesos por partes cuando no caben en la VRAM, VAE por
+  teselas con poca VRAM o imágenes grandes, y **sd-server** con el modelo cargado entre imagen e imagen (se libera
+  tras `media.sd_servidor_minutos`, 10 por defecto).
 
 ## Cómo se comprueba que acelera de verdad
 Tras arrancar llama-server, Nexus-Office lee su registro (`logs/llama-server.log`) y anota el dispositivo real: capas
@@ -83,20 +121,29 @@ funciona.
 
 ## Runtimes incluidos por instalador
 
-| Instalador | llama-server | NPU |
-|---|---|---|
-| Windows x64 | CPU, Vulkan, CUDA 12 | OpenVINO (Intel AI Boost) |
-| Windows ARM64 | CPU, Vulkan | — |
-| Linux x86_64 (.deb, .run, AppImage, Flatpak) | CPU, Vulkan, CUDA 12 | OpenVINO (Intel AI Boost) |
-| Linux ARM64 y Raspberry Pi | CPU, Vulkan, CUDA (Jetson) | — |
-| macOS Apple Silicon | CPU, Metal | — |
-| macOS Intel | CPU | — |
-| Android autónoma | CPU, OpenCL/Vulkan | Hexagon HTP |
+| Instalador | llama-server | Otros motores | NPU |
+|---|---|---|---|
+| Windows x64 | CPU, Vulkan, CUDA 12 | LiteRT-LM, ONNX Runtime GenAI (DirectML) | OpenVINO (Intel AI Boost) |
+| Windows ARM64 | CPU, Vulkan, OpenCL (Adreno) | ONNX Runtime GenAI (QNN) | Hexagon (QNN) |
+| Linux x86_64 (.deb, .run, AppImage, Flatpak) | CPU, Vulkan, CUDA 12 | LiteRT-LM, ONNX Runtime GenAI | OpenVINO (Intel AI Boost) |
+| Linux ARM64 y Raspberry Pi | CPU, Vulkan, CUDA (Jetson), Snapdragon | LiteRT-LM, ONNX Runtime GenAI | Hexagon (Snapdragon) |
+| macOS Apple Silicon | CPU, Metal | LiteRT-LM, ONNX Runtime GenAI | — |
+| macOS Intel | CPU | — | — |
+| Android autónoma | CPU, OpenCL/Vulkan | LiteRT-LM | Hexagon HTP |
+
+Las variantes que pesan demasiado para ir dentro del instalador (**CUDA 13**, **ROCm** y **SYCL**) se publican en la
+Release como paquetes aparte, `Nexus-Office-runtime-<variante>-<versión>-<plataforma>.zip`. Para usarlos sin
+internet, deja el zip junto al programa (o en su carpeta superior, o en `data/paquetes/`) y se importa solo al
+arrancar; también con `nexus-office importar-runtime <zip>` o `POST /api/runtimes/importar {"ruta": ...}`. Con
+internet, *Sistema → Runtimes* los descarga de las Releases oficiales de llama.cpp.
 
 ## Configuración
 - `llm.engine`: `auto` o `llamaserver` (`llamacpp` se acepta por compatibilidad con la edición Python, pero no está disponible).
 - `hardware.accel`: `auto`, `cpu`, `gpu` o `npu`.
-- `hardware.llama_variant`: variante de llama-server elegida (`cpu`, `vulkan`, `cuda`, `metal`, `openvino`).
+- `hardware.llama_variant`: variante de llama-server elegida (`cpu`, `vulkan`, `cuda`, `cuda13`, `rocm`, `sycl`,
+  `metal`, `openvino`, `opencl-adreno`, `snapdragon`).
+- `llm.motor_acelerador`: acelerador de LiteRT-LM u ONNX Runtime GenAI que se prueba primero.
+- `media.sd_servidor` (`no` para lanzar sd-cli en cada imagen) y `media.sd_servidor_minutos`.
 - `startup.ask_accel`: `true` para preguntar al arrancar.
 
 API: `GET /api/accel` (opciones, elección y dispositivo efectivo), `POST /api/accel` `{engine, accel, remember}`,

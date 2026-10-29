@@ -270,6 +270,11 @@ El **agente de bolsa autónomo** gestiona su propia cartera simulada con esos da
 ### Modelos
 En modo usuario verás los **recomendados para tu equipo** con una etiqueta: *ideal*, *compatible*, *pesado* o *no cabe*. Si el instalador no pudo descargar el modelo elegido (por ejemplo, sin internet), pulsa **Descargar** en el marcado con ★ y después **Activar**. Descarga también el modelo de **embeddings** (Qwen3-Embedding, 639 MB): mejora la búsqueda en tu biblioteca y en la memoria y se activa solo.
 
+Para generar imágenes de más calidad hay **Z-Image-Turbo** y **FLUX.1-schnell** en GGUF: se descargan con sus piezas
+(VAE y codificadores de texto). Si copias a mano un GGUF de imagen que es solo el modelo de difusión, déjalo en la
+misma carpeta que sus piezas; *Imagen* te dice cuál falta. Los modelos `.litertlm` (LiteRT-LM, ideales en Pixel y
+Snapdragon) y las carpetas ONNX con `genai_config.json` también se pueden usar: Nexus-Office elige el motor solo.
+
 ### Ajustes
 Nombre del asistente, idioma, estilo de respuesta (breve/equilibrado/detallado), agente por defecto, memoria, voz, velocidad de voz, avatar y color de acento.
 

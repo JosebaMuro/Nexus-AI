@@ -4,16 +4,20 @@
 // genera arte procedural. La voz usa Piper (ejecutable) o la voz del sistema, y el dictado whisper.cpp
 // (whisper-cli). La musica procedural es la misma teoria musical sintetizada en C++.
 #pragma once
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <mutex>
 #include <optional>
 #include <random>
+#include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "core/config.h"
+#include "util/proc.h"
 #include "util/fs.h"
 #include "util/json.h"
 
@@ -59,10 +63,23 @@ struct Canvas {
 
 std::string slug_name(const std::string& t, size_t max, const std::string& fallback);   // _slug de image.py / music.py
 
+// ordenes de stable-diffusion.cpp para un modelo (sd-cli y sd-server): -m o --diffusion-model, sus piezas (VAE y
+// codificadores de texto) y los ajustes segun el hardware. flags = opciones que admite ese binario (de su --help;
+// vacio si no se sabe). error != "" si al modelo le falta una pieza.
+struct SdPlan {
+  std::vector<std::string> model_args, perf_args;
+  json piezas = json::object();
+  std::string arch, error;
+};
+SdPlan sd_plan(const json& model, const json& profile, const std::string& variant, const std::set<std::string>& flags,
+               int size = 512);
+std::set<std::string> sd_flags(const std::string& help_text);   // opciones «--xxx» de la ayuda
+
 class ImageEngine {
  public:
   ImageEngine(Config& config, models::Catalog& catalog, runtimes::RuntimeManager& rt, ProfileGetter profile,
               llm::LLMManager* llm = nullptr);
+  ~ImageEngine();
   json model();
   json status();
   json generate(const std::string& prompt, const std::string& negative = "", std::optional<int> size = std::nullopt,
@@ -82,7 +99,19 @@ class ImageEngine {
   json sdcpp(const fs::path& exe, const std::string& variant, const json& model, const std::string& prompt,
              const std::string& negative, std::optional<int> size, std::optional<int> steps, long long seed,
              const fs::path& out);
+  // sd-server con el modelo cargado: las imagenes siguientes no esperan a cargarlo (Flux o Z-Image tardan minutos)
+  bool via_server(const fs::path& exe, const SdPlan& plan, const json& req, const fs::path& out, std::string& why);
+  void stop_server();
+  const std::set<std::string>& flags_of(const fs::path& exe);
   bool vision_available();
+  std::mutex mu_;
+  std::map<std::string, std::set<std::string>> flags_;
+  std::unique_ptr<proc::Process> server_;
+  std::string server_key_;
+  int server_port_ = 0;
+  double server_used_ = 0;
+  std::atomic<bool> quit_{false};
+  std::thread idle_;
 };
 
 // ---------------------------------------------------------------- musica

@@ -53,6 +53,7 @@ Services::Services(bool detect_hardware) : config(get_config()) {
   monitor->settings = st;
   auto profile_getter = [this] { return profile; };
   runtimes = std::make_unique<runtimes::RuntimeManager>();
+  runtimes->import_found();   // paquetes de runtimes sin conexion (CUDA 13, ROCm, SYCL...) junto al programa
   db = std::make_unique<DB>();
   models = std::make_unique<models::ModelManager>(cfg, profile_getter);
   embedder_ = make_embedder();

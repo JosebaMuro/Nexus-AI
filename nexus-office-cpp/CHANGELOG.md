@@ -1,5 +1,33 @@
 # Cambios
 
+## Nexus-Office 2.5.0-cpp
+
+### Motores para cada acelerador
+- **LiteRT-LM** (Google): modelos `.litertlm` en CPU, GPU y NPU (Google Tensor, Snapdragon 8 Elite, Dimensity, Intel).
+  Va también en la APK autónoma.
+- **ONNX Runtime GenAI** (Microsoft): modelos ONNX con DirectML (cualquier GPU en Windows), QNN (NPU de los
+  Snapdragon X en Windows ARM), OpenVINO, CUDA y CPU.
+- Cada motor corre en un proceso aparte y prueba NPU → GPU → CPU; se elige solo por el formato del modelo.
+
+### Runtimes por fabricante
+- llama.cpp con **CUDA 13** para las RTX 50, **ROCm** (AMD), **SYCL** (Intel Arc), **OpenCL Adreno** (Snapdragon X
+  en Windows) y el paquete **Snapdragon** de Linux ARM (CPU, Adreno y Hexagon). Los nombres de las Releases oficiales
+  de 2026 ya se reconocen al descargar.
+- Las variantes pesadas van en paquetes aparte de la Release (`Nexus-Office-runtime-*.zip`) que se importan sin
+  conexión.
+- Las APU de AMD con Radeon 680M/780M/890M o Strix Halo usan Vulkan con 16 GB o más.
+
+### Imagen con GGUF
+- Los GGUF de **Flux, Z-Image, SD3, Qwen-Image, Chroma**... se reconocen como modelos de imagen. Si son solo el
+  modelo de difusión, Nexus-Office busca sus piezas (VAE, clip_l, clip_g, T5-XXL o el LLM codificador) y dice cuál
+  falta. En *Modelos* hay **Z-Image-Turbo** y **FLUX.1-schnell** en GGUF que se descargan con todas sus piezas.
+- **sd-server** mantiene el modelo cargado entre imágenes y stable-diffusion.cpp se actualiza en los instaladores.
+- Ajustes según la VRAM: atención rápida, codificadores en la CPU, pesos por partes y VAE por teselas.
+
+### Rendimiento
+- Caché KV cuantizada (q8_0) cuando el modelo va justo de memoria, con vuelta atrás si la build no lo admite.
+- Hilos de lectura del prompt aparte de los de generación.
+
 ## Nexus-Office 2.4.0-cpp
 
 ### Conversaciones largas sin perder el hilo

@@ -1,6 +1,7 @@
 // Gestor de LLM (llm/manager.py): elige backend y modelo, presupuesto de razonamiento y medicion de rendimiento.
 #include "hardware/hardware.h"
 #include "llm/llm.h"
+#include "llm/motores.h"
 #include "models/models.h"
 #include "util/crypto.h"
 #include "util/log.h"
@@ -79,8 +80,10 @@ LLMManager::LLMManager(Config& config, models::Catalog& catalog, json& profile, 
 void LLMManager::rebuild() {
   std::lock_guard<std::recursive_mutex> lk(mu_);
   double timeout = config_.num("llm.request_timeout", 180);
-  for (auto& [n, b] : backends_)
+  for (auto& [n, b] : backends_) {
     if (n == "llamaserver") std::static_pointer_cast<LlamaServerBackend>(b)->stop();
+    if (auto mb = std::dynamic_pointer_cast<MotorBackend>(b)) mb->stop();
+  }
   backends_.clear();
   backends_.push_back({"llamaserver", std::make_shared<LlamaServerBackend>(
                                           rt_, resolver("gguf"), [this] { return profile_; },
@@ -89,6 +92,9 @@ void LLMManager::rebuild() {
     update_llm_profile(o);
   };
   backends_.push_back({"llamacpp", std::make_shared<UnavailableBackend>("llamacpp")});
+  // motores aparte de llama.cpp (LiteRT-LM, ONNX Runtime GenAI): NPU y GPU que llama.cpp no aprovecha
+  for (auto& m : motores::lista())
+    backends_.push_back({m.id, std::make_shared<MotorBackend>(m.id, resolver(m.formato), [this] { return profile_; })});
   backends_.push_back({"ollama", std::make_shared<OllamaBackend>(config_.str("llm.ollama_url"), timeout)});
   backends_.push_back({"openai", std::make_shared<OpenAICompatBackend>(config_.str("llm.openai_base_url"),
                                                                        config_.str("llm.openai_api_key"),
@@ -162,6 +168,8 @@ std::pair<std::string, std::string> LLMManager::select(const std::string& spec) 
   json entry = def.empty() ? json() : catalog_.get(def);
   std::string engine = config_.str("llm.engine", "auto");
   if (!entry.is_null()) {
+    std::string motor = motores::motor_de_formato(jstr(entry, "format"));
+    if (!motor.empty() && is_available(motor)) return {motor, jstr(entry, "id")};
     std::string b = jstr(entry, "format") == "gguf" ? "llamacpp" : "transformers";
     if (jstr(entry, "format") == "gguf") {
       if (engine == "llamaserver" || engine == "llamacpp") b = engine;
@@ -194,6 +202,10 @@ json LLMManager::status() {
     auto ms = backend("ollama")->models();
     model = ms.empty() ? "" : ms[0];
   }
+  if (motores::info(b) && model.empty()) {
+    auto ms = backend(b)->models();
+    model = ms.empty() ? "" : ms[0];
+  }
   if (b == "builtin") model = "nexus-core";
   json avail = json::object();
   for (auto& n : backend_names()) avail[n] = is_available(n);
@@ -221,6 +233,8 @@ json LLMManager::options(const json& agent_opts) {
             {"device", llm.value("device", json(""))},
             {"kv_ram", llm.value("kv_ram", json(false))},
             {"mlock", llm.value("mlock", json(false))},
+            {"n_threads_batch", llm.value("n_threads_batch", json(0))},
+            {"kv_quant", llm.value("kv_quant", json(""))},
             {"temperature", config_.get("llm.temperature", 0.7)},
             {"max_tokens", config_.get("llm.max_tokens", 1024)}};
   if (agent_opts.is_object())
@@ -284,7 +298,7 @@ void LLMManager::stream(json messages, const std::string& spec, Opts opts, const
     if (bname == "llamaserver" && budget > 0)
       full["extra_body"] = {{"reasoning_budget_tokens", budget}, {"reasoning_budget_message", REASONING_STOP}};
   }
-  if (bname == "llamaserver" || bname == "llamacpp" || bname == "ollama") {
+  if (bname == "llamaserver" || bname == "llamacpp" || bname == "ollama" || motores::info(bname)) {
     int n_ctx = (int)jnum(full["n_ctx"], 4096);
     int cap = thinking ? n_ctx / 2 : n_ctx / 3;
     int mt = truthy(full["max_tokens"]) ? (int)jnum(full["max_tokens"]) : 1024;

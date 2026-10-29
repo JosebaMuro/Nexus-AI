@@ -141,6 +141,10 @@ std::pair<std::string, const GPU*> choose_accelerator(const HardwareInfo& hw, co
   if (gpu->vendor == "apple") return {"metal", gpu};
   if (gpu->integrated) {
     if (gpu->vendor == "intel" && has_str(rt.value("openvino_devices", json()), "GPU")) return {"openvino", gpu};
+    // APU de AMD con graficos RDNA (Radeon 680M/780M/890M, Strix Halo 8050S/8060S): con Vulkan el modelo va mas
+    // rapido que en la CPU si hay memoria compartida de sobra
+    static const Rx RDNA_APU(R"(\b(6[68]0M|7[48]0M|8[4-9]0M|80[4-6]0S|Radeon\s*8\d{2}0S))", Rx::I);
+    if (gpu->vendor == "amd" && hw.ram_gb >= 16 && RDNA_APU.test(gpu->name) && vulkan_ok(hw, *gpu)) return {"vulkan", gpu};
     return {"cpu", gpu};
   }
   if (gpu->vendor == "amd") return {sys::is_linux() ? "rocm" : "vulkan", gpu};
@@ -215,6 +219,9 @@ json build_profile(const HardwareInfo& hw, const std::string& ov) {
   }
   std::string wheel = acc == "cuda" ? "cu124" : acc == "metal" ? "metal" : acc == "vulkan" || acc == "xpu" ? "vulkan"
                       : acc == "rocm" ? "rocm" : acc == "opencl" ? "opencl" : "cpu";
+  // cache KV en 8 bits (la mitad de memoria, perdida inapreciable) cuando la memoria va justa: moviles, equipos de
+  // 8 GB o menos y GPU de poca VRAM
+  bool tight = android() || ram < 12 || (gpu_offload && gpu && !gpu->integrated && vram_gpu < 8);
   json llm = {{"max_model_b", pynum(max_b)},
               {"recommended_model_b", pynum(recommended_b)},
               {"quant", budget < 24 ? "Q4_K_M" : "Q5_K_M"},
@@ -228,6 +235,9 @@ json build_profile(const HardwareInfo& hw, const std::string& ov) {
   if (android())
     llm["device"] = gpu_offload && hw.runtimes.contains("android_accel") ? jstr(hw.runtimes["android_accel"], "gpu_device")
                                                                           : "";
+  // hilos del procesado del prompt: todos los logicos (la generacion va mejor solo con los fisicos)
+  llm["n_threads_batch"] = android() ? n_threads : std::max(n_threads, hw.cores_logical);
+  llm["kv_quant"] = tight ? "q8_0" : "";
   llm["llamacpp_wheel"] = wheel;
   llm["flash_attn"] = acc == "cuda" || acc == "metal";
   std::string hint;
@@ -238,9 +248,16 @@ json build_profile(const HardwareInfo& hw, const std::string& ov) {
            (gpu_offload ? "GPU" : "CPU");
   else hint = "Instala el runtime '" + npu->runtime_hint + "' para usar la NPU";
   std::string stt_model = acc == "cuda" ? (vram >= 4 ? "small" : "base") : (phys >= 4 ? "base" : "tiny");
+  std::string soc;
+  if (android() && hw.runtimes.contains("android_accel") && hw.runtimes["android_accel"].is_object()) {
+    json sc = hw.runtimes["android_accel"].value("soc", json::object());
+    if (sc.is_object()) soc = lower(jstr(sc, "model") + " " + jstr(sc, "platform") + " " + jstr(sc, "name"));
+  }
   return {
       {"id", cat(acc, "-", gpu ? gpu->vendor : "cpu", "-", gpu && gpu->integrated ? "igpu" : gpu ? "dgpu" : "only")},
       {"accelerator", acc},
+      {"compute_capability", gpu ? gpu->compute_capability : ""},
+      {"gpu_present", gpu != nullptr},
       {"device_name", gpu && acc != "cpu" ? gpu->name : hw.cpu_name},
       {"vram_gb", vram},
       {"ram_gb", ram},
@@ -265,18 +282,21 @@ json build_profile(const HardwareInfo& hw, const std::string& ov) {
         {"runtime", npu ? npu->runtime_hint : ""},
         {"ready", npu_ready || llm_npu},
         {"offload", npu_ready ? json::array({"embeddings", "stt"}) : llm_npu ? json::array({"llm"}) : json::array()},
-        {"hint", hint}}},
+        {"hint", hint},
+        {"soc", soc}}},
   };
 }
 
 // ---------------------------------------------------------------- selector de inicio
-const std::vector<std::string> ENGINES = {"auto", "llamaserver", "llamacpp"};
+const std::vector<std::string> ENGINES = {"auto", "llamaserver", "llamacpp", "litert", "onnx"};
 const std::vector<std::string> ACCELS = {"auto", "cpu", "gpu", "npu"};
 
 std::string engine_label(const std::string& e) {
   if (e == "auto") return "Automático";
   if (e == "llamaserver") return "llama-server (llama.cpp, proceso aparte)";
   if (e == "llamacpp") return "llama.cpp integrado (llama-cpp-python)";
+  if (e == "litert") return "LiteRT-LM (Google: Pixel/Tensor, NPU Snapdragon y MediaTek, modelos .litertlm)";
+  if (e == "onnx") return "ONNX Runtime GenAI (DirectML y NPU en Windows, modelos ONNX)";
   return e;
 }
 

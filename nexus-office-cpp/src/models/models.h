@@ -18,6 +18,17 @@ namespace nx::models {
 // ---------------------------------------------------------------- GGUF
 json gguf_metadata(const fs::path& p, size_t max_keys = 400);   // lanza si no es GGUF
 json gguf_summarize(const fs::path& p);
+std::vector<std::string> gguf_tensor_names(const fs::path& p, size_t max = 64);   // vacio si no se puede leer
+
+// ---------------------------------------------------------------- modelos de imagen GGUF (models/difusion.cpp)
+// Que es un GGUF de imagen: arquitectura (sd1, sdxl, sd3, flux, chroma, z_image, qwen_image, flux2...), si es solo
+// el modelo de difusion (los GGUF de Flux, Z-Image, Qwen-Image o SD3 que no traen VAE ni codificadores de texto) y
+// que piezas le faltan entonces. null si no parece un modelo de imagen.
+json diffusion_info(const json& meta, const std::vector<std::string>& tensors, const std::string& name);
+json diffusion_info(const fs::path& p);
+// piezas que necesita (vae, clip_l, clip_g, t5xxl, llm) buscadas junto al modelo y en la carpeta de modelos:
+// {pieza: ruta}; las que no aparecen se quedan fuera
+json find_components(const fs::path& model, const json& dinfo, const json& configured = json::object());
 
 // ---------------------------------------------------------------- catalogo recomendado
 const json& recommended_list();   // RECOMMENDED (incluye SECTOR)
