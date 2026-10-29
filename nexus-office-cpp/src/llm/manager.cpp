@@ -172,7 +172,50 @@ bool LLMManager::is_available(const std::string& name) {
   return ok;
 }
 
+std::string LLMManager::especialista(const std::string& esp) {
+  std::string fijo = config_.str("ia_especializada." + esp, "auto");
+  if (fijo == "no" || fijo == "general") return "";
+  if (fijo != "auto" && !catalog_.get(fijo).is_null()) return fijo;
+  json prof;
+  {
+    std::lock_guard<std::recursive_mutex> lk(mu_);
+    prof = profile_;
+  }
+  // el mas grande que vaya bien; si todos van justos, el mas ligero; nunca uno que no cabe
+  const json* best = nullptr;
+  bool best_ok = false;
+  for (auto& r : models::recommended_list()) {
+    if (jstr(r, "especialidad") != esp || catalog_.get(jstr(r, "id")).is_null()) continue;
+    std::string f = models::fit(r, prof);
+    if (f == "no_cabe") continue;
+    bool ok = f != "pesado";
+    double p = jnum(r["params_b"]);
+    if (!best || (ok && !best_ok) ||
+        (ok == best_ok && (ok ? p > jnum((*best)["params_b"]) : p < jnum((*best)["params_b"])))) {
+      best = &r;
+      best_ok = ok;
+    }
+  }
+  return best ? jstr(*best, "id") : "";
+}
+
 std::pair<std::string, std::string> LLMManager::select(const std::string& spec) {
+  if (starts_with(spec, "especialidad:")) {   // IA especializada si esta instalada; si no, el modelo general
+    std::string id = especialista(spec.substr(13));
+    if (!id.empty()) {
+      json entry = catalog_.get(id);
+      std::string motor = motores::motor_de_formato(jstr(entry, "format"));
+      if (!motor.empty() && is_available(motor)) return {motor, id};
+      std::string b = jstr(entry, "format") == "gguf" ? "llamacpp" : "transformers";
+      std::string engine = config_.str("llm.engine", "auto");
+      if (jstr(entry, "format") == "gguf") {
+        if (engine == "llamaserver" || engine == "llamacpp") b = engine;
+        else if (is_available("llamaserver")) b = "llamaserver";
+      }
+      if (is_available(b)) return {b, id};
+    }
+    return select("default");
+  }
   if (!spec.empty() && spec != "default" && contains(spec, ":")) {
     std::string b = spec.substr(0, spec.find(':')), m = spec.substr(spec.find(':') + 1);
     if (b == "nube") {   // IA online: solo con clave; si no, el modelo local de siempre

@@ -15,7 +15,7 @@ system_prompt: |
   corresponde a un asesor registrado en la CNMV tras el test de idoneidad. Delegas la ejecución en operador-bolsa,
   el riesgo en riesgos-inversion, el análisis de un valor en analista-mercados y los impuestos en
   fiscalidad-inversiones.
-model: default
+model: "especialidad:finanzas"
 temperature: 0.3
 tools: [bolsa_cartera, bolsa_costes, bolsa_cotizacion, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
 memory: true

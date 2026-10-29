@@ -1,4 +1,5 @@
 // Catalogo curado (models/recommended.py): los datos vienen de la version Python (gen/data.cpp).
+#include <map>
 #include <set>
 
 #include "gen/data.h"
@@ -75,6 +76,17 @@ json recommend(const json& profile, const json& sector) {
       if (best) (*best)["best"] = true;
     }
   }
+  // IA especializada de la oficina (finanzas...): la mas grande que va con fluidez; si ninguna, la mas ligera que cabe
+  std::map<std::string, json*> esp_best;
+  for (auto& r : out) {
+    std::string esp = jstr(r, "especialidad"), f = jstr(r, "fit");
+    if (esp.empty() || f == "no_cabe") continue;
+    json*& b = esp_best[esp];
+    bool ok = f != "pesado", b_ok = b && jstr(*b, "fit") != "pesado";
+    double p = jnum(r["params_b"]);
+    if (!b || (ok && !b_ok) || (ok == b_ok && (ok ? p > jnum((*b)["params_b"]) : p < jnum((*b)["params_b"])))) b = &r;
+  }
+  for (auto& [esp, r] : esp_best) (*r)["best_especialidad"] = true;
   return out;
 }
 

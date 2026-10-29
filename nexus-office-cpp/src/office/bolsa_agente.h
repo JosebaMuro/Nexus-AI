@@ -30,6 +30,10 @@ std::optional<double> atr(const json& pts, size_t n = 14);
 std::optional<double> volatilidad(const std::vector<double>& x, size_t n = 20);
 json analizar(const json& pts);   // indicadores y factores (-1..1) de una serie diaria; null si es corta
 double puntuar(const json& an, const json& pesos);
+// comite de la IA financiera: la pregunta que se le hace sobre una compra y como se lee su respuesta
+// ({"decision": "comprar"|"esperar", "motivo"}; null si no se entiende)
+std::string pregunta_ia(const json& consulta);
+json veredicto_ia(const std::string& respuesta);
 
 class AgenteBolsa {
  public:
@@ -51,6 +55,11 @@ class AgenteBolsa {
   void stop();
 
   std::vector<std::function<void(const json&)>> listeners;
+  // IA especializada (la financiera si esta instalada, si no la general): revisa cada compra antes de darla.
+  // Recibe los datos del valor y devuelve {"decision": "comprar"|"esperar", "motivo", "modelo"} o null si no hay IA.
+  // La pone main.cpp con el gestor de LLM; se apaga con bolsa.agente.ia = false
+  std::function<json(const json& consulta)> comite;
+  std::function<json()> ia_info;   // {"modelo", "especializada"}: que IA revisa las compras (para el panel)
   double ultimo_ciclo = 0;
   std::string ultimo_error;
 
@@ -72,6 +81,7 @@ class AgenteBolsa {
   std::optional<std::string> vender(long long cid, const std::string& sym, double qty, const std::string& motivo,
                                     const json& p);
   std::vector<std::string> gestionar(long long cid, const json& analisis);
+  json consultar_ia(const std::string& sym, const json& an, const json& inst, double total, double libre);
   void poner_stop(long long cid, const std::string& sym, double qty, double stop, const json& p);
   std::vector<std::string> abrir(long long cid, const json& analisis, const json& c);
   void run();
@@ -79,6 +89,8 @@ class AgenteBolsa {
 };
 
 AgenteBolsa& agente();    // el de la mesa actual (ajustes en config bolsa.agente)
+// se llama con cada agente nuevo (tambien tras reset_agentes): main.cpp conecta ahi la IA financiera
+extern std::function<void(AgenteBolsa&)> al_crear_agente;
 void reset_agentes();
 
 }  // namespace nx::bolsa

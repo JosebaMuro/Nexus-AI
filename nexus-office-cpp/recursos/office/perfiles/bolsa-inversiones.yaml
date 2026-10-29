@@ -6,6 +6,9 @@ icon: "▲"
 description: "Oficina de bolsa e inversiones con mesa simulada: practica sin dinero con cartera ficticia, órdenes, comisiones, deslizamiento y horarios reales de cada bolsa."
 agents: [analista-mercados, gestor-carteras, operador-bolsa, riesgos-inversion, fiscalidad-inversiones, recepcion, agenda, administracion, comercial, proteccion-datos]
 modelos:
+  - {id: finanzas-qwen-1.5b, motivo: "IA especializada en finanzas para el móvil y equipos sin GPU: la usan los agentes de bolsa"}
+  - {id: fin-r1-7b, motivo: "IA especializada que razona sobre finanzas (valoración, ratios, riesgo): la usan los agentes de bolsa"}
+  - {id: qwen3.8-27b-finanzas, motivo: "IA especializada en finanzas con visión (lee gráficos e informes) para equipos potentes"}
   - {id: qwen3-vl-8b-thinking, motivo: "Razona mejor sobre informes de resultados, folletos y cuentas anuales"}
   - {id: qwen3-embedding-0.6b, motivo: "Buscar en tus informes, KID y documentación de fondos"}
 coordinator:

@@ -8,6 +8,7 @@
 #include "office/bolsa.h"
 #include "office/bolsa_agente.h"
 #include "office/bolsa_datos.h"
+#include "models/models.h"
 #include "util/fs.h"
 #include "util/text.h"
 
@@ -332,4 +333,83 @@ TEST("bolsa: cotizaciones reales contra las fuentes de verdad (NEXUS_ONLINE_TEST
   CHECK(usd > 0.7 && usd < 1.6);
   json btc = d.quote("BTC-EUR");
   CHECK(btc.is_object() && jnum(btc["precio"]) > 0);
+}
+
+TEST("bolsa: la IA financiera revisa las compras del agente") {
+  // como se lee la respuesta del modelo (con razonamiento, sin JSON, o sin sentido)
+  CHECK_EQ(jstr(veredicto_ia("<think>{x}</think> {\"decision\": \"Esperar\", \"motivo\": \"RSI alto\"}"), "decision"),
+           std::string("esperar"));
+  CHECK_EQ(jstr(veredicto_ia("{\"decision\":\"comprar\",\"motivo\":\"tendencia sana\"}"), "motivo"),
+           std::string("tendencia sana"));
+  CHECK_EQ(jstr(veredicto_ia("Mejor esperar a que corrija."), "decision"), std::string("esperar"));
+  CHECK(veredicto_ia("no lo sé").is_null());
+  CHECK(veredicto_ia("{\"decision\": \"vender\"}").is_null());
+  CHECK(pregunta_ia({{"simbolo", "SAN.MC"}}).find("SAN.MC") != std::string::npos);
+
+  double t = utc(2026, 10, 20, 8, 0);
+  FakeDatos fd;
+  {   // la IA dice esperar: no compra, lo anota en el diario y no vuelve a preguntar en 4 horas
+    Bolsa b(tmpdb("ia-espera"), 3, [&t] { return t; });
+    b.datos = &fd;
+    AgenteBolsa ag(b, [] { return json{{"universo", {"SAN.MC"}}}; });
+    int preguntas = 0;
+    ag.comite = [&](const json& q) -> json {
+      ++preguntas;
+      CHECK_EQ(jstr(q, "simbolo"), std::string("SAN.MC"));
+      CHECK(q["rsi"].is_number() && q["patrimonio_eur"].is_number());
+      return {{"decision", "esperar"}, {"motivo", "momento agotado"}, {"modelo", "fin-r1-7b"}};
+    };
+    CHECK(ag.ciclo()["acciones"].empty());
+    bool nota = false;
+    json est = ag.estado();
+    for (auto& d : est["diario"]) nota |= d["tipo"] == "ia" && jstr(d, "texto").find("fin-r1-7b") != std::string::npos;
+    CHECK(nota);
+    ag.ciclo();
+    CHECK_EQ(preguntas, 1);
+  }
+  {   // la IA dice comprar: compra y su motivo queda en el diario
+    Bolsa b(tmpdb("ia-compra"), 3, [&t] { return t; });
+    b.datos = &fd;
+    AgenteBolsa ag(b, [] { return json{{"universo", {"SAN.MC"}}}; });
+    ag.comite = [](const json&) -> json { return {{"decision", "comprar"}, {"motivo", "tendencia sana"}, {"modelo", "x"}}; };
+    bool compra = false;
+    json r = ag.ciclo();
+    for (auto& a : r["acciones"]) compra |= a == "compra SAN.MC";
+    CHECK(compra);
+    bool motivo = false;
+    json est = ag.estado();
+    for (auto& d : est["diario"]) motivo |= jstr(d, "texto").find("IA financiera: tendencia sana") != std::string::npos;
+    CHECK(motivo);
+  }
+  {   // sin IA (o con bolsa.agente.ia = false) decide solo con sus reglas
+    Bolsa b(tmpdb("ia-no"), 3, [&t] { return t; });
+    b.datos = &fd;
+    AgenteBolsa ag(b, [] { return json{{"universo", {"SAN.MC"}}, {"ia", false}}; });
+    ag.comite = [](const json&) -> json { throw std::runtime_error("no debe preguntar"); };
+    bool compra = false;
+    json r = ag.ciclo();
+    for (auto& a : r["acciones"]) compra |= a == "compra SAN.MC";
+    CHECK(compra);
+  }
+}
+
+TEST("bolsa: la IA financiera se elige segun el equipo") {
+  json sector = {{"finanzas-qwen-1.5b", "movil"}, {"fin-r1-7b", "pc"}, {"qwen3.8-27b-finanzas", "gpu"}};
+  auto elegida = [&](double ram, double vram, double max_b, double rec_b) {
+    json prof = {{"ram_gb", ram}, {"vram_gb", vram}, {"llm", {{"gpu_layers", vram > 0 ? -1 : 0}, {"max_model_b", max_b},
+                 {"recommended_model_b", rec_b}}}, {"image", {{"neural", vram > 0}}}};
+    std::string id;
+    for (auto& r : models::recommend(prof, sector))
+      if (truthy(r.value("best_especialidad", json(false)))) {
+        CHECK(id.empty());
+        id = jstr(r, "id");
+      }
+    return id;
+  };
+  CHECK_EQ(elegida(6, 0, 4, 1.5), std::string("finanzas-qwen-1.5b"));   // movil
+  CHECK_EQ(elegida(16, 0, 9, 7), std::string("fin-r1-7b"));            // PC sin GPU
+  CHECK_EQ(elegida(64, 24, 32, 27), std::string("qwen3.8-27b-finanzas"));   // GPU de 24 GB
+  int n = 0;
+  for (auto& r : models::recommended_list()) n += jstr(r, "especialidad") == "finanzas";
+  CHECK_EQ(n, 3);
 }
