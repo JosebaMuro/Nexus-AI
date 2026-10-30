@@ -465,7 +465,7 @@ void register_routes(App& app) {
     json res;
     try {
       res = sys2::accel_apply(c.app.S(), c.bs("engine", "auto"), c.bs("accel", "auto"), c.bb("remember", true),
-                              c.b("capas", nullptr));
+                              c.b("capas", nullptr), c.bs("runtime", "auto"));
     } catch (const std::invalid_argument& e) {
       throw HttpErr(400, e.what());
     }
@@ -1897,7 +1897,8 @@ void register_routes(App& app) {
     for (auto* k : {"source", "q"})
       if (!c.has_q(k)) throw missing_field("query", k);
     try {
-      return c.app.S().models->search(source, c.q("q"), c.q("kind"));
+      std::string fmt = c.has_q("formato") ? c.q("formato") : "";
+      return c.app.S().models->search(source, c.q("q"), fmt.empty() ? c.q("kind") : "fmt:" + fmt);
     } catch (const std::out_of_range& e) {
       throw HttpErr(502, source + ": " + key_msg(e));
     } catch (const std::exception& e) {

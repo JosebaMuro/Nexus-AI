@@ -1,5 +1,38 @@
 # Cambios
 
+## Nexus-Office 2.8.0-cpp
+
+### Todos los motores por hardware, elegibles a mano
+- **NPU de Google Tensor (Pixel 6 a 10), Qualcomm Hexagon y MediaTek APU en Android**: LiteRT-LM se compila ahora
+  desde el código fuente junto con sus *dispatch* de NPU (antes la APK traía el de PyPI, que no los tiene y solo
+  usaba GPU y CPU), con las bibliotecas QNN HTP del QAIRT de Qualcomm y las de GPU de LiteRT-LM.
+- **Qualcomm Genie** (motor nuevo, `genie`): modelos de Qualcomm AI Hub (carpeta con `genie_config.json` y binarios
+  QNN) en la NPU Hexagon. Android, Windows ARM (Snapdragon X) y Linux ARM.
+- **NVIDIA en Linux ARM** (DGX Spark, GH200, Jetson Thor y Orin con JetPack 7): llama.cpp con CUDA 13 compilado para
+  ARM64, en el paquete aparte `Nexus-Office-runtime-cuda-…-linux-aarch64.zip`.
+- **ONNX Runtime GenAI con CUDA** (Windows x64 y Linux x64, paquete aparte `runtime-onnx-cuda`) y con **OpenVINO**
+  (NPU, GPU y CPU de Intel). Cada proveedor va en su carpeta y se carga el del acelerador elegido.
+- **Intel NPU con LiteRT-LM** (Windows x64, modelos `.litertlm` de Lunar Lake y Panther Lake) si el *dispatch* de
+  OpenVINO compila; **Huawei Ascend (CANN)**, **WebGPU** y **llama.cpp Hexagon en Windows ARM** cuando ggml-org
+  publica esas builds.
+- **Selector MOTOR Y ACELERADOR**: se elige el motor (llama-server, LiteRT-LM, ONNX Runtime GenAI, Genie) y, además
+  de CPU/GPU/NPU, el **runtime concreto**: CUDA 12/13, ROCm, Vulkan, SYCL, OpenVINO, Metal, OpenCL Adreno, Hexagon,
+  NPU de LiteRT-LM, CUDA/DirectML/QNN/OpenVINO/VitisAI de ONNX. Lo que no va en el paquete de ese sistema sale
+  desactivado con el motivo. Terminal: `nexus-office run --motor onnx --runtime cuda`.
+- Con un motor elegido a mano se usa su modelo activo aunque el modelo por defecto sea un GGUF.
+
+### Modelos: filtro por formato
+- En **Modelos**, filtro **Formato** (GGUF, ONNX, LiteRT-LM/Tensor, Genie, safetensors): filtra los instalados, la
+  búsqueda en Hugging Face (etiquetas `gguf`, `onnx`, `litert-lm`; Genie = repositorios de Qualcomm) y los ficheros
+  de cada repositorio, y dice con qué motor se ejecuta ese formato.
+- Las carpetas con `genie_config.json` se reconocen como modelos Genie al importarlas o descargarlas.
+
+### Lo que no se puede incluir
+- NVIDIA TensorRT-LLM (motor compilado por modelo y tarjeta), AMD Ryzen AI NPU (su SDK no es redistribuible),
+  Apple Neural Engine (no hay motor de LLM abierto), Samsung Exynos NPU (SDK solo para socios), Hailo (driver del
+  kernel y modelos con cuenta) y Google Coral (8 MB de memoria).
+- Nada de esto se ha probado en NPU ni en GPU reales: solo en la CI y en el emulador de Android.
+
 ## Nexus-Office 2.7.0-cpp
 
 ### IA especializada para la bolsa

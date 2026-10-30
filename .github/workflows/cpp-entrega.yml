@@ -212,6 +212,32 @@ jobs:
             curl -fsSL "https://api.nuget.org/v3-flatcontainer/$id/$2/$id.nuspec" \
               | grep -o "id=\"$3\" version=\"[^\"]*\"" | head -1 | sed 's/.*version="\([^"]*\)".*/\1/; s/[][()]//g; s/,.*//'
           }
+          # artefacto de motores-npu.yml (LiteRT-LM con NPU, QAIRT/Genie, CUDA ARM64): de la ultima ejecucion que lo tenga
+          npu_art() {  # npu_art <artefacto> <destino>
+            local id
+            for id in $(gh run list -R "$GITHUB_REPOSITORY" -w motores-npu.yml -L 15 --json databaseId,status -q '.[] | select(.status=="completed") | .databaseId'); do
+              rm -rf ./w/a && if gh run download "$id" -R "$GITHUB_REPOSITORY" -n "$1" -D w/a 2>/dev/null; then
+                mkdir -p "$2" && cp -a w/a/. "$2/" && echo "$T: $1 <- motores-npu $id" && return 0
+              fi
+            done
+            echo "::warning::$T: no hay artefacto $1 (lanza motores-npu.yml)"; return 0
+          }
+          # ONNX Runtime GenAI con CUDA: genai-cuda + onnxruntime-gpu + runtime de CUDA 12 y cuDNN 9 (wheels de NVIDIA)
+          onnx_cuda() {  # onnx_cuda <plataforma del wheel> <patron de bibliotecas>
+            local d="$PK/onnx/cuda" pl=$1 re=$2
+            pypi onnxruntime-genai-cuda "" "cp31[0-9]-.*$pl" "$d" "$re"
+            pypi onnxruntime-gpu "" "cp31[0-9]-.*$pl" "$d" "$re"
+            for n in nvidia-cuda-runtime-cu12 nvidia-cublas-cu12 nvidia-cudnn-cu12 nvidia-cufft-cu12 nvidia-curand-cu12 nvidia-cuda-nvrtc-cu12; do
+              pypi "$n" "" "$pl" "$d" "$re"
+            done
+          }
+          # ONNX Runtime con OpenVINO (NPU, GPU y CPU de Intel) + las bibliotecas de OpenVINO
+          onnx_openvino() {  # onnx_openvino <plataforma del wheel> <patron de bibliotecas>
+            local d="$RT/onnx/openvino" pl=$1 re=$2
+            pypi onnxruntime-genai "$ORT_GENAI" "cp31[0-9]-.*$pl" "$d" "$re"
+            pypi onnxruntime-openvino "" "cp31[0-9]-.*$pl" "$d" "$re"
+            pypi openvino "" "cp31[0-9]-.*$pl" "$d" "$re"
+          }
           G=ggml-org/llama.cpp; S=leejet/stable-diffusion.cpp
           case $T in
             windows-x64)
@@ -228,14 +254,21 @@ jobs:
               OV=$(nuget_dep Microsoft.ML.OnnxRuntimeGenAI.DirectML $ORT_GENAI_DML Microsoft.ML.OnnxRuntime.DirectML)
               nuget Microsoft.ML.OnnxRuntimeGenAI.DirectML $ORT_GENAI_DML win-x64 "$RT/onnx/dml"
               nuget Microsoft.ML.OnnxRuntime.DirectML $OV win-x64 "$RT/onnx/dml"
-              nuget Microsoft.AI.DirectML $DIRECTML x64-win "$RT/onnx/dml" ;;
+              nuget Microsoft.AI.DirectML $DIRECTML x64-win "$RT/onnx/dml"
+              onnx_cuda win_amd64 '.*\.dll'
+              onnx_openvino win_amd64 '.*\.dll'
+              npu_art litert-windows-intel "$RT/litert/intel"
+              poner "$RT" llama webgpu $G $LT 'llama-*-bin-win-webgpu-x64.zip' ;;
             windows-arm64)
               # Snapdragon X Elite/Plus: GPU Adreno por OpenCL (llama.cpp) y NPU Hexagon por QNN (ONNX Runtime)
               poner "$RT" llama opencl-adreno $G $LT 'llama-*-bin-win-opencl-adreno-arm64.zip'
               poner "$RT" llama vulkan $G $LT 'llama-*-bin-win-vulkan-arm64.zip'
               OV=$(nuget_dep Microsoft.ML.OnnxRuntimeGenAI.QNN $ORT_GENAI_QNN Microsoft.ML.OnnxRuntime.QNN)
               nuget Microsoft.ML.OnnxRuntimeGenAI.QNN $ORT_GENAI_QNN win-arm64 "$RT/onnx/qnn"
-              nuget Microsoft.ML.OnnxRuntime.QNN $OV win-arm64 "$RT/onnx/qnn" ;;
+              nuget Microsoft.ML.OnnxRuntime.QNN $OV win-arm64 "$RT/onnx/qnn"
+              # NPU Hexagon: llama.cpp Hexagon (si ggml-org la publica para Windows) y Qualcomm Genie (QAIRT)
+              poner "$RT" llama hexagon $G $LT 'llama-*-bin-win-*hexagon*-arm64.zip'
+              npu_art qairt-windows-arm64 "$RT/genie/qnn" ;;
             linux-x86_64)
               poner "$PK" llama cuda13 $G $LT 'llama-*-bin-ubuntu-cuda-13*-x64.tar.gz' 'cudart-llama-*-bin-ubuntu-cuda-13*-x64.tar.gz'
               poner "$PK" llama rocm $G $LT 'llama-*-bin-ubuntu-rocm-*-x64.tar.gz'
@@ -244,7 +277,12 @@ jobs:
               poner "$RT" sd vulkan $S $ST 'sd-*-bin-Linux-*-x86_64-vulkan.zip'
               pypi litert-lm-api "$LITERT" 'manylinux.*_x86_64' "$RT/litert/todo" '.*\.so.*'
               pypi onnxruntime-genai "$ORT_GENAI" 'cp313-manylinux.*_x86_64' "$RT/onnx/cpu" '.*/libonnxruntime-genai\.so.*'
-              pypi onnxruntime "" 'cp313-cp313-manylinux.*_x86_64' "$RT/onnx/cpu" '.*/capi/libonnxruntime\.so.*' ;;
+              pypi onnxruntime "" 'cp313-cp313-manylinux.*_x86_64' "$RT/onnx/cpu" '.*/capi/libonnxruntime\.so.*'
+              onnx_cuda 'manylinux.*x86_64' '.*\.so(\.[0-9]+)*'
+              onnx_openvino 'manylinux.*x86_64' '.*\.so(\.[0-9]+)*'
+              # Huawei Ascend (CANN) y WebGPU, si ggml-org publica esas builds
+              poner "$PK" llama cann $G $LT 'llama-*-bin-*openEuler*x86*.tar.gz'
+              poner "$RT" llama webgpu $G $LT 'llama-*-bin-ubuntu-webgpu-x64.tar.gz' ;;
             linux-aarch64)
               poner "$RT" llama vulkan $G $LT 'llama-*-bin-ubuntu-vulkan-arm64.tar.gz'
               # placas y portatiles Snapdragon con Linux: CPU, GPU Adreno y NPU Hexagon en el mismo paquete
@@ -252,7 +290,12 @@ jobs:
               poner "$RT" sd cpu $S $ST 'sd-*-bin-Linux-*-aarch64.zip'
               pypi litert-lm-api "$LITERT" 'manylinux.*_aarch64' "$RT/litert/todo" '.*\.so.*'
               pypi onnxruntime-genai "$ORT_GENAI" 'cp313-manylinux.*_aarch64' "$RT/onnx/cpu" '.*/libonnxruntime-genai\.so.*'
-              pypi onnxruntime "" 'cp313-cp313-manylinux.*_aarch64' "$RT/onnx/cpu" '.*/capi/libonnxruntime\.so.*' ;;
+              pypi onnxruntime "" 'cp313-cp313-manylinux.*_aarch64' "$RT/onnx/cpu" '.*/capi/libonnxruntime\.so.*'
+              # NVIDIA en ARM64 (DGX Spark, Jetson Thor/Orin): llama.cpp CUDA 13 compilado en motores-npu.yml
+              npu_art llama-cuda-arm64 "$PK/llama/cuda"
+              # Snapdragon con Linux: Qualcomm Genie (NPU Hexagon)
+              npu_art qairt-linux-aarch64 "$RT/genie/qnn"
+              poner "$PK" llama cann $G $LT 'llama-*-bin-*openEuler*aarch64*.tar.gz' ;;
             macos-arm64)
               poner "$RT" sd metal $S $ST 'sd-*-bin-Darwin-*-arm64.zip'
               pypi litert-lm-api "$LITERT" 'macosx.*arm64' "$RT/litert/todo" '.*\.dylib'
@@ -260,7 +303,7 @@ jobs:
               pypi onnxruntime "" 'cp313-macosx.*arm64' "$RT/onnx/cpu" '.*/capi/libonnxruntime.*\.dylib' ;;
           esac
           # ONNX Runtime GenAI busca libonnxruntime.so(.1) / .dylib sin la version completa
-          for f in "$RT"/onnx/*/libonnxruntime.so.*; do [ -e "$f" ] || continue; cp -n "$f" "$(dirname "$f")/libonnxruntime.so"; cp -n "$f" "$(dirname "$f")/libonnxruntime.so.1" || true; done
+          for f in "$RT"/onnx/*/libonnxruntime.so.* "$PK"/onnx/*/libonnxruntime.so.*; do [ -e "$f" ] || continue; cp -n "$f" "$(dirname "$f")/libonnxruntime.so"; cp -n "$f" "$(dirname "$f")/libonnxruntime.so.1" || true; done
           for f in "$RT"/onnx/*/libonnxruntime.*.dylib; do [ -e "$f" ] && cp -n "$f" "$(dirname "$f")/libonnxruntime.dylib"; done
           for d in "$RT"/litert/* "$RT"/onnx/*; do [ -d "$d" ] && ls -la "$d"; done
           # paquetes de las variantes pesadas (limite de 2 GB por fichero de la Release)
@@ -269,7 +312,8 @@ jobs:
           for r in "$PK"/*/*; do
             [ -d "$r" ] || continue
             v=$(basename "$r"); rt=$(basename "$(dirname "$r")")
-            Z=$PWD/packs/out/Nexus-Office-runtime-$v-$V-$T.zip
+            n=$v; [ "$rt" = llama ] || n=$rt-$v   # onnx-cuda, ...
+            Z=$PWD/packs/out/Nexus-Office-runtime-$n-$V-$T.zip
             (cd packs && zip -q -r -9 "$Z" "runtimes/$rt/$v")
             s=$(stat -c %s "$Z")
             if [ "$s" -gt 2040109465 ]; then echo "::warning::$T: $rt/$v ocupa $((s/1048576)) MB: no cabe en la Release"; rm -f "$Z"; fi
@@ -430,9 +474,23 @@ jobs:
           git show FETCH_HEAD:android-gpu-npu-libs.tar.gz > npu.tgz
           (git show FETCH_HEAD:SHA256SUMS.txt | grep android-gpu-npu-libs.tar.gz | sed 's|  .*|  npu.tgz|' | sha256sum -c -)
           mkdir -p glibs && tar xzf npu.tgz -C glibs
-          # LiteRT-LM (Google) para los .litertlm: CPU y GPU del movil (y la NPU con el dispatch del fabricante)
-          U=$(curl -fsSL "https://pypi.org/pypi/litert-lm-api/$LITERT/json" | jq -r '[.urls[] | select(.filename | test("android.*arm64"))][0].url')
-          curl -fsSL -o lt.whl "$U" && unzip -q -o -j lt.whl '*/liblitert-lm.so' -d glibs/lib && ls -la glibs/lib/liblitert-lm.so
+          # LiteRT-LM (Google) para los .litertlm: compilado en motores-npu.yml con los dispatch de NPU de Google Tensor,
+          # Qualcomm y MediaTek y sus bibliotecas de GPU; si no esta, el del wheel de PyPI (CPU y GPU, sin NPU)
+          art() {
+            local id
+            for id in $(gh run list -R "$GITHUB_REPOSITORY" -w motores-npu.yml -L 15 --json databaseId,status -q '.[] | select(.status=="completed") | .databaseId'); do
+              rm -rf art && gh run download "$id" -R "$GITHUB_REPOSITORY" -n "$1" -D art 2>/dev/null && { cp -a art/. glibs/lib/; echo "$1 <- motores-npu $id"; return 0; }
+            done
+            echo "::warning::sin artefacto $1 (lanza motores-npu.yml)"; return 1
+          }
+          if ! art litert-android; then
+            U=$(curl -fsSL "https://pypi.org/pypi/litert-lm-api/$LITERT/json" | jq -r '[.urls[] | select(.filename | test("android.*arm64"))][0].url')
+            curl -fsSL -o lt.whl "$U" && unzip -q -o -j lt.whl '*/liblitert-lm.so' -d glibs/lib
+          fi
+          # QNN HTP (NPU Hexagon) y Genie del QAIRT de Qualcomm: los usan el dispatch de LiteRT-LM y el motor Genie
+          art qairt-android || true
+          rm -f glibs/lib/*.txt glibs/lib/LICENSE*
+          ls -la glibs/lib/liblitert-lm.so glibs/lib/libLiteRtDispatch_*.so glibs/lib/libQnnHtp*.so glibs/lib/libGenie.so 2>&1 || true
           chmod +x construir/nexus-construir
           (cd nexus-office-cpp && ../construir/nexus-construir apk --exe ../aout/Nexus-Office/nexus-office --libs ../alibs --recursos ../aout/Nexus-Office --gpu-libs ../glibs/lib)
           "$BT/apksigner" verify --print-certs nexus-office-cpp/dist-apk/*.apk | head -4

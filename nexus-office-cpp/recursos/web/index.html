@@ -303,7 +303,10 @@
     <section class="view" id="view-models">
       <div class="view-title">GESTOR DE MODELOS</div>
       <div class="panel"><h3>Recomendados para tu hardware <span class="sub" id="rec-profile"></span></h3><div class="grid g3" id="rec-grid"></div></div>
-      <div class="grid g2" style="margin-top:16px">
+      <div class="row" style="margin-top:16px;gap:8px"><span class="muted">Formato:</span>
+        <select class="input" id="fmt-filter" style="width:auto"><option value="">todos</option><option value="gguf">GGUF (llama.cpp)</option><option value="onnx">ONNX (ONNX Runtime GenAI)</option><option value="litertlm">LiteRT-LM (Tensor, NPU de móvil)</option><option value="genie">Genie (NPU Snapdragon, QNN)</option><option value="safetensors">safetensors / Transformers</option></select>
+        <span class="muted" id="fmt-note"></span></div>
+      <div class="grid g2" style="margin-top:8px">
         <div class="panel"><h3>Instalados</h3><div class="list" id="catalog-list"></div></div>
         <div class="panel"><h3>Descargas</h3><div class="list" id="jobs-list"><span class="muted">Sin descargas activas</span></div></div>
       </div>
@@ -497,8 +500,9 @@
 <dialog id="accel-dialog" class="accel-dialog">
   <h2>MOTOR Y ACELERADOR</h2>
   <p class="muted" id="accel-hw">Detectando…</p>
-  <div class="accel-group"><div class="lbl">Motor llama</div><div class="accel-opts" id="accel-engines"></div></div>
+  <div class="accel-group"><div class="lbl">Motor de IA</div><div class="accel-opts" id="accel-engines"></div></div>
   <div class="accel-group"><div class="lbl">Acelerar la IA con</div><div class="accel-opts" id="accel-accels"></div></div>
+  <div class="accel-group"><div class="lbl">Runtime del motor (CUDA, ROCm, Vulkan, Hexagon, NPU Tensor…)</div><div class="accel-opts" id="accel-runtimes"></div></div>
   <div class="accel-group"><div class="lbl">Capas del modelo en la GPU / NPU</div>
     <div class="row" style="gap:8px;flex-wrap:wrap"><select class="input" id="accel-capas" style="flex:1;min-width:200px"><option value="auto">Automático (las que quepan)</option><option value="todas">Todas: modelo entero en la GPU/NPU</option><option value="ninguna">Ninguna: todo en la CPU</option><option value="n">Número de capas…</option></select>
     <input class="input" id="accel-capas-n" type="number" min="1" max="999" value="20" style="width:110px" title="Capas en la GPU/NPU; el resto va en la CPU"></div>

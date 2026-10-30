@@ -292,3 +292,36 @@ TEST("runtimes: paquete sin conexion junto al programa, una sola vez") {
   } catch (const std::runtime_error&) {
   }
 }
+
+TEST("motores 2.8: Genie, variante por acelerador y aceleradores elegibles") {
+  CHECK_EQ(mo::motor_de_formato("genie"), std::string("genie"));
+  CHECK_EQ(json(mo::orden("genie", json::object(), json::object())), json(std::vector<std::string>{"npu"}));
+  // carpeta de Qualcomm AI Hub: genie_config.json
+  auto d = tmpdir("genie");
+  write_file(d / "llama32" / "genie_config.json", "{}");
+  CHECK_EQ(jstr(models::classify(d / "llama32"), "format"), std::string("genie"));
+  // ONNX: cada proveedor en su carpeta; «modelo» = el del genai_config.json
+  write_file(d / "phi" / "genai_config.json",
+             R"({"model":{"decoder":{"session_options":{"provider_options":[{"qnn":{"backend_path":"QnnHtp.dll"}}]}}}})");
+  json phi = {{"path", S(d / "phi")}};
+  CHECK_EQ(mo::variante_para("onnx", "modelo", phi), std::string("qnn"));
+  CHECK_EQ(mo::variante_para("onnx", "cuda", phi), std::string("cuda"));
+  CHECK_EQ(mo::variante_para("onnx", "dml", phi), std::string("dml"));
+  CHECK_EQ(mo::variante_para("onnx", "OpenVINO", phi), std::string("openvino"));
+  CHECK_EQ(mo::variante_para("onnx", "cpu", phi), std::string("cpu"));
+  CHECK(mo::variante_para("litert", "npu", phi).empty());
+  bool npu = false;
+  for (auto& a : mo::aceleradores("litert")) npu = npu || a.id == "npu";
+  CHECK(npu);
+  CHECK(!mo::aceleradores("onnx").empty());
+  // variantes: solo las carpetas que traen la biblioteca
+  set_env("NEXUS_DATA_DIR", S(d / "datos"));
+  set_env("NEXUS_RUNTIME_ONNX", "");
+  reset_config();
+  write_file(d / "datos" / "runtimes" / "onnx" / "cuda" / dynlib_name("onnxruntime-genai"), "x");
+  mkdirs(d / "datos" / "runtimes" / "onnx" / "vacia");
+  auto vs = mo::variantes("onnx");
+  CHECK(std::find(vs.begin(), vs.end(), "cuda") != vs.end());
+  CHECK(std::find(vs.begin(), vs.end(), "vacia") == vs.end());
+  CHECK(mo::lib_path("onnx", "cuda").has_value());
+}

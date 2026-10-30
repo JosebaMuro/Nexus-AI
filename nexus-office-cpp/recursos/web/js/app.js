@@ -1380,6 +1380,15 @@
 
   /* ================================================================ vista: MODELOS */
   const FIT = { ideal: "ideal", ok: "compatible", pesado: "pesado", no_cabe: "no cabe" };
+  // filtro por formato: el motor que lo ejecuta y como se reconoce cada formato (catalogo y ficheros de un repositorio)
+  const FMT = {
+    gguf: { motor: "llama-server", cat: (f) => f === "gguf", file: /\.gguf$/i },
+    onnx: { motor: "ONNX Runtime GenAI", cat: (f) => f === "onnx-genai" || f === "onnx", file: /(\.onnx(\.data|_data)?|genai_config\.json)$/i },
+    litertlm: { motor: "LiteRT-LM", cat: (f) => f === "litertlm", file: /\.(litertlm|task|tflite)$/i },
+    genie: { motor: "Qualcomm Genie", cat: (f) => f === "genie", file: /(genie_config\.json|\.bin|tokenizer\.json|htp_backend_ext_config\.json)$/i },
+    safetensors: { motor: "Transformers / sd.cpp", cat: (f) => ["safetensors", "transformers", "diffusers"].includes(f), file: /\.safetensors$/i },
+  };
+  const fmtSel = () => FMT[$("#fmt-filter").value];
   let jobsTimer = null;
   loaders.models = async () => {
     const [rec, m] = await Promise.all([api("/api/models/recommended"), api("/api/models")]);
@@ -1389,8 +1398,10 @@
     $("#rec-grid").innerHTML = items.map((r) => `<div class="item col" style="gap:6px"><div class="row"><span class="tag accent">${r.kind}</span><b style="flex:1">${esc(r.name)}</b>${r.best ? '<span class="tag ok">★ recomendado</span>' : ""}${r.best_especialidad ? `<span class="tag ok">★ IA ${esc(r.especialidad)} para este equipo</span>` : ""}${r.sector ? '<span class="tag warn">◆ para tu oficina</span>' : ""}</div>
       ${r.sector ? `<div class="d"><b>Para tu oficina:</b> ${esc(r.sector)}</div>` : ""}<div class="d">${esc(r.desc)}</div><div class="row mono muted"><span class="tag ${r.fit}">${FIT[r.fit]}</span><span>${r.size_mb >= 1000 ? (r.size_mb / 1024).toFixed(1) + " GB" : r.size_mb + " MB"}</span>${r.vision ? '<span class="tag">visión</span>' : ""}${r.baseline ? '<span class="tag">base CPU</span>' : ""}</div>
       <div>${r.installed ? (active.includes(r.id) ? '<span class="tag ok">● activo</span>' : `<button class="btn sm" data-act="${r.id}">ACTIVAR</button>`) : `<button class="btn sm ${r.fit === "no_cabe" ? "danger" : "primary"}" data-rec="${r.id}">DESCARGAR</button>`}</div></div>`).join("");
-    $("#catalog-list").innerHTML = m.catalog.map((c) => `<div class="item row"><span class="tag accent">${c.kind}</span><div style="flex:1"><div class="t">${esc(c.name)}</div><div class="d mono">${c.format} · ${fmtB(c.size)} · ${esc(c.source)}${c.vision ? " · visión" : ""}${c.meta?.quant ? " · " + c.meta.quant : ""}</div></div>
-      ${active.includes(c.id) ? '<span class="tag ok">activo</span>' : ["llm", "image", "tts", "embed"].includes(c.kind) ? `<button class="btn sm" data-act="${c.id}">ACTIVAR</button>` : ""}<button class="btn danger sm admin-only" data-delm="${c.id}">✕</button></div>`).join("") || `<span class="muted">Ningún modelo instalado. Descarga uno recomendado.</span>`;
+    const ff = fmtSel();
+    $("#fmt-note").textContent = ff ? `se ejecutan con ${ff.motor}` : "";
+    $("#catalog-list").innerHTML = m.catalog.filter((c) => !ff || ff.cat(c.format)).map((c) => `<div class="item row"><span class="tag accent">${c.kind}</span><div style="flex:1"><div class="t">${esc(c.name)}</div><div class="d mono">${c.format} · ${fmtB(c.size)} · ${esc(c.source)}${c.vision ? " · visión" : ""}${c.meta?.quant ? " · " + c.meta.quant : ""}</div></div>
+      ${active.includes(c.id) ? '<span class="tag ok">activo</span>' : ["llm", "image", "tts", "embed"].includes(c.kind) ? `<button class="btn sm" data-act="${c.id}">ACTIVAR</button>` : ""}<button class="btn danger sm admin-only" data-delm="${c.id}">✕</button></div>`).join("") || `<span class="muted">${ff ? "Ningún modelo instalado de este formato." : "Ningún modelo instalado. Descarga uno recomendado."}</span>`;
     if (m.ollama.length) $("#catalog-list").insertAdjacentHTML("beforeend", `<div class="item"><b>Ollama local:</b> ${m.ollama.map((o) => `<button class="btn sm" data-spec="ollama:${esc(o)}">${esc(o)}</button>`).join(" ")}</div>`);
     $("#src-select").innerHTML = m.sources.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
     $$("[data-rec]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/models/recommended/${b.dataset.rec}`, { body: {} }); toast("Descarga iniciada"); watchJobs(); })));
@@ -1412,7 +1423,7 @@
   $("#src-go").onclick = guard(async () => {
     const src = $("#src-select").value, q = $("#src-q").value.trim(); if (!q) return;
     $("#src-results").innerHTML = `<div class="chip"><span class="spin"></span>buscando en ${src}…</div>`; $("#src-files").innerHTML = "";
-    const res = await api(`/api/models/search?source=${src}&q=${encodeURIComponent(q)}&kind=${$("#src-kind").value}`);
+    const res = await api(`/api/models/search?source=${src}&q=${encodeURIComponent(q)}&kind=${$("#src-kind").value}&formato=${$("#fmt-filter").value}`);
     $("#src-results").innerHTML = res.map((r) => `<div class="item" data-repo="${esc(r.id)}" style="cursor:pointer"><div class="t">${esc(r.name)}</div><div class="d mono">${r.downloads ? "↓ " + r.downloads.toLocaleString() : ""} ${esc(r.task || "")}</div></div>`).join("") || `<span class="muted">Sin resultados.</span>`;
     $$("#src-results [data-repo]").forEach((el) => (el.onclick = guard(async () => {
       $("#src-files").innerHTML = `<div class="chip"><span class="spin"></span>listando ficheros…</div>`;
@@ -1420,7 +1431,7 @@
       const isRepo = files.some((f) => /(^|\/)(config|model_index)\.json$/.test(f.path)) && ["huggingface", "modelscope"].includes(src);
       const FITN = { ideal: "ideal", ok: "cabe", pesado: "pesado", "?": "" };
       $("#src-files").innerHTML = `<div class="row"><b style="flex:1">${esc(el.dataset.repo)}</b>${isRepo ? '<button class="btn sm primary" id="dl-repo">DESCARGAR REPOSITORIO COMPLETO</button>' : ""}</div>` +
-        files.filter((f) => !/\.(md|txt|gitattributes|json|png|jpg)$/i.test(f.path) || /onnx\.json$/.test(f.path)).slice(0, 120).map((f) => `<div class="item"><div class="row">
+        files.filter((f) => (!/\.(md|txt|gitattributes|json|png|jpg)$/i.test(f.path) || /(onnx|genai_config|genie_config)\.json$/.test(f.path)) && (!fmtSel() || fmtSel().file.test(f.path))).slice(0, 120).map((f) => `<div class="item"><div class="row">
           <span style="flex:1" class="mono">${f.recommended ? "★ " : ""}${esc(f.path)}</span><span class="muted mono">${f.size ? fmtB(f.size) : ""}</span>
           <button class="btn sm ${f.recommended ? "primary" : ""}" data-dl="${esc(f.path)}">↓</button></div>
           <div class="row" style="margin-top:4px">${f.kind ? `<span class="tag accent">${esc(f.kind)}</span>` : ""}${f.quant ? `<span class="tag">${esc(f.quant)}</span>` : ""}
@@ -1430,6 +1441,7 @@
       $("#dl-repo") && ($("#dl-repo").onclick = guard(async () => { await api("/api/models/download-repo", { body: { source: src, repo: el.dataset.repo, kind: $("#src-kind").value } }); toast("Descargando el repositorio completo"); watchJobs(); }));
     })));
   });
+  $("#fmt-filter").onchange = guard(() => loaders.models());
   $("#imp-go").onclick = guard(async () => { const r = await api("/api/models/import", { body: { path: $("#imp-path").value.trim(), copy_file: $("#imp-copy").checked } }); toast(`Importado: ${r.name} (${r.kind}, ${r.format})`); loaders.models(); });
   $("#spec-go").onclick = guard(async () => { await api("/api/models/activate-spec", { body: { spec: $("#spec-in").value.trim() } }); toast("LLM externo activado"); loadStatus(); });
 
@@ -1967,11 +1979,11 @@
 
   /* ================================================================ selector de inicio: motor llama y CPU/GPU/NPU */
   const Accel = {
-    d: null, engine: "auto", accel: "auto",
+    d: null, engine: "auto", accel: "auto", runtime: "auto",
     async open(force) {
       const d = this.d = await api("/api/accel");
       if (!force && !d.ask) return;
-      this.engine = d.engine; this.accel = d.accel;
+      this.engine = d.engine; this.accel = d.accel; this.runtime = d.runtime || "auto";
       const n = typeof d.capas === "number", sel = $("#accel-capas"), num = $("#accel-capas-n");
       sel.value = n ? "n" : d.capas || "auto"; num.value = n ? d.capas : num.value; num.disabled = !n;
       const tot = String((d.effective || {}).offloaded || "").split("/")[1];
@@ -1986,19 +1998,24 @@
       const opt = (list, cur, key) => list.map((o) => `<button type="button" data-${key}="${o.id}" class="${o.id === cur ? "on" : ""} ${o.available ? "" : "na"}">${esc(o.label)}${o.note ? `<small>${esc(o.note)}</small>` : ""}</button>`).join("");
       $("#accel-engines").innerHTML = opt(this.d.engines, this.engine, "eng");
       $("#accel-accels").innerHTML = opt(this.d.accels, this.accel, "acc");
-      $$("[data-eng]").forEach((b) => (b.onclick = () => { this.engine = b.dataset.eng; this.render(); }));
+      // runtimes concretos del motor elegido (variantes de llama.cpp o aceleradores de LiteRT-LM, ONNX y Genie)
+      const rts = (this.d.runtimes || {})[this.engine === "auto" ? "llamaserver" : this.engine] || [];
+      if (!rts.some((r) => r.id === this.runtime)) this.runtime = "auto";
+      $("#accel-runtimes").innerHTML = opt(rts, this.runtime, "rt");
+      $$("[data-eng]").forEach((b) => (b.onclick = () => { if (this.engine !== b.dataset.eng) this.runtime = "auto"; this.engine = b.dataset.eng; this.render(); }));
       $$("[data-acc]").forEach((b) => (b.onclick = () => { this.accel = b.dataset.acc; this.render(); }));
-      const a = this.d.accels.find((x) => x.id === this.accel), e = this.d.engines.find((x) => x.id === this.engine);
-      $("#accel-note").textContent = [e && !e.available ? `${e.label}: ${e.note}; se usará el siguiente disponible` : "", a && !a.available ? a.note : ""].filter(Boolean).join(" · ");
+      $$("[data-rt]").forEach((b) => (b.onclick = () => { this.runtime = b.dataset.rt; this.render(); }));
+      const a = this.d.accels.find((x) => x.id === this.accel), e = this.d.engines.find((x) => x.id === this.engine), r = rts.find((x) => x.id === this.runtime);
+      $("#accel-note").textContent = [e && !e.available ? `${e.label}: ${e.note}; se usará el siguiente disponible` : "", a && !a.available ? a.note : "", r && !r.available ? `${r.label}: ${r.note}` : ""].filter(Boolean).join(" · ");
     },
     result(r) {
       const eff = r.effective || {};
-      $("#accel-result").innerHTML = `Ahora: <b>${esc(r.selected)}</b> · perfil ${esc(r.profile.accelerator)}${r.profile.gpu_layers ? " (capas en GPU)" : ""}` +
+      $("#accel-result").innerHTML = `Ahora: <b>${esc(r.selected)}</b>${eff.acelerador ? ` · ${esc(eff.acelerador)}` : ""}${eff.variante ? ` (${esc(eff.variante)})` : ""} · perfil ${esc(r.profile.accelerator)}${r.profile.gpu_layers ? " (capas en GPU)" : ""}` +
         (eff.device ? ` · el modelo está en <b>${esc(eff.device)}</b>${eff.offloaded ? ` (${esc(eff.offloaded)} capas)` : ""}${eff.detail ? ` · ${esc(eff.detail)}` : ""}${eff.ok === false ? ` <span class="tag warn">se pidió ${esc(eff.requested)}</span>` : ""}` : "") +
         (r.tokens_s ? ` · ${r.tokens_s} tok/s` : "") + (r.error ? `<div class="bad">${esc(r.error)}</div>` : "");
     },
     capas() { const v = $("#accel-capas").value; return v === "n" ? Math.max(1, +$("#accel-capas-n").value || 1) : v; },
-    async apply() { await api("/api/accel", { body: { engine: this.engine, accel: this.accel, remember: $("#accel-remember").checked, capas: this.capas() } }); },
+    async apply() { await api("/api/accel", { body: { engine: this.engine, accel: this.accel, runtime: this.runtime, remember: $("#accel-remember").checked, capas: this.capas() } }); },
   };
   $("#accel-go").onclick = guard(async () => { await Accel.apply(); $("#accel-dialog").close(); toast("Motor y acelerador aplicados"); loadStatus(); });
   $("#accel-test").onclick = guard(async () => {
@@ -2054,7 +2071,7 @@
       if (d.act === "engine" || d.act === "accel") {
         const cur = await api("/api/accel");
         busy("Aplicando… (se reinicia el modelo)");
-        await api("/api/accel", { body: { engine: d.act === "engine" ? d.v : cur.engine, accel: d.act === "accel" ? d.v : cur.accel, remember: true } });
+        await api("/api/accel", { body: { engine: d.act === "engine" ? d.v : cur.engine, accel: d.act === "accel" ? d.v : cur.accel, runtime: d.act === "engine" ? "auto" : cur.runtime, remember: true } });
       } else if (d.act === "model") {
         busy("Cargando el modelo…"); await api(`/api/models/activate/${encodeURIComponent(d.v)}`, { body: {} });
       } else if (d.act === "hwp") {

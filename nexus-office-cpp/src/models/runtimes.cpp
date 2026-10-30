@@ -103,6 +103,8 @@ std::vector<std::string> candidates(const json& profile, const std::string& runt
   if (vendor == "intel" && igpu && llama) return {"cpu", "openvino", "vulkan"};
   if (vendor == "qualcomm") {
     // Snapdragon X (Windows ARM): GPU Adreno por OpenCL; Linux ARM: paquete Snapdragon (CPU, Adreno y NPU Hexagon)
+    // NPU Hexagon en Windows ARM: la build Hexagon de llama.cpp si va en el paquete
+    if (os_tag() == "win" && llama && acc == "hexagon") return {"hexagon", "opencl-adreno", "cpu"};
     if (os_tag() == "win" && llama) return acc == "opencl" ? std::vector<std::string>{"opencl-adreno", "cpu"} : std::vector<std::string>{"cpu", "opencl-adreno"};
     if (os_tag() == "linux" && llama) return acc == "hexagon" || acc == "opencl" ? std::vector<std::string>{"snapdragon", "cpu"} : std::vector<std::string>{"cpu", "snapdragon"};
   }

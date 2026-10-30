@@ -94,7 +94,8 @@ json annotate(json files, const json& profile, const std::string& source, const 
       if (jstr(x, "path") == p + ".json") has_json_sidecar = true;
     if (contains(low, "mmproj")) set("proyector", {"llama-server (vision)"});
     else if (ext == "litertlm") set("llm", {"LiteRT-LM (CPU, GPU y NPU)"});
-    else if (ends_with(low, "genai_config.json")) set("llm", {"ONNX Runtime GenAI (DirectML, QNN, OpenVINO...)"});
+    else if (ends_with(low, "genai_config.json")) set("llm", {"ONNX Runtime GenAI (DirectML, CUDA, QNN, OpenVINO...)"});
+    else if (ends_with(low, "genie_config.json")) set("llm", {"Qualcomm Genie (NPU Hexagon)"});
     else if (ext == "gguf" && EMBED_HINT().test(repo_l + " " + low) && !has_mm)
       set("embed", {"llama-server (--embedding)", "llama-cpp-python"});
     else if (ext == "gguf") {
@@ -137,6 +138,8 @@ json classify(const fs::path& p, const std::string& hint) {
   if (is_dir(p)) {
     // ONNX Runtime GenAI antes que Transformers: sus carpetas tambien traen config.json
     if (is_file(p / "genai_config.json")) info = {{"format", "onnx-genai"}, {"kind", "llm"}};
+    // Qualcomm AI Hub / Genie: genie_config.json y los binarios de contexto QNN (.bin) para la NPU Hexagon
+    else if (is_file(p / "genie_config.json")) info = {{"format", "genie"}, {"kind", "llm"}};
     else if (is_file(p / "config.json")) info = {{"format", "transformers"}, {"kind", "llm"}};
     else if (is_file(p / "model_index.json")) info = {{"format", "diffusers"}, {"kind", "image"}};
     else if (!glob(p, "*.xml").empty()) info = {{"format", "openvino"}, {"kind", "llm"}};
