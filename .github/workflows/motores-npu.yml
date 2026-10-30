@@ -29,6 +29,7 @@ env:
   # LiteRT-LM desde main fijado a un commit: la etiqueta v0.18.1 no compila con bazel (su TensorFlow pide
   # compatibility_proxy_repo de un rules_cc que su WORKSPACE no trae); main lo arreglo el 2026-10-29
   LITERT_LM_REF: "992287dfcf120f3a528eb23cdf11c66b7e97055f"
+  LITERT_NPU_REL: "v2.2.0"          # Release de LiteRT con el dispatch de Google Tensor ya compilado
   QAIRT: "2.42.0.251225"
   CUDA_ARCHS: "87;90;100;110;121"   # Orin, Hopper, Blackwell (B200), Thor, GB10 (DGX Spark)
   GH_TOKEN: ${{ github.token }}
@@ -67,16 +68,13 @@ jobs:
           disp qualcomm || true
           disp mediatek || true
           $B @litert//litert/c:libLiteRt.so || echo "::warning::sin libLiteRt.so"
-          # Google Tensor: el BUILD publico de sus hooks pide la licencia interna //third_party/odml:license (copybara
-          # no la quita); se compila con una copia de LiteRT sin esa linea. Va la ultima porque cambia el repositorio
-          # @litert y bazel recompilaria lo demas
-          OB=$(bazel info output_base 2>/dev/null)
-          rm -rf ../litert-src && cp -rL "$OB/external/litert" ../litert-src
-          grep -rl "third_party/odml:license" ../litert-src/litert/vendors/google_tensor | xargs -r sed -i '/third_party\/odml:license/d'
+          # Google Tensor: su dispatch no se puede compilar desde el codigo publico (depende de paquetes internos de
+          # Google: //third_party/odml, //platforms/darwinn/...). Google lo publica ya hecho en las Releases de LiteRT
+          # (litert_npu_runtime_libraries.zip, Apache 2.0): se toma de ahi
           mkdir -p ../tensor
-          if disp google_tensor --override_repository=litert="$(cd ../litert-src && pwd)"; then
-            find -L bazel-bin bazel-out -name 'libLiteRtDispatch_GoogleTensor.so' 2>/dev/null | head -1 | xargs -r -I{} cp {} ../tensor/
-          fi
+          curl -fsSL --retry 3 -o ../npu.zip "https://github.com/google-ai-edge/LiteRT/releases/download/$LITERT_NPU_REL/litert_npu_runtime_libraries.zip"
+          unzip -q -j -o ../npu.zip 'google_tensor_runtime/src/main/jni/arm64-v8a/libLiteRtDispatch_GoogleTensor.so' -d ../tensor
+          ls -la ../tensor
       - name: Recoger
         run: |
           set -e
@@ -84,7 +82,7 @@ jobs:
           cp lm/prebuilt/android_arm64/*.so out/lib/
           find -L lm/bazel-bin lm/bazel-out -type f \( -name 'liblitert-lm.so' -o -name 'libLiteRtDispatch_*.so' -o -name 'libLiteRt.so' \
             -o -name 'libedgetpu_litert*.so' \) 2>/dev/null | sort -u | while read -r f; do cp -n "$f" out/lib/; done
-          cp -n tensor/*.so out/lib/ 2>/dev/null || true
+          cp -n tensor/*.so out/lib/
           test -f out/lib/liblitert-lm.so
           for f in out/lib/*.so; do echo "== $(basename "$f") $(stat -c %s "$f")"; readelf -d "$f" | grep NEEDED | sed 's/.*\[/  necesita [/'; done
           echo "LiteRT-LM $LT_TAG (codigo fuente) · commit $GITHUB_SHA" > out/lib/VERSIONS-litert.txt
