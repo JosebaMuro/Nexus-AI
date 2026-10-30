@@ -147,6 +147,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 300
     continue-on-error: true
+    env:
+      MSYS_NO_PATHCONV: "1"        # Git Bash convierte «//c:litert-lm» en una ruta de Windows
+      MSYS2_ARG_CONV_EXCL: "*"
     steps:
       - name: LiteRT-LM y el dispatch de Intel OpenVINO
         shell: bash
