@@ -22,6 +22,9 @@ permissions:
 
 env:
   LITERT: "0.19.0"                  # la misma version que cpp-entrega.yml usa de PyPI en el escritorio
+  # LiteRT-LM desde main fijado a un commit: la etiqueta v0.18.1 no compila con bazel (su TensorFlow pide
+  # compatibility_proxy_repo de un rules_cc que su WORKSPACE no trae); main lo arreglo el 2026-10-29
+  LITERT_LM_REF: "992287dfcf120f3a528eb23cdf11c66b7e97055f"
   QAIRT: "2.42.0.251225"
   CUDA_ARCHS: "87;90;100;110;121"   # Orin, Hopper, Blackwell (B200), Thor, GB10 (DGX Spark)
   GH_TOKEN: ${{ github.token }}
@@ -36,16 +39,17 @@ jobs:
       - name: Codigo de LiteRT-LM (con LFS para prebuilt/)
         run: |
           set -e
-          T=v$LITERT
-          git ls-remote --tags https://github.com/google-ai-edge/LiteRT-LM "$T" | grep -q . || T=$(git ls-remote --tags --sort=-v:refname https://github.com/google-ai-edge/LiteRT-LM 'v*' | grep -v '\^{}' | head -1 | sed 's|.*refs/tags/||')
-          echo "LiteRT-LM $T"; echo "LT_TAG=$T" >> "$GITHUB_ENV"
-          GIT_LFS_SKIP_SMUDGE=1 git clone -q --depth 1 --branch "$T" https://github.com/google-ai-edge/LiteRT-LM lm
+          T=main@${LITERT_LM_REF:0:9}; echo "LiteRT-LM $T"; echo "LT_TAG=$T" >> "$GITHUB_ENV"
+          git init -q lm && git -C lm remote add origin https://github.com/google-ai-edge/LiteRT-LM
+          GIT_LFS_SKIP_SMUDGE=1 git -C lm fetch -q --depth 1 origin "$LITERT_LM_REF" && GIT_LFS_SKIP_SMUDGE=1 git -C lm checkout -q FETCH_HEAD
           cd lm && git lfs install --local && git lfs pull --include "prebuilt/android_arm64/*" && ls -la prebuilt/android_arm64
       - name: Compilar LiteRT-LM y los dispatch de NPU (Android ARM64)
         run: |
           set -e
           cd lm
-          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"; echo "NDK $ANDROID_NDK_HOME"
+          # NDK r28 si el runner lo trae (el que usa LiteRT); si no, el mas reciente
+          N28=$(ls -d "$ANDROID_HOME"/ndk/28.* 2>/dev/null | sort -V | tail -1)
+          export ANDROID_NDK_HOME="${N28:-${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}}"; echo "NDK $ANDROID_NDK_HOME"
           B="bazel build -c opt --config=android_arm64 --jobs=4"
           $B //c:litert-lm
           for v in google_tensor qualcomm mediatek; do
@@ -148,9 +152,8 @@ jobs:
         shell: bash
         run: |
           set -e
-          T=v$LITERT
-          git ls-remote --tags https://github.com/google-ai-edge/LiteRT-LM "$T" | grep -q . || T=$(git ls-remote --tags --sort=-v:refname https://github.com/google-ai-edge/LiteRT-LM 'v*' | grep -v '\^{}' | head -1 | sed 's|.*refs/tags/||')
-          GIT_LFS_SKIP_SMUDGE=1 git clone -q --depth 1 --branch "$T" https://github.com/google-ai-edge/LiteRT-LM lm
+          git init -q lm && git -C lm remote add origin https://github.com/google-ai-edge/LiteRT-LM
+          GIT_LFS_SKIP_SMUDGE=1 git -C lm fetch -q --depth 1 origin "$LITERT_LM_REF" && GIT_LFS_SKIP_SMUDGE=1 git -C lm checkout -q FETCH_HEAD
           cd lm
           bazel --output_base=C:/bzl build -c opt --config=windows --define=DISABLE_HUGGINGFACE_TOKENIZER=1 //c:litert-lm \
             @litert//litert/vendors/intel_openvino/dispatch:LiteRtDispatch
