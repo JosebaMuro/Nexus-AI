@@ -12,6 +12,10 @@ name: Nexus-Office C++ (instaladores y pruebas con modelo real)
 # cpp-publicar.yml publica la Release.
 on:
   workflow_dispatch:
+    inputs:
+      objetivos:
+        description: "Que construir: todos, o una lista (windows-x64 android linux-x86_64 ...)"
+        default: todos
   push:
     paths:
       - .github/workflows/cpp-entrega.yml
@@ -39,17 +43,41 @@ jobs:
   cpp:
     uses: ./.github/workflows/cpp.yml
 
+  # objetivos de esta ejecucion: todos o los pedidos (p. ej. «windows-x64 android» para probar antes el resto)
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      voz: ${{ steps.p.outputs.voz }}
+      paquetes: ${{ steps.p.outputs.paquetes }}
+      humo: ${{ steps.p.outputs.humo }}
+      android: ${{ steps.p.outputs.android }}
+    steps:
+      - id: p
+        env:
+          OBJ: ${{ inputs.objetivos || 'todos' }}
+        run: |
+          set -e
+          VOZ='[{"target":"linux-x86_64","os":"ubuntu-22.04","piper":"piper_linux_x86_64.tar.gz"},{"target":"linux-aarch64","os":"ubuntu-22.04-arm","piper":"piper_linux_aarch64.tar.gz"},{"target":"macos-arm64","os":"macos-latest","piper":"piper_macos_aarch64.tar.gz"},{"target":"macos-x86_64","os":"macos-15-intel","piper":"piper_macos_x64.tar.gz"},{"target":"windows-x64","os":"windows-latest","piper":"piper_windows_amd64.zip"},{"target":"windows-arm64","os":"windows-11-arm","piper":"piper_windows_amd64.zip"}]'
+          # la GPU paravirtual de la maquina virtual de macOS devuelve texto sin sentido con Metal: el chat va en CPU
+          HUMO='[{"target":"linux-x86_64","os":"ubuntu-24.04"},{"target":"linux-aarch64","os":"ubuntu-24.04-arm"},{"target":"macos-arm64","os":"macos-latest","accel":"cpu"},{"target":"macos-x86_64","os":"macos-15-intel"},{"target":"windows-x64","os":"windows-latest"},{"target":"windows-arm64","os":"windows-11-arm"}]'
+          if [ "$OBJ" = todos ]; then Q='.'; A=true; else
+            L=$(printf '%s' "$OBJ" | tr ', ' '\n\n' | grep -v '^$' | jq -R . | jq -sc .)
+            Q="map(select(.target as \$t | $L | index(\$t)))"
+            A=$(printf '%s' "$L" | jq 'index("android") != null')
+          fi
+          echo "voz=$(echo "$VOZ" | jq -c "$Q")" >> "$GITHUB_OUTPUT"
+          echo "humo=$(echo "$HUMO" | jq -c "$Q")" >> "$GITHUB_OUTPUT"
+          echo "paquetes=$(echo "$VOZ" | jq -c "$Q | map(.target)")" >> "$GITHUB_OUTPUT"
+          echo "android=$A" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
   voz:
+    needs: plan
+    if: needs.plan.outputs.voz != '[]'
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { target: linux-x86_64, os: ubuntu-22.04, piper: piper_linux_x86_64.tar.gz }
-          - { target: linux-aarch64, os: ubuntu-22.04-arm, piper: piper_linux_aarch64.tar.gz }
-          - { target: macos-arm64, os: macos-latest, piper: piper_macos_aarch64.tar.gz }
-          - { target: macos-x86_64, os: macos-15-intel, piper: piper_macos_x64.tar.gz }
-          - { target: windows-x64, os: windows-latest, piper: piper_windows_amd64.zip }
-          - { target: windows-arm64, os: windows-11-arm, piper: piper_windows_amd64.zip }
+        include: ${{ fromJSON(needs.plan.outputs.voz) }}
     runs-on: ${{ matrix.os }}
     env:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
@@ -112,11 +140,12 @@ jobs:
           retention-days: 7
 
   paquetes:
-    needs: [cpp, voz]
+    needs: [plan, cpp, voz]
+    if: needs.plan.outputs.paquetes != '[]'
     strategy:
       fail-fast: false
       matrix:
-        target: [windows-x64, windows-arm64, linux-x86_64, linux-aarch64, macos-arm64, macos-x86_64]
+        target: ${{ fromJSON(needs.plan.outputs.paquetes) }}
     runs-on: ubuntu-24.04
     steps:
       - name: Liberar espacio
@@ -365,18 +394,11 @@ jobs:
           compression-level: 0
 
   humo:
-    needs: paquetes
+    needs: [plan, paquetes]
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { target: linux-x86_64, os: ubuntu-24.04 }
-          - { target: linux-aarch64, os: ubuntu-24.04-arm }
-          # la GPU paravirtual de la maquina virtual de macOS devuelve texto sin sentido con Metal: el chat va en CPU
-          - { target: macos-arm64, os: macos-latest, accel: cpu }
-          - { target: macos-x86_64, os: macos-15-intel }
-          - { target: windows-x64, os: windows-latest }
-          - { target: windows-arm64, os: windows-11-arm }
+        include: ${{ fromJSON(needs.plan.outputs.humo) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/download-artifact@v4
@@ -440,7 +462,8 @@ jobs:
           flatpak run ai.nexus.NexusOfficeCpp --version
 
   android:
-    needs: cpp
+    needs: [plan, cpp]
+    if: needs.plan.outputs.android == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
