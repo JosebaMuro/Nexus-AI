@@ -7,6 +7,7 @@
 #include "office/office.h"
 #include "util/crypto.h"
 #include "util/log.h"
+#include "util/sysinfo.h"
 #include "util/rx.h"
 #include "util/text.h"
 
@@ -375,7 +376,7 @@ std::string ModelManager::download(const std::string& source, const std::string&
       job_update(jid, {{"status", "error"}, {"error", e.what()}});
       return;
     }
-    run(jid, files, [=, this] { return register_model(main_dest, source, repo, kind, mm_dest.empty() ? "" : S(mm_dest)); });
+    run(jid, files, [=, this] { return listo(register_model(main_dest, source, repo, kind, mm_dest.empty() ? "" : S(mm_dest))); });
   }).detach();
   return jid;
 }
@@ -415,7 +416,7 @@ std::string ModelManager::download_repo(const std::string& source, const std::st
       job_update(jid, {{"status", "error"}, {"error", e.what()}});
       return;
     }
-    run(jid, files, [=, this] { return register_model(root, source, repo, kind); });
+    run(jid, files, [=, this] { return listo(register_model(root, source, repo, kind)); });
   }).detach();
   return jid;
 }
@@ -465,8 +466,90 @@ static std::string closest_file(const std::vector<std::string>& names, const std
   return c.empty() ? file : c[0];
 }
 
+// fichero .litertlm o carpeta ONNX que va con el hardware de este equipo (formato del motor que acelera aqui)
+static std::string alnum_lower(const std::string& s) {
+  std::string o;
+  for (unsigned char c : s)
+    if (std::isalnum(c)) o += (char)std::tolower(c);
+  return o;
+}
+
+json resolve_por_hardware(const json& rec, const json& profile, const json& listing) {
+  json out = rec;
+  std::string fmt = jstr(rec, "formato");
+  json npu = profile.value("npu", json::object());
+  if (!npu.is_object()) npu = json::object();
+  std::string soc = alnum_lower(jstr(npu, "soc")), npu_name = lower(jstr(npu, "name") + " " + jstr(npu, "soc"));
+  std::vector<std::string> socs;
+  if (!soc.empty()) socs.push_back(soc);
+  if (auto m = Rx(R"(tensor\s*g(\d))").search(npu_name)) socs.push_back("tensorg" + m->str(1));
+  static const std::map<std::string, std::string> TENSOR = {{"gs101", "tensorg1"}, {"gs201", "tensorg2"}, {"zuma", "tensorg3"},
+                                                            {"zumapro", "tensorg4"}, {"laguna", "tensorg5"}};
+  if (TENSOR.count(soc)) socs.push_back(TENSOR.at(soc));
+  std::vector<std::string> names;
+  for (auto& f : listing) names.push_back(jstr(f, "path"));
+  if (fmt == "litertlm") {
+    static const Rx VENDOR(R"((sm\d{4}|mt\d{4}|qcs\d{4}|tensor|google|intel|qualcomm|mediatek|_npu))", Rx::I);
+    std::string npu_file, general;
+    for (auto& n : names) {
+      if (!ends_with(lower(n), ".litertlm")) continue;
+      std::string a = alnum_lower(S(P(n).filename()));
+      for (auto& sc : socs)
+        if (sc.size() >= 5 && contains(a, sc) && npu_file.empty()) npu_file = n;
+      if (!VENDOR.test(S(P(n).filename())) && (general.empty() || n.size() < general.size())) general = n;
+    }
+    if (!npu_file.empty()) {
+      out["file"] = npu_file;
+      out["acelera"] = "NPU (" + (jstr(npu, "name").empty() ? jstr(npu, "soc") : jstr(npu, "name")) + ")";
+    } else if (!general.empty()) {
+      out["file"] = general;
+      out["acelera"] = "GPU / CPU";
+    }
+  } else if (fmt == "onnx-genai") {
+    std::vector<std::string> dirs;
+    for (auto& n : names)
+      if (S(P(n).filename()) == "genai_config.json") dirs.push_back(S(P(n).parent_path()));
+    std::string acc = jstr(profile, "accelerator"), id = jstr(profile, "id");
+    std::vector<std::string> prefs;
+    if (contains(npu_name, "hexagon") || contains(npu_name, "qualcomm")) prefs = {"qnn", "npu", "htp"};
+    if (acc == "cuda") prefs.insert(prefs.end(), {"cuda", "gpu"});
+    else if (acc != "cpu" && sys::is_windows()) prefs.insert(prefs.end(), {"directml", "dml", "gpu"});
+    prefs.insert(prefs.end(), {"cpu", "mobile"});
+    std::string pick;
+    for (auto& pf : prefs) {
+      for (auto& d : dirs)
+        if (contains(lower(d), pf)) {
+          pick = d;
+          break;
+        }
+      if (!pick.empty()) break;
+    }
+    if (pick.empty() && !dirs.empty()) pick = dirs[0];
+    if (!pick.empty() || std::find(names.begin(), names.end(), "genai_config.json") != names.end()) {
+      out["carpeta"] = pick;
+      out["file"] = pick.empty() ? "genai_config.json" : pick + "/genai_config.json";
+      std::string l = lower(pick);
+      out["acelera"] = contains(l, "qnn") || contains(l, "npu") ? "NPU (QNN)" : contains(l, "cuda") ? "GPU (CUDA)"
+                       : contains(l, "dml") || contains(l, "directml") ? "GPU (DirectML)" : contains(l, "gpu") ? "GPU" : "CPU";
+    }
+  }
+  return out;
+}
+
 json ModelManager::resolve_recommended(const json& rec) {
   std::string kind = jstr(rec, "kind");
+  if (!jstr(rec, "formato").empty()) {
+    json listing = json::array();
+    try {
+      listing = sources["huggingface"]->files(jstr(rec, "repo"));
+    } catch (const std::exception& e) {
+      L.info("No se pudo listar ", jstr(rec, "repo"), " (", e.what(), "): se usan los nombres del catalogo");
+    }
+    json out = resolve_por_hardware(rec, profile_(), listing);
+    out["listing"] = listing;
+    L.info("Catalogo ", jstr(rec, "id"), ": para este equipo -> ", jstr(out, "file"), " (", jstr(out, "acelera"), ")");
+    return out;
+  }
   if (kind == "image") {
     json out = rec;
     auto list = [&](const std::string& repo) {
@@ -535,6 +618,26 @@ std::string ModelManager::download_recommended(const std::string& rec_id) {
     auto hf = sources["huggingface"];
     std::string repo = jstr(rec, "repo");
     std::vector<File> files = {{hf->download_url(repo, jstr(rec, "file")), dest("huggingface", repo, jstr(rec, "file")), {}, 0}};
+    if (rec.contains("carpeta")) {
+      // modelo ONNX: toda la carpeta del proveedor elegido (genai_config.json, .onnx, .onnx.data, tokenizer...)
+      std::string pre = jstr(rec, "carpeta");
+      fs::path root = paths::models_dir() / "huggingface" / P(replace_all(repo, "/", "__"));
+      files.clear();
+      for (auto& f : rec.value("listing", json::array())) {
+        std::string p = jstr(f, "path");
+        if (!pre.empty() && !starts_with(p, pre + "/")) continue;
+        if (pre.empty() && contains(p, "/")) continue;
+        files.push_back({hf->download_url(repo, p), root / P(p), {}, (uint64_t)jnum(f.value("size", json(0)))});
+      }
+      fs::path dir = pre.empty() ? root : root / P(pre);
+      run(jid, files, [=, this] {
+        json entry = register_model(dir, "huggingface", repo, "llm", "", jstr(rec, "id"), jstr(rec, "name"),
+                                    {{"acelera", rec.value("acelera", json(""))}});
+        activate(jstr(entry, "id"));   // elegido a mano: queda listo para usar con su motor
+        return entry;
+      });
+      return;
+    }
     std::vector<std::string> extras;
     if (!jstr(rec, "mmproj").empty()) extras.push_back(jstr(rec, "mmproj"));
     for (auto& e : rec.value("extra", json::array())) extras.push_back(e.get<std::string>());
@@ -560,8 +663,11 @@ std::string ModelManager::download_recommended(const std::string& rec_id) {
                                   {{"gen", rec.value("gen", json())},
                                    {"vision", rec.value("vision", json(false))},
                                    {"reasoning", rec.value("reasoning", json(false))},
-                                   {"componentes", comps.empty() ? json() : comps}});
-      auto_activate(entry);
+                                   {"componentes", comps.empty() ? json() : comps},
+                                   {"acelera", rec.value("acelera", json())}});
+      // elegido en Recomendados: se activa y se configura su motor (LiteRT-LM, ONNX, llama-server...)
+      if (!jstr(rec, "formato").empty()) activate(jstr(entry, "id"));
+      else auto_activate(entry);
       return entry;
     });
   }).detach();
@@ -699,7 +805,36 @@ void ModelManager::auto_activate(const json& entry) {
   }
 }
 
+// el LLM activo se ejecuta con el motor de su formato: GGUF -> llama-server, .litertlm -> LiteRT-LM, ONNX -> ONNX
+// Runtime GenAI, Genie -> Genie. Si el motor elegido a mano no lee ese formato, se vuelve a Automatico.
+void ModelManager::configurar_motor(const json& entry) {
+  if (jstr(entry, "kind") != "llm") return;
+  static const std::map<std::string, std::string> M = {{"litertlm", "litert"}, {"onnx-genai", "onnx"}, {"genie", "genie"}};
+  std::string fmt = jstr(entry, "format"), engine = config_.str("llm.engine", "auto");
+  auto it = M.find(fmt);
+  if (it != M.end()) {
+    if (engine != it->second) {
+      config_.set("llm.engine", it->second);
+      config_.set("llm.motor_acelerador", "");   // automatico: NPU, GPU y CPU en ese orden
+      L.info("Modelo ", jstr(entry, "id"), " (", fmt, "): motor ", it->second);
+    }
+  } else if (fmt == "gguf" && M.end() != std::find_if(M.begin(), M.end(), [&](auto& kv) { return kv.second == engine; })) {
+    config_.set("llm.engine", "auto");
+    config_.set("llm.motor_acelerador", "");
+  }
+}
+
+// modelo recien descargado: los de LiteRT-LM, ONNX y Genie se activan y quedan con su motor configurado (se han
+// elegido para ese motor); los demas, como siempre, solo si no hay otro activo de su tipo
+json ModelManager::listo(const json& entry) {
+  std::string f = jstr(entry, "format");
+  if (jstr(entry, "kind") == "llm" && (f == "litertlm" || f == "onnx-genai" || f == "genie")) activate(jstr(entry, "id"));
+  else auto_activate(entry);
+  return entry;
+}
+
 void ModelManager::notify(const json& entry) {
+  configurar_motor(entry);
   for (auto& fn : on_activate) {
     try {
       fn(entry);

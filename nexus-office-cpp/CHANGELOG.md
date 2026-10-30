@@ -26,6 +26,13 @@
   búsqueda en Hugging Face (etiquetas `gguf`, `onnx`, `litert-lm`; Genie = repositorios de Qualcomm) y los ficheros
   de cada repositorio, y dice con qué motor se ejecuta ese formato.
 - Las carpetas con `genie_config.json` se reconocen como modelos Genie al importarlas o descargarlas.
+- **Descarga en el formato que acelera en tu equipo**: nuevos recomendados Gemma 4 E2B en LiteRT-LM (baja el
+  `.litertlm` compilado para la NPU de tu chip: Tensor G5, SM8750, Dimensity, Intel; si no hay, el general para GPU
+  y CPU) y Phi-4 mini en ONNX (baja solo la carpeta de tu acelerador: CUDA, DirectML, QNN o CPU). Cada tarjeta dice
+  con qué motor va y si ese motor está en el paquete.
+- **Listo para usar al descargar**: un modelo de LiteRT-LM, ONNX o Genie se activa al terminar y deja configurado su
+  motor (`llm.engine`) con el acelerador automático (NPU, GPU, CPU). Al volver a un GGUF, el motor vuelve a
+  Automático. Los modelos de Genie salen de Qualcomm AI Hub (con cuenta): se descargan allí y se importan.
 
 ### Lo que no se puede incluir
 - NVIDIA TensorRT-LLM (motor compilado por modelo y tarjeta), AMD Ryzen AI NPU (su SDK no es redistribuible),

@@ -325,3 +325,22 @@ TEST("motores 2.8: Genie, variante por acelerador y aceleradores elegibles") {
   CHECK(std::find(vs.begin(), vs.end(), "vacia") == vs.end());
   CHECK(mo::lib_path("onnx", "cuda").has_value());
 }
+
+TEST("modelos 2.8: el recomendado baja el formato del motor que acelera en este equipo") {
+  json lit = {{"formato", "litertlm"}, {"file", "x.litertlm"}};
+  json listing = json::array({{{"path", "gemma-4-E2B-it.litertlm"}}, {{"path", "gemma-4-E2B-it_qualcomm_sm8750.litertlm"}},
+                              {{"path", "gemma-4-E2B-it_Google_tensor_g5.litertlm"}}, {{"path", "gemma-4-E2B-it_intel_PTL.litertlm"}}});
+  json sd = {{"npu", {{"soc", "SM8750"}, {"name", "Qualcomm Hexagon NPU"}}}};
+  CHECK_EQ(jstr(models::resolve_por_hardware(lit, sd, listing), "file"), std::string("gemma-4-E2B-it_qualcomm_sm8750.litertlm"));
+  json pixel = {{"npu", {{"soc", "laguna"}, {"name", "Google Tensor G5 TPU"}}}};
+  CHECK_EQ(jstr(models::resolve_por_hardware(lit, pixel, listing), "file"), std::string("gemma-4-E2B-it_Google_tensor_g5.litertlm"));
+  json pc = {{"accelerator", "cpu"}};
+  json g = models::resolve_por_hardware(lit, pc, listing);
+  CHECK_EQ(jstr(g, "file"), std::string("gemma-4-E2B-it.litertlm"));
+  CHECK_EQ(jstr(g, "acelera"), std::string("GPU / CPU"));
+  json onnx = {{"formato", "onnx-genai"}};
+  json ol = json::array({{{"path", "cpu_and_mobile/cpu-int4/genai_config.json"}}, {{"path", "gpu/gpu-int4-cuda/genai_config.json"}},
+                         {{"path", "gpu/gpu-int4-cuda/model.onnx"}}});
+  CHECK_EQ(jstr(models::resolve_por_hardware(onnx, {{"accelerator", "cuda"}}, ol), "carpeta"), std::string("gpu/gpu-int4-cuda"));
+  CHECK_EQ(jstr(models::resolve_por_hardware(onnx, pc, ol), "carpeta"), std::string("cpu_and_mobile/cpu-int4"));
+}
