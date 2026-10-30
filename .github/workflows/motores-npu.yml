@@ -20,6 +20,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: motores-npu-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   LITERT: "0.19.0"                  # la misma version que cpp-entrega.yml usa de PyPI en el escritorio
   # LiteRT-LM desde main fijado a un commit: la etiqueta v0.18.1 no compila con bazel (su TensorFlow pide
@@ -53,7 +57,10 @@ jobs:
           B="bazel build -c opt --config=android_arm64 --jobs=4"
           $B //c:litert-lm
           for v in google_tensor qualcomm mediatek; do
-            $B "@litert//litert/vendors/$v/dispatch:dispatch_api_so" || echo "::warning::dispatch $v no compila con LiteRT-LM $LT_TAG"
+            if ! $B "@litert//litert/vendors/$v/dispatch:dispatch_api_so" > "../dispatch-$v.log" 2>&1; then
+              echo "::warning::dispatch $v no compila con LiteRT-LM $LT_TAG"
+              grep -E "ERROR|error:|not visible|no such" "../dispatch-$v.log" | head -15 | sed "s/^/::warning::$v: /"
+            fi
           done
           $B @litert//litert/c:libLiteRt.so || echo "::warning::sin libLiteRt.so"
       - name: Recoger
@@ -72,6 +79,9 @@ jobs:
           name: litert-android
           path: out/lib
           retention-days: 90
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: litert-android-registros, path: "dispatch-*.log", retention-days: 7, if-no-files-found: ignore }
 
   qairt:
     runs-on: ubuntu-24.04
