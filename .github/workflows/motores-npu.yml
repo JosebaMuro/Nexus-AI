@@ -158,6 +158,8 @@ jobs:
           git init -q lm && git -C lm remote add origin https://github.com/google-ai-edge/LiteRT-LM
           GIT_LFS_SKIP_SMUDGE=1 git -C lm fetch -q --depth 1 origin "$LITERT_LM_REF" && GIT_LFS_SKIP_SMUDGE=1 git -C lm checkout -q FETCH_HEAD
           cd lm
+          # sin NDK: con ANDROID_NDK_HOME el WORKSPACE configura Android y en Windows falla al enlazar el NDK
+          unset ANDROID_NDK_HOME ANDROID_NDK ANDROID_NDK_ROOT ANDROID_NDK_LATEST_HOME
           bazel --output_base=C:/bzl build -c opt --config=windows --define=DISABLE_HUGGINGFACE_TOKENIZER=1 //c:litert-lm \
             @litert//litert/vendors/intel_openvino/dispatch:LiteRtDispatch
           mkdir -p ../out
