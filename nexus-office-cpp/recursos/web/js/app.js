@@ -2079,7 +2079,13 @@
     capas() { const v = $("#accel-capas").value; return v === "n" ? Math.max(1, +$("#accel-capas-n").value || 1) : v; },
     async apply() { await api("/api/accel", { body: { engine: this.engine, accel: this.accel, runtime: this.runtime, remember: $("#accel-remember").checked, capas: this.capas() } }); },
   };
-  $("#accel-go").onclick = guard(async () => { await Accel.apply(); $("#accel-dialog").close(); toast("Motor y acelerador aplicados"); loadStatus(); });
+  // el dialogo se cierra al pulsar, sin esperar a la respuesta: mientras sigue abierto (modal) el chat no recibe el
+  // teclado y lo que se escribe nada mas arrancar se pierde; si falla, vuelve a abrirse con el error
+  $("#accel-go").onclick = async () => {
+    $("#accel-dialog").close();
+    try { await Accel.apply(); toast("Motor y acelerador aplicados"); loadStatus(); }
+    catch (e) { toast(e.message, true); $("#accel-dialog").showModal(); }
+  };
   $("#accel-test").onclick = guard(async () => {
     const b = $("#accel-test"); b.disabled = true; $("#accel-result").innerHTML = `<span class="spin"></span> Cargando el modelo y probando…`;
     try { await Accel.apply(); const r = await api("/api/accel/test", { body: {} }); Accel.d = { ...Accel.d, ...r }; Accel.result(r); toast(r.ok ? "Prueba correcta" : "La prueba ha fallado", !r.ok); }
