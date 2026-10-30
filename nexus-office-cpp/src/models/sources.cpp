@@ -46,9 +46,21 @@ class HuggingFace : public Source {
     std::map<std::string, std::string> p = {{"search", q}, {"limit", "30"}, {"sort", "downloads"}, {"direction", "-1"}};
     static const std::map<std::string, std::string> HINT = {
         {"image", "text-to-image"}, {"stt", "automatic-speech-recognition"}, {"tts", "text-to-speech"}};
-    if (kind == "llm") p["filter"] = "gguf";
+    // «fmt:<formato>» (filtro por formato de la vista Modelos): GGUF, ONNX, LiteRT-LM (Tensor/NPU) o Genie (QNN)
+    if (starts_with(kind, "fmt:")) {
+      std::string f = kind.substr(4);
+      if (f == "gguf" || f == "onnx" || f == "safetensors") p["filter"] = f;
+      else if (f == "litertlm") p["filter"] = "litert-lm";
+      else if (f == "genie") p["author"] = "qualcomm";
+    } else if (kind == "llm") p["filter"] = "gguf";
     else if (HINT.count(kind)) p["pipeline_tag"] = HINT.at(kind);
     json data = http::get_json("https://huggingface.co/api/models", headers(), p);
+    // LiteRT-LM: no todos los repositorios llevan la etiqueta; se repite buscando «litert»
+    if (kind == "fmt:litertlm" && data.is_array() && data.empty()) {
+      p.erase("filter");
+      p["search"] = q + " litert";
+      data = http::get_json("https://huggingface.co/api/models", headers(), p);
+    }
     json out = json::array();
     for (auto& m : data) {
       json tags = json::array();

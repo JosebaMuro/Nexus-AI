@@ -292,3 +292,55 @@ TEST("runtimes: paquete sin conexion junto al programa, una sola vez") {
   } catch (const std::runtime_error&) {
   }
 }
+
+TEST("motores 2.8: Genie, variante por acelerador y aceleradores elegibles") {
+  CHECK_EQ(mo::motor_de_formato("genie"), std::string("genie"));
+  CHECK_EQ(json(mo::orden("genie", json::object(), json::object())), json(std::vector<std::string>{"npu"}));
+  // carpeta de Qualcomm AI Hub: genie_config.json
+  auto d = tmpdir("genie");
+  write_file(d / "llama32" / "genie_config.json", "{}");
+  CHECK_EQ(jstr(models::classify(d / "llama32"), "format"), std::string("genie"));
+  // ONNX: cada proveedor en su carpeta; «modelo» = el del genai_config.json
+  write_file(d / "phi" / "genai_config.json",
+             R"({"model":{"decoder":{"session_options":{"provider_options":[{"qnn":{"backend_path":"QnnHtp.dll"}}]}}}})");
+  json phi = {{"path", S(d / "phi")}};
+  CHECK_EQ(mo::variante_para("onnx", "modelo", phi), std::string("qnn"));
+  CHECK_EQ(mo::variante_para("onnx", "cuda", phi), std::string("cuda"));
+  CHECK_EQ(mo::variante_para("onnx", "dml", phi), std::string("dml"));
+  CHECK_EQ(mo::variante_para("onnx", "OpenVINO", phi), std::string("openvino"));
+  CHECK_EQ(mo::variante_para("onnx", "cpu", phi), std::string("cpu"));
+  CHECK(mo::variante_para("litert", "npu", phi).empty());
+  bool npu = false;
+  for (auto& a : mo::aceleradores("litert")) npu = npu || a.id == "npu";
+  CHECK(npu);
+  CHECK(!mo::aceleradores("onnx").empty());
+  // variantes: solo las carpetas que traen la biblioteca
+  set_env("NEXUS_DATA_DIR", S(d / "datos"));
+  set_env("NEXUS_RUNTIME_ONNX", "");
+  reset_config();
+  write_file(d / "datos" / "runtimes" / "onnx" / "cuda" / dynlib_name("onnxruntime-genai"), "x");
+  mkdirs(d / "datos" / "runtimes" / "onnx" / "vacia");
+  auto vs = mo::variantes("onnx");
+  CHECK(std::find(vs.begin(), vs.end(), "cuda") != vs.end());
+  CHECK(std::find(vs.begin(), vs.end(), "vacia") == vs.end());
+  CHECK(mo::lib_path("onnx", "cuda").has_value());
+}
+
+TEST("modelos 2.8: el recomendado baja el formato del motor que acelera en este equipo") {
+  json lit = {{"formato", "litertlm"}, {"file", "x.litertlm"}};
+  json listing = json::array({{{"path", "gemma-4-E2B-it.litertlm"}}, {{"path", "gemma-4-E2B-it_qualcomm_sm8750.litertlm"}},
+                              {{"path", "gemma-4-E2B-it_Google_tensor_g5.litertlm"}}, {{"path", "gemma-4-E2B-it_intel_PTL.litertlm"}}});
+  json sd = {{"npu", {{"soc", "SM8750"}, {"name", "Qualcomm Hexagon NPU"}}}};
+  CHECK_EQ(jstr(models::resolve_por_hardware(lit, sd, listing), "file"), std::string("gemma-4-E2B-it_qualcomm_sm8750.litertlm"));
+  json pixel = {{"npu", {{"soc", "laguna"}, {"name", "Google Tensor G5 TPU"}}}};
+  CHECK_EQ(jstr(models::resolve_por_hardware(lit, pixel, listing), "file"), std::string("gemma-4-E2B-it_Google_tensor_g5.litertlm"));
+  json pc = {{"accelerator", "cpu"}};
+  json g = models::resolve_por_hardware(lit, pc, listing);
+  CHECK_EQ(jstr(g, "file"), std::string("gemma-4-E2B-it.litertlm"));
+  CHECK_EQ(jstr(g, "acelera"), std::string("GPU / CPU"));
+  json onnx = {{"formato", "onnx-genai"}};
+  json ol = json::array({{{"path", "cpu_and_mobile/cpu-int4/genai_config.json"}}, {{"path", "gpu/gpu-int4-cuda/genai_config.json"}},
+                         {{"path", "gpu/gpu-int4-cuda/model.onnx"}}});
+  CHECK_EQ(jstr(models::resolve_por_hardware(onnx, {{"accelerator", "cuda"}}, ol), "carpeta"), std::string("gpu/gpu-int4-cuda"));
+  CHECK_EQ(jstr(models::resolve_por_hardware(onnx, pc, ol), "carpeta"), std::string("cpu_and_mobile/cpu-int4"));
+}

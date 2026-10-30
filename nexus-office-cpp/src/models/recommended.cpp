@@ -4,6 +4,7 @@
 
 #include "gen/data.h"
 #include "hardware/hardware.h"
+#include "llm/motores.h"
 #include "models/models.h"
 
 namespace nx::models {
@@ -44,17 +45,26 @@ json recommend(const json& profile, const json& sector) {
   for (auto& r : recommended_list()) {
     std::string kind = jstr(r, "kind");
     if (hw::android() && kind != "llm" && kind != "embed") continue;
+    std::string motor = jstr(r, "motor");
+    if (hw::android() && (motor == "onnx")) continue;   // ONNX Runtime GenAI no va en la APK
     std::string id = jstr(r, "id");
     if (truthy(r.value("sector_only", json(false))) && !sector.contains(id)) continue;
     json item = r;
     item["fit"] = fit(r, profile);
+    if (!motor.empty()) {
+      // modelo en el formato de otro motor: se dice cual y si va incluido en este paquete
+      const motores::Info* mi = motores::info(motor);
+      item["motor_nombre"] = mi ? mi->nombre : motor;
+      item["motor_ok"] = motores::lib_path(motor).has_value();
+    }
     if (sector.contains(id)) item["sector"] = sector[id];
     out.push_back(item);
   }
   std::set<std::string> kinds;
   std::vector<json*> general;
   for (auto& r : out)
-    if (!truthy(r.value("sector_only", json(false))) && !truthy(r.value("previous", json(false)))) {
+    if (!truthy(r.value("sector_only", json(false))) && !truthy(r.value("previous", json(false))) &&
+        jstr(r, "motor").empty()) {   // los de otros motores no compiten con los GGUF por «recomendado»
       general.push_back(&r);
       kinds.insert(jstr(r, "kind"));
     }

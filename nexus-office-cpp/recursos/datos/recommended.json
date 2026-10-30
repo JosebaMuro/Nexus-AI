@@ -321,5 +321,31 @@
     "sector_only": true,
     "especialidad": "finanzas",
     "desc": "Qwen3.8 27B ajustado para finanzas, con visión: lee gráficos de cotización, informes y cuentas. Para GPU de 24 GB o equipos con 32 GB de RAM. Es apoyo al análisis, nunca asesoramiento."
+  },
+  {
+    "id": "gemma4-e2b-litert",
+    "kind": "llm",
+    "name": "Gemma 4 E2B · LiteRT-LM (NPU de Tensor, Snapdragon, MediaTek e Intel)",
+    "params_b": 2,
+    "repo": "litert-community/gemma-4-E2B-it-litert-lm",
+    "file": "gemma-4-E2B-it.litertlm",
+    "formato": "litertlm",
+    "motor": "litert",
+    "size_mb": 2700,
+    "min_ram_gb": 4,
+    "desc": "Formato .litertlm: se descarga la versión compilada para la NPU de tu chip (Pixel con Tensor, Snapdragon, Dimensity, Intel Lunar/Panther Lake) o, si no hay, la general para GPU y CPU."
+  },
+  {
+    "id": "phi4-mini-onnx",
+    "kind": "llm",
+    "name": "Phi-4 mini · ONNX Runtime GenAI (CUDA, DirectML, NPU o CPU)",
+    "params_b": 3.8,
+    "repo": "microsoft/Phi-4-mini-instruct-onnx",
+    "file": "cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4/genai_config.json",
+    "formato": "onnx-genai",
+    "motor": "onnx",
+    "size_mb": 2600,
+    "min_ram_gb": 6,
+    "desc": "Formato ONNX: se descarga la carpeta para tu acelerador (GPU con CUDA o DirectML, NPU QNN si la hay, o CPU)."
   }
 ]

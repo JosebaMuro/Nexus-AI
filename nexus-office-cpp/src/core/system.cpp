@@ -8,6 +8,7 @@
 #include "hardware/hardware.h"
 #include "hardware/hw_profiles.h"
 #include "llm/llm.h"
+#include "llm/motores.h"
 #include "models/runtimes.h"
 #include "util/log.h"
 #include "util/proc.h"
@@ -31,22 +32,63 @@ void open_url(const std::string& url) {
 
 // ------------------------------------------------------------------ selector CPU/GPU/NPU
 static std::pair<bool, std::string> engine_state(Services& s, const std::string& engine) {
-  bool gguf = s.llm->resolver("gguf")("").has_value();
   if (engine == "llamaserver") {
+    bool gguf = s.llm->resolver("gguf")("").has_value();
     bool have = s.runtimes->exe("llama", s.profile, s.config.str("hardware.llama_variant", "")).has_value();
     if (!have) return {false, "falta el binario llama-server"};
     if (gguf) return {true, "incluido · CPU, GPU y NPU"};
     return {false, "incluido; falta un modelo GGUF (vista Modelos)"};
   }
-  if (hw::android()) return {false, "no disponible en Android: usa llama-server"};
+  if (const motores::Info* i = motores::info(engine)) {
+    if (!motores::lib_path(engine)) return {false, "no va incluido en el paquete de este sistema"};
+    if (!s.llm->resolver(i->formato)("").has_value())
+      return {false, "incluido; falta un modelo " + i->formato + " (vista Modelos)"};
+    return {true, "incluido"};
+  }
   // llama-cpp-python es Python: la edicion C++ usa siempre llama-server (el mismo llama.cpp en otro proceso)
   return {false, "la edición C++ usa llama-server (el mismo llama.cpp)"};
+}
+
+// nombre de cada variante de llama.cpp en el selector
+static std::string variant_label(const std::string& v) {
+  static const std::map<std::string, std::string> N = {
+      {"cpu", "CPU (AVX2 / NEON)"},        {"cpu-compat", "CPU sin AVX2 (procesadores antiguos)"},
+      {"cuda", "NVIDIA CUDA 12"},          {"cuda13", "NVIDIA CUDA 13 (RTX 50 y DGX Spark)"},
+      {"rocm", "AMD ROCm / HIP"},
+      {"vulkan", "Vulkan (cualquier GPU)"}, {"sycl", "Intel SYCL (Arc)"},
+      {"openvino", "Intel OpenVINO (GPU y NPU)"}, {"metal", "Apple Metal"},
+      {"opencl-adreno", "Qualcomm Adreno (OpenCL)"}, {"snapdragon", "Snapdragon: CPU, Adreno y NPU Hexagon"},
+      {"hexagon", "NPU Hexagon (Snapdragon)"}, {"cann", "Huawei Ascend (CANN)"}, {"webgpu", "WebGPU"},
+      {"embedded", "El incluido en la app"}};
+  auto it = N.find(v);
+  return it == N.end() ? v : it->second;
+}
+
+// runtimes concretos que se pueden elegir a mano para cada motor
+static json runtime_options(Services& s) {
+  json out = json::object();
+  json llama = json::array({{{"id", "auto"}, {"label", "Automático (según el hardware)"}, {"available", true}}});
+  std::vector<std::string> vs = runtimes::bundled_variants("llama");
+  for (auto& v : s.runtimes->installed().value("llama", json::array()))
+    if (std::find(vs.begin(), vs.end(), v.get<std::string>()) == vs.end()) vs.push_back(v.get<std::string>());
+  if (hw::android()) vs = {"embedded"};
+  for (auto& v : vs) llama.push_back({{"id", v}, {"label", variant_label(v)}, {"available", true}});
+  out["llamaserver"] = llama;
+  for (auto& m : motores::lista()) {
+    json l = json::array({{{"id", "auto"}, {"label", "Automático (NPU, GPU y CPU)"}, {"available", true}}});
+    json st = motores::estado()[m.id];
+    for (auto& a : st.value("aceleradores", json::array()))
+      l.push_back({{"id", a["id"]}, {"label", a["nombre"]}, {"available", a["incluido"]},
+                   {"note", truthy(a["incluido"]) ? "" : "no va incluido en este paquete"}});
+    out[m.id] = l;
+  }
+  return out;
 }
 
 json accel_options(Services& s) {
   const hw::GPU* gpu = hw::best_gpu(s.hw);
   json engines = json::array();
-  for (const char* e : {"auto", "llamaserver", "llamacpp"}) {
+  for (const char* e : {"auto", "llamaserver", "litert", "onnx", "genie"}) {
     if (std::string(e) == "auto") {
       engines.push_back({{"id", e}, {"label", hw::engine_label(e)}, {"available", true}, {"note", "el mejor que haya"}});
       continue;
@@ -71,34 +113,64 @@ json accel_options(Services& s) {
     gpu_llama = ls->gpu();
     gpu_error = ls->gpu_error();
   }
+  std::string selected = s.llm->select().first;
+  if (auto mb = std::dynamic_pointer_cast<llm::MotorBackend>(s.llm->backend(selected))) eff = mb->effective();
   json gpus = json::array(), npus = json::array();
   for (auto& g : s.hw.gpus) gpus.push_back(g.name);
   for (auto& n : s.hw.npus) npus.push_back(n.name);
+  std::string engine = s.config.str("llm.engine", "auto");
+  if (engine == "llamacpp") engine = "llamaserver";
+  std::string runtime = motores::info(engine) ? s.config.str("llm.motor_acelerador", "auto")
+                                              : s.config.str("hardware.llama_variant_manual", "auto");
   return {{"gpu_llama", gpu_llama},
           {"gpu_error", gpu_error},
           {"gpus", hw::profiles::gpus(s)},
           {"perfil_hw", s.config.get("hardware.perfil", "auto")},
-          {"engine", s.config.str("llm.engine", "auto")},
+          {"engine", engine},
           {"accel", s.config.str("hardware.accel", "auto")},
+          {"runtime", runtime.empty() ? "auto" : runtime},
           {"capas", s.config.get("hardware.capas", "auto")},
           {"ask", truthy(s.config.get("startup.ask_accel", true))},
           {"engines", engines},
           {"accels", accels},
+          {"runtimes", runtime_options(s)},
+          {"motores", motores::estado()},
           {"hardware", {{"cpu", s.hw.cpu_name}, {"cores", s.hw.cores_physical}, {"ram_gb", s.hw.ram_gb},
                         {"gpus", gpus}, {"npus", npus}, {"android", hw::android()}}},
           {"profile", {{"accelerator", s.profile["accelerator"]}, {"device", s.profile["device_name"]},
                        {"gpu_layers", s.profile["llm"]["gpu_layers"]}}},
           {"effective", eff.is_null() ? json::object() : eff},
-          {"selected", s.llm->select().first}};
+          {"selected", selected}};
 }
 
-json accel_apply(Services& s, const std::string& engine, const std::string& accel, std::optional<bool> remember,
-                 const json& capas) {
-  static const std::vector<std::string> E = {"auto", "llamaserver", "llamacpp"}, A = {"auto", "cpu", "gpu", "npu"};
-  if (std::find(E.begin(), E.end(), engine) == E.end() || std::find(A.begin(), A.end(), accel) == A.end())
-    throw std::invalid_argument("motor ('auto', 'llamaserver', 'llamacpp') y acelerador ('auto', 'cpu', 'gpu', 'npu')");
+// acelerador del motor cuando se elige CPU/GPU/NPU sin un runtime concreto
+static std::string motor_accel(Services& s, const std::string& motor, const std::string& accel) {
+  if (accel == "auto") return "";
+  if (motor == "litert" || motor == "genie") return accel;
+  if (accel == "cpu") return "cpu";
+  if (accel == "gpu") return sys::is_windows() ? "dml" : "cuda";
+  // NPU: la del fabricante que haya
+  std::string v = s.hw.npus.empty() ? "" : lower(s.hw.npus[0].vendor);
+  if (v == "qualcomm") return "qnn";
+  if (v == "amd") return "VitisAI";
+  if (v == "intel") return "OpenVINO";
+  return "";
+}
+
+json accel_apply(Services& s, const std::string& engine_in, const std::string& accel, std::optional<bool> remember,
+                 const json& capas, const std::string& runtime) {
+  static const std::vector<std::string> E = {"auto", "llamaserver", "llamacpp", "litert", "onnx", "genie"},
+                                        A = {"auto", "cpu", "gpu", "npu"};
+  if (std::find(E.begin(), E.end(), engine_in) == E.end() || std::find(A.begin(), A.end(), accel) == A.end())
+    throw std::invalid_argument(
+        "motor ('auto', 'llamaserver', 'litert', 'onnx', 'genie') y acelerador ('auto', 'cpu', 'gpu', 'npu')");
+  std::string engine = engine_in == "llamacpp" ? "llamaserver" : engine_in;
   std::vector<std::string> notes;
-  if (engine == "llamacpp") notes.push_back("la edición C++ no incluye llama-cpp-python: se usa llama-server");
+  if (engine_in == "llamacpp") notes.push_back("la edición C++ no incluye llama-cpp-python: se usa llama-server");
+  if (motores::info(engine)) {
+    auto [ok, note] = engine_state(s, engine);
+    if (!ok) notes.push_back(hw::engine_label(engine) + ": " + note);
+  }
   json capas_ok = capas.is_null() ? json() : hw::profiles::norm_capas(capas);   // invalid_argument -> 400
   auto [profile, p] = hw::build_for(s.hw, accel, accel == "auto" ? s.config.str("hardware.profile_override", "") : "");
   if (!capas_ok.is_null()) s.config.set("hardware.capas", capas_ok);
@@ -106,15 +178,31 @@ json accel_apply(Services& s, const std::string& engine, const std::string& acce
   s.profile = profile;
   s.config.set("llm.engine", engine);
   s.config.set("hardware.accel", accel);
-  s.config.set("hardware.llama_variant", p["variant"]);
+  std::string variant = jstr(p, "variant");
+  std::string rt = runtime.empty() ? "auto" : runtime;
+  if (motores::info(engine)) {
+    // LiteRT-LM, ONNX Runtime GenAI o Genie: el acelerador elegido (o el que toca a CPU/GPU/NPU) se prueba primero
+    s.config.set("llm.motor_acelerador", rt == "auto" ? motor_accel(s, engine, accel) : rt);
+  } else {
+    s.config.set("llm.motor_acelerador", "");
+    if (engine == "llamaserver" && rt != "auto") {
+      // variante de llama.cpp elegida a mano (cuda, rocm, vulkan, sycl, openvino, metal, hexagon...)
+      variant = rt;
+      s.config.set("hardware.llama_variant_manual", rt);
+    } else {
+      s.config.set("hardware.llama_variant_manual", "");
+    }
+  }
+  s.config.set("hardware.llama_variant", variant);
   if (remember) s.config.set("startup.ask_accel", !*remember);
   s.llm->rebuild();
   if (!jstr(p, "note").empty()) notes.insert(notes.begin(), jstr(p, "note"));
   return {{"engine", engine},
           {"accel", accel},
+          {"runtime", rt},
           {"ok", truthy(p["ok"]) && notes.empty()},
           {"note", join(notes, "; ")},
-          {"variant", p["variant"]},
+          {"variant", variant},
           {"selected", s.llm->select().first},
           {"capas", s.config.get("hardware.capas", "auto")},
           {"profile", {{"accelerator", profile["accelerator"]}, {"gpu_layers", profile["llm"]["gpu_layers"]}}}};

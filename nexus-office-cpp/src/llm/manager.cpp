@@ -114,8 +114,17 @@ void LLMManager::rebuild() {
   };
   backends_.push_back({"llamacpp", std::make_shared<UnavailableBackend>("llamacpp")});
   // motores aparte de llama.cpp (LiteRT-LM, ONNX Runtime GenAI): NPU y GPU que llama.cpp no aprovecha
+  // (y Qualcomm Genie). llm.motor_acelerador = el acelerador elegido a mano en el selector (cpu, gpu, npu, cuda, qnn...)
   for (auto& m : motores::lista())
-    backends_.push_back({m.id, std::make_shared<MotorBackend>(m.id, resolver(m.formato), [this] { return profile_; })});
+    backends_.push_back({m.id, std::make_shared<MotorBackend>(m.id, resolver(m.formato), [this] {
+                           json p = profile_;
+                           std::string forced = config_.str("llm.motor_acelerador", "");
+                           if (!forced.empty() && forced != "auto" && p.is_object()) {
+                             if (!p["llm"].is_object()) p["llm"] = json::object();
+                             p["llm"]["motor_acelerador"] = forced;
+                           }
+                           return p;
+                         })});
   backends_.push_back({"ollama", std::make_shared<OllamaBackend>(config_.str("llm.ollama_url"), timeout)});
   backends_.push_back({"openai", std::make_shared<OpenAICompatBackend>(config_.str("llm.openai_base_url"),
                                                                        config_.str("llm.openai_api_key"),
@@ -224,6 +233,9 @@ std::pair<std::string, std::string> LLMManager::select(const std::string& spec) 
       return {b, m};
     }
   }
+  // motor elegido a mano en el selector (LiteRT-LM, ONNX Runtime GenAI, Genie): con su modelo activo
+  std::string forced_engine = config_.str("llm.engine", "auto");
+  if (motores::info(forced_engine) && is_available(forced_engine)) return {forced_engine, ""};
   std::string def = config_.str("llm.default_model");
   if (!def.empty() && contains(def, ":")) {
     std::string b = def.substr(0, def.find(':')), m = def.substr(def.find(':') + 1);

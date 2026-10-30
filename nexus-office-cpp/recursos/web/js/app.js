@@ -1380,20 +1380,33 @@
 
   /* ================================================================ vista: MODELOS */
   const FIT = { ideal: "ideal", ok: "compatible", pesado: "pesado", no_cabe: "no cabe" };
+  // filtro por formato: el motor que lo ejecuta y como se reconoce cada formato (catalogo y ficheros de un repositorio)
+  const FMT = {
+    gguf: { motor: "llama-server", cat: (f) => f === "gguf", file: /\.gguf$/i },
+    onnx: { motor: "ONNX Runtime GenAI", cat: (f) => f === "onnx-genai" || f === "onnx", file: /(\.onnx(\.data|_data)?|genai_config\.json)$/i },
+    litertlm: { motor: "LiteRT-LM", cat: (f) => f === "litertlm", file: /\.(litertlm|task|tflite)$/i },
+    genie: { motor: "Qualcomm Genie", cat: (f) => f === "genie", file: /(genie_config\.json|\.bin|tokenizer\.json|htp_backend_ext_config\.json)$/i },
+    safetensors: { motor: "Transformers / sd.cpp", cat: (f) => ["safetensors", "transformers", "diffusers"].includes(f), file: /\.safetensors$/i },
+  };
+  const fmtSel = () => FMT[$("#fmt-filter").value];
+  const MOTOR_DE = { gguf: "llama-server", litertlm: "LiteRT-LM", "onnx-genai": "ONNX Runtime GenAI", genie: "Qualcomm Genie" };
   let jobsTimer = null;
   loaders.models = async () => {
     const [rec, m] = await Promise.all([api("/api/models/recommended"), api("/api/models")]);
     $("#rec-profile").textContent = `perfil ${rec.profile.tier} · hasta ${rec.profile.max_model_b}B · ideal ${rec.profile.recommended_model_b}B`;
     const active = Object.values(m.active);
-    const items = rec.items.slice().sort((a, b) => (b.sector ? 1 : 0) - (a.sector ? 1 : 0));   // los de tu oficina, primero
+    const fr = fmtSel();
+    const items = rec.items.filter((r) => !fr || fr.cat(r.formato || (/\.gguf$/i.test(r.file || "") ? "gguf" : ""))).sort((a, b) => (b.sector ? 1 : 0) - (a.sector ? 1 : 0));   // los de tu oficina, primero
     $("#rec-grid").innerHTML = items.map((r) => `<div class="item col" style="gap:6px"><div class="row"><span class="tag accent">${r.kind}</span><b style="flex:1">${esc(r.name)}</b>${r.best ? '<span class="tag ok">★ recomendado</span>' : ""}${r.best_especialidad ? `<span class="tag ok">★ IA ${esc(r.especialidad)} para este equipo</span>` : ""}${r.sector ? '<span class="tag warn">◆ para tu oficina</span>' : ""}</div>
-      ${r.sector ? `<div class="d"><b>Para tu oficina:</b> ${esc(r.sector)}</div>` : ""}<div class="d">${esc(r.desc)}</div><div class="row mono muted"><span class="tag ${r.fit}">${FIT[r.fit]}</span><span>${r.size_mb >= 1000 ? (r.size_mb / 1024).toFixed(1) + " GB" : r.size_mb + " MB"}</span>${r.vision ? '<span class="tag">visión</span>' : ""}${r.baseline ? '<span class="tag">base CPU</span>' : ""}</div>
+      ${r.sector ? `<div class="d"><b>Para tu oficina:</b> ${esc(r.sector)}</div>` : ""}<div class="d">${esc(r.desc)}</div><div class="row mono muted"><span class="tag ${r.fit}">${FIT[r.fit]}</span><span>${r.size_mb >= 1000 ? (r.size_mb / 1024).toFixed(1) + " GB" : r.size_mb + " MB"}</span>${r.vision ? '<span class="tag">visión</span>' : ""}${r.baseline ? '<span class="tag">base CPU</span>' : ""}${r.motor_nombre ? `<span class="tag ${r.motor_ok ? "ok" : "warn"}">${esc(r.motor_nombre)}${r.motor_ok ? "" : " · no incluido aquí"}</span>` : ""}</div>
       <div>${r.installed ? (active.includes(r.id) ? '<span class="tag ok">● activo</span>' : `<button class="btn sm" data-act="${r.id}">ACTIVAR</button>`) : `<button class="btn sm ${r.fit === "no_cabe" ? "danger" : "primary"}" data-rec="${r.id}">DESCARGAR</button>`}</div></div>`).join("");
-    $("#catalog-list").innerHTML = m.catalog.map((c) => `<div class="item row"><span class="tag accent">${c.kind}</span><div style="flex:1"><div class="t">${esc(c.name)}</div><div class="d mono">${c.format} · ${fmtB(c.size)} · ${esc(c.source)}${c.vision ? " · visión" : ""}${c.meta?.quant ? " · " + c.meta.quant : ""}</div></div>
-      ${active.includes(c.id) ? '<span class="tag ok">activo</span>' : ["llm", "image", "tts", "embed"].includes(c.kind) ? `<button class="btn sm" data-act="${c.id}">ACTIVAR</button>` : ""}<button class="btn danger sm admin-only" data-delm="${c.id}">✕</button></div>`).join("") || `<span class="muted">Ningún modelo instalado. Descarga uno recomendado.</span>`;
+    const ff = fmtSel();
+    $("#fmt-note").textContent = ff ? `se ejecutan con ${ff.motor}` : "";
+    $("#catalog-list").innerHTML = m.catalog.filter((c) => !ff || ff.cat(c.format)).map((c) => `<div class="item row"><span class="tag accent">${c.kind}</span><div style="flex:1"><div class="t">${esc(c.name)}</div><div class="d mono">${c.format} · ${fmtB(c.size)} · ${esc(c.source)}${c.vision ? " · visión" : ""}${c.meta?.quant ? " · " + c.meta.quant : ""}${c.acelera ? " · " + esc(c.acelera) : ""}${MOTOR_DE[c.format] ? " · " + MOTOR_DE[c.format] : ""}</div></div>
+      ${active.includes(c.id) ? '<span class="tag ok">activo</span>' : ["llm", "image", "tts", "embed"].includes(c.kind) ? `<button class="btn sm" data-act="${c.id}">ACTIVAR</button>` : ""}<button class="btn danger sm admin-only" data-delm="${c.id}">✕</button></div>`).join("") || `<span class="muted">${ff ? "Ningún modelo instalado de este formato." : "Ningún modelo instalado. Descarga uno recomendado."}</span>`;
     if (m.ollama.length) $("#catalog-list").insertAdjacentHTML("beforeend", `<div class="item"><b>Ollama local:</b> ${m.ollama.map((o) => `<button class="btn sm" data-spec="ollama:${esc(o)}">${esc(o)}</button>`).join(" ")}</div>`);
     $("#src-select").innerHTML = m.sources.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
-    $$("[data-rec]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/models/recommended/${b.dataset.rec}`, { body: {} }); toast("Descarga iniciada"); watchJobs(); })));
+    $$("[data-rec]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/models/recommended/${b.dataset.rec}`, { body: {} }); toast("Descarga iniciada: al terminar queda activado y con su motor configurado"); watchJobs(); })));
     $$("[data-act]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/models/activate/${b.dataset.act}`, { body: {} }); toast("Modelo activado"); loadStatus(); loaders.models(); })));
     $$("[data-delm]").forEach((b) => (b.onclick = guard(async () => { if (!confirm("¿Quitar del catálogo y borrar ficheros?")) return; await api(`/api/models/${b.dataset.delm}?files=true`, { method: "DELETE" }); loaders.models(); })));
     $$("[data-spec]").forEach((b) => (b.onclick = guard(async () => { await api("/api/models/activate-spec", { body: { spec: b.dataset.spec } }); toast("LLM cambiado"); loadStatus(); })));
@@ -1412,7 +1425,7 @@
   $("#src-go").onclick = guard(async () => {
     const src = $("#src-select").value, q = $("#src-q").value.trim(); if (!q) return;
     $("#src-results").innerHTML = `<div class="chip"><span class="spin"></span>buscando en ${src}…</div>`; $("#src-files").innerHTML = "";
-    const res = await api(`/api/models/search?source=${src}&q=${encodeURIComponent(q)}&kind=${$("#src-kind").value}`);
+    const res = await api(`/api/models/search?source=${src}&q=${encodeURIComponent(q)}&kind=${$("#src-kind").value}&formato=${$("#fmt-filter").value}`);
     $("#src-results").innerHTML = res.map((r) => `<div class="item" data-repo="${esc(r.id)}" style="cursor:pointer"><div class="t">${esc(r.name)}</div><div class="d mono">${r.downloads ? "↓ " + r.downloads.toLocaleString() : ""} ${esc(r.task || "")}</div></div>`).join("") || `<span class="muted">Sin resultados.</span>`;
     $$("#src-results [data-repo]").forEach((el) => (el.onclick = guard(async () => {
       $("#src-files").innerHTML = `<div class="chip"><span class="spin"></span>listando ficheros…</div>`;
@@ -1420,7 +1433,7 @@
       const isRepo = files.some((f) => /(^|\/)(config|model_index)\.json$/.test(f.path)) && ["huggingface", "modelscope"].includes(src);
       const FITN = { ideal: "ideal", ok: "cabe", pesado: "pesado", "?": "" };
       $("#src-files").innerHTML = `<div class="row"><b style="flex:1">${esc(el.dataset.repo)}</b>${isRepo ? '<button class="btn sm primary" id="dl-repo">DESCARGAR REPOSITORIO COMPLETO</button>' : ""}</div>` +
-        files.filter((f) => !/\.(md|txt|gitattributes|json|png|jpg)$/i.test(f.path) || /onnx\.json$/.test(f.path)).slice(0, 120).map((f) => `<div class="item"><div class="row">
+        files.filter((f) => (!/\.(md|txt|gitattributes|json|png|jpg)$/i.test(f.path) || /(onnx|genai_config|genie_config)\.json$/.test(f.path)) && (!fmtSel() || fmtSel().file.test(f.path))).slice(0, 120).map((f) => `<div class="item"><div class="row">
           <span style="flex:1" class="mono">${f.recommended ? "★ " : ""}${esc(f.path)}</span><span class="muted mono">${f.size ? fmtB(f.size) : ""}</span>
           <button class="btn sm ${f.recommended ? "primary" : ""}" data-dl="${esc(f.path)}">↓</button></div>
           <div class="row" style="margin-top:4px">${f.kind ? `<span class="tag accent">${esc(f.kind)}</span>` : ""}${f.quant ? `<span class="tag">${esc(f.quant)}</span>` : ""}
@@ -1430,7 +1443,68 @@
       $("#dl-repo") && ($("#dl-repo").onclick = guard(async () => { await api("/api/models/download-repo", { body: { source: src, repo: el.dataset.repo, kind: $("#src-kind").value } }); toast("Descargando el repositorio completo"); watchJobs(); }));
     })));
   });
-  $("#imp-go").onclick = guard(async () => { const r = await api("/api/models/import", { body: { path: $("#imp-path").value.trim(), copy_file: $("#imp-copy").checked } }); toast(`Importado: ${r.name} (${r.kind}, ${r.format})`); loaders.models(); });
+  $("#fmt-filter").onchange = guard(() => loaders.models());
+  async function importModel(path) {
+    const r = await api("/api/models/import", { body: { path, copy_file: $("#imp-copy").checked } });
+    toast(`Importado: ${r.name} (${r.kind}, ${r.format})`); loaders.models();
+  }
+  $("#imp-go").onclick = guard(() => importModel($("#imp-path").value.trim()));
+
+  /* ---- explorador de archivos para importar: el del sistema si la interfaz va en el mismo equipo; si no (movil,
+     acceso remoto, servicio sin escritorio), el propio, que navega por las carpetas del equipo de Nexus-Office */
+  const FX = { path: "", sel: null, dialogo: null };
+  async function fxSystem(carpeta) {
+    const r = await api("/api/fs/dialogo", { body: { carpeta } });
+    if (r.unavailable) { FX.dialogo = false; return false; }
+    if (r.path) { $("#imp-path").value = r.path; $("#fx-dialog").open && $("#fx-dialog").close(); await importModel(r.path); }
+    return true;   // elegido o cancelado
+  }
+  async function fxOpen(carpeta) {
+    if (FX.dialogo !== false && await fxSystem(carpeta).catch(() => false)) return;
+    const dlg = $("#fx-dialog"); if (!dlg.open) dlg.showModal();
+    await fxLoad($("#imp-path").value.trim() || FX.path);
+  }
+  async function fxLoad(ruta) {
+    let d;
+    try { d = await api(`/api/fs/listar?ruta=${encodeURIComponent(ruta || "")}&todos=${$("#fx-all").checked ? 1 : 0}`); }
+    catch (e) { toast(e.message, true); if (ruta) return fxLoad(""); return; }
+    FX.path = d.path; FX.parent = d.parent; FX.dialogo = d.dialogo; fxPick(d.modelo ? { path: d.path, formato: d.modelo, dir: true } : null);
+    $("#fx-path").value = d.path; $("#fx-up").disabled = !d.parent; $("#fx-system").style.display = d.dialogo ? "" : "none";
+    $("#fx-roots").innerHTML = d.roots.map((r) => `<button class="btn sm" data-fxr="${esc(r.path)}" title="${esc(r.path)}">${esc(r.name)}</button>`).join("");
+    $("#fx-info").textContent = `${d.dirs.length} carpetas · ${d.files.length} ${$("#fx-all").checked ? "archivos" : "modelos"}`;
+    $("#fx-list").innerHTML = d.dirs.map((x) => `<div class="item" data-fxd="${esc(x.path)}" data-fmt="${esc(x.modelo)}">📁<span class="n">${esc(x.name)}</span>${x.modelo ? `<span class="tag ok">${esc(x.modelo)}</span>` : ""}</div>`).join("") +
+      d.files.map((x) => `<div class="item" data-fxf="${esc(x.path)}" data-fmt="${esc(x.formato)}">📄<span class="n">${esc(x.name)}</span>${x.formato ? `<span class="tag accent">${esc(x.formato)}</span>` : ""}<span class="muted mono">${fmtB(x.size)}</span></div>`).join("") ||
+      `<span class="muted">No hay modelos en esta carpeta. Marca «todos los archivos» para verlo todo.</span>`;
+    $$("[data-fxr]").forEach((b) => (b.onclick = () => fxLoad(b.dataset.fxr)));
+    // carpeta: un toque la elige si es un modelo (ONNX GenAI, Genie) y dos entran; un archivo se elige y con dos se importa
+    $$("#fx-list [data-fxd]").forEach((el) => {
+      el.onclick = () => (el.dataset.fmt ? fxPick({ path: el.dataset.fxd, formato: el.dataset.fmt, dir: true }, el) : fxLoad(el.dataset.fxd));
+      el.ondblclick = () => fxLoad(el.dataset.fxd);
+    });
+    $$("#fx-list [data-fxf]").forEach((el) => {
+      el.onclick = () => fxPick({ path: el.dataset.fxf, formato: el.dataset.fmt }, el);
+      el.ondblclick = guard(() => fxImport());
+    });
+  }
+  function fxPick(sel, el) {
+    FX.sel = sel; $$("#fx-list .item.sel").forEach((x) => x.classList.remove("sel")); el && el.classList.add("sel");
+    $("#fx-ok").disabled = !sel;
+    $("#fx-sel").textContent = sel ? `${sel.dir ? "Carpeta" : "Archivo"}: ${sel.path}${sel.formato ? ` (${sel.formato})` : ""}` : "Elige un archivo de modelo (.gguf, .onnx, .litertlm, .safetensors…) o la carpeta de un modelo ONNX GenAI o Genie.";
+  }
+  async function fxImport() {
+    if (!FX.sel) return;
+    $("#imp-path").value = FX.sel.path; $("#fx-dialog").close(); await importModel(FX.sel.path);
+  }
+  $("#imp-browse").onclick = guard(() => fxOpen(false));
+  $("#imp-browse-dir").onclick = guard(() => fxOpen(true));
+  $("#fx-up").onclick = () => FX.parent && fxLoad(FX.parent);
+  $("#fx-go").onclick = () => fxLoad($("#fx-path").value.trim());
+  $("#fx-path").onkeydown = (e) => { if (e.key === "Enter") fxLoad(e.target.value.trim()); };
+  $("#fx-all").onchange = () => fxLoad(FX.path);
+  $("#fx-here").onclick = () => fxPick({ path: FX.path, dir: true });
+  $("#fx-system").onclick = guard(() => fxSystem(!!(FX.sel && FX.sel.dir)));
+  $("#fx-cancel").onclick = () => $("#fx-dialog").close();
+  $("#fx-ok").onclick = guard(() => fxImport());
   $("#spec-go").onclick = guard(async () => { await api("/api/models/activate-spec", { body: { spec: $("#spec-in").value.trim() } }); toast("LLM externo activado"); loadStatus(); });
 
   /* ================================================================ vista: HERRAMIENTAS */
@@ -1967,11 +2041,11 @@
 
   /* ================================================================ selector de inicio: motor llama y CPU/GPU/NPU */
   const Accel = {
-    d: null, engine: "auto", accel: "auto",
+    d: null, engine: "auto", accel: "auto", runtime: "auto",
     async open(force) {
       const d = this.d = await api("/api/accel");
       if (!force && !d.ask) return;
-      this.engine = d.engine; this.accel = d.accel;
+      this.engine = d.engine; this.accel = d.accel; this.runtime = d.runtime || "auto";
       const n = typeof d.capas === "number", sel = $("#accel-capas"), num = $("#accel-capas-n");
       sel.value = n ? "n" : d.capas || "auto"; num.value = n ? d.capas : num.value; num.disabled = !n;
       const tot = String((d.effective || {}).offloaded || "").split("/")[1];
@@ -1986,21 +2060,32 @@
       const opt = (list, cur, key) => list.map((o) => `<button type="button" data-${key}="${o.id}" class="${o.id === cur ? "on" : ""} ${o.available ? "" : "na"}">${esc(o.label)}${o.note ? `<small>${esc(o.note)}</small>` : ""}</button>`).join("");
       $("#accel-engines").innerHTML = opt(this.d.engines, this.engine, "eng");
       $("#accel-accels").innerHTML = opt(this.d.accels, this.accel, "acc");
-      $$("[data-eng]").forEach((b) => (b.onclick = () => { this.engine = b.dataset.eng; this.render(); }));
+      // runtimes concretos del motor elegido (variantes de llama.cpp o aceleradores de LiteRT-LM, ONNX y Genie)
+      const rts = (this.d.runtimes || {})[this.engine === "auto" ? "llamaserver" : this.engine] || [];
+      if (!rts.some((r) => r.id === this.runtime)) this.runtime = "auto";
+      $("#accel-runtimes").innerHTML = opt(rts, this.runtime, "rt");
+      $$("[data-eng]").forEach((b) => (b.onclick = () => { if (this.engine !== b.dataset.eng) this.runtime = "auto"; this.engine = b.dataset.eng; this.render(); }));
       $$("[data-acc]").forEach((b) => (b.onclick = () => { this.accel = b.dataset.acc; this.render(); }));
-      const a = this.d.accels.find((x) => x.id === this.accel), e = this.d.engines.find((x) => x.id === this.engine);
-      $("#accel-note").textContent = [e && !e.available ? `${e.label}: ${e.note}; se usará el siguiente disponible` : "", a && !a.available ? a.note : ""].filter(Boolean).join(" · ");
+      $$("[data-rt]").forEach((b) => (b.onclick = () => { this.runtime = b.dataset.rt; this.render(); }));
+      const a = this.d.accels.find((x) => x.id === this.accel), e = this.d.engines.find((x) => x.id === this.engine), r = rts.find((x) => x.id === this.runtime);
+      $("#accel-note").textContent = [e && !e.available ? `${e.label}: ${e.note}; se usará el siguiente disponible` : "", a && !a.available ? a.note : "", r && !r.available ? `${r.label}: ${r.note}` : ""].filter(Boolean).join(" · ");
     },
     result(r) {
       const eff = r.effective || {};
-      $("#accel-result").innerHTML = `Ahora: <b>${esc(r.selected)}</b> · perfil ${esc(r.profile.accelerator)}${r.profile.gpu_layers ? " (capas en GPU)" : ""}` +
+      $("#accel-result").innerHTML = `Ahora: <b>${esc(r.selected)}</b>${eff.acelerador ? ` · ${esc(eff.acelerador)}` : ""}${eff.variante ? ` (${esc(eff.variante)})` : ""} · perfil ${esc(r.profile.accelerator)}${r.profile.gpu_layers ? " (capas en GPU)" : ""}` +
         (eff.device ? ` · el modelo está en <b>${esc(eff.device)}</b>${eff.offloaded ? ` (${esc(eff.offloaded)} capas)` : ""}${eff.detail ? ` · ${esc(eff.detail)}` : ""}${eff.ok === false ? ` <span class="tag warn">se pidió ${esc(eff.requested)}</span>` : ""}` : "") +
         (r.tokens_s ? ` · ${r.tokens_s} tok/s` : "") + (r.error ? `<div class="bad">${esc(r.error)}</div>` : "");
     },
     capas() { const v = $("#accel-capas").value; return v === "n" ? Math.max(1, +$("#accel-capas-n").value || 1) : v; },
-    async apply() { await api("/api/accel", { body: { engine: this.engine, accel: this.accel, remember: $("#accel-remember").checked, capas: this.capas() } }); },
+    async apply() { await api("/api/accel", { body: { engine: this.engine, accel: this.accel, runtime: this.runtime, remember: $("#accel-remember").checked, capas: this.capas() } }); },
   };
-  $("#accel-go").onclick = guard(async () => { await Accel.apply(); $("#accel-dialog").close(); toast("Motor y acelerador aplicados"); loadStatus(); });
+  // el dialogo se cierra al pulsar, sin esperar a la respuesta: mientras sigue abierto (modal) el chat no recibe el
+  // teclado y lo que se escribe nada mas arrancar se pierde; si falla, vuelve a abrirse con el error
+  $("#accel-go").onclick = async () => {
+    $("#accel-dialog").close();
+    try { await Accel.apply(); toast("Motor y acelerador aplicados"); loadStatus(); }
+    catch (e) { toast(e.message, true); $("#accel-dialog").showModal(); }
+  };
   $("#accel-test").onclick = guard(async () => {
     const b = $("#accel-test"); b.disabled = true; $("#accel-result").innerHTML = `<span class="spin"></span> Cargando el modelo y probando…`;
     try { await Accel.apply(); const r = await api("/api/accel/test", { body: {} }); Accel.d = { ...Accel.d, ...r }; Accel.result(r); toast(r.ok ? "Prueba correcta" : "La prueba ha fallado", !r.ok); }
@@ -2054,7 +2139,7 @@
       if (d.act === "engine" || d.act === "accel") {
         const cur = await api("/api/accel");
         busy("Aplicando… (se reinicia el modelo)");
-        await api("/api/accel", { body: { engine: d.act === "engine" ? d.v : cur.engine, accel: d.act === "accel" ? d.v : cur.accel, remember: true } });
+        await api("/api/accel", { body: { engine: d.act === "engine" ? d.v : cur.engine, accel: d.act === "accel" ? d.v : cur.accel, runtime: d.act === "engine" ? "auto" : cur.runtime, remember: true } });
       } else if (d.act === "model") {
         busy("Cargando el modelo…"); await api(`/api/models/activate/${encodeURIComponent(d.v)}`, { body: {} });
       } else if (d.act === "hwp") {

@@ -123,11 +123,11 @@ int cmd_run(const Args& a) {
     cfg.set("memory.llm_graph_extraction", false);
     cfg.set("android.configured", true);
   }
-  std::string motor = a.get("motor"), accel = a.get("acelerador");
-  if (!motor.empty() || !accel.empty()) {   // eleccion por linea de comandos: no preguntar
+  std::string motor = a.get("motor"), accel = a.get("acelerador"), runtime = a.get("runtime");
+  if (!motor.empty() || !accel.empty() || !runtime.empty()) {   // eleccion por linea de comandos: no preguntar
     if (!motor.empty()) {
       if (motor != "auto" && motor != "llamaserver" && !motores::info(motor)) {
-        std::printf("  Motor '%s' desconocido (llamaserver, litert u onnx): se usa llamaserver.\n", motor.c_str());
+        std::printf("  Motor '%s' desconocido (llamaserver, litert, onnx o genie): se usa llamaserver.\n", motor.c_str());
         motor = "llamaserver";
       }
       cfg.set("llm.engine", motor);
@@ -136,6 +136,14 @@ int cmd_run(const Args& a) {
       if (accel != "auto" && accel != "cpu" && accel != "gpu" && accel != "npu") die("--acelerador: auto, cpu, gpu o npu", 2);
       cfg.set("hardware.accel", accel);
       cfg.set("hardware.llama_variant", hw::plan(cached_hardware(), accel).value("variant", json("")));
+      if (motores::info(cfg.str("llm.engine", "auto")) && accel != "auto") cfg.set("llm.motor_acelerador", accel);
+    }
+    if (!runtime.empty()) {   // --runtime: variante de llama.cpp (cuda, rocm, vulkan...) o acelerador del motor (qnn, cuda...)
+      if (motores::info(cfg.str("llm.engine", "auto"))) cfg.set("llm.motor_acelerador", runtime == "auto" ? "" : runtime);
+      else {
+        cfg.set("hardware.llama_variant_manual", runtime == "auto" ? "" : runtime);
+        if (runtime != "auto") cfg.set("hardware.llama_variant", runtime);
+      }
     }
     cfg.set("startup.ask_accel", false);
   }
@@ -930,7 +938,7 @@ int run_main(std::vector<std::string> argv) {
     }
     return 0;
   }
-  if (cmd == "run") return cmd_run(parse(argv, {"host", "port", "motor", "acelerador"}));
+  if (cmd == "run") return cmd_run(parse(argv, {"host", "port", "motor", "acelerador", "runtime"}));
   if (cmd == "detect") return cmd_detect();
   if (cmd == "pull") {
     if (argv.empty()) die("uso: nexus-office pull <id-recomendado|auto>", 2);

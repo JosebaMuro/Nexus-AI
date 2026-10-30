@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 # Nexus-Office 2.7.0-cpp: la oficina para pymes reescrita en C++ (misma interfaz web, mismos datos).
-project(NexusOfficeCpp VERSION 2.7.0 LANGUAGES C CXX)
+project(NexusOfficeCpp VERSION 2.8.0 LANGUAGES C CXX)
 
-set(NEXUS_VERSION "2.7.0-cpp")
+set(NEXUS_VERSION "2.8.0-cpp")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -132,7 +132,7 @@ target_link_libraries(nexus_core PUBLIC nx_sqlite3 nx_miniz nx_pcre2 nx_bz2 nx_x
 if(WIN32)
   target_compile_definitions(nexus_core PUBLIC _WIN32_WINNT=0x0A00 NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE
                              _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS)
-  target_link_libraries(nexus_core PUBLIC ws2_32 crypt32 bcrypt iphlpapi shell32 advapi32 cfgmgr32)
+  target_link_libraries(nexus_core PUBLIC ws2_32 crypt32 bcrypt iphlpapi shell32 advapi32 cfgmgr32 ole32 uuid)
   if(MSVC)
     target_compile_options(nexus_core PUBLIC /utf-8 /bigobj /Zc:__cplusplus)
   else()
