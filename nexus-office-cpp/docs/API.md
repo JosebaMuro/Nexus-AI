@@ -29,6 +29,7 @@ Eventos recibidos: `session`, `agent`, `state` (`thinking|tool|idle`), `token`, 
 | `GET /api/lounge`, `POST /api/lounge/meet`, `POST /api/lounge/say`, `POST /api/lounge/proposals/{id}` | Salón. |
 | `GET /api/tools`, `POST /api/approvals/{id}`, `GET /api/tools/audit`, `GET/POST/PUT /api/proposals…` | Herramientas. |
 | `GET /api/models`, `/recommended`, `/search?source=&q=`, `/files?source=&repo=`; `POST /api/models/download`, `/recommended/{id}`, `/import`, `/activate/{id}`, `/activate-spec` | Modelos. |
+| `GET /api/fs/listar?ruta=&todos=`; `POST /api/fs/dialogo {carpeta}` (Admin) | Explorador para importar modelos: carpetas y ficheros de modelo con su formato, y el selector de archivos del sistema (solo desde el mismo equipo). |
 | `GET /api/coop`, `POST /api/coop/create|join|start|stop|chat|ping/{n}|agent`, `GET /api/coop/invite` | Red cooperativa. |
 | `GET /api/vpn`, `POST /api/vpn/enable` `{enabled, port}`, `POST /api/vpn/peers` `{name, lookup_public_ip}`, `DELETE /api/vpn/peers/{id}`, `GET /api/vpn/server.conf`, `POST /api/vpn/apply`, `POST /api/vpn/upnp` *(admin)* | VPN WireGuard para la app Nexus-Office VPN (ver [VPN.md](VPN.md)). |
 | `GET /api/office/profiles`, `POST /api/office/profile` `{id, reset_agents}` *(admin; `id` vacío quita el perfil)* | Perfiles de oficina para pymes (ver [OFICINA.md](OFICINA.md)). |

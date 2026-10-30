@@ -319,7 +319,8 @@
       </div>
       <div class="panel admin-only col" style="margin-top:16px">
         <h3>Importar modelo local · Modelo externo</h3>
-        <div class="row"><input class="input" id="imp-path" placeholder="C:\ruta\modelo.gguf  o carpeta" style="flex:1"><label class="row muted"><span class="switch"><input type="checkbox" id="imp-copy"><span></span></span>copiar</label><button class="btn" id="imp-go">IMPORTAR</button></div>
+        <div class="row" style="flex-wrap:wrap"><button class="btn primary" id="imp-browse" title="Abrir el explorador de archivos para elegir el modelo">📂 BUSCAR ARCHIVO…</button><button class="btn" id="imp-browse-dir" title="Carpeta de un modelo ONNX GenAI, Genie o safetensors">📁 CARPETA…</button>
+          <input class="input" id="imp-path" placeholder="o escribe la ruta: C:\ruta\modelo.gguf  o carpeta" style="flex:1 1 220px;min-width:0"><label class="row muted"><span class="switch"><input type="checkbox" id="imp-copy"><span></span></span>copiar</label><button class="btn" id="imp-go">IMPORTAR</button></div>
         <div class="row"><input class="input" id="spec-in" placeholder="ollama:qwen3-vl:2b · openai:gpt-4o-mini · peer:NODO" style="flex:1"><button class="btn" id="spec-go">USAR COMO LLM</button></div>
       </div>
     </section>
@@ -496,6 +497,15 @@
   <h3 style="margin:14px 0 6px">Mis avatares descargados</h3>
   <div class="avlib-grid" id="avlib-mine"></div>
   <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="avlib-close">CERRAR</button></div>
+</dialog>
+<dialog id="fx-dialog" class="fx-dialog">
+  <h2>BUSCAR EL MODELO A IMPORTAR</h2>
+  <div class="fx-roots" id="fx-roots"></div>
+  <div class="row fx-nav" style="flex-wrap:nowrap"><button class="btn sm" id="fx-up" title="Carpeta de arriba">↑</button><input class="input mono" id="fx-path" style="flex:1;min-width:0"><button class="btn sm" id="fx-go">IR</button></div>
+  <div class="row muted" style="justify-content:space-between;font-size:.8rem"><span id="fx-info"></span><label class="row" style="gap:6px"><input type="checkbox" id="fx-all"> todos los archivos</label></div>
+  <div class="list fx-list" id="fx-list"></div>
+  <div class="muted mono fx-sel" id="fx-sel">Elige un archivo de modelo (.gguf, .onnx, .litertlm, .safetensors…) o la carpeta de un modelo ONNX GenAI o Genie.</div>
+  <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" id="fx-system" style="display:none">EXPLORADOR DEL SISTEMA…</button><button class="btn" id="fx-here">USAR ESTA CARPETA</button><button class="btn" id="fx-cancel">CANCELAR</button><button class="btn primary" id="fx-ok" disabled>IMPORTAR</button></div>
 </dialog>
 <dialog id="accel-dialog" class="accel-dialog">
   <h2>MOTOR Y ACELERADOR</h2>

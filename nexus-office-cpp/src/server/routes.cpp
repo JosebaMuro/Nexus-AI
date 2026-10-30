@@ -13,6 +13,7 @@
 #include "core/android_tune.h"
 #include "core/services.h"
 #include "core/system.h"
+#include "core/explorador.h"
 #include "gen/data.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
@@ -1940,6 +1941,24 @@ void register_routes(App& app) {
     c.app.S().models->cancel(c.p("jid"));
     return json{{"ok", true}};
   });
+
+  // explorador de archivos para importar modelos: el selector del sistema solo si la interfaz se abre en el mismo
+  // equipo (no por el puerto remoto: el dialogo saldria en el PC y no en el movil que lo pide)
+  app.get("/api/fs/listar", [](Ctx& c) -> Out {
+    try {
+      json r = explorador::listar(c.q("ruta"), c.qb("todos", false));
+      r["dialogo"] = !c.remote && c.local() && explorador::dialogo_disponible();
+      return r;
+    } catch (const std::runtime_error& e) {
+      throw HttpErr(404, e.what());
+    }
+  }, true);
+
+  app.post("/api/fs/dialogo", [](Ctx& c) -> Out {
+    if (c.remote || !c.local())
+      return json{{"unavailable", true}, {"detail", "el selector del sistema solo se abre en el equipo de Nexus-Office"}};
+    return explorador::dialogo(c.bb("carpeta", false));
+  }, true);
 
   app.post("/api/models/import", [](Ctx& c) -> Out {
     std::string path = c.bs("path");

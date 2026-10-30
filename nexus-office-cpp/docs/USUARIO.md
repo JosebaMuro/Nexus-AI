@@ -179,6 +179,12 @@ desde la terminal:
 
 En Windows, `nexus-office.exe` en la carpeta de instalación; con el `.deb`, `nexus-office-c modelos --descargar`.
 
+Para usar un modelo que ya tienes (descargado aparte, en un USB o de Qualcomm AI Hub), ve a **Modelos > Importar
+modelo local** y pulsa **Buscar archivo…** (un `.gguf`, `.onnx`, `.litertlm`, `.safetensors`…) o **Carpeta…** (la
+carpeta de un modelo ONNX GenAI o Genie). En el PC se abre el explorador de archivos del sistema; en el móvil o desde
+otro equipo, el explorador de Nexus-Office, que marca qué es modelo y con qué formato. Activa **copiar** para guardarlo
+dentro de la carpeta de modelos de Nexus-Office.
+
 ## Arranque automático
 
 Con el **arranque automático**, Nexus-Office se inicia solo al encender el equipo, sin ventana, y se reinicia si falla. Es

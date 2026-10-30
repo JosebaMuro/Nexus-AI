@@ -33,6 +33,11 @@
 - **Listo para usar al descargar**: un modelo de LiteRT-LM, ONNX o Genie se activa al terminar y deja configurado su
   motor (`llm.engine`) con el acelerador automático (NPU, GPU, CPU). Al volver a un GGUF, el motor vuelve a
   Automático. Los modelos de Genie salen de Qualcomm AI Hub (con cuenta): se descargan allí y se importan.
+- **Importar modelo con explorador de archivos**: *Modelos > Importar modelo local* tiene **Buscar archivo…** y
+  **Carpeta…**. En el escritorio abre el selector de archivos del sistema (Windows, macOS, Linux con zenity o kdialog);
+  desde el móvil, el acceso remoto o un servicio sin escritorio, un explorador propio que recorre las carpetas del
+  equipo de Nexus-Office (unidades, Descargas, almacenamiento y tarjetas SD de Android), marca los ficheros y carpetas
+  de modelo (GGUF, ONNX, LiteRT-LM, safetensors, ONNX GenAI, Genie) e importa al elegir.
 
 ### Lo que no se puede incluir
 - NVIDIA TensorRT-LLM (motor compilado por modelo y tarjeta), AMD Ryzen AI NPU (su SDK no es redistribuible),

@@ -1444,7 +1444,67 @@
     })));
   });
   $("#fmt-filter").onchange = guard(() => loaders.models());
-  $("#imp-go").onclick = guard(async () => { const r = await api("/api/models/import", { body: { path: $("#imp-path").value.trim(), copy_file: $("#imp-copy").checked } }); toast(`Importado: ${r.name} (${r.kind}, ${r.format})`); loaders.models(); });
+  async function importModel(path) {
+    const r = await api("/api/models/import", { body: { path, copy_file: $("#imp-copy").checked } });
+    toast(`Importado: ${r.name} (${r.kind}, ${r.format})`); loaders.models();
+  }
+  $("#imp-go").onclick = guard(() => importModel($("#imp-path").value.trim()));
+
+  /* ---- explorador de archivos para importar: el del sistema si la interfaz va en el mismo equipo; si no (movil,
+     acceso remoto, servicio sin escritorio), el propio, que navega por las carpetas del equipo de Nexus-Office */
+  const FX = { path: "", sel: null, dialogo: null };
+  async function fxSystem(carpeta) {
+    const r = await api("/api/fs/dialogo", { body: { carpeta } });
+    if (r.unavailable) { FX.dialogo = false; return false; }
+    if (r.path) { $("#imp-path").value = r.path; $("#fx-dialog").open && $("#fx-dialog").close(); await importModel(r.path); }
+    return true;   // elegido o cancelado
+  }
+  async function fxOpen(carpeta) {
+    if (FX.dialogo !== false && await fxSystem(carpeta).catch(() => false)) return;
+    const dlg = $("#fx-dialog"); if (!dlg.open) dlg.showModal();
+    await fxLoad($("#imp-path").value.trim() || FX.path);
+  }
+  async function fxLoad(ruta) {
+    let d;
+    try { d = await api(`/api/fs/listar?ruta=${encodeURIComponent(ruta || "")}&todos=${$("#fx-all").checked ? 1 : 0}`); }
+    catch (e) { toast(e.message, true); if (ruta) return fxLoad(""); return; }
+    FX.path = d.path; FX.parent = d.parent; FX.dialogo = d.dialogo; fxPick(d.modelo ? { path: d.path, formato: d.modelo, dir: true } : null);
+    $("#fx-path").value = d.path; $("#fx-up").disabled = !d.parent; $("#fx-system").style.display = d.dialogo ? "" : "none";
+    $("#fx-roots").innerHTML = d.roots.map((r) => `<button class="btn sm" data-fxr="${esc(r.path)}" title="${esc(r.path)}">${esc(r.name)}</button>`).join("");
+    $("#fx-info").textContent = `${d.dirs.length} carpetas · ${d.files.length} ${$("#fx-all").checked ? "archivos" : "modelos"}`;
+    $("#fx-list").innerHTML = d.dirs.map((x) => `<div class="item" data-fxd="${esc(x.path)}" data-fmt="${esc(x.modelo)}">📁<span class="n">${esc(x.name)}</span>${x.modelo ? `<span class="tag ok">${esc(x.modelo)}</span>` : ""}</div>`).join("") +
+      d.files.map((x) => `<div class="item" data-fxf="${esc(x.path)}" data-fmt="${esc(x.formato)}">📄<span class="n">${esc(x.name)}</span>${x.formato ? `<span class="tag accent">${esc(x.formato)}</span>` : ""}<span class="muted mono">${fmtB(x.size)}</span></div>`).join("") ||
+      `<span class="muted">No hay modelos en esta carpeta. Marca «todos los archivos» para verlo todo.</span>`;
+    $$("[data-fxr]").forEach((b) => (b.onclick = () => fxLoad(b.dataset.fxr)));
+    // carpeta: un toque la elige si es un modelo (ONNX GenAI, Genie) y dos entran; un archivo se elige y con dos se importa
+    $$("#fx-list [data-fxd]").forEach((el) => {
+      el.onclick = () => (el.dataset.fmt ? fxPick({ path: el.dataset.fxd, formato: el.dataset.fmt, dir: true }, el) : fxLoad(el.dataset.fxd));
+      el.ondblclick = () => fxLoad(el.dataset.fxd);
+    });
+    $$("#fx-list [data-fxf]").forEach((el) => {
+      el.onclick = () => fxPick({ path: el.dataset.fxf, formato: el.dataset.fmt }, el);
+      el.ondblclick = guard(() => fxImport());
+    });
+  }
+  function fxPick(sel, el) {
+    FX.sel = sel; $$("#fx-list .item.sel").forEach((x) => x.classList.remove("sel")); el && el.classList.add("sel");
+    $("#fx-ok").disabled = !sel;
+    $("#fx-sel").textContent = sel ? `${sel.dir ? "Carpeta" : "Archivo"}: ${sel.path}${sel.formato ? ` (${sel.formato})` : ""}` : "Elige un archivo de modelo (.gguf, .onnx, .litertlm, .safetensors…) o la carpeta de un modelo ONNX GenAI o Genie.";
+  }
+  async function fxImport() {
+    if (!FX.sel) return;
+    $("#imp-path").value = FX.sel.path; $("#fx-dialog").close(); await importModel(FX.sel.path);
+  }
+  $("#imp-browse").onclick = guard(() => fxOpen(false));
+  $("#imp-browse-dir").onclick = guard(() => fxOpen(true));
+  $("#fx-up").onclick = () => FX.parent && fxLoad(FX.parent);
+  $("#fx-go").onclick = () => fxLoad($("#fx-path").value.trim());
+  $("#fx-path").onkeydown = (e) => { if (e.key === "Enter") fxLoad(e.target.value.trim()); };
+  $("#fx-all").onchange = () => fxLoad(FX.path);
+  $("#fx-here").onclick = () => fxPick({ path: FX.path, dir: true });
+  $("#fx-system").onclick = guard(() => fxSystem(!!(FX.sel && FX.sel.dir)));
+  $("#fx-cancel").onclick = () => $("#fx-dialog").close();
+  $("#fx-ok").onclick = guard(() => fxImport());
   $("#spec-go").onclick = guard(async () => { await api("/api/models/activate-spec", { body: { spec: $("#spec-in").value.trim() } }); toast("LLM externo activado"); loadStatus(); });
 
   /* ================================================================ vista: HERRAMIENTAS */
