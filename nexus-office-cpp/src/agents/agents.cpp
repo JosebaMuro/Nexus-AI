@@ -320,9 +320,13 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
       emit({{"type", "learned"}, {"items", items}});
     }
   }
-  json info = use_memory ? s.learner->build_context(text, spec.id, (int)s.config.num("memory.top_k", 6))
-                         : json{{"memories", json::array()}, {"examples", json::array()}, {"lessons", json::array()},
-                                {"facts", json::array()}, {"profile", json::object()}};
+  json info = json{{"memories", json::array()}, {"examples", json::array()}, {"lessons", json::array()},
+                   {"facts", json::array()}, {"profile", json::object()}};
+  if (use_memory) {   // la consulta al grafo queda grabada para que el avatar dibuje su recorrido
+    mem::Recorrido rec;
+    info = s.learner->build_context(text, spec.id, (int)s.config.num("memory.top_k", 6));
+    if (!rec.empty()) emit(rec.evento(spec.id, "contexto"));
+  }
   if (s.rag && use_memory) {
     try {
       info["documents"] = s.rag->search(text, 3, 0.3, 0, spec.id);   // general + los suyos
