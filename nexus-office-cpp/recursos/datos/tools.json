@@ -926,5 +926,244 @@
     "permissions": [
       "network"
     ]
+  },
+  {
+    "name": "bolsa_senales",
+    "description": "Señales técnicas de un valor con su confianza: tendencia, reversión a la media, momento, régimen de volatilidad y exponente de Hurst, más RSI, MACD y Bollinger, combinadas en una lectura alcista, neutral o bajista",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "simbolo": {
+          "type": "string",
+          "description": "símbolo del valor, p. ej. SAN.MC, AAPL, VWCE.DE, BTC-EUR"
+        }
+      },
+      "required": [
+        "simbolo"
+      ]
+    },
+    "risk": "low",
+    "permissions": []
+  },
+  {
+    "name": "bolsa_backtest",
+    "description": "Prueba una estrategia con el histórico diario (reglas del agente autónomo, señales, cruce de medias o comprar y mantener) con comisiones y deslizamiento, frente a comprar y mantener, y devuelve rentabilidad, Sharpe, Sortino, caída máxima, VaR, aciertos y el tramo fuera de muestra",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "simbolos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "símbolos de los valores"
+        },
+        "estrategia": {
+          "type": "string",
+          "enum": [
+            "agente",
+            "senales",
+            "cruce_medias",
+            "comprar_mantener"
+          ],
+          "default": "agente"
+        },
+        "rango": {
+          "type": "string",
+          "enum": [
+            "6mo",
+            "1y",
+            "5y"
+          ],
+          "default": "1y"
+        },
+        "capital": {
+          "type": "number",
+          "default": 10000
+        },
+        "riesgo_pct": {
+          "type": "number",
+          "default": 1
+        },
+        "comision_pct": {
+          "type": "number",
+          "default": 0.1
+        },
+        "deslizamiento_bps": {
+          "type": "number",
+          "default": 5
+        },
+        "fuera_muestra_pct": {
+          "type": "number",
+          "default": 30
+        }
+      },
+      "required": []
+    },
+    "risk": "low",
+    "permissions": []
+  },
+  {
+    "name": "bolsa_optimizar",
+    "description": "Reparte una cartera entre varios valores con su histórico: pesos iguales, inversa de la volatilidad, varianza mínima, paridad de riesgo, Sharpe máximo o HRP, con la contribución al riesgo y, si se da el capital, los títulos enteros a comprar",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "simbolos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "símbolos de los valores"
+        },
+        "metodo": {
+          "type": "string",
+          "enum": [
+            "igual",
+            "inversa_vol",
+            "min_varianza",
+            "paridad_riesgo",
+            "max_sharpe",
+            "hrp"
+          ],
+          "default": "hrp"
+        },
+        "capital": {
+          "type": "number"
+        },
+        "max_peso_pct": {
+          "type": "number"
+        },
+        "rango": {
+          "type": "string",
+          "enum": [
+            "6mo",
+            "1y",
+            "5y"
+          ],
+          "default": "1y"
+        }
+      },
+      "required": [
+        "simbolos"
+      ]
+    },
+    "risk": "low",
+    "permissions": []
+  },
+  {
+    "name": "bolsa_montecarlo",
+    "description": "Simulación de Monte Carlo remuestreando las rentabilidades diarias de un valor: abanico de valores finales, probabilidad de perder y caída máxima esperable",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "simbolo": {
+          "type": "string",
+          "description": "símbolo del valor, p. ej. SAN.MC, AAPL, VWCE.DE, BTC-EUR"
+        },
+        "capital": {
+          "type": "number",
+          "default": 10000
+        },
+        "horizonte": {
+          "type": "integer",
+          "default": 252,
+          "description": "sesiones"
+        },
+        "simulaciones": {
+          "type": "integer",
+          "default": 1000
+        }
+      },
+      "required": [
+        "simbolo"
+      ]
+    },
+    "risk": "low",
+    "permissions": []
+  },
+  {
+    "name": "bolsa_noticias",
+    "description": "Titulares recientes de un valor (Yahoo Finance y Google Noticias por RSS, guardados en el banco de datos) con su sentimiento de -1 a 1",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "simbolo": {
+          "type": "string",
+          "description": "símbolo del valor, p. ej. SAN.MC, AAPL, VWCE.DE, BTC-EUR"
+        },
+        "refrescar": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "simbolo"
+      ]
+    },
+    "risk": "low",
+    "permissions": []
+  },
+  {
+    "name": "bolsa_informe",
+    "description": "Informe de la mesa de analistas IA sobre un valor: analistas técnico, de noticias y fundamental, debate alcista contra bajista, propuesta del operador, equipo de riesgo y decisión final del gestor (comprar, mantener o vender, con confianza y peso). Solo informa: no ordena nada",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "simbolo": {
+          "type": "string",
+          "description": "símbolo del valor, p. ej. SAN.MC, AAPL, VWCE.DE, BTC-EUR"
+        },
+        "rondas": {
+          "type": "integer",
+          "default": 1,
+          "description": "rondas del debate (1-3)"
+        }
+      },
+      "required": [
+        "simbolo"
+      ]
+    },
+    "risk": "low",
+    "permissions": []
+  },
+  {
+    "name": "bolsa_etapas",
+    "description": "Etapas que debe superar la estrategia antes de invertir dinero real (banco de datos, investigación, backtest, simulación e inversión real asistida), qué ha cumplido y qué le falta",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    },
+    "risk": "low",
+    "permissions": []
+  },
+  {
+    "name": "bolsa_banco",
+    "description": "Banco de datos de la mesa: sin símbolos dice qué históricos hay guardados; con símbolos descarga y guarda sus cierres diarios reales para trabajar sin conexión",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "simbolos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "símbolos de los valores"
+        },
+        "rango": {
+          "type": "string",
+          "enum": [
+            "6mo",
+            "1y",
+            "5y"
+          ],
+          "default": "1y"
+        }
+      },
+      "required": []
+    },
+    "risk": "low",
+    "permissions": []
   }
 ]

@@ -16,9 +16,9 @@ system_prompt: |
   fiscalidad-inversiones lo que es suyo, y la protección de datos en proteccion-datos.
 model: "especialidad:finanzas"
 temperature: 0.2
-tools: [bolsa_cartera, bolsa_cotizacion, bolsa_costes, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
+tools: [bolsa_cartera, bolsa_montecarlo, bolsa_backtest, bolsa_etapas, bolsa_cotizacion, bolsa_costes, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
 memory: true
-can_delegate_to: [gestor-carteras, operador-bolsa, analista-mercados, fiscalidad-inversiones, proteccion-datos]
+can_delegate_to: [gestor-carteras, operador-bolsa, analista-mercados, fiscalidad-inversiones, proteccion-datos, laboratorio-cuantitativo]
 keywords: [riesgo, gestion del riesgo, volatilidad, drawdown, caida maxima, var, valor en riesgo, concentracion, tamano de posicion, apalancamiento, mifid, test de idoneidad, test de conveniencia, kid, priips, cnmv, chiringuito, estafa, fraude, fondo de garantia, mica, producto complejo, derivados, cfd]
 specialty: "gestión del riesgo (tamaño de posición, stops, volatilidad, drawdown, VaR, concentración, divisa, liquidez), MiFID II, KID PRIIPs, CNMV, chiringuitos financieros, Fondo de Garantía de Inversiones, MiCA"
 color: "#d63031"

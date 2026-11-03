@@ -249,8 +249,43 @@
               <option value="auto">IA financiera: la mejor instalada para este equipo</option><option value="finanzas-qwen-1.5b">Finanzas 1.5B (móvil)</option>
               <option value="fin-r1-7b">Fin-R1 7B</option><option value="qwen3.8-27b-finanzas">Qwen3.8 27B Finanzas</option><option value="no">Sin especializada: la IA general</option></select>
             <span class="muted" id="ba-ia-info"></span></div>
+          <div class="row" style="margin-top:8px"><label class="muted"><input type="checkbox" id="ba-mesa"> La mesa de analistas aprueba cada compra (más lenta)</label></div>
+          <div class="row" style="margin-top:8px"><span class="muted">Frenos:</span>
+            <label class="muted">Caída máx. 30 días (%) <input class="input" id="ba-maxdd" type="number" min="0" max="90" style="width:80px"></label>
+            <label class="muted">Pérdidas seguidas <input class="input" id="ba-racha" type="number" min="0" max="20" style="width:70px"></label>
+            <label class="muted">Pérdida en 24 h (%) <input class="input" id="ba-perdia" type="number" step="0.5" min="0" max="50" style="width:80px"></label>
+            <span class="muted">(0 desactiva)</span></div>
           <div class="row" style="margin-top:8px"><input class="input" id="ba-universo" placeholder="Universo: símbolos separados por comas (vacío = todo el catálogo)" style="flex:1 1 300px;min-width:0"><button class="btn sm primary" id="ba-save">GUARDAR</button></div>
         </details>
+      </div>
+      <div class="panel" style="margin-top:16px" id="bolsa-lab"><h3>Laboratorio de inversión <span class="sub">del dato a la inversión real, paso a paso</span></h3>
+        <div class="lab-etapas" id="lab-etapas"></div>
+        <div class="row" style="margin:10px 0"><input class="input" id="lab-syms" placeholder="Valores: SAN.MC, ITX.MC, AAPL… (vacío = el universo del agente)" style="flex:1 1 280px;min-width:0">
+          <select class="input sm" id="lab-rango" style="width:auto"><option value="1y">1 año diario</option><option value="6mo">6 meses</option><option value="5y">5 años semanal</option></select>
+          <button class="btn sm" id="lab-banco">GUARDAR EN EL BANCO</button></div>
+        <div class="grid g2">
+          <div><div class="muted" style="margin-bottom:4px">Backtest con comisiones y deslizamiento</div>
+            <div class="row"><select class="input sm" id="lab-estr" style="width:auto"><option value="agente">Reglas del agente</option><option value="senales">Señales combinadas</option><option value="cruce_medias">Cruce de medias 20/50</option><option value="comprar_mantener">Comprar y mantener</option></select>
+              <button class="btn sm primary" id="lab-bt">PROBAR</button><button class="btn sm" id="lab-mc" disabled>MONTE CARLO</button></div>
+            <canvas id="lab-curve" class="live-chart" style="height:160px;margin-top:8px"></canvas><div id="lab-bt-res" style="overflow-x:auto"></div></div>
+          <div><div class="muted" style="margin-bottom:4px">Mesa de analistas IA</div>
+            <div class="row"><input class="input sm" id="lab-sym" placeholder="Símbolo" style="width:120px"><button class="btn sm primary" id="lab-inf">INFORME</button><button class="btn sm" id="lab-not">NOTICIAS</button></div>
+            <div id="lab-inf-res" class="lab-informe"></div></div>
+        </div>
+        <details style="margin-top:10px"><summary class="muted">Repartir la cartera (optimización)</summary>
+          <div class="row" style="margin-top:8px"><select class="input sm" id="lab-met" style="width:auto"><option value="hrp">HRP (agrupa por correlación)</option><option value="paridad_riesgo">Paridad de riesgo</option><option value="min_varianza">Varianza mínima</option><option value="max_sharpe">Sharpe máximo</option><option value="inversa_vol">Inversa de la volatilidad</option><option value="igual">Pesos iguales</option></select>
+            <label class="muted">Capital (€) <input class="input" id="lab-cap" type="number" min="0" value="10000" style="width:100px"></label>
+            <label class="muted">Peso máx. (%) <input class="input" id="lab-maxw" type="number" min="1" max="100" value="40" style="width:70px"></label>
+            <button class="btn sm primary" id="lab-opt">CALCULAR</button></div><div id="lab-opt-res" style="overflow-x:auto;margin-top:8px"></div></details>
+        <details style="margin-top:10px" class="admin-only"><summary class="muted">Inversión real asistida y bróker</summary>
+          <p class="muted" style="margin:8px 0">El agente nunca usa dinero. Si lo habilitas y la estrategia ha superado el backtest y la simulación, propone en tu cartera real las mismas operaciones, que no salen hasta que escribes CONFIRMO.</p>
+          <div class="row"><label class="muted"><input type="checkbox" id="lab-real"> Propuestas reales del agente</label>
+            <select class="input sm" id="lab-real-cart" style="width:auto"></select><button class="btn sm" id="lab-real-save">GUARDAR</button></div>
+          <div class="row" style="margin-top:8px"><select class="input sm" id="lab-bk-tipo" style="width:auto"><option value="manual">Manual (ejecutas tú y registras)</option><option value="alpaca">Alpaca (EE. UU. y cripto)</option></select>
+            <select class="input sm" id="lab-bk-ent" style="width:auto"><option value="papel">Entorno de papel</option><option value="real">Entorno real</option></select>
+            <input class="input sm" id="lab-bk-clave" placeholder="Clave" style="width:150px"><input class="input sm" id="lab-bk-secreto" type="password" placeholder="Secreto" style="width:150px">
+            <label class="muted"><input type="checkbox" id="lab-bk-auto" checked> Enviar al confirmar</label><button class="btn sm" id="lab-bk-save">GUARDAR</button></div>
+          <div class="muted" id="lab-bk-info" style="margin-top:6px"></div></details>
       </div>
       <div class="panel" style="margin-top:16px"><h3>Órdenes activas en tiempo real <span class="sub" id="bl-sub"></span></h3><div class="grid g2" id="bolsa-live"></div></div>
       <div class="panel" style="margin-top:16px"><h3>Posiciones</h3><div id="bolsa-pos" style="overflow-x:auto"></div></div>

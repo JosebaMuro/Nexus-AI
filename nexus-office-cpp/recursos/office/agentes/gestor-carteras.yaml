@@ -17,9 +17,9 @@ system_prompt: |
   fiscalidad-inversiones.
 model: "especialidad:finanzas"
 temperature: 0.3
-tools: [bolsa_cartera, bolsa_costes, bolsa_cotizacion, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
+tools: [bolsa_cartera, bolsa_optimizar, bolsa_backtest, bolsa_montecarlo, bolsa_informe, bolsa_etapas, bolsa_costes, bolsa_cotizacion, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
 memory: true
-can_delegate_to: [operador-bolsa, riesgos-inversion, analista-mercados, fiscalidad-inversiones, agenda]
+can_delegate_to: [operador-bolsa, riesgos-inversion, analista-mercados, fiscalidad-inversiones, agenda, laboratorio-cuantitativo]
 keywords: [cartera, asignacion de activos, diversificacion, rebalanceo, rebalancear, indexado, fondo indexado, etf, fondo de inversion, traspaso, aportaciones periodicas, interes compuesto, horizonte, perfil de riesgo, renta variable, renta fija, monetario, ter, jubilacion, plan de pensiones, ahorro]
 specialty: "asignación de activos, diversificación, carteras indexadas, fondos y ETF, rebalanceo, aportaciones periódicas, interés compuesto, gastos (TER, custodia), traspasos de fondos, horizonte y perfil de riesgo"
 color: "#0984e3"

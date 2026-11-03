@@ -622,6 +622,14 @@ body.flat .panel::before, body.flat .panel::after { display: none; }
 .ba-diario .e { border-left: 3px solid var(--muted); padding: 4px 8px; background: rgba(255,255,255,.02); border-radius: 0 6px 6px 0; }
 .ba-diario .e.compra { border-color: var(--ok); } .ba-diario .e.venta { border-color: var(--accent); }
 .ba-diario .e.stop { border-color: var(--warn, #fb0); } .ba-diario .e.error { border-color: var(--bad); }
+.ba-diario .e.proteccion, .ba-diario .e.mesa { border-color: var(--warn, #fb0); } .ba-diario .e.propuesta { border-color: var(--bad); }
+.lab-etapas { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.lab-etapas .et { border: 1px solid var(--line, rgba(255,255,255,.12)); border-top: 3px solid var(--muted); border-radius: 8px; padding: 8px; font-size: .85rem; }
+.lab-etapas .et.hecha, .lab-etapas .et.habilitada { border-top-color: var(--ok); } .lab-etapas .et.lista { border-top-color: var(--accent); }
+.lab-etapas .et b { display: block; margin-bottom: 2px; } .lab-etapas .et .f { color: var(--muted); font-size: .78rem; margin-top: 4px; }
+.lab-informe { max-height: 420px; overflow-y: auto; margin-top: 8px; display: flex; flex-direction: column; gap: 6px; font-size: .88rem; }
+.lab-informe .sec { border-left: 3px solid var(--accent); padding: 4px 8px; background: rgba(255,255,255,.02); border-radius: 0 6px 6px 0; white-space: pre-wrap; }
+.lab-informe .sec.al { border-color: var(--ok); } .lab-informe .sec.ba { border-color: var(--bad); } .lab-informe .sec.dec { border-color: var(--warn, #fb0); }
 .ba-diario .t { font-size: .75rem; color: var(--muted); font-family: var(--mono, monospace); }
 .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: livepulse 1.6s infinite; }
 .live-dot.off { background: var(--muted); box-shadow: none; animation: none; }

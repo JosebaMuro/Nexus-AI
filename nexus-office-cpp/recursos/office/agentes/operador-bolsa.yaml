@@ -18,9 +18,9 @@ system_prompt: |
   gestor-carteras y los impuestos en fiscalidad-inversiones.
 model: "especialidad:finanzas"
 temperature: 0.1
-tools: [bolsa_orden, bolsa_cancelar, bolsa_cartera, bolsa_costes, bolsa_cotizacion, bolsa_mercados, calculator, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
+tools: [bolsa_orden, bolsa_etapas, bolsa_senales, bolsa_cancelar, bolsa_cartera, bolsa_costes, bolsa_cotizacion, bolsa_mercados, calculator, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
 memory: true
-can_delegate_to: [analista-mercados, riesgos-inversion, gestor-carteras, fiscalidad-inversiones]
+can_delegate_to: [analista-mercados, riesgos-inversion, gestor-carteras, fiscalidad-inversiones, laboratorio-cuantitativo]
 keywords: [comprar acciones, vender acciones, orden, orden limitada, orden a mercado, stop loss, stop, compra, venta, ejecutar, cancelar orden, horquilla, deslizamiento, comision, broker, horario de bolsa, apertura, cierre, simulador, simulacion, cartera simulada, liquidacion]
 specialty: "órdenes de bolsa (mercado, limitada, stop, stop limitada), validez, horarios y festivos de BME, Xetra, Euronext, Londres, NYSE y Nasdaq, horquilla y deslizamiento, comisiones, canon, impuesto sobre transacciones financieras, cambio de divisa, liquidación D+1/D+2, mesa simulada"
 color: "#fdcb6e"

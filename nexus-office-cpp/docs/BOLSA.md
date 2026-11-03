@@ -65,6 +65,16 @@ descargados (vista Modelos, «◆ para tu oficina», o `nexus-office modelos --d
 
 La IA financiera es apoyo al análisis: no es asesoramiento financiero y la mesa sigue siendo simulada.
 
+## Laboratorio de inversión
+
+Del dato a la inversión real en cinco etapas (banco de datos, investigación, backtest, simulación e inversión real
+asistida), con lo que hacen los proyectos libres de inversión con IA más usados (TradingAgents, ai-hedge-fund, FinRL,
+Qlib, freqtrade, QuantStats, PyPortfolioOpt, Lean…) reescrito en C++: señales técnicas combinadas, backtest con
+costes y tramo fuera de muestra, Monte Carlo, cartera óptima (HRP, paridad de riesgo…), protecciones del agente,
+mesa de analistas IA con debate alcista/bajista y gestor, noticias con sentimiento y enlace con un bróker. En la app
+es el panel **Laboratorio de inversión** de la sección BOLSA, y en la oficina lo lleva el agente **Laboratorio
+cuantitativo**. Todo el detalle, las licencias y los criterios de cada etapa: [BOLSA_PROYECTOS.md](BOLSA_PROYECTOS.md).
+
 ## Agentes
 
 | Agente | Qué hace | Herramientas de la mesa |
@@ -121,9 +131,12 @@ nada se ejecute por su cuenta:
 1. Cualquier orden (tuya o de un agente) queda **por confirmar**. No se envía a ningún sitio.
 2. Solo una persona puede confirmarla, escribiendo `CONFIRMO`: en la app con el modo **ADMIN** activo, o en la
    terminal con `nexus-office bolsa confirmar <id>`. Ningún agente tiene una herramienta para confirmar.
-3. **Nexus-Office no se conecta a ningún bróker.** La orden confirmada la ejecutas tú en tu bróker.
+3. Por defecto **Nexus-Office no se conecta a ningún bróker**: la orden confirmada la ejecutas tú en tu bróker. Si
+   conectas Alpaca (Laboratorio → *Inversión real asistida y bróker*, empieza en su entorno de papel), la orden sale
+   hacia él justo después de tu `CONFIRMO`, y nunca antes.
 4. Después registras la ejecución real (precio, comisiones) con *REGISTRAR EJECUCIÓN* o
-   `nexus-office bolsa ejecucion <id> <precio> --comision <euros>`, y la cartera se actualiza.
+   `nexus-office bolsa ejecucion <id> <precio> --comision <euros>`, y la cartera se actualiza. Con Alpaca se registra
+   sola al ejecutarse.
 
 Crear una cartera real también requiere el modo administrador.
 
@@ -166,3 +179,15 @@ En la app Nexus-Office autónomo de Android la mesa está en la sección **BOLSA
 | `POST /api/bolsa/instrumento` | Añadir un valor propio |
 | `POST /api/bolsa/importar` | Importar cierres reales (`simbolo`, `csv`) |
 | `GET /api/bolsa/fiscal?anio=` | Ganancias y pérdidas realizadas del año |
+| `GET /api/bolsa/senales/<símbolo>` | Señales técnicas combinadas |
+| `POST /api/bolsa/backtest` · `GET /api/bolsa/backtests[?id=]` | Backtest (`simbolos`, `estrategia`, `rango`, costes…) y los guardados |
+| `POST /api/bolsa/montecarlo` | Monte Carlo de un valor (`simbolo`) o de un backtest (`backtest`) |
+| `POST /api/bolsa/optimizar` | Pesos de cartera (`simbolos`, `metodo`, `capital`, `max_peso_pct`) |
+| `GET /api/bolsa/metricas?cartera=` | Métricas de la cartera del agente o de una cartera |
+| `GET /api/bolsa/noticias/<símbolo>?refrescar=1` | Titulares con sentimiento |
+| `POST /api/bolsa/informe` · `GET /api/bolsa/informes?simbolo=` | Informe de la mesa de analistas IA |
+| `GET/POST /api/bolsa/banco` | Banco de datos: qué hay guardado / descargar históricos (`simbolos`, `rango`) |
+| `GET /api/bolsa/etapas` | Etapas hasta la inversión real |
+| `POST /api/bolsa/real` | Habilitar las propuestas reales y elegir la cartera real (requiere admin) |
+| `GET/POST /api/bolsa/broker` | Bróker: `tipo` manual/alpaca, `entorno` papel/real, `clave`, `secreto` (POST requiere admin) |
+| `POST /api/bolsa/orden/<id>/enviar` · `POST /api/bolsa/broker/sincronizar` | Enviar una orden confirmada al bróker y recoger ejecuciones |
