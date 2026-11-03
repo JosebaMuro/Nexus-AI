@@ -2,7 +2,10 @@
 #include "office/bolsa_mesa.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <map>
 #include <mutex>
