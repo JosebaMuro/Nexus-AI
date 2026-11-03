@@ -1,5 +1,22 @@
 # Cambios
 
+## Nexus-Office 2.9.0-cpp
+
+### Igual que la edición Python, con todas las mejoras
+Se ha comparado la edición C++ con la edición Python en marcha, las dos a la vez en el mismo equipo: las 201 rutas
+de la API (mismas claves y tipos en las respuestas), las 12 vistas de la interfaz en capturas y los flujos de chat,
+imagen, música, memoria y dispositivos. La C++ tenía ya todo lo de la Python salvo dos cosas, que llegan ahora:
+- **Imagen sin modelo que sigue el prompt** (compositor de escenas, `src/media/scene.cpp`): sin modelo de imagen la
+  edición C++ dibujaba siempre un campo de flujo abstracto que solo cambiaba de color. Ahora, como en la Python, lee
+  el prompt en español o inglés y dibuja la hora (día, noche, atardecer, amanecer), el clima (lluvia, nieve, niebla,
+  tormenta), el lugar (mar, playa, montaña, bosque, ciudad, espacio, desierto, lago, jardín, campo) y los sujetos
+  (gato, perro, casa, castillo, árbol, flor, coche, barco, persona, astronauta, robot, faro...) con su color y
+  cuántos hay. El arte abstracto queda para cuando se pide («abstracto», «fractal», «patrón»), y si no reconoce nada
+  del prompt lo dice en la nota.
+- **APK con Snapdragon cuyo backend Hexagon se cae**: si la sonda de llama-server con la NPU no devuelve nada, se
+  repite sin la NPU (`GGML_HEXAGON_DEVICES=0`) para seguir usando la GPU, y la NPU queda marcada como no usable.
+  La GPU ya no abre sesión en el DSP cuando el modelo no va en la NPU.
+
 ## Nexus-Office 2.8.0-cpp
 
 ### Todos los motores por hardware, elegibles a mano

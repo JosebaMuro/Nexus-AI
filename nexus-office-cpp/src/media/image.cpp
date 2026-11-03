@@ -1,4 +1,4 @@
-// Imagen (media/image.py): generacion (stable-diffusion.cpp > arte procedural sin modelo) y analisis
+// Imagen (media/image.py): generacion (stable-diffusion.cpp > compositor de escenas sin modelo) y analisis
 // (LLM multimodal > estadisticas de la imagen).
 #include <algorithm>
 #include <chrono>
@@ -7,6 +7,7 @@
 
 #include "llm/llm.h"
 #include "media/media.h"
+#include "media/scene.h"
 #include "models/models.h"
 #include "models/runtimes.h"
 #include "util/crypto.h"
@@ -375,16 +376,22 @@ json ImageEngine::generate(const std::string& prompt, const std::string& negativ
           why = "stable-diffusion.cpp fallo en " + sd->variant + " y en la CPU: " + uright(trim(e2.what()), 300);
         }
       }
-      L.warning("sd.cpp fallo (", uright(why, 300), "); usando el compositor procedural");
+      L.warning("sd.cpp fallo (", uright(why, 300), "); usando el compositor de escenas");
     }
   }
+  // sin modelo: el compositor dibuja la escena que describe el prompt (hora, clima, lugar y sujetos); el arte
+  // abstracto solo si se pide algo abstracto
   std::string text = idea.empty() ? prompt : idea;
-  Canvas img = procedural(text, seed, size.value_or(512));
+  bool abstract = scene::parse(text).abstract;
+  Canvas img = abstract ? procedural(text, seed, size.value_or(512)) : scene::compose(text, seed, size.value_or(512));
+  std::string engine = abstract ? "procedural" : "escena";
   img.save_png(out);
   std::string note = why + ": imagen compuesta sin IA a partir de las palabras del prompt. Para imagenes neuronales "
                            "descarga un modelo de imagen en Modelos (p. ej. SDXS-512 en CPU).";
-  return {{"engine", "procedural"}, {"url", "/outputs/images/" + S(out.filename())}, {"path", S(out)},
-          {"seed", seed},          {"note", note}};
+  if (engine == "escena" && !scene::understood(text))
+    note = "No he reconocido ningun elemento del prompt (lugar, objeto, animal, hora o clima). " + note;
+  return {{"engine", engine}, {"url", "/outputs/images/" + S(out.filename())}, {"path", S(out)},
+          {"seed", seed},     {"note", note}};
 }
 
 bool ImageEngine::must_lend(const std::string& variant, const SdPlan& plan, int size, double llm_gb) {

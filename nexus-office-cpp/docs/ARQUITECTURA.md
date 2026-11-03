@@ -38,7 +38,7 @@ sd-cli, Piper y Whisper. El código está en `nexus-office-cpp/`:
 | `src/agents/` | Gestor de agentes (enrutado, prompt, bucle de herramientas, delegación), actividad y salón virtual. |
 | `src/tools/` | Registro modular, supervisor, herramientas integradas y propuestas con análisis estático. |
 | `src/rag/` | Lectores de documentos, PDF, archivos comprimidos, extracción y rastreo web, guardar una URL como PDF. |
-| `src/media/` | Imagen (stable-diffusion.cpp o arte procedural), música procedural, voz (Piper, voz del sistema, Whisper), avatares y GIMP. |
+| `src/media/` | Imagen (stable-diffusion.cpp o el compositor de escenas que dibuja lo que dice el prompt), música procedural, voz (Piper, voz del sistema, Whisper), avatares y GIMP. |
 | `src/office/` | Perfiles de oficina, mesa de bolsa y agente de bolsa autónomo. |
 | `src/coop/` | Cifrado, invitaciones y nodo de la LAN virtual. |
 | `src/remote/` | Acceso remoto: certificado propio y TLS, dispositivos y códigos de emparejamiento, UPnP y VPN WireGuard. |

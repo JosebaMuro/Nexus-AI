@@ -151,6 +151,23 @@ TEST("android: sonda con cache, NPU que falla y vuelta a la GPU y a la CPU") {
   CHECK(nob["gpu"]["binary"] == false && nob["gpu"]["use"].is_null());
 }
 
+TEST("android: sonda sin NPU si el backend Hexagon se cae") {
+  fs::path d = tmpdir("sonda-hex");
+  set_env("NEXUS_DATA_DIR", S(d / "nexus"));
+  mkdirs(d / "nexus");
+  set_env("NEXUS_DEVICE_INFO", S(d / "no.json"));
+  mkdirs(d / "lib");
+  write_file(d / "lib" / "libggml-hexagon.so", "\x7f" "ELF");
+  // aborta salvo con GGML_HEXAGON_DEVICES=0
+  executable(d / "lib" / aa::GPU_EXE, "#!/bin/sh\n[ \"$GGML_HEXAGON_DEVICES\" = 0 ] || { echo 'ggml-hex: abort'; exit 134; }\n"
+                                      "cat <<'EOF'\n" + LIST_ADRENO + "EOF\n");
+  json r = aa::detect(S(d / "lib"));
+  CHECK_EQ(jstr(r["gpu"]["use"], "dev"), std::string("GPUOpenCL"));
+  CHECK(contains(jstr(r["gpu"], "npu_broken"), "abort"));
+  CHECK_EQ(aa::gpu_env(S(d / "lib"), false)["GGML_HEXAGON_DEVICES"], std::string("0"));
+  CHECK(!aa::gpu_env(S(d / "lib")).count("GGML_HEXAGON_DEVICES"));
+}
+
 TEST("android: llama-server en la NPU cae a la GPU y despues a la CPU") {
   fs::path d = tmpdir("llama");
   set_env("NEXUS_DATA_DIR", S(d / "nexus"));

@@ -148,7 +148,7 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
     device = ngl ? jstr(opts, "device") : "";
     bool gpu = !device.empty() && !nx::env("NEXUS_RUNTIME_LLAMA_GPU").empty();
     exe = P(nx::env(gpu ? "NEXUS_RUNTIME_LLAMA_GPU" : "NEXUS_RUNTIME_LLAMA_CPU"));
-    if (hw::android_accel::is_gpu_exe(exe)) env = hw::android_accel::gpu_env(S(exe.parent_path()));
+    if (hw::android_accel::is_gpu_exe(exe)) env = hw::android_accel::gpu_env(S(exe.parent_path()), hw::android_accel::is_npu_dev(device));
     else ngl = 0, device.clear();
   }
   if (var == "cpu") ngl = 0;
