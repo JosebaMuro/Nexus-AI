@@ -6,7 +6,8 @@
  *  · "glb": cualquier modelo GLB/GLTF/VRM del usuario (reproduce su animacion y usa morphs de boca).
  *
  *  Ambos: respiracion, parpadeo, mirada al puntero, labios sincronizados con la voz (setLevel) y los nodos
- *  del grafo de memoria orbitando como particulas de conocimiento (update(graph)).
+ *  del grafo de memoria orbitando como particulas de conocimiento (update(graph)); una luz salta entre las
+ *  particulas que lee cada consulta al grafo (trace).
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -286,22 +287,71 @@ class Base3D {
     const maxW = Math.max(1, ...nodes.map((n) => n.weight));
     this.moteData = nodes.map((n, i) => ({ r: rand(0.42, 0.85), inc: rand(-0.7, 0.7), sp: rand(0.08, 0.25) * (i % 2 ? 1 : -1), ph: rand(0, 6.28),
                                             y: rand(-0.3, 0.4), s: 0.004 + 0.009 * Math.sqrt(n.weight / maxW) }));
-    nodes.forEach((n, i) => this.motes.setColorAt(i, new THREE.Color(TYPE_COLORS[n.type] || TYPE_COLORS.concepto)));
+    this.moteIds = nodes.map((n) => n.id); this.moteColors = nodes.map((n) => new THREE.Color(TYPE_COLORS[n.type] || TYPE_COLORS.concepto));
+    this.moteHeat = new Map(); this.ray = null;
+    nodes.forEach((n, i) => this.motes.setColorAt(i, this.moteColors[i]));
     this.motes.count = nodes.length; this.motes.frustumCulled = false;
     this.scene.add(this.motes);
     if (prev && nodes.length > prev) this.burst = 1;
+  }
+  /* luz que recorre el grafo: salta del centro a cada particula que la consulta ha leido (en orden) y las deja
+   * encendidas un momento; las que no estan entre las particulas visibles se saltan */
+  trace(ev) {
+    if (!this.motes || !ev || document.hidden) return;
+    const idx = new Map((this.moteIds || []).map((id, i) => [String(id), i])), seq = [];
+    for (const p of ev.pasos || []) {
+      for (const id of p.n != null ? [p.n] : [p.a, p.b]) {
+        const i = idx.get(String(id)); if (i != null && !seq.includes(i)) seq.push(i);
+      }
+    }
+    if (!seq.length) { this.burst = Math.max(this.burst, 0.5); return; }
+    if (!this.rayMesh) {
+      this.rayMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 10), new THREE.MeshBasicMaterial({ color: "#fff3c4", transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      this.rayTrail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 24 }, () => new THREE.Vector3())),
+        new THREE.LineBasicMaterial({ color: "#ffe9a8", transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }));
+      this.rayMesh.frustumCulled = this.rayTrail.frustumCulled = false;
+      this.scene.add(this.rayMesh, this.rayTrail);
+    }
+    this.ray = { seq: seq.slice(0, 40), t0: this.clock.elapsedTime, hop: 0.32, hist: [] };
   }
   animateMotes(t, center) {
     if (!this.motes) return;
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
     const speed = this.state === "thinking" ? 3 : this.state === "tool" ? 2 : 1;
+    const pos = this.motePos || (this.motePos = []), heat = this.moteHeat || (this.moteHeat = new Map()), warm = new THREE.Color("#fff3c4");
     this.moteData.forEach((d, i) => {
       d.ph += d.sp * 0.016 * speed;
       const r = d.r * (1 + this.burst * 0.4);
       p.set(Math.cos(d.ph) * r, d.y + Math.sin(d.ph) * r * d.inc * 0.4, Math.sin(d.ph) * r * 0.6).add(center);
-      const k = d.s * (1 + 0.4 * Math.sin(t * 3 + i) + this.burst);
+      (pos[i] || (pos[i] = new THREE.Vector3())).copy(p);
+      const h = heat.get(i) || 0;
+      const k = d.s * (1 + 0.4 * Math.sin(t * 3 + i) + this.burst) * (1 + 1.8 * h);
       s.set(k, k, k); m.compose(p, q, s); this.motes.setMatrixAt(i, m);
     });
+    // la luz: del centro a cada particula leida; al llegar la enciende
+    let colors = false;
+    if (this.ray) {
+      const R = this.ray, x = (t - R.t0) / R.hop, i = Math.floor(x), f = x - i, n = R.seq.length;
+      const at = (j) => (j < 0 || j >= n ? center : pos[R.seq[j]] || center);
+      for (let j = R.lit || 0; j < Math.min(i, n); j++) heat.set(R.seq[j], 1);   // las ya alcanzadas
+      R.lit = Math.max(R.lit || 0, Math.min(i, n));
+      const e = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+      const head = at(i - 1).clone().lerp(at(i), Math.min(1, e));
+      R.hist.unshift(head.clone()); R.hist.length = Math.min(R.hist.length, 24);
+      const pts = Array.from({ length: 24 }, (_, j) => R.hist[Math.min(j, R.hist.length - 1)]);
+      this.rayTrail.geometry.setFromPoints(pts);
+      const fade = i > n ? Math.max(0, 1 - (x - n - 1)) : 1;
+      this.rayMesh.position.copy(head); this.rayMesh.scale.setScalar(0.014 * (1 + 0.3 * Math.sin(t * 20)));
+      this.rayMesh.material.opacity = fade; this.rayTrail.material.opacity = 0.8 * fade;
+      this.rayMesh.visible = this.rayTrail.visible = fade > 0;
+      if (fade <= 0) this.ray = null;
+    }
+    for (const [i, h] of heat) {   // encendidas: color calido que se apaga poco a poco
+      const v = h - (this.ray ? 0.002 : 0.008);
+      this.motes.setColorAt(i, this.moteColors[i].clone().lerp(warm, Math.max(0, v)));
+      v <= 0 ? heat.delete(i) : heat.set(i, v); colors = true;
+    }
+    if (colors && this.motes.instanceColor) this.motes.instanceColor.needsUpdate = true;
     this.motes.instanceMatrix.needsUpdate = true; this.burst *= 0.96;
   }
   loop() {
