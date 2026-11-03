@@ -9,6 +9,9 @@
 #include <set>
 
 #include "core/config.h"
+#include "office/bolsa_cuant.h"
+#include "office/bolsa_mesa.h"
+#include "office/bolsa_real.h"
 #include "util/crypto.h"
 #include "util/log.h"
 #include "util/text.h"
@@ -161,7 +164,8 @@ void AgenteBolsa::put(const std::string& k, const json& v) {
 json AgenteBolsa::cfg() {
   json d = {{"activo", true},         {"intervalo_s", 60},     {"capital", 10000.0}, {"riesgo_pct", 1.0},
             {"max_posiciones", 8},    {"max_peso_pct", 20.0},  {"reserva_pct", 10.0}, {"universo", json::array()},
-            {"ia", true}};
+            {"ia", true},             {"mesa", false},         {"max_drawdown_pct", 15.0}, {"racha_perdidas", 4},
+            {"pausa_racha_h", 24.0},  {"perdida_diaria_pct", 3.0}};
   json a = ajustes_();
   if (a.is_object())
     for (auto it = a.begin(); it != a.end(); ++it)
@@ -250,6 +254,13 @@ json AgenteBolsa::historia_simulada(const std::string& sym, int n) {
 
 json AgenteBolsa::ciclo() {
   std::lock_guard<std::recursive_mutex> lk(mu_);
+  if (al_empezar_ciclo) {
+    try {
+      al_empezar_ciclo();
+    } catch (const std::exception& e) {
+      L.warning("Agente de bolsa: ", e.what());
+    }
+  }
   long long cid = cartera();
   b.procesar();
   sincronizar(cid);
@@ -372,6 +383,7 @@ std::optional<std::string> AgenteBolsa::vender(long long cid, const std::string&
     borrar(sym);
     diario("venta", sym, motivo + ". Vende " + gg(qty) + " a " + g4(jnum(o["precio_ejec"])) + ": " + sg2(g) + " € con gastos.",
            {{"orden", o["id"]}});
+    avisar_operacion(sym, "venta", qty, cid);
   } else {
     diario("venta", sym, motivo + ". Orden de venta #" + std::to_string(o["id"].get<long long>()) + " en espera: " +
                              jstr(o, "nota"),
@@ -466,6 +478,7 @@ std::vector<std::string> AgenteBolsa::abrir(long long cid, const json& analisis,
   std::stable_sort(cands.begin(), cands.end(),
                    [](auto& x, auto& y) { return jnum(x.second["puntuacion"]) > jnum(y.second["puntuacion"]); });
   std::vector<std::string> hechos;
+  if (!cands.empty() && huecos > 0 && frenado(cid, c)) return hechos;
   for (size_t i = 0; i < cands.size() && (long)i < std::max(0L, huecos); ++i) {
     auto& [sym, an] = cands[i];
     json inst = b.instrumento(sym);
@@ -479,6 +492,8 @@ std::vector<std::string> AgenteBolsa::abrir(long long cid, const json& analisis,
     if (qty <= 0 || qty * px_eur < 150) continue;   // operaciones minusculas: la comision se come el beneficio
     json ia = truthy(c["ia"]) ? consultar_ia(sym, an, inst, total, libre) : json();
     if (ia.is_object() && jstr(ia, "decision") == "esperar") continue;
+    json ms = truthy(c.value("mesa", json(false))) ? consultar_mesa(sym) : json();
+    if (ms.is_object() && jstr(ms, "decision") != "comprar") continue;
     json o;
     try {
       o = b.ordenar(sym, "compra", qty, "mercado", nullptr, nullptr, "dia", cid, ORIGEN_AGENTE);
@@ -500,11 +515,13 @@ std::vector<std::string> AgenteBolsa::abrir(long long cid, const json& analisis,
                 " su media de 50, momento " + fmt("%+.1f", jnum(an["roc20"]) * 100) + " % en 20 sesiones, RSI " +
                 fmt("%.0f", jnum(an["rsi"]));
     if (ia.is_object() && !jstr(ia, "motivo").empty()) motivo += ". IA financiera: " + jstr(ia, "motivo");
+    if (ms.is_object() && !jstr(ms, "motivo").empty()) motivo += ". Mesa de analistas: " + jstr(ms, "motivo");
     if (jstr(o, "estado") == "ejecutada") {
       diario("compra", sym,
              "Compra " + gg(qty) + " a " + g4(entrada) + ". " + motivo + ". Stop " + g4(stop) + ", objetivo " + g4(objetivo) + ".",
              {{"orden", o["id"]}});
       poner_stop(cid, sym, qty, stop, {{"stop", 0}});
+      avisar_operacion(sym, "compra", qty, cid);
     } else {
       diario("compra", sym,
              "Orden de compra #" + std::to_string(o["id"].get<long long>()) + " de " + gg(qty) + " en espera. " + motivo + ".",
@@ -574,6 +591,59 @@ json AgenteBolsa::consultar_ia(const std::string& sym, const json& an, const jso
   return v;
 }
 
+json AgenteBolsa::consultar_mesa(const std::string& sym) {
+  if (!mesa) return nullptr;
+  json previas = get("mesa_veredictos", json::object());
+  if (!previas.is_object()) previas = json::object();
+  if (previas.contains(sym) && now() - jnum(previas[sym]["ts"]) < VIGENCIA_IA_S) return previas[sym];
+  json inf;
+  try {
+    inf = mesa(sym);
+  } catch (const std::exception& e) {   // sin mesa el agente sigue con sus reglas
+    L.debug("mesa de analistas no disponible: ", e.what());
+    return nullptr;
+  }
+  if (!inf.is_object() || !inf.contains("decision")) return nullptr;
+  json v = {{"decision", inf["decision"]["decision"]}, {"motivo", inf["decision"]["motivo"]},
+            {"confianza", inf["decision"]["confianza"]}, {"informe", inf.value("id", json(nullptr))}, {"ts", now()}};
+  previas[sym] = v;
+  for (auto it = previas.begin(); it != previas.end();)
+    it = now() - jnum(it.value()["ts"]) > VIGENCIA_IA_S ? previas.erase(it) : std::next(it);
+  put("mesa_veredictos", previas);
+  if (jstr(v, "decision") != "comprar")
+    diario("mesa", sym, "No compra: el gestor de la mesa de analistas dice «" + jstr(v, "decision") + "». " + jstr(v, "motivo"),
+           {{"informe", v["informe"]}});
+  return v;
+}
+
+bool AgenteBolsa::frenado(long long cid, const json& c) {
+  json curva = json::array(), cerradas = json::array();
+  for (auto& r : b.db().query("SELECT ts, total_eur FROM agente_valor WHERE ts > ? ORDER BY ts", {now() - 31 * 86400.0}))
+    curva.push_back(r);
+  for (auto& r : b.db().query("SELECT ts, ganancia_eur FROM operaciones WHERE cartera=? AND lado='venta' ORDER BY ts DESC "
+                              "LIMIT 20",
+                              {cid}))
+    cerradas.insert(cerradas.begin(), r);
+  json p = protecciones(curva, cerradas, c, now());
+  if (!truthy(p["bloqueado"])) return false;
+  if (now() - jnum(get("ultimo_freno", 0)) > 1800) {
+    std::vector<std::string> m;
+    for (auto& x : p["motivos"]) m.push_back(x.get<std::string>());
+    diario("proteccion", "", "No abre posiciones nuevas: " + join(m, "; ") + ". Sigue gestionando lo que tiene.");
+    put("ultimo_freno", now());
+  }
+  return true;
+}
+
+void AgenteBolsa::avisar_operacion(const std::string& sym, const std::string& lado, double qty, long long cid) {
+  if (!al_operar) return;
+  try {
+    al_operar(sym, lado, qty, jnum(b.resumen(cid)["total_eur"]));
+  } catch (const std::exception& e) {
+    diario("error", sym, std::string("No pudo proponer la operación en la cartera real: ") + e.what());
+  }
+}
+
 json AgenteBolsa::estado() {
   long long cid = cartera();
   json c = cfg();
@@ -614,6 +684,7 @@ json AgenteBolsa::estado() {
           {"error", ultimo_error},
           {"ia", ia_info ? ia_info() : json(nullptr)},
           {"ia_veredictos", get("ia_veredictos", json::object())},
+          {"mesa_veredictos", get("mesa_veredictos", json::object())},
           {"datos", b.datos ? b.datos->estado() : json{{"en_linea", false}, {"fuentes", json::object()}}},
           {"aviso", AVISO}};
 }
@@ -707,6 +778,28 @@ AgenteBolsa& agente() {
     json j = get_config().get("bolsa.agente", json::object());
     return j.is_object() ? j : json::object();
   });
+  if (!a->mesa) {
+    a->mesa = [](const std::string& sym) {
+      json c = get_config().get("bolsa.agente", json::object());
+      json op = {{"rondas", 1}};
+      if (c.is_object()) op["riesgo_pct"] = c.value("riesgo_pct", json(1.0)), op["max_peso_pct"] = c.value("max_peso_pct", json(20.0));
+      return bolsa::mesa().informe(sym, op);
+    };
+    AgenteBolsa* self = a.get();
+    a->al_operar = [&mesa, self](const std::string& sym, const std::string& lado, double qty, double total) {
+      json r = get_config().get("bolsa.real", json::object());
+      json o = proponer_real(mesa, r, sym, lado, qty, total);
+      if (o.is_object())
+        self->diario("propuesta", sym, "Propone en tu cartera real " + lado + " de " + gg(jnum(o["cantidad"])) +
+                                               " (orden #" + std::to_string(o["id"].get<long long>()) +
+                                               "): no sale hasta que escribas " + CONFIRMACION + ".",
+                        {{"orden", o["id"]}});
+    };
+    a->al_empezar_ciclo = [&mesa] {
+      json c = get_config().get("bolsa.broker", json::object());
+      if (c.is_object() && jstr(c, "tipo") == "alpaca") sincronizar_broker(mesa, c);
+    };
+  }
   if (al_crear_agente && !a->comite) al_crear_agente(*a);
   return *a;
 }

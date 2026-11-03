@@ -60,6 +60,11 @@ class AgenteBolsa {
   // La pone main.cpp con el gestor de LLM; se apaga con bolsa.agente.ia = false
   std::function<json(const json& consulta)> comite;
   std::function<json()> ia_info;   // {"modelo", "especializada"}: que IA revisa las compras (para el panel)
+  // mesa de analistas (bolsa_mesa): si bolsa.agente.mesa = true, una compra necesita que el gestor diga «comprar»
+  std::function<json(const std::string& simbolo)> mesa;
+  // tras cada compra o venta en la simulada (bolsa_real: propone la misma operacion en la cartera real, por confirmar)
+  std::function<void(const std::string& simbolo, const std::string& lado, double cantidad, double total_eur)> al_operar;
+  std::function<void()> al_empezar_ciclo;   // p. ej. sincronizar las ordenes enviadas al broker
   double ultimo_ciclo = 0;
   std::string ultimo_error;
 
@@ -82,6 +87,9 @@ class AgenteBolsa {
                                     const json& p);
   std::vector<std::string> gestionar(long long cid, const json& analisis);
   json consultar_ia(const std::string& sym, const json& an, const json& inst, double total, double libre);
+  json consultar_mesa(const std::string& sym);
+  bool frenado(long long cid, const json& c);   // protecciones: caida, racha de perdidas o mal dia
+  void avisar_operacion(const std::string& sym, const std::string& lado, double qty, long long cid);
   void poner_stop(long long cid, const std::string& sym, double qty, double stop, const json& p);
   std::vector<std::string> abrir(long long cid, const json& analisis, const json& c);
   void run();

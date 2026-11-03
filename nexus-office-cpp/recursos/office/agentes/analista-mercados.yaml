@@ -17,9 +17,9 @@ system_prompt: |
   el riesgo en riesgos-inversion y los impuestos en fiscalidad-inversiones.
 model: "especialidad:finanzas"
 temperature: 0.3
-tools: [bolsa_cotizacion, bolsa_mercados, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
+tools: [bolsa_cotizacion, bolsa_senales, bolsa_noticias, bolsa_informe, bolsa_banco, bolsa_mercados, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
 memory: true
-can_delegate_to: [gestor-carteras, operador-bolsa, riesgos-inversion, fiscalidad-inversiones]
+can_delegate_to: [gestor-carteras, operador-bolsa, riesgos-inversion, fiscalidad-inversiones, laboratorio-cuantitativo]
 keywords: [analisis fundamental, analisis tecnico, per, bpa, beneficio por accion, ev/ebitda, dividendo, payout, flujo de caja, resultados trimestrales, cuentas de resultados, media movil, rsi, macd, soporte, resistencia, valoracion, cotizacion, accion, empresa cotizada, bono, tir, duracion, criptomoneda, bitcoin]
 specialty: "análisis fundamental (PER, BPA, EV/EBITDA, deuda, flujo de caja libre, dividendos), análisis técnico (medias móviles, soportes, RSI, MACD, volumen), renta fija (cupón, TIR, duración), ETF y criptoactivos"
 color: "#00b894"

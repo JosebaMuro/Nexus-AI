@@ -78,7 +78,7 @@ const std::set<std::string>& secret_keys() {
   static const std::set<std::string> K = {"admin.pin_hash",        "admin.pin_salt",       "llm.openai_api_key",
                                           "models.huggingface_token", "models.civitai_token", "models.kaggle_key",
                                           "models.modelscope_token", "coop.passphrase",      "server.lan_key",
-                                          "avatares.sketchfab_token",
+                                          "avatares.sketchfab_token", "bolsa.broker.clave", "bolsa.broker.secreto",
                                           "nube.clave_gemini", "nube.clave_openai", "nube.clave_perplexity",
                                           "nube.clave_claude", "nube.clave_mistral", "nube.clave_deepseek",
                                           "nube.clave_groq", "nube.clave_openrouter", "nube.clave_compatible"};
@@ -194,9 +194,11 @@ json Config::view(bool admin) const {
   }
   if (!admin) return json{{"user", d["user"]}};
   for (auto& key : secret_keys()) {
+    json* n = &d;   // a cualquier profundidad (bolsa.broker.secreto)
     auto parts = split(key, ".");
-    if (d.contains(parts[0]) && d[parts[0]].is_object() && truthy(d[parts[0]].value(parts[1], json())))
-      d[parts[0]][parts[1]] = "********";
+    for (size_t i = 0; n && i + 1 < parts.size(); ++i)
+      n = n->is_object() && n->contains(parts[i]) ? &(*n)[parts[i]] : nullptr;
+    if (n && n->is_object() && truthy(n->value(parts.back(), json()))) (*n)[parts.back()] = "********";
   }
   d.erase("admin");
   return d;
