@@ -22,6 +22,7 @@
 <div class="app">
   <header class="topbar">
     <div class="logo" data-text="Nexus-Office">Nexus-Office<small id="ver">v1</small></div>
+    <button class="beta-tag" title="Versión beta: rendimiento y aspecto en pruebas. Abre el Laboratorio BETA">BETA</button>
     <div class="pills">
       <button class="pill pill-menu" data-menu="ia" title="Motor y modelo de IA"><span class="dot live" id="dot-llm"></span>IA <b id="pill-llm">…</b><i>▾</i></button>
       <button class="pill pill-menu" data-menu="perfil" title="Perfil de hardware, acelerador y GPU"><span class="dot ok"></span>PERFIL <b id="pill-profile">…</b><i>▾</i></button>
@@ -47,6 +48,7 @@
     <button data-view="devices"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span class="tip">DISPOSITIVOS</span></button>
     <button data-view="net"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span class="tip">RED COOP</span></button>
     <button data-view="system"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/><rect x="9.5" y="9.5" width="5" height="5"/></svg><span class="tip">SISTEMA</span></button>
+    <button data-view="beta"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7.5 15h9"/></svg><span class="tip">LAB. BETA</span></button>
     <button id="rail-more" class="more" aria-label="Más secciones"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span class="tip">MÁS</span><span class="badge hidden" id="badge-more"></span></button>
     <div class="spacer"></div>
     <button data-view="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="tip">AJUSTES</span></button>
@@ -401,6 +403,76 @@
       <div class="panel admin-only" style="margin-top:16px"><h3>Registro <span class="sub"><button class="btn sm" id="accel-open">MOTOR Y CPU/GPU/NPU</button> <button class="btn sm" id="redetect">RE-DETECTAR HARDWARE</button> <button class="btn danger sm" id="shutdown">APAGAR NEXUS-OFFICE</button></span></h3><pre class="code" id="logs"></pre></div>
     </section>
 
+    <!-- ================= LABORATORIO BETA ================= -->
+    <section class="view" id="view-beta">
+      <div class="view-title">LABORATORIO BETA · RENDIMIENTO Y ASPECTO</div>
+      <div class="row beta-head"><div class="row" id="beta-tabs"></div><span class="muted mono" id="beta-info"></span>
+        <button class="btn sm ghost" id="beta-hud-btn" title="Alt+Mayús+P">MOSTRAR HUD</button></div>
+
+      <div class="beta-pane" data-pane="rend">
+        <div class="panel"><h3>Banco de pruebas <span class="sub">CPU, memoria, disco, IA e interfaz; se guarda para comparar versiones y equipos</span></h3>
+          <div class="row beta-opts">
+            <label>Rondas de IA <select class="input" id="beta-opt-rondas"><option>1</option><option selected>3</option><option>5</option><option>10</option></select></label>
+            <label>Tokens por respuesta <select class="input" id="beta-opt-tokens"><option>64</option><option selected>128</option><option>256</option><option>512</option></select></label>
+            <label><input type="checkbox" id="beta-opt-sis" checked> CPU, memoria y disco</label>
+            <label><input type="checkbox" id="beta-opt-llm" checked> IA (primer token y tokens/s)</label>
+            <label><input type="checkbox" id="beta-opt-fluidez" checked> fluidez de la interfaz</label>
+            <button class="btn primary" id="beta-run">MEDIR AHORA</button>
+            <button class="btn sm" id="beta-export">EXPORTAR JSON</button>
+            <button class="btn sm" id="beta-report" title="Equipo, mediciones, API y opiniones en Markdown">INFORME .MD</button>
+          </div>
+          <div class="grid g4 beta-cards" id="beta-cards"></div>
+        </div>
+        <div class="grid g2" style="margin-top:16px">
+          <div class="panel"><h3>IA · última medición</h3><div id="beta-llm"></div></div>
+          <div class="panel"><h3>Navegador <span class="sub">métricas de esta página</span></h3><div id="beta-vitals"></div></div>
+        </div>
+        <div class="grid g2" style="margin-top:16px">
+          <div class="panel"><h3>API <span class="sub"><button class="btn sm ghost" id="beta-reset-api">PONER A CERO</button></span></h3><div id="beta-api"></div></div>
+          <div class="panel"><h3>Fluidez <span class="sub"><button class="btn sm" id="beta-fluidez-run">MEDIR FLUIDEZ</button></span></h3><div id="beta-fluidez"></div></div>
+        </div>
+        <div class="panel" style="margin-top:16px"><h3>Historial de mediciones</h3><div id="beta-hist" class="beta-scroll"></div></div>
+      </div>
+
+      <div class="beta-pane hidden" data-pane="aspecto">
+        <div class="panel"><h3>Temas <span class="sub">vista previa sin guardar; el tuyo se cambia en Ajustes</span></h3><div class="beta-themes" id="beta-themes"></div>
+          <div class="row" style="margin-top:12px"><span class="muted">Efectos visuales</span><span class="row" id="beta-fx"></span>
+            <span class="muted" style="margin-left:16px">Disposición</span><span class="row" id="beta-layout"></span></div></div>
+        <div class="grid g2" style="margin-top:16px">
+          <div class="panel"><h3>Galería de componentes</h3>
+            <div class="beta-gallery">
+              <div class="row"><button class="btn primary">PRINCIPAL</button><button class="btn">NORMAL</button><button class="btn ghost">FANTASMA</button><button class="btn ok">CORRECTO</button><button class="btn danger">PELIGRO</button><button class="btn" disabled>INACTIVO</button></div>
+              <div class="row"><button class="btn sm primary">PEQUEÑO</button><span class="tag">etiqueta</span><span class="tag accent">acento</span><span class="tag low">bajo</span><span class="tag medium">medio</span><span class="tag high">alto</span>
+                <span class="pill"><span class="dot ok live"></span>PÍLDORA <b>activa</b></span></div>
+              <div class="row"><input class="input" placeholder="Campo de texto"><select class="input"><option>Desplegable</option></select>
+                <label class="switch"><input type="checkbox" checked><span></span></label><label><input type="checkbox" checked> casilla</label></div>
+              <div class="bar"><i style="width:62%"></i></div>
+              <div class="notice">Aviso informativo con <b>énfasis</b> y un <a href="#beta">enlace</a>.</div>
+              <div class="notice bad">Aviso de error.</div>
+              <div class="beta-msgs"><div class="msg user"><div class="who">TÚ</div><div class="bubble">¿Puedes preparar la factura de marzo?</div></div>
+                <div class="msg ai"><div class="who">CONTABLE</div><div class="bubble">Claro. He preparado la factura <b>F-2026-031</b> por 1.240,00 €.</div></div></div>
+              <dl class="kv"><dt>Clave</dt><dd>valor monoespaciado</dd><dt>Estado</dt><dd class="ok">correcto</dd></dl>
+              <table class="tbl"><tr><th>Concepto</th><th>Importe</th></tr><tr><td>Servicio mensual</td><td>1.000,00 €</td></tr><tr><td>IVA 21 %</td><td>210,00 €</td></tr></table>
+              <pre class="code">nexus-office bench --rondas 3 --informe</pre>
+              <div class="row"><button class="btn sm" id="beta-gallery-toast">AVISO</button><button class="btn sm danger" id="beta-gallery-toast-err">ERROR</button>
+                <div class="stat"><span class="k">Estadística</span><span class="v">42,7</span></div></div>
+            </div></div>
+          <div class="panel"><h3>Contraste <span class="sub">WCAG 2.1 del tema que estás viendo</span></h3><div id="beta-contrast"></div></div>
+        </div>
+      </div>
+
+      <div class="beta-pane hidden" data-pane="opinion">
+        <div class="grid g2">
+          <div class="panel col"><h3>Tu opinión sobre el aspecto <span class="sub">se guarda con el tema, la pantalla y las métricas</span></h3>
+            <label class="muted">Zona <select class="input" id="beta-zona"></select></label>
+            <div class="beta-stars" id="beta-stars"></div>
+            <textarea class="input" id="beta-op-text" rows="5" maxlength="4000" placeholder="¿Qué te gusta, qué cuesta leer, qué va lento o qué cambiarías?"></textarea>
+            <div class="row"><button class="btn primary" id="beta-op-send">ENVIAR OPINIÓN</button></div></div>
+          <div class="panel"><h3>Resumen <span class="sub">nota media por zona</span></h3><div id="beta-op-list" class="beta-scroll"></div></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ================= AJUSTES ================= -->
     <section class="view" id="view-settings">
       <div class="view-title">AJUSTES</div>
@@ -524,6 +596,7 @@
 <script type="module" src="/static/js/avatar3d.js"></script>
 <script src="/static/js/lounge.js"></script>
 <script src="/static/js/offices.js"></script>
+<script src="/static/js/beta.js"></script>
 <script src="/static/js/app.js"></script>
 <script src="/static/js/kgadmin.js"></script>
 </body>

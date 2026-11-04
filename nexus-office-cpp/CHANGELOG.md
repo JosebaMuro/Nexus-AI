@@ -1,5 +1,27 @@
 # Cambios
 
+## Nexus-Office 2.8.0-beta.1-cpp
+
+Versión beta para probar el rendimiento y el aspecto. Detalles en [docs/BETA.md](docs/BETA.md).
+
+### Medir el rendimiento
+- **Laboratorio BETA** en la interfaz: banco de pruebas de CPU (un hilo y todos), memoria, disco y la IA activa
+  (primer token y tokens/s), con historial y diferencia con la medición anterior; exportación a JSON e informe en
+  Markdown.
+- Cada petición a la API se cronometra por ruta (p50, p95, máximo y errores) y lleva la cabecera `Server-Timing`; la
+  interfaz compara el tiempo del núcleo con el que ve el navegador.
+- Métricas del navegador (FCP, LCP, CLS, INP aproximado, tareas largas, memoria JS) y prueba de fluidez con los
+  efectos completos y ligeros. HUD de rendimiento flotante con Alt+Mayús+P.
+- Nueva orden `nexus-office bench` (`--rondas`, `--tokens`, `--sin-llm`, `--solo-llm`, `--json`, `--informe`).
+
+### Evaluar el aspecto
+- Vista previa de los temas sin guardarlos (y recorrido automático), efectos visuales completos, ligeros o
+  automáticos por dispositivo, y disposición escritorio, tablet o móvil.
+- Galería de componentes y comprobación de contraste WCAG 2.1 (AA/AAA) del tema.
+- Opiniones de los probadores con nota por zona, guardadas con el tema, la pantalla y las métricas; resumen para el
+  administrador.
+- Etiqueta **BETA** junto al logo.
+
 ## Nexus-Office 2.7.0-cpp
 
 ### IA especializada para la bolsa

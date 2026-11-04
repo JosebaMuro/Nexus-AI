@@ -69,5 +69,6 @@ empaquetar ni probar.
 
 - [Edición C++](docs/CPP.md): qué está igual, cómo está hecha y cómo se prueba.
 - [Guía de usuario](docs/USUARIO.md): instalación y uso diario.
+- [Versión beta](docs/BETA.md): Laboratorio BETA, `nexus-office bench` y cómo medir el rendimiento y evaluar el aspecto.
 - El resto de guías (oficina, administrador, servicio, memoria, RAG, avatar, herramientas, API, grafos, dispositivos)
   están en [docs/](docs) y van en la carpeta `docs/` de cada instalador.

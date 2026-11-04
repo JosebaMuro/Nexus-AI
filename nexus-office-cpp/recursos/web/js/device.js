@@ -40,6 +40,8 @@
     const w = innerWidth || document.documentElement.clientWidth || screen.width || 1280;
     return w < 700 ? "phone" : w < 1100 ? "tablet" : "desktop";
   }
+  // efectos visuales: auto (ligeros en moviles modestos), completo o ligero; se elige en el Laboratorio BETA
+  const effects = () => { let v = "auto"; try { v = localStorage.getItem("nexus_efectos") || "auto"; } catch {} return v === "auto" ? (lowPower ? "ligero" : "completo") : v; };
   let last = "";
   function apply() {
     const pref = read(), layout = pref !== "auto" ? pref : detect();
@@ -47,7 +49,7 @@
     const orient = vw > vh ? "landscape" : "portrait";
     root.dataset.client = apk ? "apk" : pwa ? "pwa" : "web";
     root.dataset.layout = layout; root.dataset.orient = orient; root.dataset.input = touch ? "touch" : "mouse";
-    root.toggleAttribute("data-lowpower", lowPower);
+    root.toggleAttribute("data-lowpower", effects() === "ligero");
     if (!("avatar" in root.dataset)) {
       let av = "on"; try { av = localStorage.getItem("nexus_avatar_band") || "on"; } catch {}
       root.dataset.avatar = av;
@@ -61,6 +63,7 @@
     get preference() { return read(); }, detected: detect,
     compact() { return root.dataset.layout !== "desktop"; },
     setPreference(v) { try { localStorage.setItem(KEY, v); } catch {} apply(); },
+    effects, setEffects(v) { try { localStorage.setItem("nexus_efectos", v); } catch {} apply(); },
     setAvatarBand(on) { root.dataset.avatar = on ? "on" : "off"; try { localStorage.setItem("nexus_avatar_band", root.dataset.avatar); } catch {} },
     info() { return { client: root.dataset.client, layout: root.dataset.layout, orient: root.dataset.orient, input: root.dataset.input, lowPower }; },
     haptic() { try { window.NexusApp && NexusApp.haptic ? NexusApp.haptic() : navigator.vibrate && navigator.vibrate(8); } catch {} },

@@ -38,6 +38,7 @@
 #include "office/office.h"
 #include "rag/rag.h"
 #include "server/app.h"
+#include "server/beta.h"
 #include "tools/tools.h"
 #include "util/archive.h"
 #include "util/crypto.h"
@@ -2247,6 +2248,9 @@ void register_routes(App& app) {
     r.cert(true);
     return merged(r.status(), {{"restart_required", true}});
   }, true);
+
+  // ------------------------------------------------------------------ beta: rendimiento y aspecto (server/beta.cpp)
+  beta::register_routes(app);
 }
 
 }  // namespace nx::server

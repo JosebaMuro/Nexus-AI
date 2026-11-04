@@ -1962,7 +1962,9 @@
   loaders.chat = async () => { await loadSessions(); };
 
   // utilidades para los modulos de la interfaz que viven en otros ficheros (js/kgadmin.js)
-  window.NexusUI = { api, toast, esc, guard, ago, fmtB, saveFile, agents: () => S.agents, admin: () => !!S.token,
+  loaders.beta = async () => { if (window.NexusBeta) await NexusBeta.load(); };   // laboratorio BETA (js/beta.js)
+
+  window.NexusUI = { api, toast, esc, guard, ago, fmtB, saveFile, agents: () => S.agents, admin: () => !!S.token, cfg: () => S.cfg,
                      agentName: (id) => agentName(id), refreshGraph: () => { loadGraph().catch(() => {}); } };
 
   /* ================================================================ selector de inicio: motor llama y CPU/GPU/NPU */

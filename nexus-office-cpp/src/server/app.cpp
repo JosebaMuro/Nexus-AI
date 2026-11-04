@@ -3,6 +3,7 @@
 
 #include <httplib.h>
 
+#include <chrono>
 #include <fstream>
 #include <regex>
 #include <thread>
@@ -11,6 +12,7 @@
 #include "core/services.h"
 #include "memory/memory.h"
 #include "remote/remote.h"
+#include "server/beta.h"
 #include "tools/tools.h"
 #include "util/crypto.h"
 #include "util/log.h"
@@ -255,8 +257,17 @@ void App::route(const std::string& method, const std::string& pattern, Handler h
     last = it->position() + it->length();
   }
   rx += replace_all(pattern.substr(last), ".", "\\.");
-  auto fn = [this, h = std::move(h), admin_required, names](const httplib::Request& req, httplib::Response& res) {
+  // beta: cada peticion se cronometra por su patron (/api/x/{id}) y la duracion va en la cabecera Server-Timing,
+  // que las herramientas de desarrollo del navegador muestran junto a la peticion
+  auto fn = [this, h = std::move(h), admin_required, names, method, pattern](const httplib::Request& req,
+                                                                            httplib::Response& res) {
+    auto t0 = std::chrono::steady_clock::now();
     dispatch(h, admin_required, names, req, res);
+    double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    char st[48];
+    std::snprintf(st, sizeof st, "app;dur=%.2f", ms);
+    res.set_header("Server-Timing", st);
+    beta::record(method, pattern, ms, res.status);
   };
   if (method == "GET")
     srv_->Get(rx, fn);

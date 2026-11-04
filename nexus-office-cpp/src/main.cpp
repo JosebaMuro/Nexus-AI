@@ -45,6 +45,7 @@
 #include "remote/remote.h"
 #include "office/office.h"
 #include "server/app.h"
+#include "server/beta.h"
 #include "tools/tools.h"
 #include "util/http.h"
 #include "util/log.h"
@@ -878,6 +879,35 @@ int cmd_cleanup(const Args& a) {
   return 0;
 }
 
+// beta: banco de pruebas en la terminal (el mismo de Laboratorio BETA en la interfaz) y su informe
+int cmd_bench(const Args& a) {
+  Services s;
+  s.start();
+  json body = {{"llm", !a.has("sin-llm")}, {"sistema", !a.has("solo-llm")}};
+  if (a.opt.count("rondas")) body["rondas"] = std::atoi(a.get("rondas").c_str());
+  if (a.opt.count("tokens")) body["max_tokens"] = std::atoi(a.get("tokens").c_str());
+  std::fprintf(stderr, "Midiendo (CPU, memoria, disco y IA)... puede tardar un minuto\n");
+  json r = beta::run_bench(s, beta::bench_opts(body));
+  if (a.has("json")) std::printf("%s\n", jdump(r, 2).c_str());
+  else if (a.has("informe")) std::printf("%s", beta::report_markdown(s).c_str());
+  else {
+    auto f = [&](const char* sec, const char* k) { return r.contains(sec) && r[sec].contains(k) ? jdump(r[sec][k]) : "-"; };
+    std::printf("Nexus-Office %s (beta) · %s\n", NEXUS_VERSION, jstr(r["equipo"], "cpu").c_str());
+    std::printf("  CPU      1 hilo %s Mops/s · %s hilos %s Mops/s (escalado x%s)\n", f("cpu", "mops_1_hilo").c_str(),
+                f("cpu", "hilos").c_str(), f("cpu", "mops_todos").c_str(), f("cpu", "escalado").c_str());
+    std::printf("  Memoria  %s GB/s\n", f("memoria", "copia_gbs").c_str());
+    std::printf("  Disco    escritura %s MB/s · lectura %s MB/s\n", f("disco", "escritura_mbs").c_str(), f("disco", "lectura_mbs").c_str());
+    if (r.contains("llm") && r["llm"].contains("omitido")) std::printf("  IA       %s\n", jstr(r["llm"], "omitido").c_str());
+    else if (r.contains("llm"))
+      std::printf("  IA       %s · TTFT p50 %s ms · %s tok/s\n", jstr(r["llm"], "modelo").c_str(), f("llm", "ttft_ms_p50").c_str(),
+                  f("llm", "tok_s_global").c_str());
+    std::printf("Guardado en %s (compáralo en Laboratorio BETA)\n", S(paths::sub({"beta"}) / "bench.jsonl").c_str());
+  }
+  s.shutdown();
+  proc::cleanup();
+  return 0;
+}
+
 const char* HELP =
     "Nexus-Office " NEXUS_VERSION " - oficina de IA local para pymes (edicion C++)\n\n"
     "  nexus-office run [--host H] [--port P] [--no-browser] [--motor auto|llamaserver|litert|onnx]\n"
@@ -901,6 +931,8 @@ const char* HELP =
     "  nexus-office comprobar [--sin-reparar] [--rapido] [--json]   comprueba y repara la instalacion y los datos\n"
     "  nexus-office motor litert|onnx --modelo RUTA --puerto N [--acelerador cpu|gpu|npu|dml|qnn]   (lo usa el LLM)\n"
     "  nexus-office importar-runtime <Nexus-Office-runtime-...zip>   runtimes sin conexion (CUDA 13, ROCm, SYCL...)\n"
+    "  nexus-office bench [--rondas N] [--tokens N] [--sin-llm|--solo-llm] [--json|--informe]   (beta) mide CPU,\n"
+    "                     memoria, disco y la IA (TTFT y tokens/s) y lo guarda para comparar\n"
     "  nexus-office --version\n";
 
 }  // namespace
@@ -946,6 +978,7 @@ int run_main(std::vector<std::string> argv) {
   if (cmd == "wheels") return cmd_wheels(parse(argv, {}));
   if (cmd == "cleanup") return cmd_cleanup(parse(argv, {}));
   if (cmd == "comprobar") return cmd_comprobar(parse(argv, {}));
+  if (cmd == "bench") return cmd_bench(parse(argv, {"rondas", "tokens"}));
   if (cmd == "firmware") return cmd_firmware(parse(argv, {"puerto", "modelo", "wifi", "clave", "nexus"}));
   std::fprintf(stderr, "orden desconocida: %s\n\n%s", cmd.c_str(), HELP);
   return 2;
