@@ -71,6 +71,15 @@ build/nexus-construir datos                        # tras tocar recursos/datos/*
 | `android-npu.yml`, `selector-runtimes.yml`, `gimp-runtimes.yml`, `firmware.yml`, `wikipedia-grafo.yml` | Runtimes y piezas aparte. |
 | `entrega.yml`, `apk.yml`, `publicar.yml`, `python.yml`, `release.yml` | Edición Python (congelada). |
 
+## Beta, rendimiento y firma
+
+- **Laboratorio BETA** (`src/server/beta.cpp`, `recursos/web/js/beta.js`, `docs/BETA.md`): banco de pruebas, tiempos de la
+  API (`Server-Timing`), HUD de rendimiento, temas y opiniones. Desde la terminal: `nexus-office bench`.
+- **Entrega siempre** (regla de Joseba): ZIP del código fuente, PDF del manual de usuario y del manual técnico, `.exe`,
+  `.apk` y la web de descarga. Los PDF salen de `nexus-construir pdf` (capítulos en `LIBROS` de `tools/construir/pdf.cpp`).
+- **Firma de la APK**: desde la 2.10.0-beta.1 se usa la clave «Agente IA» (alias `agente-ia`), que guarda Joseba fuera
+  del repositorio. `cpp-entrega.yml` firma solo con una clave temporal. Nunca subas la clave al repositorio.
+
 ## Entorno de las sesiones
 
 - `dl.google.com` está bloqueado y Maven Central limita peticiones: lo que necesite el SDK de Android o bazel se
