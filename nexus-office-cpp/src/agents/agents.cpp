@@ -7,7 +7,9 @@
 #include "memory/hilo.h"
 
 #include "agents/activity.h"
+#include "agents/guardas.h"
 
+#include <chrono>
 #include <set>
 
 #include "core/services.h"
@@ -97,6 +99,11 @@ void AgentManager::reload() {
         json d = yaml::load_file(def);
         spec.specialty = d.is_object() ? jstr(d, "specialty") : "";
       }
+      // minimo privilegio: el generalista con todas las herramientas ("*") no usa las de alto riesgo (ejecutar codigo,
+      // scripts de GIMP); para eso delega en el especialista. Se desactiva con seguridad.nexus_minimo_privilegio=false.
+      if (spec.id == "nexus" && spec.tools == std::vector<std::string>{"*"} &&
+          truthy(s_.config.get("seguridad.nexus_minimo_privilegio", true)))
+        spec.tools.push_back("!riesgo:high");
       agents[spec.id] = spec;
     } catch (const std::exception& e) {
       L.error("Agente invalido ", S(f.filename()), ": ", e.what());
@@ -223,8 +230,10 @@ std::string AgentManager::build_system(const AgentSpec& spec, const json& info,
     for (auto& x : info["behaviors"]) b.push_back("- " + uleft(x.get<std::string>(), 200));
     parts.push_back("Pautas de comportamiento que el usuario te ha pedido (respetalas siempre):\n" + join(b, "\n"));
   }
+  if (!jstr(info, "estilo").empty()) parts.push_back(jstr(info, "estilo"));   // tono y forma de trabajar aprendidos
   std::vector<std::string> dynamic;
   if (!tools.empty()) {
+    parts.push_back(guard::untrusted_rule());
     if (text_tools) {
       json pub = json::array();
       for (auto& t : tools) pub.push_back(t->public_json());
@@ -287,9 +296,12 @@ std::string AgentManager::build_system(const AgentSpec& spec, const json& info,
 
 json AgentManager::run(std::string agent_id, const std::string& text, const std::string& session_id,
                        const std::vector<std::string>& images, tools::Emit emit, bool remote, int depth, bool save,
-                       bool live) {
+                       bool live, const std::string& user, std::shared_ptr<tools::TurnStats> stats) {
   Services& s = s_;
   if (!emit) emit = [](const json&) {};
+  const double t_start = now();
+  double t_first = 0;
+  if (!stats) stats = std::make_shared<tools::TurnStats>();
   std::string routed_by = "usuario";
   if (agent_id.empty() || agent_id == "auto") {
     agent_id = route(text, !images.empty());
@@ -312,17 +324,46 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
   }
   emit({{"type", "agent"}, {"agent", spec.id}, {"name", spec.name}, {"color", spec.color}, {"icon", spec.icon}});
   bool use_memory = spec.memory && truthy(s.config.get("user.memory_enabled", true));
+  // estilo del usuario: solo de sus propios mensajes (nunca de resultados de herramientas)
+  json style_signals = json::array();
+  if (save && depth == 0 && !remote && s.estilo && truthy(s.config.get("estilo.aprender", true)) &&
+      truthy(s.config.get("user.memory_enabled", true))) {
+    try {
+      std::string prev;
+      auto hist = s.memory->history(session_id, 6);
+      for (auto it = hist.rbegin(); it != hist.rend(); ++it)
+        if (jstr(*it, "role") == "user") {
+          prev = jstr(*it, "content");
+          break;
+        }
+      style_signals = s.estilo->observe(user, session_id, spec.id, text, prev);
+      json shown = json::array();
+      for (auto& x : style_signals)
+        if (jstr(x, "kind") == "explicita") shown.push_back(x);
+      if (!shown.empty()) emit({{"type", "estilo"}, {"items", shown}});
+    } catch (const std::exception& e) {
+      L.warning("No se pudo aprender el estilo: ", e.what());
+    }
+  }
   if (save && use_memory && !remote) {
-    json learned = s.learner->on_user_message(text, session_id, spec.id, truthy(s.config.get("memory.llm_graph_extraction", false)));
+    json learned = s.learner->on_user_message(text, session_id, spec.id,
+                                              truthy(s.config.get("memory.llm_graph_extraction", false)), user);
     if (!learned.empty()) {
       json items = json::array();
       for (size_t i = 0; i < learned.size() && i < 8; ++i) items.push_back(learned[i]);
       emit({{"type", "learned"}, {"items", items}});
     }
   }
-  json info = use_memory ? s.learner->build_context(text, spec.id, (int)s.config.num("memory.top_k", 6))
+  json info = use_memory ? s.learner->build_context(text, spec.id, (int)s.config.num("memory.top_k", 6), user)
                          : json{{"memories", json::array()}, {"examples", json::array()}, {"lessons", json::array()},
                                 {"facts", json::array()}, {"profile", json::object()}};
+  if (s.estilo && truthy(s.config.get("estilo.aplicar", true))) {
+    try {
+      info["estilo"] = s.estilo->prompt(user);
+    } catch (const std::exception& e) {
+      L.warning("No se pudo leer el estilo del usuario: ", e.what());
+    }
+  }
   if (s.rag && use_memory) {
     try {
       info["documents"] = s.rag->search(text, 3, 0.3, 0, spec.id);   // general + los suyos
@@ -389,7 +430,10 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
                                           ". Para editarlas usa imagen_editar con esa ruta.]";
   // la peticion actual nunca se descarta al ajustar el contexto (fit_context)
   msgs.push_back({{"role", "user"}, {"content", text + note}, {"images", images}, {"keep", true}});
-  tools::ToolContext ctx{&s, spec.id, session_id, emit, remote, depth};
+  tools::ToolContext ctx{&s, spec.id, session_id, emit, remote, depth, user, stats};
+  auto [backend_name, model_name] = s.llm->select(spec.model);
+  long long tokens_in = 0, tokens_out = 0;
+  int llm_calls = 0;
   int max_steps = (int)s.config.num("llm.max_tool_steps", 5);
   std::vector<std::string> answer_parts;
   std::vector<std::pair<std::string, std::string>> media;
@@ -434,9 +478,12 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
         opts.o["tool_specs"] = specs;
       }
       auto sink = [&](const std::string& piece) {
+        if (!t_first) t_first = now();
         buf += piece;
         emit({{"type", "token"}, {"text", piece}, {"agent", aid}});
       };
+      ++llm_calls;
+      tokens_in += mem::Hilo::tokens(msgs.dump());
       try {
         s.llm->stream(msgs, spec.model, opts, sink);
       } catch (const llm::ToolsUnsupported&) {
@@ -447,6 +494,7 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
         s.llm->stream(msgs, spec.model, opts, sink);
       }
     }
+    tokens_out += mem::Hilo::tokens(buf);
     auto call = tools.empty() ? std::nullopt : llm::parse_tool_call(buf);
     if (!call || step == max_steps) {
       answer_parts.push_back(trim(TOOL_TAG.sub(buf, "")));
@@ -473,7 +521,27 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
       break;
     }
     msgs.push_back({{"role", "assistant"}, {"content", buf}});
-    msgs.push_back({{"role", "user"}, {"content", llm::format_result(name, result)}});
+    // lo que viene de terceros se delimita como datos y contamina el turno: desde aqui, lo que escribe o actua pide
+    // permiso (Supervisor). Las frases tipicas de inyeccion se marcan y se avisa en la interfaz.
+    bool untrusted = guard::untrusted_tool(name) || s.tools->get(name) == nullptr ||
+                     (s.tools->get(name) && s.tools->get(name)->source != "builtin");
+    if (untrusted && truthy(s.config.get("seguridad.delimitar_no_fiable", true))) {
+      if (!is_err) stats->taint(name);
+      std::string body = result.is_string() ? result.get<std::string>() : pydump(result);
+      if (ulen(body) > 6000) body = uleft(body, 6000) + "...[recortado]";
+      auto signals = guard::injection_signals(body);
+      if (!signals.empty()) {
+        {
+          std::lock_guard<std::mutex> lk(stats->mu);
+          ++stats->injection_flags;
+        }
+        emit({{"type", "inyeccion"}, {"tool", name}, {"senales", signals}});
+        L.warning("Posible inyeccion de instrucciones en el resultado de ", name, ": ", join(signals, ", "));
+      }
+      msgs.push_back({{"role", "user"}, {"content", guard::wrap_result(name, body, true, uuid_hex().substr(0, 8), signals)}});
+    } else {
+      msgs.push_back({{"role", "user"}, {"content", llm::format_result(name, result)}});
+    }
   }
   std::vector<std::string> nonempty;
   for (auto& p : answer_parts)
@@ -502,6 +570,43 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
     if (use_memory && !remote) {
       s.learner->on_exchange(session_id, text, answer, spec.id, (int)s.config.num("memory.consolidate_every", 12));
       emit({{"type", "graph_update"}});
+    }
+  }
+  if (depth == 0 && save) {
+    try {   // metricas por tarea (ver /api/metricas)
+      std::lock_guard<std::mutex> lk(stats->mu);
+      bool ok = answer != "(sin respuesta)" && (stats->calls == 0 || stats->errors < stats->calls);
+      int corrections = 0, reformulated = 0;
+      for (auto& x : style_signals) {
+        corrections += jstr(x, "kind") == "explicita" ? 1 : 0;
+        reformulated += jstr(x, "kind") == "reformula" ? 1 : 0;
+      }
+      double cost = 0;
+      json price = s.config.get("metricas.precio_mtok." + backend_name, json());
+      if (price.is_object())
+        cost = (tokens_in * jnum(price.value("in", json(0))) + tokens_out * jnum(price.value("out", json(0)))) / 1e6;
+      s.db->execute(
+          "INSERT INTO tasks(ts, session_id, user_id, agent, routed_by, backend, steps, tool_calls, tool_errors, "
+          "tool_repaired, tool_invalid, approvals, approvals_denied, tainted, injection_flags, latency, first_token, "
+          "tokens_in, tokens_out, cost, ok, message_id, style_corrections, reformulated) "
+          "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          {t_start, session_id, user, spec.id, routed_by, backend_name, llm_calls, stats->calls, stats->errors,
+           stats->repaired, stats->invalid + stats->unknown, stats->approvals, stats->approvals_denied,
+           stats->tainted ? 1 : 0, stats->injection_flags, round_to(now() - t_start, 3),
+           t_first ? round_to(t_first - t_start, 3) : 0.0, tokens_in, tokens_out, round_to(cost, 6), ok ? 1 : 0, mid,
+           corrections, reformulated});
+    } catch (const std::exception& e) {
+      L.warning("No se pudo guardar la metrica de la tarea: ", e.what());
+    }
+    if (s.estilo && tool_log.size() >= 2 && !remote) {
+      try {
+        std::vector<std::string> used;
+        for (auto& t : tool_log)
+          if (truthy(t.value("ok", json(false)))) used.push_back(jstr(t, "tool"));
+        s.estilo->record_tools(user, used, text);
+      } catch (const std::exception& e) {
+        L.warning("No se pudo anotar la rutina: ", e.what());
+      }
     }
   }
   if (depth == 0 && s.lounge) {
@@ -566,7 +671,7 @@ std::string AgentManager::run_subtask(const std::string& target, const std::stri
       L.warning("No se pudo anotar la delegacion: ", e.what());
     }
   }
-  json res = run(target, task, ctx.session_id, {}, sub_emit, ctx.remote, ctx.depth + 1, false);
+  json res = run(target, task, ctx.session_id, {}, sub_emit, ctx.remote, ctx.depth + 1, false, false, ctx.user, ctx.stats);
   std::string answer = jstr(res, "answer");
   if (s_.lounge) {
     s_.lounge->bump(target, Lounge::topics(task), 1.0, 0.0);
@@ -574,6 +679,41 @@ std::string AgentManager::run_subtask(const std::string& target, const std::stri
                     {{"from", target}, {"to", ctx.agent}});
   }
   return answer;
+}
+
+void AgentManager::resume_deferred(const json& row, bool approved, const std::string& approver) {
+  Services& s = s_;
+  std::string agent = jstr(row, "agent"), session = jstr(row, "session_id"), tool = jstr(row, "tool"),
+              user = jstr(row, "user_id");
+  json args = jparse(jstr(row, "args"));
+  if (!args.is_object()) args = json::object();
+  auto listeners_copy = listeners;
+  for (auto& l : s.supervisor->listeners) listeners_copy.push_back(l);
+  tools::Emit emit = [listeners_copy, session](const json& e) {
+    json c = e;
+    c["session_id"] = session;
+    c["reanudada"] = true;
+    for (auto& l : listeners_copy) {
+      try {
+        l(c);
+      } catch (...) {
+      }
+    }
+  };
+  if (!approved) {
+    s.memory->add_message(session, "assistant", "La accion pendiente `" + tool + "` fue rechazada (" + approver + ").", agent);
+    emit({{"type", "reanudada"}, {"tool", tool}, {"approved", false}});
+    return;
+  }
+  auto stats = std::make_shared<tools::TurnStats>();
+  stats->preapproved.insert(tools::Supervisor::call_key(tool, args));
+  tools::ToolContext ctx{&s, agent, session, emit, false, 0, user, stats};
+  emit({{"type", "reanudada"}, {"tool", tool}, {"approved", true}});
+  json result = s.supervisor->execute(tool, args, ctx);
+  std::string body = result.is_string() ? result.get<std::string>() : pydump(result);
+  std::string text = "[Aprobacion concedida] Se ha ejecutado la accion pendiente `" + tool + "`. Resultado:\n" +
+                     uleft(body, 3000) + "\nContinua la tarea que habia quedado pendiente y explica el resultado al usuario.";
+  run(agent, text, session, {}, emit, false, 0, true, false, user, stats);
 }
 
 }  // namespace nx::agents

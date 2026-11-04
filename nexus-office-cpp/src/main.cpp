@@ -26,6 +26,7 @@
 
 #include "llm/motores.h"
 #include "agents/agents.h"
+#include "agents/evaluar.h"
 #include "coop/coop.h"
 #include "core/config.h"
 #include "core/service.h"
@@ -391,6 +392,28 @@ int cmd_models(const Args& a) {
   int rc = 0;
   for (auto& id : todo) rc |= pull_one(mm, id);
   return rc;
+}
+
+// banco de evaluacion de los agentes (agents/evaluar): rapido sin modelo, o completo con el modelo activo
+int cmd_evaluar(const Args& a) {
+  Services s;
+  if (a.has("completo")) s.start();
+  json tareas = agents::tareas_doradas();
+  if (!a.get("tareas").empty()) tareas = json::parse(read_text(P(a.get("tareas"))));
+  json r = agents::evaluar(s, tareas, a.has("completo"), a.has("juez"));
+  if (a.has("json")) {
+    std::printf("%s\n", r.dump(2).c_str());
+  } else {
+    for (auto& x : r["resultados"]) {
+      bool ok = x.value("agente_ok", false) && x.value("herramienta_ok", true) && x.value("args_ok", true) &&
+                x.value("respuesta_ok", true);
+      std::printf("%s %-14s agente=%s%s\n", ok ? "OK " : "MAL", jstr(x, "id").c_str(), jstr(x, "agente").c_str(),
+                  x.contains("herramienta") ? (" herramienta=" + jstr(x, "herramienta")).c_str() : "");
+    }
+    std::printf("\n%s\n", r["resumen"].dump(2).c_str());
+  }
+  s.shutdown();
+  return 0;
 }
 
 int cmd_chat(const Args& a) {
@@ -929,6 +952,7 @@ const char* HELP =
     "  nexus-office firmware drivers [--instalar|--simular]   instala los drivers CH340/CP210x/FTDI que falten\n"
     "  nexus-office firmware grabar luces|reloj|pico [--puerto P] [--modelo esp8266|esp32c3...] [--wifi RED --clave C]\n"
     "  nexus-office comprobar [--sin-reparar] [--rapido] [--json]   comprueba y repara la instalacion y los datos\n"
+    "  nexus-office evaluar [--completo] [--juez] [--tareas f.json] [--json]   banco de evaluacion de los agentes\n"
     "  nexus-office motor litert|onnx --modelo RUTA --puerto N [--acelerador cpu|gpu|npu|dml|qnn]   (lo usa el LLM)\n"
     "  nexus-office importar-runtime <Nexus-Office-runtime-...zip>   runtimes sin conexion (CUDA 13, ROCm, SYCL...)\n"
     "  nexus-office bench [--rondas N] [--tokens N] [--sin-llm|--solo-llm] [--json|--informe]   (beta) mide CPU,\n"
@@ -979,6 +1003,7 @@ int run_main(std::vector<std::string> argv) {
   if (cmd == "cleanup") return cmd_cleanup(parse(argv, {}));
   if (cmd == "comprobar") return cmd_comprobar(parse(argv, {}));
   if (cmd == "bench") return cmd_bench(parse(argv, {"rondas", "tokens"}));
+  if (cmd == "evaluar") return cmd_evaluar(parse(argv, {"tareas"}));
   if (cmd == "firmware") return cmd_firmware(parse(argv, {"puerto", "modelo", "wifi", "clave", "nexus"}));
   std::fprintf(stderr, "orden desconocida: %s\n\n%s", cmd.c_str(), HELP);
   return 2;

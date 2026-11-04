@@ -4,6 +4,7 @@
 
 #include "hardware/hardware.h"
 #include "llm/llm.h"
+#include "agents/guardas.h"
 #include "llm/motores.h"
 #include "models/models.h"
 #include "util/crypto.h"
@@ -381,6 +382,24 @@ void LLMManager::stream(json messages, const std::string& spec, Opts opts, const
     return;
   }
   auto b = backend(bname);
+  // la IA online (Profesor) recibe el texto sin datos personales: DNI/NIE, IBAN, tarjetas, correos y telefonos se
+  // cambian por marcas [DNI_1]... y se restauran en la respuesta, que el usuario ve completa
+  auto pii = std::make_shared<std::map<std::string, std::string>>();
+  std::shared_ptr<guard::PiiRestorer> restorer;
+  Sink user_out = out;
+  Sink out_sink = out;
+  if (bname == "nube" && truthy(config_.get("privacidad.redactar_nube", true))) {
+    messages = guard::redact_messages(messages, *pii);
+    if (!pii->empty()) {
+      restorer = std::make_shared<guard::PiiRestorer>(*pii);
+      out_sink = [restorer, user_out, pii](const std::string& piece) {
+        std::string t = restorer->feed(piece);
+        if (!t.empty()) user_out(t);
+      };
+      L.info("Datos personales ocultados antes de enviar a la nube: ", pii->size());
+    }
+  }
+  const Sink& out_ref = out_sink;
   json full = options(opts.o);
   int budget = (int)jnum(full.value("reasoning_budget", json(0)));
   full.erase("reasoning_budget");
@@ -416,7 +435,7 @@ void LLMManager::stream(json messages, const std::string& spec, Opts opts, const
   ++inflight;
   try {
     try {
-      b->stream_chat(messages, model, o2, out);
+      b->stream_chat(messages, model, o2, out_ref);
     } catch (const std::exception& e) {
       // la estimacion se quedo corta (plantilla, idioma, imagenes): se reajusta con lo que dice el servidor y se reintenta
       static const Rx OVER(R"("n_prompt_tokens"\s*:\s*(\d+).*?"n_ctx"\s*:\s*(\d+))", Rx::S);
@@ -430,7 +449,7 @@ void LLMManager::stream(json messages, const std::string& spec, Opts opts, const
       int budget = (int)((avail - reply) / ratio * 0.92) - tools_tok;
       L.warning("Peticion de ", (int)real, " tokens para un contexto de ", (int)avail, ": se reajusta y se reintenta");
       messages = fit_context(original, std::max(256, budget) + reply + 48, reply);
-      b->stream_chat(messages, model, o2, out);
+      b->stream_chat(messages, model, o2, out_ref);
     }
   } catch (const std::exception& e) {
     --inflight;
@@ -439,6 +458,10 @@ void LLMManager::stream(json messages, const std::string& spec, Opts opts, const
     throw;
   }
   --inflight;
+  if (restorer) {
+    std::string rest = restorer->flush();
+    if (!rest.empty()) user_out(rest);
+  }
   if (monitor_ && b->last_stats.tokens)
     monitor_->record_llm(bname, model, (int)b->last_stats.tokens, b->last_stats.seconds, b->last_stats.ttft);
   std::lock_guard<std::recursive_mutex> lk(mu_);

@@ -49,6 +49,23 @@ CREATE TABLE IF NOT EXISTS entity_vecs (
 CREATE TABLE IF NOT EXISTS tool_calls (
     id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, agent TEXT, session_id TEXT, tool TEXT, args TEXT,
     risk TEXT, decision TEXT, approver TEXT, status TEXT, result TEXT, duration REAL);
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, session_id TEXT, user_id TEXT NOT NULL DEFAULT '', agent TEXT,
+    routed_by TEXT, backend TEXT, steps INTEGER, tool_calls INTEGER, tool_errors INTEGER, tool_repaired INTEGER,
+    tool_invalid INTEGER, approvals INTEGER, approvals_denied INTEGER, tainted INTEGER, injection_flags INTEGER,
+    latency REAL, first_token REAL, tokens_in INTEGER, tokens_out INTEGER, cost REAL, ok INTEGER, message_id INTEGER,
+    style_corrections INTEGER DEFAULT 0, reformulated INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS aprobaciones (
+    id TEXT PRIMARY KEY, ts REAL, agent TEXT, session_id TEXT, user_id TEXT NOT NULL DEFAULT '', tool TEXT, args TEXT,
+    risk TEXT, level TEXT, status TEXT, approver TEXT, resolved REAL, motivo TEXT);
+CREATE TABLE IF NOT EXISTS user_style (
+    user_id TEXT NOT NULL, dim TEXT NOT NULL, value REAL, confidence REAL, signals INTEGER, locked INTEGER DEFAULT 0,
+    updated REAL, PRIMARY KEY(user_id, dim));
+CREATE TABLE IF NOT EXISTS style_signals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, user_id TEXT NOT NULL DEFAULT '', session_id TEXT, agent TEXT,
+    kind TEXT, dim TEXT, delta REAL, text TEXT);
+CREATE TABLE IF NOT EXISTS user_routines (
+    user_id TEXT NOT NULL, seq TEXT NOT NULL, count INTEGER, last REAL, example TEXT, PRIMARY KEY(user_id, seq));
 )SQL";
 
 static const char* INDEXES = R"SQL(
@@ -59,6 +76,10 @@ CREATE INDEX IF NOT EXISTS ix_relations_scope ON relations(scope, weight DESC);
 CREATE INDEX IF NOT EXISTS ix_rag_docs_agent ON rag_docs(agent);
 CREATE INDEX IF NOT EXISTS ix_entities_category ON entities(scope, category);
 CREATE INDEX IF NOT EXISTS ix_rag_chunks_embedder ON rag_chunks(embedder);
+CREATE INDEX IF NOT EXISTS ix_tasks_ts ON tasks(ts);
+CREATE INDEX IF NOT EXISTS ix_tasks_message ON tasks(message_id);
+CREATE INDEX IF NOT EXISTS ix_style_signals_user ON style_signals(user_id, ts);
+CREATE INDEX IF NOT EXISTS ix_aprobaciones_status ON aprobaciones(status, ts);
 )SQL";
 
 json blob(const std::string& bytes) { return json::binary(json::binary_t::container_type(bytes.begin(), bytes.end())); }
@@ -126,6 +147,7 @@ void DB::migrate() {
   }
   if (!has("relations", "scope")) execute("ALTER TABLE relations ADD COLUMN scope TEXT NOT NULL DEFAULT ''");
   if (!has("rag_docs", "agent")) execute("ALTER TABLE rag_docs ADD COLUMN agent TEXT NOT NULL DEFAULT ''");
+  if (!has("memories", "user_id")) execute("ALTER TABLE memories ADD COLUMN user_id TEXT NOT NULL DEFAULT ''");
   for (const char* col : {"category", "note", "source"})
     if (!has("entities", col)) execute(cat("ALTER TABLE entities ADD COLUMN ", col, " TEXT NOT NULL DEFAULT ''"));
 }

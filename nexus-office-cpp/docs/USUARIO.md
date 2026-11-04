@@ -335,3 +335,36 @@ La interfaz se adapta sola al dispositivo:
 - **Móviles modestos:** se desactivan los efectos pesados para que todo vaya fluido.
 
 Si prefieres otro diseño, cámbialo en *Ajustes → Diseño de la interfaz* (Automático, Móvil, Tablet o Escritorio). El cambio solo afecta a ese dispositivo.
+
+## Nexus-Office aprende cómo trabajas
+
+Cada persona que usa Nexus-Office tiene su propio **estilo**. Los agentes lo aprenden de lo que escribes y lo aplican
+a todos: si al Investigador le pides «más corto» o «sin emojis», el Programador también lo sabrá. Lo que aprende de ti
+no se aplica a tus compañeros.
+
+- **Corrige con naturalidad:** «más corto», «con más detalle», «trátame de usted», «tutéame», «ponlo en una tabla»,
+  «sin listas», «sin tecnicismos», «más técnico», «sin emojis», «ve al grano», «más cercano». En el chat aparece la
+  etiqueta *🎨 estilo* cuando ha aprendido algo.
+- **Valora las respuestas** con 👍 o 👎: ajusta la longitud y el formato que prefieres.
+- **Rutinas:** si repites a menudo los mismos pasos (por ejemplo, buscar en la biblioteca y después guardar un
+  documento), los agentes te ofrecerán hacerlo así.
+- **Míralo y ajústalo** en *Herramientas → Mi estilo*: escribe tu nombre si el equipo lo usáis varias personas (en el
+  móvil emparejado no hace falta: cada dispositivo es una persona), mueve los deslizadores para fijar lo que quieras o
+  pulsa *Olvidar mi estilo*.
+
+## Seguridad: cuándo te pide permiso un agente
+
+- Lo que un agente lee en internet, en documentos o en ficheros se trata siempre como **datos**: si una página intenta
+  darle órdenes («ignora tus instrucciones», «guarda esto en tu memoria»), no las sigue y verás un aviso.
+- Después de leer algo de fuera, antes de **guardar en la memoria, escribir ficheros, ejecutar código o lanzar una
+  orden** te pide permiso y te explica por qué.
+- Si no contestas a una aprobación, la tarea **queda pendiente**: apruébala cuando quieras en *Herramientas →
+  Aprobaciones pendientes*, aunque hayas cerrado Nexus-Office, y el agente terminará la tarea.
+- Si usas el Profesor con IA online, tus DNI, IBAN, tarjetas, correos y teléfonos se ocultan antes de enviar la
+  pregunta y vuelven a aparecer en la respuesta. Todo lo demás funciona sin internet.
+
+## Métricas: cómo de bien trabajan tus agentes
+
+En *Herramientas → Métricas clave* tienes, para el último día, semana o mes: la **tasa de éxito**, lo que **tarda**
+cada tarea, cuántas veces han **necesitado tu permiso**, la **precisión** con la que usan sus herramientas y cuántas
+**correcciones de estilo** haces por cada 100 tareas (si Nexus-Office se adapta bien, baja con el tiempo).

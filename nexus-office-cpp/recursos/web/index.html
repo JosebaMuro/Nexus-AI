@@ -330,6 +330,14 @@
         <div class="panel"><h3>Aprobaciones pendientes</h3><div class="list" id="pending-list"><span class="muted">Nada pendiente</span></div></div>
         <div class="panel"><h3>Política de supervisión</h3><div id="policy-box"></div></div>
       </div>
+      <div class="grid g2" style="margin-top:16px">
+        <div class="panel"><h3>Métricas clave <span class="sub">últimos <select class="input" id="met-dias" style="width:auto;display:inline-block"><option value="1">1 día</option><option value="7" selected>7 días</option><option value="30">30 días</option></select></span></h3><div id="met-box"><span class="muted">Sin tareas todavía.</span></div></div>
+        <div class="panel"><h3>Mi estilo <span class="sub">lo que Nexus-Office ha aprendido de cómo trabajas</span></h3>
+          <div class="row" style="margin-bottom:8px"><input class="input" id="est-user" placeholder="Tu nombre (vacío = titular de este equipo)" style="flex:1"><button class="btn sm" id="est-user-save">USAR</button></div>
+          <div id="est-box"></div>
+          <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn danger sm" id="est-reset">OLVIDAR MI ESTILO</button></div>
+        </div>
+      </div>
       <div class="panel" style="margin-top:16px"><h3>Repositorio de herramientas</h3><div id="tools-table"></div></div>
       <div class="panel admin-only" style="margin-top:16px"><h3>Propuestas de los agentes <span class="sub">revisión humana obligatoria</span></h3><div class="list" id="proposals-list"></div></div>
       <div class="panel admin-only" style="margin-top:16px"><h3>Auditoría</h3><div id="audit-table" style="max-height:340px;overflow:auto"></div></div>

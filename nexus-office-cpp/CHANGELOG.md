@@ -4,6 +4,25 @@
 
 Versión beta para probar el rendimiento y el aspecto. Detalles en [docs/BETA.md](docs/BETA.md).
 
+### Agentes más seguros, que aprenden tu estilo y se miden (ver docs/AGENTES.md)
+- **Contenido no fiable delimitado:** lo que traen la web, los documentos, los ficheros y la memoria entra al modelo
+  marcado como datos de terceros, con las etiquetas del protocolo neutralizadas y un detector de frases de inyección
+  (aviso en la interfaz).
+- **Contaminación por turno:** tras leer contenido externo, guardar en memoria, escribir ficheros, ejecutar código u
+  operar piden permiso, con el motivo en la tarjeta. `memory_save` en ese turno guarda con menos peso y sin crear pautas.
+- **Mínimo privilegio:** el agente generalista ya no tiene herramientas de alto riesgo (delega en el especialista);
+  las listas de herramientas admiten exclusiones (`"!web_fetch"`, `"!riesgo:high"`).
+- **Aprobaciones que se reanudan:** si nadie responde (10 minutos), la acción queda pendiente, sobrevive a un reinicio
+  y, al aprobarla, el agente termina la tarea.
+- **Estilo de cada usuario:** tono, formalidad, longitud, formato, nivel técnico, emojis y rutinas de trabajo
+  aprendidos de las correcciones, las valoraciones y la forma de escribir de cada persona (cada móvil emparejado o
+  nombre de perfil), visibles y ajustables en *Herramientas → Mi estilo*.
+- **Métricas clave por tarea:** tasa de éxito, latencia y coste, escalado humano, precisión de las herramientas y
+  adaptación al estilo, en *Herramientas → Métricas clave* y `GET /api/metricas`.
+- **Banco de evaluación:** `nexus-office evaluar` (rápido sin modelo, o `--completo` con el modelo activo y `--juez`).
+- **Privacidad con el Profesor online:** DNI/NIE, CIF, IBAN, tarjetas, correos y teléfonos se ocultan antes de enviar
+  y se restauran en la respuesta.
+
 ### Medir el rendimiento
 - **Laboratorio BETA** en la interfaz: banco de pruebas de CPU (un hilo y todos), memoria, disco y la IA activa
   (primer token y tokens/s), con historial y diferencia con la medición anterior; exportación a JSON e informe en

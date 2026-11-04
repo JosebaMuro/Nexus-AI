@@ -16,7 +16,8 @@ static const std::map<std::string, std::string> REL_TEXT = {
 
 Learner::Learner(DB& d, MemoryStore& m, KnowledgeGraph& g, Organizer& o) : db(d), memory(m), graph(g), organizer(o) {}
 
-json Learner::on_user_message(const std::string& text, const std::string&, const std::string& agent, bool llm_extraction) {
+json Learner::on_user_message(const std::string& text, const std::string&, const std::string& agent, bool llm_extraction,
+                              const std::string& user) {
   static const Rx EXPLICIT(R"(^\s*(?:recuerda(?: que)?|apunta(?: que)?|no olvides(?: que)?|remember(?: that)?)\s*[:,]?\s*(.+))",
                            Rx::I | Rx::S);
   json learned = json::array();
@@ -25,11 +26,11 @@ json Learner::on_user_message(const std::string& text, const std::string&, const
     memory.remember(what, "fact", 0.9, "explicito", "");
     learned.push_back({{"s", "Usuario"}, {"r", "pidio_recordar"}, {"o", uleft(what, 80)}, {"type", "nota"}});
   }
-  for (auto& t : learn_text(text, agent, llm_extraction)) learned.push_back(t);
+  for (auto& t : learn_text(text, agent, llm_extraction, user)) learned.push_back(t);
   return learned;
 }
 
-json Learner::learn_text(const std::string& text, const std::string& agent, bool llm_extraction) {
+json Learner::learn_text(const std::string& text, const std::string& agent, bool llm_extraction, const std::string& user) {
   json triples = json::array();
   std::string topics = Organizer::strip_behaviors(text);
   auto [scope, category] = organizer.route(topics, agent);
@@ -49,7 +50,8 @@ json Learner::learn_text(const std::string& text, const std::string& agent, bool
       memory.remember(replace_all(it->second, "{o}", o), kind, 0.8, "conversacion");
       if (r == "se_llama") db.set_profile("user_name", o);
     } else if (jstr(t, "category") == "comportamiento") {
-      memory.remember(o, "behavior", 0.85, "conversacion");
+      long long id = memory.remember(o, "behavior", 0.85, "conversacion");
+      if (!user.empty() && id > 0) db.execute("UPDATE memories SET user_id=? WHERE id=?", {user, id});
     } else if (jstr(t, "category") == "relacion") {
       memory.remember(o + " es " + replace_all(r.size() > 3 ? r.substr(3) : "", "_", " ") + " del usuario", "fact", 0.75,
                       "conversacion");
@@ -147,16 +149,16 @@ std::string Learner::consolidate(const std::string& session_id,
   return summary;
 }
 
-std::vector<std::string> Learner::behaviors(int limit) {
+std::vector<std::string> Learner::behaviors(int limit, const std::string& user) {
   std::vector<std::string> out;
-  for (auto& r : db.query("SELECT content FROM memories WHERE kind='behavior' AND agent='' ORDER BY importance DESC, "
-                          "created DESC LIMIT ?",
-                          {limit}))
+  for (auto& r : db.query("SELECT content FROM memories WHERE kind='behavior' AND agent='' AND user_id=? "
+                          "ORDER BY importance DESC, created DESC LIMIT ?",
+                          {user, limit}))
     out.push_back(jstr(r, "content"));
   return out;
 }
 
-json Learner::build_context(const std::string& query, const std::string& agent, int k) {
+json Learner::build_context(const std::string& query, const std::string& agent, int k, const std::string& user) {
   std::optional<std::string> ag = agent.empty() ? std::nullopt : std::optional<std::string>(agent);
   auto mems = memory.recall(query, k, {"fact", "preference", "summary", "note", "episode", "skill"}, ag);
   auto examples = memory.recall(query, 2, {"example"}, ag, 0.3);
@@ -182,7 +184,7 @@ json Learner::build_context(const std::string& query, const std::string& agent, 
   auto toks = tokens(query);
   if (toks.size() > 12) toks.resize(12);
   return {{"memories", mems}, {"examples", examples}, {"lessons", lessons}, {"facts", uniq},
-          {"profile", prof},  {"query_terms", toks},   {"behaviors", behaviors()}};
+          {"profile", prof},  {"query_terms", toks},   {"behaviors", behaviors(8, user)}};
 }
 
 }  // namespace nx::mem

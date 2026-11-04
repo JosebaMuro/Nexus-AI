@@ -36,7 +36,7 @@ const std::vector<Libro> LIBROS = {
      {"USUARIO.md", "CPP.md", "OFICINA.md", "BOLSA.md", "SERVICIO.md", "AVATAR.md", "SALON.md", "ACELERADOR.md",
       "GRAFOS.md", "RAG.md", "DISPOSITIVOS.md", "BETA.md"}},
     {"Documentacion-tecnica", "Documentación técnica", "Edición C++: cómo está hecha, administración y API",
-     {"CPP.md", "ACELERADOR.md", "ADMINISTRADOR.md", "SERVICIO.md", "API.md", "HERRAMIENTAS.md", "MEMORIA.md",
+     {"CPP.md", "ACELERADOR.md", "ADMINISTRADOR.md", "SERVICIO.md", "API.md", "HERRAMIENTAS.md", "AGENTES.md", "MEMORIA.md",
       "GRAFOS.md", "RAG.md", "RED_COOPERATIVA.md", "VPN.md", "ACCESO_REMOTO.md", "DISPOSITIVOS.md", "BETA.md"}},
 };
 

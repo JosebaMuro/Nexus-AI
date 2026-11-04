@@ -16,8 +16,10 @@
   const S = { token: store.get("nexus_admin", ""), session: local.get("nexus_session", null), status: null, agents: [], busy: false,
               speak: local.get("nexus_speak", false), attachments: [], projects: [], view: "chat", cfg: {} };
 
+  // usuario final de este navegador (cada persona de la oficina tiene su estilo); "" = el titular del equipo
+  function usuario() { try { return localStorage.getItem("nexus_usuario") || ""; } catch { return ""; } }
   async function api(path, opts = {}) {
-    const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...(S.token ? { "X-Admin-Token": S.token } : {}) };
+    const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...(S.token ? { "X-Admin-Token": S.token } : {}), ...(usuario() ? { "X-Nexus-Usuario": usuario() } : {}) };
     const res = await fetch(path, { method: opts.method || (opts.body ? "POST" : "GET"), headers,
       body: opts.body instanceof FormData ? opts.body : opts.body ? JSON.stringify(opts.body) : undefined });
     if (opts.raw) return res;
@@ -303,6 +305,9 @@
       case "graph_update": loadGraph().catch(() => {}); if (explorer) loadScopes().catch(() => {}); break;
       case "approval_required": showApproval(e.approval); break;
       case "approval_resolved": $(`#ap-${e.id}`)?.remove(); break;
+      case "estilo": if (current && !e.sub) current.note("🎨 estilo", `Aprendido de tu mensaje: ${e.items.map((x) => x.label).join(", ")}. Ver y ajustar en Herramientas → Mi estilo.`); break;
+      case "inyeccion": toast(`⚠ ${e.tool} trajo texto que intenta dar órdenes al agente (${e.senales.join(", ")}). Se ha tratado solo como datos.`, true); break;
+      case "reanudada": toast(e.approved ? `Aprobada «${e.tool}»: la tarea pendiente continúa` : `Rechazada «${e.tool}»`); break;
       case "lounge": onLounge(e.message); break;
       case "agent_activity": if (offices) offices.onActivity(e.activity); break;
       case "coop": onCoop(e.event); break;
@@ -408,7 +413,7 @@
     userMsg((text || (ready.length ? "" : "(imagen)")) + (ready.length ? `${text ? "\n\n" : ""}${ready.map((p) => `📦 ${p.name}`).join("  ")}` : ""), images);
     current = aiMsg($("#agent-select").value === "auto" ? "nexus" : $("#agent-select").value);
     S.busy = true; setBusy(true); setState("thinking");
-    ws.send(JSON.stringify({ type: "chat", text: note ? `${body}\n\n${note}` : body, agent: $("#agent-select").value, session_id: S.session, images, live: !!opts.live }));
+    ws.send(JSON.stringify({ type: "chat", text: note ? `${body}\n\n${note}` : body, agent: $("#agent-select").value, session_id: S.session, images, live: !!opts.live, usuario: usuario() }));
     $("#input").value = ""; autoGrow();
   }
   const autoGrow = () => { const t = $("#input"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 180) + "px"; };
@@ -743,6 +748,7 @@
     const el = document.createElement("div"); el.className = "approval"; el.id = `ap-${a.id}`;
     el.innerHTML = `<h4>⚠ APROBACIÓN REQUERIDA ${a.level === "admin" ? "· ADMIN" : ""}</h4>
       <div><b>${esc(a.agent)}</b>${a.remote ? " (nodo remoto)" : ""} quiere usar <b>${esc(a.tool)}</b> <span class="tag ${a.risk}">${a.risk}</span></div>
+      ${a.motivo ? `<div class="muted">${esc(a.motivo)}</div>` : ""}${a.diferida ? `<div class="muted">Quedó pendiente: al aprobarla, la tarea se reanuda.</div>` : ""}
       <pre class="code" style="max-height:140px;margin:8px 0">${esc(JSON.stringify(a.args, null, 1))}</pre>
       <div class="row" style="justify-content:flex-end"><button class="btn danger sm">DENEGAR</button><button class="btn ok sm">APROBAR</button></div>`;
     const [deny, ok] = $$("button", el);
@@ -1434,7 +1440,35 @@
   $("#spec-go").onclick = guard(async () => { await api("/api/models/activate-spec", { body: { spec: $("#spec-in").value.trim() } }); toast("LLM externo activado"); loadStatus(); });
 
   /* ================================================================ vista: HERRAMIENTAS */
+  const pctm = (x) => `${Math.round((x || 0) * 100)} %`;
+  async function loadMetricas() {
+    const m = await api(`/api/metricas?dias=${$("#met-dias").value}`), g = m.global;
+    if (!g.tareas) { $("#met-box").innerHTML = `<span class="muted">Sin tareas en este periodo.</span>`; return; }
+    const kpi = (lbl, val, hint) => `<div class="setting"><div class="lbl"><b>${lbl}</b><div class="muted">${hint}</div></div><b class="mono">${val}</b></div>`;
+    $("#met-box").innerHTML = kpi("Tasa de éxito", pctm(g.tasa_exito), `${g.tareas} tareas${g.valoradas ? ` · ${pctm(g.tasa_exito_valorada)} de las valoradas` : ""}`)
+      + kpi("Latencia por tarea", `${g.latencia_p50_s} s`, `p95 ${g.latencia_p95_s} s · primer token ${g.primer_token_p50_s} s · ${g.tokens_por_tarea} tokens${g.coste_total ? ` · ${g.coste_por_tarea.toFixed(4)} €` : ""}`)
+      + kpi("Escalado humano", pctm(g.tasa_escalado_humano), `tareas que pidieron aprobación · ${g.aprobaciones_rechazadas_o_pendientes} rechazadas o pendientes`)
+      + kpi("Precisión de herramientas", pctm(g.precision_herramientas), `${g.llamadas_herramientas} llamadas · ${pctm(g.precision_herramientas_sin_reparar)} sin reparar`)
+      + kpi("Adaptación al estilo", `${g.correcciones_estilo_por_100}`, `correcciones de estilo por cada 100 tareas (debe bajar) · ${g.reformulaciones_por_100} reformulaciones`)
+      + (g.posibles_inyecciones ? kpi("Posibles inyecciones", g.posibles_inyecciones, "texto externo que intentaba dar órdenes") : "")
+      + `<details><summary class="muted" style="cursor:pointer">Por agente</summary><table class="tbl"><tr><th>AGENTE</th><th>TAREAS</th><th>ÉXITO</th><th>P50</th><th>HERRAMIENTAS</th></tr>${Object.entries(m.por_agente).map(([k, a]) => `<tr><td>${esc(k)}</td><td>${a.tareas}</td><td>${pctm(a.tasa_exito)}</td><td>${a.latencia_p50_s} s</td><td>${pctm(a.precision_herramientas)}</td></tr>`).join("")}</table></details>`;
+  }
+  const ESTILO_DIMS = { longitud: ["Corto", "Detallado"], formalidad: ["Tú", "Usted"], formato: ["Prosa", "Listas y tablas"], tecnico: ["Sencillo", "Técnico"], emojis: ["Sin emojis", "Con emojis"], tono: ["Directo", "Cercano"] };
+  async function loadEstilo() {
+    $("#est-user").value = usuario();
+    const p = await api("/api/estilo");
+    $("#est-box").innerHTML = Object.entries(ESTILO_DIMS).map(([k, [a, b]]) => { const d = p.dims[k] || {};
+      return `<div class="setting"><div class="lbl"><b>${a} ↔ ${b}</b><div class="muted">${d.locked ? "fijado por ti" : d.signals ? `${d.signals} señales · confianza ${pctm(d.confidence)}` : "aún sin datos"}</div></div>
+        <input type="range" min="-100" max="100" value="${Math.round((d.value || 0) * 100)}" data-est="${k}" style="width:140px"></div>`; }).join("")
+      + (p.routines.length ? `<div class="muted" style="margin-top:6px">Rutinas: ${p.routines.map((r) => `${esc(r.seq)} (${r.count})`).join(" · ")}</div>` : "")
+      + (p.recent.length ? `<details><summary class="muted" style="cursor:pointer">Últimas señales</summary>${p.recent.slice(0, 8).map((r) => `<div class="muted">${esc(r.kind)} · ${esc(r.dim || "-")} · «${esc(r.text || "valoración")}»</div>`).join("")}</details>` : "");
+    $$("[data-est]").forEach((r) => (r.onchange = guard(async () => { await api("/api/estilo", { method: "PUT", body: { dim: r.dataset.est, value: Number(r.value) / 100, fijar: true } }); toast("Estilo fijado"); loadEstilo(); })));
+  }
+  $("#met-dias") && ($("#met-dias").onchange = guard(loadMetricas));
+  $("#est-user-save") && ($("#est-user-save").onclick = guard(async () => { try { localStorage.setItem("nexus_usuario", $("#est-user").value.trim()); } catch {} toast("Perfil de usuario cambiado"); loadEstilo(); }));
+  $("#est-reset") && ($("#est-reset").onclick = guard(async () => { if (!confirm("¿Olvidar todo lo aprendido de tu estilo?")) return; await api("/api/estilo", { method: "DELETE" }); loadEstilo(); }));
   loaders.tools = async () => {
+    loadMetricas().catch(() => {}); loadEstilo().catch(() => {});
     const d = await api("/api/tools");
     $("#pending-list").innerHTML = d.pending.map((p) => `<div class="item"><b>${esc(p.agent)}</b> → ${esc(p.tool)} <span class="tag ${p.risk}">${p.risk}</span><span class="muted"> · requiere ${p.level}</span></div>`).join("") || `<span class="muted">Nada pendiente.</span>`;
     d.pending.forEach(showApproval);
