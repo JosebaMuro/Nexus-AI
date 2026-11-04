@@ -340,11 +340,20 @@ json memory_search(const json& args, ToolContext& ctx) {
 json memory_save(const json& args, ToolContext& ctx) {
   Services& s = *ctx.services;
   std::string content = jstr(args, "content");
-  long long mid = s.memory->remember(content, jstr(args, "kind", "note"), jnum(args.value("importance", json(0.7)), 0.7),
-                                     "agente:" + ctx.agent);
-  // datos del usuario, pautas y relaciones al general; los temas, al especialista que corresponda (o comunes)
-  s.learner->learn_text(content, ctx.agent);
-  return {{"saved", true}, {"id", mid}};
+  double importance = jnum(args.value("importance", json(0.7)), 0.7);
+  std::string source = "agente:" + ctx.agent;
+  bool tainted = ctx.stats && ctx.stats->is_tainted();
+  if (tainted) {   // se pidio guardar despues de leer contenido de terceros: pesa menos y queda marcado
+    importance = std::min(importance, 0.4);
+    source += ":tras_contenido_externo";
+  }
+  long long mid = s.memory->remember(content, jstr(args, "kind", "note"), importance, source);
+  // datos del usuario, pautas y relaciones al general; los temas, al especialista que corresponda (o comunes).
+  // Lo que llega tras contenido externo no crea pautas de comportamiento (seria una puerta a la inyeccion).
+  if (!tainted) s.learner->learn_text(content, ctx.agent, false, ctx.user);
+  json out = {{"saved", true}, {"id", mid}};
+  if (tainted) out["nota"] = "guardado con importancia reducida porque el turno leyo contenido externo";
+  return out;
 }
 
 json knowledge_graph(const json& args, ToolContext& ctx) {

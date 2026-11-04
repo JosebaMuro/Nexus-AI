@@ -680,6 +680,12 @@ void register_routes(App& app) {
     long long mid = (long long)jnum(c.b("message_id"));
     int score = (int)jnum(c.b("score"));
     json res = s.learner->feedback(mid, score, c.bs("comment", ""));
+    try {   // el estilo se ajusta para quien hizo la tarea (o, si no consta, para quien valora)
+      auto t = s.db->one("SELECT user_id FROM tasks WHERE message_id=? ORDER BY id DESC LIMIT 1", {mid});
+      auto m = s.db->one("SELECT content FROM messages WHERE id=?", {mid});
+      if (m && s.estilo) s.estilo->on_feedback(t ? jstr(*t, "user_id") : user_of(c), jstr(*m, "content"), score);
+    } catch (const std::exception&) {
+    }
     if (auto msg = s.db->one("SELECT session_id, agent FROM messages WHERE id=?", {mid})) {
       auto q = s.db->one(
           "SELECT content FROM messages WHERE session_id=? AND id<? AND role='user' ORDER BY id DESC LIMIT 1",
@@ -1801,6 +1807,9 @@ void register_routes(App& app) {
     if (j.is_null()) throw HttpErr(404, "trabajo desconocido");
     return j;
   });
+
+  // ------------------------------------------------------------------ metricas, estilo y aprobaciones diferidas
+  register_agent_routes(app);
 
   // ------------------------------------------------------------------ herramientas
   app.get("/api/tools", [](Ctx& c) -> Out {

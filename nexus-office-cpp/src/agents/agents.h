@@ -40,7 +40,11 @@ class AgentManager {
   // live: modo en vivo por voz (respuesta corta y hablada, sin razonamiento largo)
   json run(std::string agent_id, const std::string& text, const std::string& session_id,
            const std::vector<std::string>& images = {}, tools::Emit emit = nullptr, bool remote = false, int depth = 0,
-           bool save = true, bool live = false);
+           bool save = true, bool live = false, const std::string& user = "",
+           std::shared_ptr<tools::TurnStats> stats = nullptr);
+  // una aprobacion que caduco se concede despues: ejecuta la accion y el agente continua la tarea
+  void resume_deferred(const json& row, bool approved, const std::string& approver);
+  std::vector<std::function<void(const json&)>> listeners;   // eventos fuera de una peticion (tareas reanudadas)
   std::string run_subtask(const std::string& target, const std::string& task, tools::ToolContext& ctx);
   // reparto del contexto del modelo en un turno (tokens)
   struct Presupuesto {

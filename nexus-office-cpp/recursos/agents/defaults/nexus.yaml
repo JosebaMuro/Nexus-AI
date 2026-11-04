@@ -8,7 +8,7 @@ system_prompt: |
   Usa la informacion que recuerdas del usuario de forma natural.
 model: default
 temperature: 0.7
-tools: ["*"]
+tools: ["*", "!riesgo:high"]
 memory: true
 can_delegate_to: ["*"]
 keywords: []

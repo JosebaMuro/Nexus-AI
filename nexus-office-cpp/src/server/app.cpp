@@ -518,7 +518,9 @@ void App::websocket(const httplib::Request& req, httplib::ws::WebSocket& ws) {
     if (type == "ping") {
       link->send({{"type", "pong"}});
     } else if (type == "chat") {
-      std::thread([&s, link, data] {
+      // usuario final: el dispositivo emparejado o el perfil elegido en la interfaz ("" = el titular)
+      std::string user = !device.empty() ? "dispositivo:" + device : sanitize_user(jstr(data, "usuario"));
+      std::thread([&s, link, data, user] {
         tools::Emit emit = [link](const json& e) { link->send(e); };
         try {
           std::string text = jstr(data, "text");
@@ -532,7 +534,7 @@ void App::websocket(const httplib::Request& req, httplib::ws::WebSocket& ws) {
             images.push_back(comma == std::string::npos ? v : v.substr(comma + 1));
           }
           std::string agent = data.contains("agent") && data["agent"].is_string() ? data["agent"].get<std::string>() : "auto";
-          s.agents->run(agent, text, sid, images, emit, false, 0, true, truthy(data.value("live", json(false))));
+          s.agents->run(agent, text, sid, images, emit, false, 0, true, truthy(data.value("live", json(false))), user);
         } catch (const std::exception& e) {
           L.error("Error en el chat: ", e.what());
           emit({{"type", "error"}, {"message", e.what()}});

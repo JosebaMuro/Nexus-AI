@@ -84,6 +84,10 @@ hilo:
   max_tokens: 24000   # tope de la parte de la conversacion
 ```
 
+## Estilo de cada usuario
+
+Además de lo común y del saber hacer de cada agente, Nexus-Office guarda el **estilo de cada usuario final** (tono, formalidad, longitud, formato, nivel técnico, emojis y rutinas de trabajo) y sus pautas explícitas (`memories.user_id`). Detalles en [AGENTES.md](AGENTES.md#estilo-de-cada-usuario).
+
 ## Modelo de embeddings: Qwen3-Embedding 0.6B
 
 Los embeddings convierten un texto en un vector que representa su significado. Nexus-Office los usa para buscar en la biblioteca y en la memoria, decidir qué es común y qué es de cada agente, agrupar documentos por temas y encontrar duplicados.

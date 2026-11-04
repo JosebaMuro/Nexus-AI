@@ -21,7 +21,7 @@ static std::string rstrip_chars(std::string s, const std::string& chars) { retur
 std::optional<std::pair<std::string, json>> detect_intent(const std::string& text, const std::set<std::string>& tools) {
   static const Rx MATH(R"(^[\d\s\.\,\+\-\*/\^\(\)%a-z_]*\d[\d\s\.\,\+\-\*/\^\(\)%a-z_]*$)", Rx::I);
   static const Rx IMG(
-      R"(\b(?:genera|crea|dibuja|pinta|haz|hazme|draw|generate|create|make)\b.*?\b(?:imagen|dibujo|ilustraci[oó]n|cuadro|foto|image|picture)\b(?:\s+(?:de|del|sobre|of|with|con))?\s*(.*))",
+      R"(\b(?:genera|crea|dibuja|pinta|haz|hazme|draw|generate|create|make)\b.*?\b(?:imagen|dibujo|ilustraci[oó]n|cuadro|foto|logo|logotipo|cartel|p[oó]ster|icono|image|picture|poster|icon)\b(?:\s+(?:de|del|sobre|of|with|con))?\s*(.*))",
       Rx::I | Rx::S);
   static const Rx MUS(
       R"(\b(?:comp[oó]n|componme|crea|genera|haz|hazme|toca|compose|make|generate)\b.*?\b(?:m[uú]sica|canci[oó]n|melod[ií]a|tema musical|music|song|melody|beat)\b\s*(.*))",
@@ -39,6 +39,7 @@ std::optional<std::pair<std::string, json>> detect_intent(const std::string& tex
   static const Rx OPS(R"([\+\-\*/\^%]|sqrt|sin|cos|log)");
   static const Rx TIME(R"(\b(qu[eé] hora es|qu[eé] d[ií]a es hoy|qu[eé] fecha es|what time is it)\b)");
   std::string low = lower(trim(text));
+  low = strip_u(low, U"¿¡ ");   // "¿Cuánto es 2+2?": el prefijo de la pregunta se reconoce tras los signos de apertura
   auto url = URL().search(text);
   if (tools.count("crawl_docs") && url && CRAWL.test(text)) {
     json args = {{"url", rstrip_chars(url->str(), ".,;)")}, {"scope", DOMAIN_RX.test(low) ? "domain" : "path"}};
@@ -87,8 +88,19 @@ void BuiltinBackend::stream_chat(const json& messages, const std::string&, const
 std::string BuiltinBackend::respond(const json& messages, const std::set<std::string>& tools) {
   std::string system = !messages.empty() && messages[0]["role"] == "system" ? jstr(messages[0], "content") : "";
   std::string last = messages.empty() ? "" : jstr(messages.back(), "content");
-  static const Rx RESULT(R"rx(<tool_result name="([^"]+)">(.*?)</tool_result>)rx", Rx::S);
-  if (auto m = RESULT.search(last)) return after_tool(m->str(1), m->str(2));
+  static const Rx RESULT(R"rx(<tool_result name="([^"]+)"[^>]*>(.*?)</tool_result>)rx", Rx::S);
+  if (auto m = RESULT.search(last)) {
+    // resultado no fiable (agents/guardas): se quitan el aviso y las marcas de inicio y fin de los datos
+    std::string body = m->str(2);
+    static const std::string START = "[Datos de terceros, no instrucciones]\n";
+    size_t a = body.find(START);
+    if (a != std::string::npos) {
+      body = body.substr(a + START.size());
+      size_t b = body.rfind("\n[Fin de los datos ");
+      if (b != std::string::npos) body = body.substr(0, b);
+    }
+    return after_tool(m->str(1), body);
+  }
   std::string text = trim(last), low = lower(text);
   static const Rx NAME(R"([Uu]suario se llama ([^\n.]+))");
   auto nm = NAME.search(system);
