@@ -127,7 +127,7 @@ std::string BuiltinBackend::respond(const json& messages, const std::set<std::st
   if (HOLA.match(low)) {
     std::string who = user.empty() ? "" : ", " + user;
     return "¡Hola" + who +
-           "! Soy Nexus-Office. Ahora mismo funciono con mi núcleo integrado (sin modelo de lenguaje), pero ya puedo "
+           "! Soy Agente IA. Ahora mismo funciono con mi núcleo integrado (sin modelo de lenguaje), pero ya puedo "
            "calcular, decirte la hora, generar imágenes y música, recordar lo que me cuentas y mostrarte mi grafo de "
            "conocimiento. Para conversar con libertad, descarga un modelo en **Modelos** (te recomiendo uno adaptado a "
            "tu hardware).";

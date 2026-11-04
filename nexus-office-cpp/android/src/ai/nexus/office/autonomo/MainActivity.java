@@ -249,7 +249,7 @@ public class MainActivity extends Activity {
                 @Override
                 public void run() {
                     new AlertDialog.Builder(MainActivity.this)
-                            .setTitle("Descargar la IA de Nexus-Office")
+                            .setTitle("Descargar la IA de Agente IA")
                             .setMessage("El modelo adecuado para este movil es " + label + ". Estas usando datos moviles: "
                                     + "¿lo descargo ahora o esperas a tener Wi-Fi? (tambien puedes hacerlo en Modelos)")
                             .setPositiveButton("Descargar", new DialogInterface.OnClickListener() {
@@ -290,7 +290,7 @@ public class MainActivity extends Activity {
             @Override
             public void run() {
                 new AlertDialog.Builder(MainActivity.this)
-                        .setTitle("Nexus-Office se ha ajustado a tu movil")
+                        .setTitle("Agente IA se ha ajustado a tu movil")
                         .setMessage(msg)
                         .setPositiveButton("Cambiar", new DialogInterface.OnClickListener() {
                             @Override
@@ -682,7 +682,7 @@ public class MainActivity extends Activity {
             Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
             if (lang != null && !lang.isEmpty()) i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang);
-            i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Habla con Nexus-Office");
+            i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Habla con Agente IA");
             try {
                 startActivityForResult(i, REQ_VOICE);
             } catch (ActivityNotFoundException e) {
@@ -765,7 +765,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void copy(String text) {
             ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            cm.setPrimaryClip(ClipData.newPlainText("Nexus-Office", text));
+            cm.setPrimaryClip(ClipData.newPlainText("Agente IA", text));
         }
 
         @JavascriptInterface

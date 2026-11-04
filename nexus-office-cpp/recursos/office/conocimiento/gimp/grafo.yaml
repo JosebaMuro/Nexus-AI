@@ -3,7 +3,7 @@ grafo:
   - "GIMP | es | editor de imágenes libre con licencia GPL v3 | gimp"
   - "GIMP | funciona en | Windows, macOS y Linux | gimp"
   - "GIMP | no funciona en | Android | gimp"
-  - "Nexus-Office | usa GIMP con | imagen_editar en modo batch | gimp"
+  - "Agente IA | usa GIMP con | imagen_editar en modo batch | gimp"
   - "imagen_editar | sin GIMP usa | Pillow con las mismas operaciones | gimp"
   - "gimp_script | ejecuta | Python-Fu en GIMP 3 o Script-Fu en GIMP 2.10 | gimp"
   - "GIMP 3 | se programa con | Python-Fu y la API GObject | automatizacion"

@@ -1,25 +1,25 @@
-# VPN cifrada para la app Nexus-Office VPN (WireGuard)
+# VPN cifrada para la app Agente IA VPN (WireGuard)
 
-La app **Nexus-Office VPN** para Android (`Nexus-Office-<versión>-android-vpn.apk`) llega al Nexus-Office de tu PC por un túnel **WireGuard**
-cifrado. Funciona igual en Windows, Linux, macOS y WSL, en casa y fuera de ella (datos móviles), sin publicar Nexus-Office
+La app **Agente IA VPN** para Android (`Nexus-Office-<versión>-android-vpn.apk`) llega al Agente IA de tu PC por un túnel **WireGuard**
+cifrado. Funciona igual en Windows, Linux, macOS y WSL, en casa y fuera de ella (datos móviles), sin publicar Agente IA
 en internet.
 
 | Aspecto | Cómo es |
 |---|---|
 | Cifrado | WireGuard: Curve25519, ChaCha20‑Poly1305 y BLAKE2s, más una **clave precompartida distinta para cada móvil** |
-| Qué viaja por el túnel | Solo el tráfico de la app Nexus-Office VPN y solo hacia el PC (`10.78.0.1/32`). El resto del móvil sigue por su red normal. |
+| Qué viaja por el túnel | Solo el tráfico de la app Agente IA VPN y solo hacia el PC (`10.78.0.1/32`). El resto del móvil sigue por su red normal. |
 | Red del túnel | `10.78.0.0/24`. El PC es `10.78.0.1` y cada móvil recibe la siguiente IP libre. |
 | Puerto | UDP 51820, configurable. Es el único que hay que abrir en el router. |
-| Claves | Las del PC están en `data/vpn/` (permisos 600). La clave privada de cada móvil solo aparece en su código y Nexus-Office no la guarda. |
-| Acceso a Nexus-Office | Dentro del túnel, Nexus-Office sigue pidiendo la **clave de red**, y el código la incluye. |
+| Claves | Las del PC están en `data/vpn/` (permisos 600). La clave privada de cada móvil solo aparece en su código y Agente IA no la guarda. |
+| Acceso a Agente IA | Dentro del túnel, Agente IA sigue pidiendo la **clave de red**, y el código la incluye. |
 
 ## Puesta en marcha
 
 Todo está en *Red COOP → VPN cifrada para la app Android*, en modo administrador.
 
-1. **Activar VPN**. Elige el puerto UDP y activa el interruptor. Nexus-Office pasa a escuchar en todas las interfaces, así que **reinícialo**.
+1. **Activar VPN**. Elige el puerto UDP y activa el interruptor. Agente IA pasa a escuchar en todas las interfaces, así que **reinícialo**.
 2. **Levantar el túnel en el PC**. Pulsa **LEVANTAR / RECARGAR TÚNEL**:
-   - Si Nexus-Office tiene permisos de administrador o root, lo hace solo.
+   - Si Agente IA tiene permisos de administrador o root, lo hace solo.
    - Si no, muestra los comandos de tu sistema con botón COPIAR. Con **⤓ DESCARGAR nexusvpn.conf** obtienes la configuración del PC.
 
    | Sistema | Instalar | Levantar |
@@ -34,7 +34,7 @@ Todo está en *Red COOP → VPN cifrada para la app Android*, en modo administra
    - El código contiene la clave del móvil, por eso **solo se muestra una vez**.
    - También puedes descargar el `.conf` para la app oficial de WireGuard.
    - El túnel del PC se recarga para aceptar el móvil nuevo.
-5. **En el móvil**: abre la app Nexus-Office VPN, entra en *Conectar por VPN* y pega el código. Android pide permiso para crear la VPN solo la primera vez.
+5. **En el móvil**: abre la app Agente IA VPN, entra en *Conectar por VPN* y pega el código. Android pide permiso para crear la VPN solo la primera vez.
 
 El código lleva todas las direcciones del PC: IP de la Wi‑Fi y, si lo marcas, la IP pública. La app prueba primero la última que funcionó, así que el mismo código sirve en casa y fuera.
 
@@ -45,7 +45,7 @@ Para retirar un móvil, pulsa **QUITAR** en la lista y recarga el túnel.
 | Método | Ruta | Uso |
 |---|---|---|
 | GET | `/api/vpn` | Estado, móviles, plataforma e instrucciones por sistema |
-| POST | `/api/vpn/enable` | `{enabled, port}`. Devuelve `restart_required` si Nexus-Office debe reiniciarse. |
+| POST | `/api/vpn/enable` | `{enabled, port}`. Devuelve `restart_required` si Agente IA debe reiniciarse. |
 | POST | `/api/vpn/peers` | `{name, lookup_public_ip}`. Devuelve `code` (`NEXUSV1:`), `client_conf` y `endpoints`. |
 | DELETE | `/api/vpn/peers/{id}` | Quita un móvil |
 | GET | `/api/vpn/server.conf` | Configuración del PC en formato `wg-quick` |
@@ -56,10 +56,10 @@ Para retirar un móvil, pulsa **QUITAR** en la lista y recarga el túnel.
 
 `packaging/test_vpn_e2e.sh`, ejecutado como root en Linux, monta un «PC» y un «móvil» en espacios de red separados:
 
-- El PC levanta el túnel con la `nexusvpn.conf` que genera Nexus-Office.
+- El PC levanta el túnel con la `nexusvpn.conf` que genera Agente IA.
 - El móvil configura WireGuard con el texto exacto que produce la app (`WgConfig.java`).
 
-La prueba comprueba la negociación WireGuard, que `/api/status` responde por el túnel y que sin la clave de red Nexus-Office devuelve 401.
+La prueba comprueba la negociación WireGuard, que `/api/status` responde por el túnel y que sin la clave de red Agente IA devuelve 401.
 
 ## Problemas frecuentes
 

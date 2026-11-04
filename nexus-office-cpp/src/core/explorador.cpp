@@ -55,7 +55,7 @@ json raices() {
     for (auto* d : {"Desktop", "Escritorio"}) add("Escritorio", home / d);
     add("Documentos", home / "Documents");
   }
-  add("Modelos de Nexus-Office", paths::models_dir());
+  add("Modelos de Agente IA", paths::models_dir());
 #ifdef _WIN32
   DWORD m = GetLogicalDrives();
   for (int i = 0; i < 26; ++i)
@@ -131,7 +131,7 @@ static json dialogo_windows(bool carpeta) {
       dlg->GetOptions(&o);
       o |= FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | (carpeta ? FOS_PICKFOLDERS : FOS_FILEMUSTEXIST);
       dlg->SetOptions(o);
-      dlg->SetTitle(carpeta ? L"Nexus-Office: carpeta del modelo (ONNX, Genie, safetensors)" : L"Nexus-Office: importar modelo");
+      dlg->SetTitle(carpeta ? L"Agente IA: carpeta del modelo (ONNX, Genie, safetensors)" : L"Agente IA: importar modelo");
       if (!carpeta) {
         COMDLG_FILTERSPEC tipos[] = {
             {L"Modelos (GGUF, ONNX, LiteRT, safetensors...)", L"*.gguf;*.onnx;*.safetensors;*.litertlm;*.task;*.tflite;*.bin;*.ckpt;*.pth;*.pt"},
@@ -162,7 +162,7 @@ static json dialogo_windows(bool carpeta) {
 
 // orden del selector en Linux: zenity (GNOME, XFCE...), kdialog (KDE), yad
 static std::vector<std::string> orden_linux(bool carpeta) {
-  const std::string tit = carpeta ? "Nexus-Office: carpeta del modelo" : "Nexus-Office: importar modelo";
+  const std::string tit = carpeta ? "Agente IA: carpeta del modelo" : "Agente IA: importar modelo";
   const std::string pat = "*.gguf *.onnx *.safetensors *.litertlm *.task *.tflite *.bin *.ckpt *.pth *.pt";
   std::string start = S(home_dir()) + "/";
   if (!proc::which("zenity").empty()) {
@@ -203,7 +203,7 @@ json dialogo(bool carpeta) {
   std::vector<std::string> args;
   if (sys::is_macos()) {
     std::string elegir = carpeta ? "choose folder with prompt \"Carpeta del modelo (ONNX, Genie, safetensors)\""
-                                 : "choose file with prompt \"Modelo a importar en Nexus-Office\"";
+                                 : "choose file with prompt \"Modelo a importar en Agente IA\"";
     // System Events lo trae delante del navegador
     args = {"osascript", "-e", "tell application \"System Events\"", "-e", "activate", "-e",
             "set f to " + elegir, "-e", "end tell", "-e", "POSIX path of f"};

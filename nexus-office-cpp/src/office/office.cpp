@@ -257,7 +257,7 @@ json Office::apply(const std::string& pid, bool reset_agents) {
   for (auto& a : team) names[a] = jstr(cat[a], "name");
   write(coordinator(profile, names));
   std::string an = jstr(profile, "assistant_name");
-  config_.set("user.assistant_name", an.empty() ? "Nexus-Office" : an, false);
+  config_.set("user.assistant_name", an.empty() ? "Agente IA" : an, false);
   config_.set("user.default_agent", "auto", false);
   config_.set("office.profile", pid);
   L.info("Perfil de oficina aplicado: ", pid, " (", team.size(), " agentes)");
@@ -278,7 +278,7 @@ void Office::clear() {
       set_enabled(dst, true);
     }
   }
-  config_.set("user.assistant_name", "Nexus-Office", false);
+  config_.set("user.assistant_name", "Agente IA", false);
   config_.set("office.profile", "");
 }
 

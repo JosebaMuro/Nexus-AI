@@ -221,7 +221,7 @@ void register_routes(App& app) {
   };
 
   app.get("/api/ping", [](Ctx& c) -> Out {
-    std::string name = c.app.ready() ? c.app.S().config.str("user.assistant_name") : "Nexus-Office";
+    std::string name = c.app.ready() ? c.app.S().config.str("user.assistant_name") : "Agente IA";
     return json{{"nexus", true}, {"version", NEXUS_VERSION}, {"name", name}, {"edition", "cpp"}};
   });
 
@@ -256,7 +256,7 @@ void register_routes(App& app) {
       if (is_file(f) && !contains(S(f), "__pycache__"))
         files.push_back({"Nexus-Office/nexus/" + S(fs::relative(f, paths::package()).generic_u8string()), read_text(f)});
     files.push_back({"Nexus-Office/install-termux.sh",
-                     "#!/data/data/com.termux/files/usr/bin/sh\n# Nexus-Office (edicion C++) en Termux\nset -e\n"
+                     "#!/data/data/com.termux/files/usr/bin/sh\n# Agente IA (edicion C++) en Termux\nset -e\n"
                      "cd \"$(dirname \"$0\")\"\nchmod +x nexus-office\n"
                      "printf '#!/data/data/com.termux/files/usr/bin/sh\\ncd \"%s\"\\nLD_LIBRARY_PATH=\"%s:$LD_LIBRARY_PATH\" exec ./nexus-office \"$@\"\\n' "
                      "\"$(pwd)\" \"$(pwd)\" > start.sh\nchmod +x start.sh\n"
@@ -266,7 +266,7 @@ void register_routes(App& app) {
                {{"Content-Disposition", std::string("attachment; filename=Nexus-Office-") + NEXUS_VERSION + "-termux.tar.gz"}}};
 #else
     throw HttpErr(501, "Este equipo no lleva el binario de Android: en Termux descarga el paquete de Android "
-                       "(Nexus-Office-...-android-arm64) de la pagina de descargas o instala la APK de Nexus-Office.");
+                       "(Nexus-Office-...-android-arm64) de la pagina de descargas o instala la APK de Agente IA.");
 #endif
   });
 
@@ -1966,7 +1966,7 @@ void register_routes(App& app) {
 
   app.post("/api/fs/dialogo", [](Ctx& c) -> Out {
     if (c.remote || !c.local())
-      return json{{"unavailable", true}, {"detail", "el selector del sistema solo se abre en el equipo de Nexus-Office"}};
+      return json{{"unavailable", true}, {"detail", "el selector del sistema solo se abre en el equipo de Agente IA"}};
     return explorador::dialogo(c.bb("carpeta", false));
   }, true);
 
@@ -2096,7 +2096,7 @@ void register_routes(App& app) {
     if (!res) {
       r.limiter.fail("pair:" + c.host);
       L.warning("Emparejamiento remoto rechazado desde ", c.host);
-      throw HttpErr(401, "Codigo incorrecto o caducado (pide uno nuevo en tu Nexus-Office)");
+      throw HttpErr(401, "Codigo incorrecto o caducado (pide uno nuevo en tu Agente IA)");
     }
     auto& [token, dev] = *res;
     r.limiter.reset("pair:" + c.host);

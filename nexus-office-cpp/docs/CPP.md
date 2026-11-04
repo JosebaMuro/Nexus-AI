@@ -1,6 +1,6 @@
 # Edición C++
 
-Nexus-Office reescrito en C++20, con todas las funciones de la edición Python. Es la misma aplicación: la misma interfaz web (los ficheros de
+Agente IA reescrito en C++20, con todas las funciones de la edición Python. Es la misma aplicación: la misma interfaz web (los ficheros de
 `nexus-office/nexus/web` se usan tal cual), la misma API HTTP y WebSocket, los mismos perfiles de oficina, agentes,
 paquetes de conocimiento, base de datos y configuración. Cambia el motor: en vez de Python con sus dependencias es un
 único ejecutable nativo, `nexus-office` (`nexus-office.exe` en Windows).

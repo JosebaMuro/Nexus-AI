@@ -1,8 +1,8 @@
 # Acceso remoto por internet
 
-Usa tu Nexus-Office desde cualquier lugar (datos móviles, otra Wi‑Fi, otro país) con el móvil, la tablet o un navegador, cifrado de extremo a extremo y solo para los dispositivos que tú emparejes.
+Usa tu Agente IA desde cualquier lugar (datos móviles, otra Wi‑Fi, otro país) con el móvil, la tablet o un navegador, cifrado de extremo a extremo y solo para los dispositivos que tú emparejes.
 
-> **Alternativa con la app Android**: la **VPN cifrada WireGuard** (app Nexus-Office VPN). Solo hay que abrir un puerto UDP, Nexus-Office no queda publicado en internet y funciona igual con el PC en Windows, Linux o macOS. Ver [VPN.md](VPN.md).
+> **Alternativa con la app Android**: la **VPN cifrada WireGuard** (app Agente IA VPN). Solo hay que abrir un puerto UDP, Agente IA no queda publicado en internet y funciona igual con el PC en Windows, Linux o macOS. Ver [VPN.md](VPN.md).
 
 ## Cómo funciona
 
@@ -39,7 +39,7 @@ Otros detalles:
 
 *Ajustes → Asistente del router* (o el botón **ASISTENTE DEL ROUTER** en *Red COOP → Acceso remoto*) te guía en cinco pasos:
 
-1. **Acceso remoto en Nexus-Office**: lo activa si hace falta y te avisa si falta reiniciar.
+1. **Acceso remoto en Agente IA**: lo activa si hace falta y te avisa si falta reiniciar.
 2. **Tu router**:
    - Detecta la puerta de enlace, la IP y el adaptador de este equipo.
    - Identifica la marca cuando puede: Movistar, Vodafone, Orange/Jazztel, Digi, FRITZ!Box, TP‑Link, ASUS, Netgear, Huawei, ZTE, Xiaomi, MikroTik, D‑Link, Linksys o Sagemcom.
@@ -57,11 +57,11 @@ El asistente solo **lee**: el título de la página del router y su descripción
 
 ## Puesta en marcha (modo administrador)
 
-1. **Red COOP → Acceso remoto por internet**: activa *Permitir acceso desde internet* (puerto 8443 o el que elijas) y **reinicia Nexus-Office**. La etiqueta pasa a «escuchando en el puerto 8443».
+1. **Red COOP → Acceso remoto por internet**: activa *Permitir acceso desde internet* (puerto 8443 o el que elijas) y **reinicia Agente IA**. La etiqueta pasa a «escuchando en el puerto 8443».
 2. **Haz que llegue desde internet** (una de estas opciones):
-   - **Abrir puerto en el router (UPnP)**: Nexus-Office pide al router que redirija el puerto TCP a este PC y muestra la IP pública. *Cerrar puerto* lo deshace.
+   - **Abrir puerto en el router (UPnP)**: Agente IA pide al router que redirija el puerto TCP a este PC y muestra la IP pública. *Cerrar puerto* lo deshace.
    - **A mano**: en el router, redirige el puerto TCP 8443 a la IP local de este PC.
-   - **Tailscale o ZeroTier**: si ya los usas, no hace falta abrir nada. Nexus-Office muestra su dirección.
+   - **Tailscale o ZeroTier**: si ya los usas, no hace falta abrir nada. Agente IA muestra su dirección.
    - **Túnel** (Cloudflare Tunnel o similar): apunta el túnel a `https://localhost:8443`, nunca al puerto 8775.
 3. Si el panel avisa de **CGNAT** (tu operador comparte la IP pública), abrir puertos no basta: usa Tailscale, ZeroTier o un túnel.
 4. **Generar código**, con un nombre opcional para el dispositivo. El código sirve una sola vez y caduca a los 10 minutos.

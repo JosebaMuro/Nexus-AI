@@ -208,7 +208,7 @@ void Services::start() {
 void Services::shutdown() {
   if (shut_) return;
   shut_ = true;
-  L.info("Apagando Nexus-Office...");
+  L.info("Apagando Agente IA...");
   hilo.reset();   // espera al plegado en curso antes de parar el LLM
   if (coop) coop->stop();
   if (llm) {

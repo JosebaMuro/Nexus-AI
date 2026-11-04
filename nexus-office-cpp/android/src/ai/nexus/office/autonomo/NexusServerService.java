@@ -108,7 +108,7 @@ public class NexusServerService extends Service {
         PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), imm);
         PendingIntent stop = PendingIntent.getService(this, 1, new Intent(this, NexusServerService.class).setAction(ACTION_STOP), imm);
         Notification n = new Notification.Builder(this, CHANNEL).setSmallIcon(android.R.drawable.ic_menu_compass)
-                .setContentTitle("Nexus-Office esta activo")
+                .setContentTitle("Agente IA esta activo")
                 .setContentText("Tu asistente funciona en este movil, sin conexion con el PC")
                 .setContentIntent(open)
                 .addAction(new Notification.Action.Builder(null, "Detener", stop).build())
@@ -202,7 +202,7 @@ public class NexusServerService extends Service {
         long bytes = meta.getLong("bytes"), zipLen = getAssets().openFd("runtime.zip").getLength();
         long need = bytes + zipLen + 64L * 1024 * 1024, free = files.getUsableSpace();
         if (free < need) {
-            throw new RuntimeInstaller.NoSpaceException("falta espacio. Nexus-Office necesita " + (need >> 20) + " MB libres para prepararse y hay "
+            throw new RuntimeInstaller.NoSpaceException("falta espacio. Agente IA necesita " + (need >> 20) + " MB libres para prepararse y hay "
                     + (free >> 20) + " MB. Libera espacio y pulsa Reintentar.");
         }
 
@@ -305,7 +305,7 @@ public class NexusServerService extends Service {
 
     private Result launch(File runtime) throws Exception {
         state = "starting";
-        detail = "Arrancando Nexus-Office...";
+        detail = "Arrancando Agente IA...";
         String libs = getApplicationInfo().nativeLibraryDir;
         File data = getFilesDir();
         File tmp = new File(getCacheDir(), "tmp");
@@ -361,7 +361,7 @@ public class NexusServerService extends Service {
             if (process != p) break;
             if (System.currentTimeMillis() - t0 > BOOT_TIMEOUT_MS) {
                 r.hung = true;
-                r.message = "Nexus-Office no ha respondido en " + (BOOT_TIMEOUT_MS / 60000) + " minutos. Ultimas lineas: " + tail(log, 500);
+                r.message = "Agente IA no ha respondido en " + (BOOT_TIMEOUT_MS / 60000) + " minutos. Ultimas lineas: " + tail(log, 500);
                 p.destroy();
                 if (!p.waitFor(4, TimeUnit.SECONDS)) p.destroyForcibly();
                 return r;
@@ -375,7 +375,7 @@ public class NexusServerService extends Service {
             r.stopped = true;
             return r;
         }
-        r.message = (r.everUp ? "Nexus-Office se cerro" : "Nexus-Office se cerro al arrancar") + " (codigo " + code
+        r.message = (r.everUp ? "Agente IA se cerro" : "Agente IA se cerro al arrancar") + " (codigo " + code
                 + (code > 128 ? ", senal " + (code - 128) : "") + "). " + tail(log, 600);
         if (r.everUp && code == 0) {
             r.stopped = true;

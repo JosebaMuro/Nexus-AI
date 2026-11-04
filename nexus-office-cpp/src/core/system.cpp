@@ -429,7 +429,7 @@ static json evaluate(json d) {
     }
   }
   if (jstr(d, "version").empty()) status = "desconocido";
-  if (status == "ok") reasons.push_back("Driver al dia para los runtimes de Nexus-Office");
+  if (status == "ok") reasons.push_back("Driver al dia para los runtimes de Agente IA");
   d["status"] = status;
   d["reasons"] = reasons;
   d["options"] = driver_options(vendor);
@@ -452,7 +452,7 @@ json drivers_report(const std::string&, Services& s) {
 json drivers_launch(const std::string& option_id) {
   L.info("Actualizacion de drivers solicitada por el usuario: ", option_id);
   if (option_id == "intel-dsa") {
-    proc::Process().start({"cmd", "/c", "start", "Nexus-Office - actualizar drivers Intel", "cmd", "/k",
+    proc::Process().start({"cmd", "/c", "start", "Agente IA - actualizar drivers Intel", "cmd", "/k",
                            "winget install --id Intel.IntelDriverAndSupportAssistant -e --source winget"},
                           {.detached = true, .hide_window = false});
     return {{"launched", true}, {"how", "winget (consola visible)"}};

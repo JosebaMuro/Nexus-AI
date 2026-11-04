@@ -62,7 +62,7 @@ TEST("servidor: API, administrador, memoria, biblioteca y chat por WebSocket") {
   for (auto* k : {"profile", "llm", "memory", "graph", "rag", "voice", "image"}) CHECK(status.contains(k));
 
   auto index = c.Get("/");
-  CHECK(index && index->status == 200 && index->body.find("Nexus-Office") != std::string::npos);
+  CHECK(index && index->status == 200 && index->body.find("Agente IA") != std::string::npos);
   auto js = c.Get("/static/js/app.js");
   CHECK(js && js->status == 200);
 

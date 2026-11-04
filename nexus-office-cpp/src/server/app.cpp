@@ -183,7 +183,7 @@ bool App::valid() const { return srv_ && srv_->is_valid(); }
 App::~App() = default;
 
 Services& App::S() {
-  if (!services_) throw HttpErr(503, "Nexus-Office aun esta arrancando");
+  if (!services_) throw HttpErr(503, "Agente IA aun esta arrancando");
   return *services_;
 }
 
@@ -387,7 +387,7 @@ void App::setup() {
         res.set_content(body, mime);
         return httplib::Server::HandlerResponse::Handled;
       };
-      if (!services_) return deny(503, json{{"detail", "Nexus-Office esta arrancando"}}.dump(), "application/json");
+      if (!services_) return deny(503, json{{"detail", "Agente IA esta arrancando"}}.dump(), "application/json");
       std::string host = req.remote_addr.empty() ? "127.0.0.1" : req.remote_addr;
       std::string token = cookie(req, remote::COOKIE);
       if (token.empty()) token = req.get_header_value("X-Nexus-Device");
@@ -416,7 +416,7 @@ void App::setup() {
     if (req.path == "/") {
       res.set_content(
           "<!doctype html><meta name=viewport content='width=device-width'><body style='background:#04060c;color:#d8f6ff;"
-          "font-family:sans-serif;padding:24px'><h2 style='color:#00f0ff'>Nexus-Office</h2><p>Introduce la clave de red "
+          "font-family:sans-serif;padding:24px'><h2 style='color:#00f0ff'>Agente IA</h2><p>Introduce la clave de red "
           "(en el PC: Red COOP &gt; Conectar dispositivos).</p><form><input name=key autofocus style='font-size:18px;padding:8px'>"
           " <button style='font-size:18px;padding:8px'>Entrar</button></form>",
           "text/html; charset=utf-8");

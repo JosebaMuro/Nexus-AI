@@ -1,6 +1,11 @@
 # Cambios
 
-## Nexus-Office 2.10.0-beta.1-cpp
+## Agente IA 2.10.0-beta.1-cpp
+
+**Nuevo nombre: Agente IA** (antes Nexus-Office). Cambia el nombre visible en la interfaz, los instaladores, los manuales, la web
+de descarga y la app de Android. La APK tiene identificador nuevo (`ai.agente.ia`) y se firma con la clave «Agente IA», asi
+que se instala junto a la anterior y no encima. El codigo interno,
+los nombres de fichero y las rutas de instalacion no cambian, y los datos de las instalaciones de escritorio siguen sirviendo.
 
 Incluye todo lo de la 2.9.0 y la 2.8.0 (más abajo).
 

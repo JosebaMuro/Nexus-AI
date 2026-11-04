@@ -1,7 +1,7 @@
 # Manual de GIMP 7. Automatización: modo batch, Script-Fu y Python-Fu
 
-## Cómo lo usa Nexus-Office
-Nexus-Office lanza GIMP sin ventana (modo batch) con un perfil propio en `data/gimp`, así no toca la configuración
+## Cómo lo usa Agente IA
+Agente IA lanza GIMP sin ventana (modo batch) con un perfil propio en `data/gimp`, así no toca la configuración
 del usuario. GIMP 3 se programa en Python-Fu; GIMP 2.10 en Script-Fu. Si GIMP no está (Android, por ejemplo), la
 misma lista de operaciones se hace con Pillow.
 
@@ -90,6 +90,6 @@ img.delete()
 - Procesar una carpeta en 2.10: `(file-glob "/ruta/*.jpg" 1)` devuelve los ficheros.
 
 ## Procesar muchas fotos
-- Con Nexus-Office: pedir al agente que aplique la misma receta a cada foto de una carpeta (file_list e
+- Con Agente IA: pedir al agente que aplique la misma receta a cada foto de una carpeta (file_list e
   imagen_editar para cada una).
 - En GIMP con ventana: el plugin BIMP (Batch Image Manipulation Plugin) hace lotes con asistente; no viene incluido.

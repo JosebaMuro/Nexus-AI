@@ -40,7 +40,7 @@ un trabajo que se sigue en `GET /api/avatares/trabajo/{tid}`), `GET /api/avatare
 ## Crear un avatar de calidad a partir de imágenes
 La geisha actual se genera a partir de la hoja de personaje (proyección de fotos sobre un volumen de siluetas): de frente y en perfil es fiel a la referencia, y en ángulos intermedios mezcla vistas. Para un modelo con malla y rig completos:
 
-1. **Modelo propio GLB/VRM** creado en VRoid Studio o Blender, o generado con herramientas *image‑to‑3D* (Hunyuan3D, TripoSR, Meshy…) a partir de las imágenes de referencia, y después riggeado (Mixamo/AccuRIG) y con *blendshapes* de boca y parpadeo. Nexus-Office lo carga directamente.
+1. **Modelo propio GLB/VRM** creado en VRoid Studio o Blender, o generado con herramientas *image‑to‑3D* (Hunyuan3D, TripoSR, Meshy…) a partir de las imágenes de referencia, y después riggeado (Mixamo/AccuRIG) y con *blendshapes* de boca y parpadeo. Agente IA lo carga directamente.
 2. **Mejorar la hoja**: planos de mayor resolución (≥1024 px por vista), fondo liso y vistas exactas de frente/perfil/espalda mejoran directamente el resultado de `nexus-construir avatar`.
 
 ### Imágenes de referencia necesarias

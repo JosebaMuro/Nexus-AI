@@ -1,10 +1,10 @@
-Nexus-Office 1.8.0 - instaladores (todos 100 % portables: se instalan sin internet)
+Agente IA 1.8.0 - instaladores (todos 100 % portables: se instalan sin internet)
 ===================================================================================
 
 Todos llevan dentro Python, las dependencias y el motor de IA (llama-server y sd-cli: CPU, Vulkan y, segun la
-plataforma, CUDA o Metal). Al instalar, Nexus-Office evalua el hardware (memoria, grafica, procesador) y elige el modelo
+plataforma, CUDA o Metal). Al instalar, Agente IA evalua el hardware (memoria, grafica, procesador) y elige el modelo
 de IA adecuado; lo descarga si hay internet (sin internet lo recomienda y se descarga despues desde la app).
-Todos pueden dejar Nexus-Office como servicio que arranca solo con el equipo.
+Todos pueden dejar Agente IA como servicio que arranca solo con el equipo.
 
 windows/  Nexus-Office-Setup-1.8.0-windows-x64.exe    PC con Windows 10/11 de 64 bits (Intel/AMD; NVIDIA con CUDA)
           Nexus-Office-Setup-1.8.0-windows-arm64.exe  Windows 11 en ARM (Snapdragon X)
@@ -19,9 +19,9 @@ linux/    sh Nexus-Office-1.8.0-linux-x86_64.run [carpeta] [--oficina=herreria] 
           flatpak install --user Nexus-Office-1.8.0-linux-x86_64.flatpak  (o -aarch64; pide el runtime de Flathub)
 macos/    Nexus-Office-1.8.0-macos-arm64.tar.gz (Apple Silicon) / macos-x86_64 (Intel): descomprimir y abrir
           "Nexus-Office.command" (o ./install.sh --oficina=herreria --servicio && ./start.sh)
-android/  Nexus-Office-1.8.0-android-autonomo.apk  Nexus-Office completo dentro del movil (ARM64, Android 9+), sin PC;
+android/  Nexus-Office-1.8.0-android-autonomo.apk  Agente IA completo dentro del movil (ARM64, Android 9+), sin PC;
                                                   usa la GPU (Adreno por OpenCL, Mali/Xclipse por Vulkan) si acelera
-          Nexus-Office-1.8.0-android-vpn.apk       app ligera que conecta con el Nexus-Office de la oficina (VPN o Wi-Fi)
+          Nexus-Office-1.8.0-android-vpn.apk       app ligera que conecta con el Agente IA de la oficina (VPN o Wi-Fi)
 Nexus-Office-1.8.0-codigo-fuente.zip               proyecto limpio (codigo, tests, empaquetado y documentacion)
 Manual-de-usuario.pdf / Documentacion-tecnica.pdf
 

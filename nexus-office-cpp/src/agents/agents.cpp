@@ -223,7 +223,7 @@ std::string AgentManager::build_system(const AgentSpec& spec, const json& info,
     style += " El usuario valora respuestas completas.";
   // Orden pensado para la cache de prompt de llama.cpp: primero lo estable y al final lo variable.
   std::vector<std::string> parts = {
-      replace_all(spec.system_prompt, "{assistant_name}", cfg.str("user.assistant_name", "Nexus-Office")),
+      replace_all(spec.system_prompt, "{assistant_name}", cfg.str("user.assistant_name", "Agente IA")),
       "Responde siempre en " + lang + ". " + style + " Usa Markdown sencillo (sin LaTeX)."};
   if (truthy(info.value("behaviors", json()))) {
     std::vector<std::string> b;

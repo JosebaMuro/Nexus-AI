@@ -1,4 +1,4 @@
-# Nexus-Office 2.3 (edición C++)
+# Agente IA 2.3 (edición C++)
 
 **La oficina de IA local para pymes, reescrita en C++ y con todas las funciones de la edición Python.** Misma interfaz,
 mismos agentes por gremio, misma memoria, biblioteca, voz, imagen y música, mesa de bolsa simulada con cotizaciones
@@ -17,7 +17,7 @@ un **resumen del proyecto** para subirlo a la biblioteca.
 ## Instalación
 
 Todos los instaladores llevan dentro el programa y los motores de IA (llama-server y sd-cli en sus variantes de CPU,
-Vulkan, CUDA o Metal, Piper y Whisper) y **se instalan sin internet**. Al instalar, Nexus-Office evalúa el hardware y
+Vulkan, CUDA o Metal, Piper y Whisper) y **se instalan sin internet**. Al instalar, Agente IA evalúa el hardware y
 elige el modelo de IA adecuado; lo descarga si hay conexión y, si no, lo deja recomendado para *Modelos → Recomendados*.
 
 | Equipo | Fichero |
@@ -27,7 +27,7 @@ elige el modelo de IA adecuado; lo descarga si hay conexión y, si no, lo deja r
 | Linux x86_64 | `Nexus-Office-2.3.0-cpp-linux-x86_64.run`, `.AppImage`, `.flatpak` o `nexus-office-c_2.3.0-cpp_amd64.deb` |
 | Linux ARM64, Raspberry Pi 4/5 (64 bits) | `Nexus-Office-2.3.0-cpp-linux-aarch64.run`, `.AppImage`, `.flatpak` o `nexus-office-c_2.3.0-cpp_arm64.deb` |
 | macOS Apple Silicon / Intel | `Nexus-Office-2.3.0-cpp-macos-arm64.tar.gz` / `-macos-x86_64.tar.gz` (abre `Nexus-Office.command`) |
-| Android, Nexus-Office dentro del móvil | `Nexus-Office-2.3.0-cpp-android-autonomo.apk` |
+| Android, Agente IA dentro del móvil | `Nexus-Office-2.3.0-cpp-android-autonomo.apk` |
 | Android, cliente del PC de la oficina | `Nexus-Office-2.3.0-cpp-android-vpn.apk` |
 | Código fuente | `Nexus-Office-2.3.0-cpp-codigo-fuente.zip` |
 | Ejemplos | `Nexus-Office-2.3.0-cpp-grafo-wikipedia-es.zip`, `Nexus-Office-resumen.md` |

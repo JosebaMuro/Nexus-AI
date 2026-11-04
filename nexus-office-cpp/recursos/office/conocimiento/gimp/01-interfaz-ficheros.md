@@ -1,7 +1,7 @@
 # Manual de GIMP 1. Interfaz, ficheros y formatos
 
 GIMP (GNU Image Manipulation Program) es un editor de imágenes libre (licencia GPL v3) para Windows, macOS y Linux.
-Nexus-Office trae la versión 3 incluida en sus instaladores de escritorio y la usa sin ventana con la herramienta
+Agente IA trae la versión 3 incluida en sus instaladores de escritorio y la usa sin ventana con la herramienta
 `imagen_editar`. Este manual sirve para explicar a una persona cómo hacer cada cosa en GIMP con ventana, y para que
 el agente sepa qué operación o script usar.
 

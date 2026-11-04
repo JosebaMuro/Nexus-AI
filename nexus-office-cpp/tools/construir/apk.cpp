@@ -9,7 +9,7 @@
 //   lib/arm64-v8a/libllama-server-gpu.so     llama.cpp con la libc de Android y los backends Vulkan, OpenCL y Hexagon
 //   lib/arm64-v8a/libggml-*.so ...           (NPU de los Snapdragon 8 Gen 2+); de la rama android-npu-libs (--gpu-libs)
 //   assets/runtime.zip + runtime.json        la carpeta nexus/ (interfaz web, perfiles, agentes, certificados)
-// La app Java esta en android/ (identificador ai.nexus.office.cpp). Herramientas: aapt2, d8, zipalign y apksigner del
+// La app Java esta en android/ (identificador ai.agente.ia). Herramientas: aapt2, d8, zipalign y apksigner del
 // SDK de Android (.cache/android/build-tools o el PATH), javac y android.jar (NEXUS_ANDROID_JAR o
 // .cache/android/platform/android.jar). Sin firma propia (.cache/android/nexus-release.jks) se crea una con keytool.
 #include <cstdio>
@@ -26,7 +26,7 @@ using namespace nx;
 
 namespace {
 
-const std::string APP_ID = "ai.nexus.office.cpp";
+const std::string APP_ID = "ai.agente.ia";   // desde la 2.10.0-beta.1 (antes ai.nexus.office.cpp)
 const int MIN_SDK = 28;
 const char* LLAMA[] = {"libllama-server.so", "libllama-server-dotprod.so", "libllama-server-i8mm.so"};
 
@@ -76,7 +76,7 @@ std::pair<fs::path, std::string> keystore() {
     std::string pw = token_urlsafe(16);
     ejecutar({jdk_tool("keytool"), "-genkeypair", "-keystore", S(ks), "-alias", "nexus", "-keyalg", "RSA", "-keysize",
               "2048", "-validity", "10000", "-storepass", pw, "-keypass", pw, "-dname",
-              "CN=Nexus-Office, O=Nexus-Office, C=ES"});
+              "CN=Agente IA, O=Agente IA, C=ES"});
     escribir(pw_file, pw, 0600);
   }
   return {ks, trim(read_text(pw_file))};
@@ -157,7 +157,7 @@ int apk(const std::vector<std::string>& argv) {
     z.add_file("assets/runtime.zip", runtime, 0);
     z.add_bytes("assets/runtime.json", jdump(meta));
     z.add_bytes("assets/LICENSES/LEEME.txt",
-                "Nexus-Office C++; llama.cpp y ggml (MIT), cpp-httplib (MIT), nlohmann/json (MIT), SQLite (dominio "
+                "Agente IA; llama.cpp y ggml (MIT), cpp-httplib (MIT), nlohmann/json (MIT), SQLite (dominio "
                 "publico), miniz (MIT), PCRE2 (BSD), rapidyaml (MIT), stb (dominio publico/MIT), mbedTLS (Apache 2.0), "
                 "LLVM libc++ (Apache 2.0 con excepcion LLVM), musl (MIT).\n");
     if (!z.close()) throw Fallo("no puedo anadir los ficheros a la APK");

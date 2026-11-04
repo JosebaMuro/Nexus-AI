@@ -403,8 +403,8 @@ json Hub::resumen_reloj() {
 // ---------------------------------------------------------------- Pico W (tinta electronica)
 std::string Hub::pico_version() {
   auto& cfg = get_config();
-  std::string name = cfg.str("user.assistant_name", "Nexus-Office");
-  if (name.empty()) name = "Nexus-Office";
+  std::string name = cfg.str("user.assistant_name", "Agente IA");
+  if (name.empty()) name = "Agente IA";
   std::string style = cfg.str("dispositivos.pico.estilo", "avatar");
   return sha1_hex(name + "|" + style + "|4").substr(0, 10);
 }
@@ -519,8 +519,8 @@ std::vector<uint8_t> Hub::pico_imagen(const std::string& state_in, int ancho, in
     }
   }
   const std::string& font = font_bold();
-  std::string name = cfg.str("user.assistant_name", "Nexus-Office");
-  if (name.empty()) name = "Nexus-Office";
+  std::string name = cfg.str("user.assistant_name", "Agente IA");
+  if (name.empty()) name = "Agente IA";
   name = uleft(name, 16);
   if (!font.empty()) {
     raster::text_gray(img.px, img.w, img.h, x0, 4, font, name, 13, 0);

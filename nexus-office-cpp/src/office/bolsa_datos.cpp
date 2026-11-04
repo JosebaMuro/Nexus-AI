@@ -18,7 +18,7 @@ namespace {
 
 auto L = log::get("bolsa.datos");
 const char* UA_WEB =
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Nexus-Office";
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Agente IA";
 const std::vector<std::string> YAHOO = {"https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"};
 const std::vector<std::pair<std::string, std::string>> STOOQ_SUFFIX = {
     {".MC", ".es"}, {".DE", ".de"}, {".PA", ".fr"}, {".AS", ".nl"}, {".L", ".uk"}};

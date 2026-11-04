@@ -1,6 +1,6 @@
 # Dispositivos: luces, reloj y avatar de bolsillo
 
-Nexus-Office reparte su estado (en línea, escuchando, pensando, usando una herramienta, hablando, hecho, error) y lo
+Agente IA reparte su estado (en línea, escuchando, pensando, usando una herramienta, hablando, hecho, error) y lo
 que hace cada agente a tres dispositivos baratos que se conectan por Wi‑Fi a tu ordenador. Todo se graba y configura
 **sin internet**: los binarios y el grabador vienen en el paquete.
 
@@ -12,11 +12,11 @@ que hace cada agente a tres dispositivos baratos que se conectan por Wi‑Fi a t
 
 ## Grabar el firmware
 
-**Desde Nexus-Office**: *Dispositivos → Grabar firmware*. Conecta la placa por USB, elige el dispositivo y el modelo
+**Desde Agente IA**: *Dispositivos → Grabar firmware*. Conecta la placa por USB, elige el dispositivo y el modelo
 de ESP32, escribe la Wi‑Fi y pulsa **GRABAR**. Nexus graba el binario, le pone la Wi‑Fi, su propia dirección y la
 clave de red, y el dispositivo aparece en *Conectados ahora*. Para el Pico W, conéctalo con **BOOTSEL** pulsado.
 
-Nexus-Office graba con su propio grabador en C++ (nexus-flash), sin esptool ni Python: detecta el chip, elige el
+Agente IA graba con su propio grabador en C++ (nexus-flash), sin esptool ni Python: detecta el chip, elige el
 binario, lo graba, lo comprueba y le manda la configuración. Si el adaptador USB de la placa (CH340, CP210x o FTDI)
 no tiene driver, **INSTALAR DRIVERS** lo instala.
 
@@ -34,7 +34,7 @@ nexus-flash reloj --wifi MiRed MiClave --nexus 192.168.1.10:8775 CLAVE_DE_RED
 nexus-flash pico  --wifi MiRed MiClave --nexus 192.168.1.10:8775 CLAVE_DE_RED
 ```
 
-**Desde Nexus-Office** (misma lógica, sin abrir la interfaz):
+**Desde Agente IA** (misma lógica, sin abrir la interfaz):
 
 ```bash
 nexus-office firmware                                  # placas, puertos y drivers
@@ -43,7 +43,7 @@ nexus-office firmware grabar reloj --puerto COM5
 ```
 
 Los dos reconocen el chip y eligen su `.bin`. La *clave de red* es la de *Red COOP → Conectar
-dispositivos*, y Nexus-Office tiene que escuchar en la red local.
+dispositivos*, y Agente IA tiene que escuchar en la red local.
 
 **A mano**: `esptool --chip esp32s3 write_flash 0x0 nexusled-esp32s3.bin` (los `.bin` son imágenes completas y van en
 la dirección `0x0`) o la web <https://espressif.github.io/esptool-js/>. Para el Pico W, copia el `.uf2` a la unidad

@@ -1,4 +1,4 @@
-name: Nexus-Office C++ (compilar y probar)
+name: Agente IA (compilar y probar)
 
 # Edicion C++ de Nexus-Office (nexus-office-cpp/): compila y pasa las pruebas en cada sistema nativo y prueba la
 # interfaz web en Chromium. Cada compilacion deja la carpeta instalada (ejecutable + nexus/) como artefacto

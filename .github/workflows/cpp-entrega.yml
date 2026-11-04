@@ -1,4 +1,4 @@
-name: Nexus-Office C++ (instaladores y pruebas con modelo real)
+name: Agente IA (instaladores y pruebas con modelo real)
 
 # Entrega de la edicion C++ (nexus-office-cpp, 2.1):
 #  1. cpp.yml compila y prueba nexus-office en cada sistema nativo (artefactos cpp-<plataforma>)
@@ -26,6 +26,8 @@ permissions:
 
 env:
   BASE: v2.0.0
+  # motores, APK VPN y bibliotecas de NPU ya hechos: se toman del repositorio anterior (Nexus-AI, publico)
+  BASE_REPO: JosebaMuro/Nexus-AI
   GH_TOKEN: ${{ github.token }}
   PIPER: "2023.11.14-2"
   WHISPER: v1.7.6
@@ -174,7 +176,7 @@ jobs:
             linux-*) A=Nexus-Office-$V-$T.run ;;
             macos-*) A=Nexus-Office-$V-$T.tar.gz ;;
           esac
-          gh release download "$BASE" -R "$GITHUB_REPOSITORY" -p "$A" -D old
+          gh release download "$BASE" -R "$BASE_REPO" -p "$A" -D old
           mkdir -p x
           case $A in
             *.exe) 7z x -y -ox "old/$A" >/dev/null ;;
@@ -244,11 +246,11 @@ jobs:
           # artefacto de motores-npu.yml (LiteRT-LM con NPU, QAIRT/Genie, CUDA ARM64): de la ultima ejecucion que lo tenga
           npu_art() {  # npu_art <artefacto> <destino>
             local id
-            for id in $(gh run list -R "$GITHUB_REPOSITORY" -w motores-npu.yml -L 15 --json databaseId,status -q '.[] | select(.status=="completed") | .databaseId'); do
-              rm -rf ./w/a && if gh run download "$id" -R "$GITHUB_REPOSITORY" -n "$1" -D w/a 2>/dev/null; then
+            for r in "$GITHUB_REPOSITORY" "$BASE_REPO"; do for id in $(gh run list -R "$r" -w motores-npu.yml -L 15 --json databaseId,status -q '.[] | select(.status=="completed") | .databaseId'); do
+              rm -rf ./w/a && if gh run download "$id" -R "$r" -n "$1" -D w/a 2>/dev/null; then
                 mkdir -p "$2" && cp -a w/a/. "$2/" && echo "$T: $1 <- motores-npu $id" && return 0
               fi
-            done
+            done; done
             echo "::warning::$T: no hay artefacto $1 (lanza motores-npu.yml)"; return 0
           }
           # ONNX Runtime GenAI con CUDA: genai-cuda + onnxruntime-gpu + runtime de CUDA 12 y cuDNN 9 (wheels de NVIDIA)
@@ -483,7 +485,7 @@ jobs:
       - name: llama-server de la APK autonoma de la edicion Python (BASE)
         run: |
           set -e
-          gh release download "$BASE" -R "$GITHUB_REPOSITORY" -p "Nexus-Office-${BASE#v}-android-autonomo.apk" -D old
+          gh release download "$BASE" -R "$BASE_REPO" -p "Nexus-Office-${BASE#v}-android-autonomo.apk" -D old
           mkdir -p alibs && (cd alibs && unzip -q -j ../old/*.apk 'lib/arm64-v8a/libllama-server*.so')
           ls -la alibs; rm -rf old
       - name: APK autonoma (firma temporal)
@@ -493,7 +495,7 @@ jobs:
           JAR=$(ls -d "$ANDROID_HOME"/platforms/android-* | sort -V | grep -E 'android-3[4-9]$' | head -1)/android.jar
           export PATH="$BT:$PATH" NEXUS_ANDROID_JAR="$JAR"
           # GPU y NPU del movil: llama-server-gpu y los backends de ggml (Vulkan, OpenCL, Hexagon) de android-npu-libs
-          git fetch -q --depth 1 origin android-npu-libs
+          git fetch -q --depth 1 "https://github.com/$BASE_REPO.git" android-npu-libs
           git show FETCH_HEAD:android-gpu-npu-libs.tar.gz > npu.tgz
           (git show FETCH_HEAD:SHA256SUMS.txt | grep android-gpu-npu-libs.tar.gz | sed 's|  .*|  npu.tgz|' | sha256sum -c -)
           mkdir -p glibs && tar xzf npu.tgz -C glibs
@@ -501,9 +503,9 @@ jobs:
           # Qualcomm y MediaTek y sus bibliotecas de GPU; si no esta, el del wheel de PyPI (CPU y GPU, sin NPU)
           art() {
             local id
-            for id in $(gh run list -R "$GITHUB_REPOSITORY" -w motores-npu.yml -L 15 --json databaseId,status -q '.[] | select(.status=="completed") | .databaseId'); do
-              rm -rf art && gh run download "$id" -R "$GITHUB_REPOSITORY" -n "$1" -D art 2>/dev/null && { cp -a art/. glibs/lib/; echo "$1 <- motores-npu $id"; return 0; }
-            done
+            for r in "$GITHUB_REPOSITORY" "$BASE_REPO"; do for id in $(gh run list -R "$r" -w motores-npu.yml -L 15 --json databaseId,status -q '.[] | select(.status=="completed") | .databaseId'); do
+              rm -rf art && gh run download "$id" -R "$r" -n "$1" -D art 2>/dev/null && { cp -a art/. glibs/lib/; echo "$1 <- motores-npu $id"; return 0; }
+            done; done
             echo "::warning::sin artefacto $1 (lanza motores-npu.yml)"; return 1
           }
           if ! art litert-android; then
@@ -557,7 +559,7 @@ jobs:
             unzip -q -o -j apk/*.apk lib/arm64-v8a/libnexusoffice.so -d nx && adb push nx/libnexusoffice.so /data/local/tmp/nx && adb shell chmod 755 /data/local/tmp/nx
             adb shell /data/local/tmp/nx --version; adb shell /data/local/tmp/nx detect | head -30 || true
             adb install -r apk/*.apk
-            adb shell am start -n ai.nexus.office.cpp/ai.nexus.office.autonomo.MainActivity
+            adb shell am start -n ai.agente.ia/ai.nexus.office.autonomo.MainActivity
             adb forward tcp:8775 tcp:8775
             ok=0; for i in $(seq 80); do if curl -sf http://127.0.0.1:8775/api/ping; then ok=1; break; fi; sleep 3; done; echo; test $ok = 1 || { adb logcat -d | grep -iE "nexus|translation|AndroidRuntime|FATAL|linker" | tail -120; adb shell dumpsys notification --noredact | grep -iE -A4 "ai.nexus" | head -60; adb shell dumpsys activity services ai.nexus.office.cpp | head -40; }; test $ok = 1
             curl -sf http://127.0.0.1:8775/api/status | head -c 600; echo

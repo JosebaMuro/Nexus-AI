@@ -1,7 +1,11 @@
-# CLAUDE.md · Nexus-AI / Nexus-Office
+# CLAUDE.md · Agente IA (antes Nexus-AI / Nexus-Office)
 
 Guía corta para trabajar en el repositorio sin leerlo entero. Primero mira aquí; abre solo los ficheros que nombra la
 tarea. Detalle de cada módulo en `nexus-office-cpp/docs/ARQUITECTURA.md` y `docs/CPP.md`.
+
+> **Nombre**: desde la 2.10.0-beta.1 el producto se llama **Agente IA**. Solo cambia el nombre visible (interfaz, instaladores,
+> manuales, web, APK con identificador `ai.agente.ia`); carpetas, binarios (`nexus-office`), espacios de nombres y nombres de
+> fichero de los instaladores siguen con «nexus». Los textos nuevos para el usuario dicen «Agente IA».
 
 ## Qué hay en el repositorio
 

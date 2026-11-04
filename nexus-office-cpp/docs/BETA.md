@@ -1,6 +1,6 @@
 # Versión beta 2.10.0-beta.1: pruebas de rendimiento y aspecto
 
-Esta beta trae herramientas para **medir el rendimiento** de Nexus-Office en cada equipo y para **evaluar su aspecto**,
+Esta beta trae herramientas para **medir el rendimiento** de Agente IA en cada equipo y para **evaluar su aspecto**,
 y guarda todo en `data/beta/` para comparar versiones, equipos y temas. No cambia el comportamiento de la oficina.
 
 ## Laboratorio BETA (interfaz)

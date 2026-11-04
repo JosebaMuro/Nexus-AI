@@ -154,7 +154,7 @@ int cmd_run(const Args& a) {
   std::string url = "http://" + std::string(host == "0.0.0.0" || host == "::" ? "127.0.0.1" : host) + ":" + std::to_string(port);
   bool browser = cfg.flag("server.open_browser", true) && !a.has("no-browser");
   if (service::running(port)) {   // ya lo arranco el servicio: el acceso directo solo abre el navegador
-    std::printf("\n  Nexus-Office ya esta en marcha (servicio)  ->  %s\n\n", url.c_str());
+    std::printf("\n  Agente IA ya esta en marcha (servicio)  ->  %s\n\n", url.c_str());
     if (!a.has("no-browser")) sys2::open_url(url);
     return 0;
   }
@@ -167,7 +167,7 @@ int cmd_run(const Args& a) {
       cfg.set("server.port_efectivo", port, false);
     }
   }
-  std::printf("\n  Nexus-Office %s (C++)  ->  %s\n\n", NEXUS_VERSION, url.c_str());
+  std::printf("\n  Agente IA %s (C++)  ->  %s\n\n", NEXUS_VERSION, url.c_str());
   std::fflush(stdout);
   std::signal(SIGINT, on_signal);
   std::signal(SIGTERM, on_signal);
@@ -428,7 +428,7 @@ int cmd_chat(const Args& a) {
   Services s;
   s.start();
   std::string sid = s.memory->new_session("Terminal");
-  std::printf("Nexus-Office (%s) - escribe 'salir' para terminar\n", jstr(s.llm->status(), "backend").c_str());
+  std::printf("Agente IA (%s) - escribe 'salir' para terminar\n", jstr(s.llm->status(), "backend").c_str());
   std::string agent = a.get("agent", "auto");
   std::string line;
   while (true) {
@@ -471,7 +471,7 @@ int cmd_office(const Args& a) {
   office::Office o(get_config());
   if (a.has("quitar")) {
     o.clear();
-    std::printf("Perfil de oficina quitado: vuelven los agentes por defecto de Nexus-Office.\n");
+    std::printf("Perfil de oficina quitado: vuelven los agentes por defecto de Agente IA.\n");
     return 0;
   }
   if (a.pos.empty()) {
@@ -483,7 +483,7 @@ int cmd_office(const Args& a) {
       std::printf("  %s %-26s %s\n", jstr(p, "id") == active ? "*" : " ", jstr(p, "id").c_str(), jstr(p, "name").c_str());
       std::printf("      gremio: %s\n      oficina: %s\n", join(trades, ", ").c_str(), join(desk, ", ").c_str());
     }
-    std::printf(active.empty() ? "\n  Ningun perfil activo (agentes por defecto de Nexus-Office)\n" : "\n  * = perfil activo\n");
+    std::printf(active.empty() ? "\n  Ningun perfil activo (agentes por defecto de Agente IA)\n" : "\n  * = perfil activo\n");
     return 0;
   }
   std::string pid = a.pos[0];
@@ -652,7 +652,7 @@ int cmd_bolsa(const Args& a) {
     } else if (acc == "confirmar") {   // solo una persona, en la terminal, confirma una orden de cartera real
       need(1, "confirmar ID");
       json o = b.orden(std::stoll(rest[0]));
-      std::printf("Orden REAL #%lld: %s %g %s (%s). Nexus-Office no la envía a ningún bróker: después la ejecutas tú.\n",
+      std::printf("Orden REAL #%lld: %s %g %s (%s). Agente IA no la envía a ningún bróker: después la ejecutas tú.\n",
                   o["id"].get<long long>(), jstr(o, "lado").c_str(), num(o["cantidad"]), jstr(o, "simbolo").c_str(),
                   jstr(o, "tipo").c_str());
       std::printf("Escribe %s para confirmarla: ", bolsa::CONFIRMACION);
@@ -774,7 +774,7 @@ bool ask(const std::string& q, bool def) {
   bool tty = isatty(fileno(stdin));
 #endif
   if (!tty) return def;
-  std::printf("[Nexus-Office] %s [%s] ", q.c_str(), def ? "S/n" : "s/N");
+  std::printf("[Agente IA] %s [%s] ", q.c_str(), def ? "S/n" : "s/N");
   std::fflush(stdout);
   std::string ans;
   if (!std::getline(std::cin, ans)) return def;
@@ -862,7 +862,7 @@ int cmd_comprobar(const Args& a) {
   if (a.has("json")) {
     std::printf("%s\n", jdump(inf, 2).c_str());
   } else {
-    std::printf("\n  Comprobacion de Nexus-Office %s\n\n", NEXUS_VERSION);
+    std::printf("\n  Comprobacion de Agente IA %s\n\n", NEXUS_VERSION);
     for (auto& c : inf["comprobaciones"]) {
       std::string e = jstr(c, "estado");
       std::printf("  %-10s %-38s %s\n", e == "ok" ? "[ok]" : ("[" + e + "]").c_str(), jstr(c, "nombre").c_str(), jstr(c, "detalle").c_str());
@@ -888,9 +888,9 @@ int cmd_cleanup(const Args& a) {
   uintmax_t bytes = 0;
   for (auto& p : unused) bytes += tree_size(p);
   double mb = bytes / 1048576.0;
-  std::printf("[Nexus-Office] Limpieza de la instalacion: %zu elementos sin usar (%.0f MB).\n", unused.size(), mb);
+  std::printf("[Agente IA] Limpieza de la instalacion: %zu elementos sin usar (%.0f MB).\n", unused.size(), mb);
   for (auto& k : keep)
-    std::printf("[Nexus-Office]   se conserva el runtime %s\n", k.lexically_relative(resolve(root)).generic_string().c_str());
+    std::printf("[Agente IA]   se conserva el runtime %s\n", k.lexically_relative(resolve(root)).generic_string().c_str());
   json report = {{"removed", json::array()}, {"kept_for_reinstall", json::array()}, {"dry_run", a.has("dry-run")}};
   for (auto& p : unused) report["removed"].push_back(p.lexically_relative(root).generic_string());
   if (a.has("dry-run")) {
@@ -899,10 +899,10 @@ int cmd_cleanup(const Args& a) {
   }
   if (!unused.empty() && (a.has("yes") || ask("¿Eliminar lo que este equipo no usa (" + fnum(mb, 0) + " MB)?", false))) {
     for (auto& p : unused) rm_rf(p);
-    std::printf("[Nexus-Office] Eliminado: %.0f MB.\n", mb);
+    std::printf("[Agente IA] Eliminado: %.0f MB.\n", mb);
   } else {
     report["removed"] = json::array();
-    std::printf("[Nexus-Office] Sin limpieza: el paquete queda completo (reinstalable en cualquier equipo de esta "
+    std::printf("[Agente IA] Sin limpieza: el paquete queda completo (reinstalable en cualquier equipo de esta "
                 "plataforma).\n");
   }
   mkdirs(root / ".cache");
@@ -923,7 +923,7 @@ int cmd_bench(const Args& a) {
   else if (a.has("informe")) std::printf("%s", beta::report_markdown(s).c_str());
   else {
     auto f = [&](const char* sec, const char* k) { return r.contains(sec) && r[sec].contains(k) ? jdump(r[sec][k]) : "-"; };
-    std::printf("Nexus-Office %s (beta) · %s\n", NEXUS_VERSION, jstr(r["equipo"], "cpu").c_str());
+    std::printf("Agente IA %s (beta) · %s\n", NEXUS_VERSION, jstr(r["equipo"], "cpu").c_str());
     std::printf("  CPU      1 hilo %s Mops/s · %s hilos %s Mops/s (escalado x%s)\n", f("cpu", "mops_1_hilo").c_str(),
                 f("cpu", "hilos").c_str(), f("cpu", "mops_todos").c_str(), f("cpu", "escalado").c_str());
     std::printf("  Memoria  %s GB/s\n", f("memoria", "copia_gbs").c_str());
@@ -940,7 +940,7 @@ int cmd_bench(const Args& a) {
 }
 
 const char* HELP =
-    "Nexus-Office " NEXUS_VERSION " - oficina de IA local para pymes (edicion C++)\n\n"
+    "Agente IA " NEXUS_VERSION " - oficina de IA local para pymes (edicion C++)\n\n"
     "  nexus-office run [--host H] [--port P] [--no-browser] [--motor auto|llamaserver|litert|onnx]\n"
     "                   [--acelerador auto|cpu|gpu|npu] [--sin-comprobar]   (al arrancar comprueba y repara ficheros, base de datos, modelos y motor)\n"
     "  nexus-office detect                      detecta el hardware y muestra el perfil\n"
@@ -976,7 +976,7 @@ int run_main(std::vector<std::string> argv) {
     return 0;
   }
   if (cmd == "--version" || cmd == "-V") {
-    std::printf("Nexus-Office %s\n", NEXUS_VERSION);
+    std::printf("Agente IA %s\n", NEXUS_VERSION);
     return 0;
   }
   if (starts_with(cmd, "--")) cmd = "run";   // "nexus-office --no-browser" = run --no-browser

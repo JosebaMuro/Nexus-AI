@@ -15,7 +15,7 @@
 namespace {
 
 int uso() {
-  std::cout << "nexus-construir " << NEXUS_VERSION << ": instaladores, APK, manuales y pruebas de Nexus-Office\n\n"
+  std::cout << "nexus-construir " << NEXUS_VERSION << ": instaladores, APK, manuales y pruebas de Agente IA\n\n"
                "  paquetes [--targets ...] [--apk ...] [--docs ...] [--keep]   instaladores de cada sistema en dist/\n"
                "  apk --exe E --libs D --recursos R [--gpu-libs G]          APK autonoma de Android\n"
                "  pdf [carpeta]                                             Manual-de-usuario.pdf y Documentacion-tecnica.pdf\n"

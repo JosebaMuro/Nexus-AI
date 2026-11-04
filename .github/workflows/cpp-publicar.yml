@@ -1,4 +1,4 @@
-name: Publicar la Release de Nexus-Office C++
+name: Publicar la Release de Agente IA
 
 # Se lanza al empujar la rama temporal «publicar-cpp-<version>» (no «entrega-*», que es la de la edicion Python): trae
 # entrega/entrega.json ({"run": <id de la ejecucion de cpp-entrega.yml>, "tag": "v2.1.0-cpp", "target": <rama>}) y
@@ -17,6 +17,8 @@ permissions:
 env:
   GH_TOKEN: ${{ github.token }}
   BASE: v2.0.0
+  # motores, APK VPN y bibliotecas de NPU ya hechos: se toman del repositorio anterior (Nexus-AI, publico)
+  BASE_REPO: JosebaMuro/Nexus-AI
 
 jobs:
   publicar:
@@ -45,7 +47,7 @@ jobs:
           done
           (cd apk && sha256sum -c ../entrega/apk/SHA256SUMS.txt)
           V=$(sed -n 's/^set(NEXUS_VERSION "\([^"]*\)").*/\1/p' nexus-office-cpp/CMakeLists.txt)
-          gh release download "$BASE" -R "$GITHUB_REPOSITORY" -p "Nexus-Office-${BASE#v}-android-vpn.apk" -O "apk/Nexus-Office-$V-android-vpn.apk"
+          gh release download "$BASE" -R "$BASE_REPO" -p "Nexus-Office-${BASE#v}-android-vpn.apk" -O "apk/Nexus-Office-$V-android-vpn.apk"
           ls -la apk
       - name: Manuales, codigo fuente, LEEME y sumas
         run: |
@@ -62,7 +64,7 @@ jobs:
           TAG=$(jq -r .tag entrega/entrega.json)
           TARGET=$(jq -r '.target // "main"' entrega/entrega.json)
           V=${TAG#v}
-          awk -v v="## Nexus-Office $V" '$0 ~ "^## " {p = (index($0, v) == 1)} p' nexus-office-cpp/CHANGELOG.md > notas.md
+          awk -v a="## Agente IA $V" -v b="## Nexus-Office $V" '$0 ~ "^## " {p = (index($0, a) == 1 || index($0, b) == 1)} p' nexus-office-cpp/CHANGELOG.md > notas.md
           # entrega por partes (p. ej. primero Windows x64 y Android): «nota» de entrega.json lo dice en las notas
           NOTA=$(jq -r '.nota // ""' entrega/entrega.json)
           if [ -n "$NOTA" ]; then printf '\n%s\n' "$NOTA" >> notas.md; else
@@ -71,7 +73,7 @@ jobs:
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$TAG" -R "$GITHUB_REPOSITORY" -F notas.md
           else
-            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$TARGET" --latest=false -t "Nexus-Office $V (edición C++)" -F notas.md
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$TARGET" --latest=false $(case "$V" in *beta*|*rc*) echo --prerelease;; esac) -t "Agente IA $V" -F notas.md
           fi
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber release/*
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets -q '.assets[] | "\(.name) \(.size)"'

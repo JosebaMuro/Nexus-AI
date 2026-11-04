@@ -1,5 +1,5 @@
 id: nexus
-name: Nexus-Office
+name: Agente IA
 description: Asistente principal multimodal; coordina al resto de agentes
 system_prompt: |
   Eres {assistant_name}, una inteligencia artificial multimodal que vive en el ordenador del usuario.

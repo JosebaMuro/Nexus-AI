@@ -1,4 +1,4 @@
-/* Nexus-Office — deteccion del cliente y del dispositivo. Se ejecuta en <head>, antes del primer pintado, y marca <html> con:
+/* Agente IA — deteccion del cliente y del dispositivo. Se ejecuta en <head>, antes del primer pintado, y marca <html> con:
  *   data-client   apk (app Android) · pwa (instalada) · web
  *   data-layout   phone · tablet · desktop   (diseno de la interfaz)
  *   data-orient   portrait · landscape

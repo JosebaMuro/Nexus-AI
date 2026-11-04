@@ -1,8 +1,8 @@
 # Red cooperativa (LAN virtual por internet)
 
-Varias instancias de Nexus-Office forman una **malla cifrada**: se ven como si estuvieran en la misma red local, aunque estén en casas o países distintos.
+Varias instancias de Agente IA forman una **malla cifrada**: se ven como si estuvieran en la misma red local, aunque estén en casas o países distintos.
 
-> Para usar **tu** Nexus-Office desde el móvil o el navegador fuera de casa, consulta [Acceso remoto](ACCESO_REMOTO.md) (TLS 1.3 y dispositivos emparejados). Esta red sirve para conectar **varias instancias de Nexus-Office** entre sí.
+> Para usar **tu** Agente IA desde el móvil o el navegador fuera de casa, consulta [Acceso remoto](ACCESO_REMOTO.md) (TLS 1.3 y dispositivos emparejados). Esta red sirve para conectar **varias instancias de Agente IA** entre sí.
 
 ## Cómo funciona
 - **Transporte**: WebSocket en un puerto propio (8766 por defecto), separado de la interfaz web, que sigue escuchando solo en `127.0.0.1`.
@@ -29,7 +29,7 @@ Varias instancias de Nexus-Office forman una **malla cifrada**: se ven como si e
 > El código de invitación **contiene la clave de cifrado**: compártelo solo con quien deba entrar en tu red.
 
 ## Hacer accesible un nodo
-- **Tailscale** o **ZeroTier** (recomendado): Nexus-Office detecta sus direcciones (100.64.0.0/10 y redes ZeroTier) y las muestra; usa `ws://100.x.y.z:8766`.
+- **Tailscale** o **ZeroTier** (recomendado): Agente IA detecta sus direcciones (100.64.0.0/10 y redes ZeroTier) y las muestra; usa `ws://100.x.y.z:8766`.
 - Redirección del puerto 8766 en el router hacia el PC anfitrión.
 - Cualquier túnel TCP/WebSocket (por ejemplo cloudflared) que apunte al puerto 8766.
 Solo hace falta **un** nodo accesible; los demás pueden estar detrás de NAT.

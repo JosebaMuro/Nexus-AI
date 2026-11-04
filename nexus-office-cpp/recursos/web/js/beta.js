@@ -1,4 +1,4 @@
-/* Nexus-Office — Laboratorio BETA: medir el rendimiento y evaluar el aspecto.
+/* Agente IA — Laboratorio BETA: medir el rendimiento y evaluar el aspecto.
    - Se carga antes que app.js para cronometrar cada llamada a /api (tiempo total en el navegador y tiempo del núcleo,
      que llega en la cabecera Server-Timing).
    - Métricas del navegador: FCP, LCP, CLS, tareas largas, INP aproximado, memoria JS y FPS.

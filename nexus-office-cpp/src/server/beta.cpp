@@ -370,7 +370,7 @@ json info(Services& s) {
 
 std::string report_markdown(Services& s) {
   json in = info(s), hist = bench_history(5), http = http_stats(), ops = opinions(200);
-  std::string md = "# Informe de la beta de Nexus-Office " + jstr(in, "version") + "\n\n";
+  std::string md = "# Informe de la beta de Agente IA " + jstr(in, "version") + "\n\n";
   md += "- Compilado: " + jstr(in, "compilado") + " con " + jstr(in, "compilador") + "\n";
   md += "- Equipo: " + s.hw.cpu_name + ", " + std::to_string(s.hw.cores_logical) + " hilos, " +
         std::to_string((int)std::round(s.hw.ram_gb)) + " GB de RAM, " + jstr(s.profile, "accelerator") + "\n";

@@ -1,6 +1,6 @@
 # Memoria y gestor de conocimiento
 
-Desde la 1.6.0, Nexus-Office separa lo que es **común** a todos los agentes de lo que es **saber hacer propio** de cada uno.
+Desde la 1.6.0, Agente IA separa lo que es **común** a todos los agentes de lo que es **saber hacer propio** de cada uno.
 
 ## Cómo se organiza
 
@@ -86,11 +86,11 @@ hilo:
 
 ## Estilo de cada usuario
 
-Además de lo común y del saber hacer de cada agente, Nexus-Office guarda el **estilo de cada usuario final** (tono, formalidad, longitud, formato, nivel técnico, emojis y rutinas de trabajo) y sus pautas explícitas (`memories.user_id`). Detalles en [AGENTES.md](AGENTES.md#estilo-de-cada-usuario).
+Además de lo común y del saber hacer de cada agente, Agente IA guarda el **estilo de cada usuario final** (tono, formalidad, longitud, formato, nivel técnico, emojis y rutinas de trabajo) y sus pautas explícitas (`memories.user_id`). Detalles en [AGENTES.md](AGENTES.md#estilo-de-cada-usuario).
 
 ## Modelo de embeddings: Qwen3-Embedding 0.6B
 
-Los embeddings convierten un texto en un vector que representa su significado. Nexus-Office los usa para buscar en la biblioteca y en la memoria, decidir qué es común y qué es de cada agente, agrupar documentos por temas y encontrar duplicados.
+Los embeddings convierten un texto en un vector que representa su significado. Agente IA los usa para buscar en la biblioteca y en la memoria, decidir qué es común y qué es de cada agente, agrupar documentos por temas y encontrar duplicados.
 
 - **Modelo**: `qwen3-embedding-0.6b`, de `Qwen/Qwen3-Embedding-0.6B-GGUF`, fichero `Qwen3-Embedding-0.6B-Q8_0.gguf` (639 MB). Es multilingüe (más de 100 idiomas, español incluido), admite textos de hasta 32k tokens y está entrenado para buscar y clasificar documentación. Recibe **instrucciones por tarea**: buscar, recordar, clasificar, organizar, deduplicar.
 - **Descarga**: en *Modelos* (recomendado ★ para todos los perfiles), en *Ajustes → Gestor de conocimiento → Embeddings* o con `nexus-office pull qwen3-embedding-0.6b`. Se descarga una vez y queda en `data/models/`, disponible sin conexión. Si es el único de su tipo, se activa solo.
