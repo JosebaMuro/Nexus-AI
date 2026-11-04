@@ -60,6 +60,8 @@ json ollama_layers(const std::string& ref);
 json annotate(json files, const json& profile, const std::string& source = "", const std::string& repo = "");
 json best_mmproj(const json& listing);
 json classify(const fs::path& p, const std::string& hint = "");
+// recomendado con formato de un motor (.litertlm, ONNX): el fichero o la carpeta para el NPU/GPU de este equipo
+json resolve_por_hardware(const json& rec, const json& profile, const json& listing);
 std::string slug(const std::string& text);
 extern const std::map<std::string, std::string> ACTIVE_KEYS;
 
@@ -127,6 +129,8 @@ class ModelManager {
   void pull_ollama(const std::string& jid, const std::string& name);
   void auto_activate(const json& entry);
   void notify(const json& entry);
+  void configurar_motor(const json& entry);
+  json listo(const json& entry);
   void autoregister();
 };
 

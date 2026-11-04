@@ -309,6 +309,16 @@ dialog { border: 1px solid var(--line-strong); border-radius: 18px; background: 
 dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
 .accel-dialog { width: min(560px, 94vw); }
 .avlib-dialog { width: min(860px, 96vw); max-height: 92vh; }
+.fx-dialog { width: min(760px, 96vw); max-height: 92vh; display: flex; flex-direction: column; gap: 8px; }
+.fx-dialog:not([open]) { display: none; }
+.fx-roots { display: flex; flex-wrap: wrap; gap: 6px; }
+.fx-list { overflow-y: auto; min-height: 200px; max-height: 52vh; gap: 4px; }
+.fx-list .item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; min-width: 0; }
+.fx-list .item .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-list .item.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--shade)); }
+.fx-sel { font-size: .8rem; overflow-wrap: anywhere; }
+[data-layout] .fx-dialog .fx-nav > .btn { flex: 0 0 auto; width: auto; }
+[data-layout] .fx-dialog .fx-nav > .input { flex: 1 1 auto; width: auto; font-size: .85rem; }
 .avlib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 .avlib-card { border: 1px solid var(--line); border-radius: 12px; background: var(--shade); padding: 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .avlib-card .th { aspect-ratio: 1; border-radius: 8px; background: #0b0f18 center/cover no-repeat; display: grid; place-items: center; font-size: 34px; color: var(--muted); overflow: hidden; }

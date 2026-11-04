@@ -63,9 +63,16 @@ jobs:
           TARGET=$(jq -r '.target // "main"' entrega/entrega.json)
           V=${TAG#v}
           awk -v v="## Nexus-Office $V" '$0 ~ "^## " {p = (index($0, v) == 1)} p' nexus-office-cpp/CHANGELOG.md > notas.md
-          printf '\nEdición C++: se instala junto a la edición Python sin pisarla. Instaladores 100 %% offline para Windows (x64 y ARM64), Linux (x86_64 y ARM64: .run, .deb, AppImage y Flatpak), macOS (Apple Silicon e Intel) y Android (autónoma y VPN). Instrucciones en LEEME.txt; integridad en SHA256SUMS.txt.\n' >> notas.md
-          gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+          # entrega por partes (p. ej. primero Windows x64 y Android): «nota» de entrega.json lo dice en las notas
+          NOTA=$(jq -r '.nota // ""' entrega/entrega.json)
+          if [ -n "$NOTA" ]; then printf '\n%s\n' "$NOTA" >> notas.md; else
+            printf '\nEdición C++: se instala junto a la edición Python sin pisarla. Instaladores 100 %% offline para Windows (x64 y ARM64), Linux (x86_64 y ARM64: .run, .deb, AppImage y Flatpak), macOS (Apple Silicon e Intel) y Android (autónoma y VPN). Instrucciones en LEEME.txt; integridad en SHA256SUMS.txt.\n' >> notas.md
+          fi
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" -F notas.md
+          else
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$TARGET" --latest=false -t "Nexus-Office $V (edición C++)" -F notas.md
+          fi
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber release/*
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets -q '.assets[] | "\(.name) \(.size)"'
       - name: Borrar la rama temporal

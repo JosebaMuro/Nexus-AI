@@ -175,13 +175,16 @@ json npu(const json& s, const LibFinder& lib_in) {
   return nullptr;
 }
 
-std::map<std::string, std::string> gpu_env(const std::string& libs) {
+std::map<std::string, std::string> gpu_env(const std::string& libs, bool npu) {
   std::vector<std::string> ps = {libs};
   for (auto d : {"/system/lib64", "/vendor/lib64", "/system/vendor/lib64"})
     if (is_dir(P(d))) ps.push_back(d);
   std::vector<std::string> dsp = {libs};
   dsp.insert(dsp.end(), DSP_DIRS.begin(), DSP_DIRS.end());
-  return {{"LD_PRELOAD", ""}, {"LD_LIBRARY_PATH", join(ps, ":")}, {"ADSP_LIBRARY_PATH", join(dsp, ";")}};
+  std::map<std::string, std::string> e = {
+      {"LD_PRELOAD", ""}, {"LD_LIBRARY_PATH", join(ps, ":")}, {"ADSP_LIBRARY_PATH", join(dsp, ";")}};
+  if (!npu) e["GGML_HEXAGON_DEVICES"] = "0";
+  return e;
 }
 
 bool is_npu_dev(const std::string& dev) {
@@ -243,6 +246,20 @@ json probe_gpu(const std::string& libs, const std::string& exe_name) {
   std::string out = run_text({S(exe), "--list-devices"}, 45, gpu_env(libs));
   json devs = parse_devices(out);
   json res = {{"binary", true}, {"devices", devs}};
+  if (devs.empty() && is_file(P(libs) / "libggml-hexagon.so")) {
+    // la sonda con la NPU no devolvio nada (el backend Hexagon puede abortar en algun Snapdragon): sin ella
+    std::string out2 = run_text({S(exe), "--list-devices"}, 45, gpu_env(libs, false));
+    json devs2 = parse_devices(out2);
+    if (!devs2.empty()) {
+      std::vector<std::string> last = splitlines(out);
+      if (last.size() > 3) last.erase(last.begin(), last.end() - 3);
+      std::string err = join(last, " | ");
+      if (err.size() > 300) err = err.substr(err.size() - 300);
+      devs = devs2;
+      res = {{"binary", true}, {"devices", devs}, {"npu_error", err.empty() ? "la sonda con la NPU no respondio" : err}};
+      out = out2;
+    }
+  }
   if (devs.empty()) {
     res["error"] = "ningun backend GPU (Vulkan/OpenCL) encontro una GPU utilizable";
     std::vector<std::string> tail;
@@ -272,6 +289,7 @@ json detect(const std::optional<std::string>& libs_in, bool use_cache) {
   json s = soc(p, info);
   json devs = probe.value("devices", json::array());
   std::string broken = jstr(cache, "gpu_broken"), npu_broken = jstr(cache, "npu_broken");
+  if (npu_broken.empty()) npu_broken = jstr(probe, "npu_error");
   json use = pick(devs, npu_broken.empty(), broken.empty());
   json gpus = json::array();
   for (auto& d : devs)

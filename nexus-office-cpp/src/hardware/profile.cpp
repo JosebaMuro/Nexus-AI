@@ -297,7 +297,8 @@ std::string engine_label(const std::string& e) {
   if (e == "llamaserver") return "llama-server (llama.cpp, proceso aparte)";
   if (e == "llamacpp") return "llama.cpp integrado (llama-cpp-python)";
   if (e == "litert") return "LiteRT-LM (Google: Pixel/Tensor, NPU Snapdragon y MediaTek, modelos .litertlm)";
-  if (e == "onnx") return "ONNX Runtime GenAI (DirectML y NPU en Windows, modelos ONNX)";
+  if (e == "onnx") return "ONNX Runtime GenAI (DirectML, CUDA, QNN, OpenVINO; modelos ONNX)";
+  if (e == "genie") return "Qualcomm Genie (NPU Hexagon de Snapdragon, modelos de AI Hub)";
   return e;
 }
 

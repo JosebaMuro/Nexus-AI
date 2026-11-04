@@ -61,6 +61,26 @@ llama-server va **incluido en los instaladores offline** con todas sus variantes
 La opción **llama.cpp integrado** de la edición Python (llama-cpp-python dentro del programa) no existe en la edición
 C++: el selector la muestra como no disponible y llama-server, que es el mismo llama.cpp, hace su trabajo.
 
+### Elegir motor y runtime a mano (2.8)
+En **MOTOR Y ACELERADOR** hay tres grupos: el **motor** (Automático, llama-server, LiteRT-LM, ONNX Runtime GenAI,
+Qualcomm Genie), **CPU/GPU/NPU** y el **runtime concreto** de ese motor. Automático elige según el hardware; a mano
+se fuerza uno. Lo que no va en el paquete de ese sistema sale desactivado con el motivo.
+
+| Motor | Runtimes que se pueden elegir | Formato del modelo |
+|---|---|---|
+| llama-server | CPU, CPU sin AVX2, CUDA 12, CUDA 13, ROCm, Vulkan, SYCL, OpenVINO, Metal, OpenCL Adreno, Snapdragon/Hexagon, CANN, WebGPU (los que traiga el paquete) | `.gguf` |
+| LiteRT-LM | CPU, GPU, NPU (Google Tensor, Hexagon, MediaTek APU, Intel) | `.litertlm` |
+| ONNX Runtime GenAI | el del modelo, CPU, CUDA, DirectML, QNN, OpenVINO, VitisAI | carpeta con `genai_config.json` |
+| Qualcomm Genie | NPU Hexagon (HTP) | carpeta con `genie_config.json` (Qualcomm AI Hub) |
+
+Con un motor elegido a mano se usa su modelo activo; si no hay ninguno de su formato, el selector lo dice. En la
+vista **Modelos**, el filtro **Formato** enseña solo los modelos de un motor. Terminal:
+`nexus-office run --motor litert --acelerador npu`, `nexus-office run --motor onnx --runtime cuda`,
+`nexus-office run --motor llamaserver --runtime vulkan`. Configuración: `llm.engine`, `llm.motor_acelerador`,
+`hardware.llama_variant_manual`.
+
+La lista completa de motores por hardware, con lo que no se puede incluir y por qué, está en el CHANGELOG (2.8.0).
+
 ### LiteRT-LM y ONNX Runtime GenAI (2.5)
 Son motores para los equipos y móviles donde llama.cpp no aprovecha el acelerador: los **Pixel** (Tensor), los
 **Snapdragon 8 Elite** y **Dimensity** con modelos `.litertlm` compilados para su NPU, y los portátiles **Snapdragon X
@@ -94,8 +114,11 @@ Si lo tienes instalado, Nexus-Office lo sigue usando cuando no hay otro motor.
     móvil no lo permite, pasa solo a la GPU y luego a la CPU.
   - **Snapdragon X Elite/Plus en Windows ARM**: ONNX Runtime GenAI con **QNN** en la NPU Hexagon (modelos ONNX
     exportados para QNN); los GGUF van a la GPU Adreno por OpenCL.
-  - **Google Tensor, Snapdragon 8 Elite y Dimensity** (Android): LiteRT-LM con los modelos `.litertlm` de su SoC,
-    si el móvil trae las bibliotecas *dispatch* de su NPU; si no, la GPU del móvil.
+  - **Google Tensor, Snapdragon 8 Gen 2 o posterior y Dimensity** (Android, 2.8): LiteRT-LM con los modelos
+    `.litertlm` de su SoC. La APK trae los *dispatch* de NPU de Google Tensor, Qualcomm y MediaTek y las bibliotecas
+    QNN HTP; la NPU del Pixel usa además la biblioteca del sistema (`libedgetpu_litert.so`) y la de MediaTek el
+    NeuroPilot del móvil. Si faltan, la GPU del móvil.
+  - **Qualcomm Genie** (2.8): modelos de Qualcomm AI Hub en la NPU Hexagon (Android, Windows ARM, Linux ARM).
   - **AMD Ryzen AI y Apple Neural Engine**: llama.cpp no puede ejecutar ahí el modelo de texto. El selector lo dice y
     usa la GPU (o la CPU).
 
