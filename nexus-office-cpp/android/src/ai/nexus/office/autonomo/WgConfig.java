@@ -52,10 +52,10 @@ public final class WgConfig {
         List<String> eps = new ArrayList<String>();
         for (int i = 0; i < e.length(); i++) eps.add(e.getString(i));
         if (eps.isEmpty()) throw new IllegalArgumentException("El codigo no trae ninguna direccion del PC");
-        WgConfig w = new WgConfig(o.optString("n", "Nexus-Office"), o.getString("a"), o.getString("k"), o.getString("s"),
+        WgConfig w = new WgConfig(o.optString("n", "Agente IA"), o.getString("a"), o.getString("k"), o.getString("s"),
                 o.optString("p", ""), o.optString("r", "10.78.0.1/32"), o.getString("u"), o.optString("key", ""), eps);
         if (base64(w.privateKey).length != 32 || base64(w.serverKey).length != 32) {
-            throw new IllegalArgumentException("Claves incompletas: genera otro codigo en tu Nexus-Office");
+            throw new IllegalArgumentException("Claves incompletas: genera otro codigo en tu Agente IA");
         }
         return w;
     }

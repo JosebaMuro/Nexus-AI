@@ -1,4 +1,4 @@
-# GIMP en Nexus-Office: edición profesional de imágenes para los agentes
+# GIMP en Agente IA: edición profesional de imágenes para los agentes
 
 Los agentes de imagen y diseño editan las fotos y gráficos de la empresa con **GIMP**, sin ventana y sin que nadie
 tenga que abrirlo. Trabajan sobre su **carpeta de trabajo** (`data/sandbox`), la misma que usan `file_list`,
@@ -6,15 +6,15 @@ tenga que abrirlo. Trabajan sobre su **carpeta de trabajo** (`data/sandbox`), la
 manejo para explicar a una persona cómo hacerlo ella misma.
 
 ## Qué GIMP se usa
-Nexus-Office busca GIMP en este orden y usa el primero que arranca:
+Agente IA busca GIMP en este orden y usa el primero que arranca:
 
 1. `media.gimp_path` en la configuración (o la variable `NEXUS_GIMP`).
 2. Un GIMP copiado en `bundled/runtimes/gimp` (el mismo que preparan los instaladores de la edición Python).
 3. El GIMP del sistema: PATH, `Archivos de programa\GIMP 3`, `/Applications/GIMP.app`, Flatpak `org.gimp.GIMP` o Snap.
 
 Los instaladores de la edición C++ **no llevan GIMP** (pesa varios cientos de MB por sistema): sin él, todas las
-operaciones las hace el motor de imagen propio de Nexus-Office (`src/media/raster.cpp`), sin internet. Si quieres GIMP,
-instálalo en el equipo (o copia su carpeta en `bundled/runtimes/gimp`) y Nexus-Office lo usa solo.
+operaciones las hace el motor de imagen propio de Agente IA (`src/media/raster.cpp`), sin internet. Si quieres GIMP,
+instálalo en el equipo (o copia su carpeta en `bundled/runtimes/gimp`) y Agente IA lo usa solo.
 
 | Sistema | Cómo se lanza GIMP |
 |---|---|
@@ -23,7 +23,7 @@ instálalo en el equipo (o copia su carpeta en `bundled/runtimes/gimp`) y Nexus-
 | Linux x86_64 y ARM64, Raspberry Pi 4/5 | `gimp-console` del sistema, Flatpak o Snap |
 | Android | No existe GIMP para Android: motor propio |
 
-GIMP 3 se programa en **Python-Fu**; si el equipo solo tiene GIMP 2.10, Nexus-Office le habla en **Script-Fu**.
+GIMP 3 se programa en **Python-Fu**; si el equipo solo tiene GIMP 2.10, Agente IA le habla en **Script-Fu**.
 Se ejecuta con un perfil propio en `data/gimp/perfil-<versión>`, así no cambia la configuración del GIMP del usuario.
 
 **Sin GIMP** (Android, o un equipo donde no está o no se puede ejecutar) las mismas operaciones las hace el **motor propio**, con el
@@ -96,7 +96,7 @@ Ejemplo de lo que pide un agente:
 
 - Nueve capítulos en Markdown: interfaz y formatos; capas, máscaras y selecciones; color y tono; retoque;
   recortar, enderezar y escalar; texto, diseño y medidas de redes e imprenta; automatización (modo batch,
-  Python-Fu, Script-Fu y las operaciones de Nexus-Office); atajos de teclado; recetas para pymes (foto de carnet,
+  Python-Fu, Script-Fu y las operaciones de Agente IA); atajos de teclado; recetas para pymes (foto de carnet,
   producto, redes, carta del restaurante, inmobiliaria, antes y después, escaneos, logos) con los avisos legales.
 - `grafo.yaml`: 119 relaciones del manejo de GIMP (herramientas y teclas, menús, formatos, medidas, procedimientos).
 
@@ -108,7 +108,7 @@ herramientas del paquete sin tocar el resto de su configuración. Al aplicar un 
 momento. Se pueden añadir paquetes para otros programas con la misma estructura.
 
 ## Licencia
-GIMP es software libre (GNU GPL v3); Nexus-Office solo lo ejecuta como programa aparte. Su código fuente está en
+GIMP es software libre (GNU GPL v3); Agente IA solo lo ejecuta como programa aparte. Su código fuente está en
 https://download.gimp.org/gimp/.
 
 ## Pruebas

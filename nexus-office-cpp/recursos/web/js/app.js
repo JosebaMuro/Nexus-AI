@@ -1,4 +1,4 @@
-/* Nexus-Office — webui */
+/* Agente IA — webui */
 (() => {
   "use strict";
   const $ = (s, r = document) => r.querySelector(s);
@@ -16,8 +16,10 @@
   const S = { token: store.get("nexus_admin", ""), session: local.get("nexus_session", null), status: null, agents: [], busy: false,
               speak: local.get("nexus_speak", false), attachments: [], projects: [], view: "chat", cfg: {} };
 
+  // usuario final de este navegador (cada persona de la oficina tiene su estilo); "" = el titular del equipo
+  function usuario() { try { return localStorage.getItem("nexus_usuario") || ""; } catch { return ""; } }
   async function api(path, opts = {}) {
-    const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...(S.token ? { "X-Admin-Token": S.token } : {}) };
+    const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...(S.token ? { "X-Admin-Token": S.token } : {}), ...(usuario() ? { "X-Nexus-Usuario": usuario() } : {}) };
     const res = await fetch(path, { method: opts.method || (opts.body ? "POST" : "GET"), headers,
       body: opts.body instanceof FormData ? opts.body : opts.body ? JSON.stringify(opts.body) : undefined });
     if (opts.raw) return res;
@@ -303,6 +305,9 @@
       case "graph_update": loadGraph().catch(() => {}); if (explorer) loadScopes().catch(() => {}); break;
       case "approval_required": showApproval(e.approval); break;
       case "approval_resolved": $(`#ap-${e.id}`)?.remove(); break;
+      case "estilo": if (current && !e.sub) current.note("🎨 estilo", `Aprendido de tu mensaje: ${e.items.map((x) => x.label).join(", ")}. Ver y ajustar en Herramientas → Mi estilo.`); break;
+      case "inyeccion": toast(`⚠ ${e.tool} trajo texto que intenta dar órdenes al agente (${e.senales.join(", ")}). Se ha tratado solo como datos.`, true); break;
+      case "reanudada": toast(e.approved ? `Aprobada «${e.tool}»: la tarea pendiente continúa` : `Rechazada «${e.tool}»`); break;
       case "lounge": onLounge(e.message); break;
       case "agent_activity": if (offices) offices.onActivity(e.activity); break;
       case "coop": onCoop(e.event); break;
@@ -338,10 +343,10 @@
   /* ================================================================ chat */
   const box = $("#messages");
   const agentColor = (id) => (S.agents.find((a) => a.id === id) || {}).color || "var(--accent)";
-  const agentName = (id) => (S.agents.find((a) => a.id === id) || {}).name || id || "Nexus-Office";
+  const agentName = (id) => (S.agents.find((a) => a.id === id) || {}).name || id || "Agente IA";
   function scroll() { box.scrollTop = box.scrollHeight; }
   function welcome() {
-    box.innerHTML = `<div class="welcome"><h1>Nexus-Office</h1><div class="muted">Inteligencia multimodal con memoria, aprendizaje y agentes</div>
+    box.innerHTML = `<div class="welcome"><h1>Agente IA</h1><div class="muted">Inteligencia multimodal con memoria, aprendizaje y agentes</div>
       <div class="sugg">${["Hola, me llamo … y me gusta …", "¿Qué sabes de mí?", "Genera una imagen de una ciudad de neón bajo la lluvia",
         "Compón una música épica", "Cuánto es 2^16 / 7", "Info del sistema", "Busca noticias sobre IA"].map((s) => `<button>${esc(s)}</button>`).join("")}</div></div>`;
     $$(".sugg button", box).forEach((b) => (b.onclick = () => { $("#input").value = b.textContent; $("#input").focus(); }));
@@ -408,14 +413,14 @@
     userMsg((text || (ready.length ? "" : "(imagen)")) + (ready.length ? `${text ? "\n\n" : ""}${ready.map((p) => `📦 ${p.name}`).join("  ")}` : ""), images);
     current = aiMsg($("#agent-select").value === "auto" ? "nexus" : $("#agent-select").value);
     S.busy = true; setBusy(true); setState("thinking");
-    ws.send(JSON.stringify({ type: "chat", text: note ? `${body}\n\n${note}` : body, agent: $("#agent-select").value, session_id: S.session, images, live: !!opts.live }));
+    ws.send(JSON.stringify({ type: "chat", text: note ? `${body}\n\n${note}` : body, agent: $("#agent-select").value, session_id: S.session, images, live: !!opts.live, usuario: usuario() }));
     $("#input").value = ""; autoGrow();
   }
   const autoGrow = () => { const t = $("#input"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 180) + "px"; };
   $("#input").addEventListener("input", autoGrow);
   // con teclado fisico Intro envia; en pantallas tactiles Intro es salto de linea y se envia con el boton
   $("#input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !NexusDevice.touch) { e.preventDefault(); send(); } });
-  const placeholder = () => { $("#input").placeholder = NexusDevice.layout === "phone" ? "Mensaje…" : NexusDevice.touch ? "Escribe a Nexus-Office…" : "Escribe a Nexus-Office… (Shift+Enter: nueva línea)"; };
+  const placeholder = () => { $("#input").placeholder = NexusDevice.layout === "phone" ? "Mensaje…" : NexusDevice.touch ? "Escribe a Agente IA…" : "Escribe a Agente IA… (Shift+Enter: nueva línea)"; };
   placeholder(); addEventListener("nexus-layout", placeholder);
   $("#btn-send").onclick = () => { NexusDevice.haptic(); send(); };
   $("#btn-attach").onclick = () => $("#file-attach").click();
@@ -596,7 +601,7 @@
     async start() {
       if (this.on) return;
       this.engine = this.pickEngine();
-      if (!this.engine) return toast(micOK() ? "Para el modo en vivo instala la voz local (Sistema > faster-whisper) o usa Chrome, Edge o Safari" : "El micrófono del navegador solo funciona en https o en este mismo equipo; usa la app o abre Nexus-Office en localhost", true);
+      if (!this.engine) return toast(micOK() ? "Para el modo en vivo instala la voz local (Sistema > faster-whisper) o usa Chrome, Edge o Safari" : "El micrófono del navegador solo funciona en https o en este mismo equipo; usa la app o abre Agente IA en localhost", true);
       this.on = true; this.paused = false; this.said = ""; $("#live").classList.remove("hidden"); $("#btn-live").classList.add("on");
       $("#live-heard").textContent = ""; $("#live-said").textContent = "";
       $("#live-engine").textContent = { android: "voz del sistema Android", whisper: "Whisper local · " + (S.status?.voice?.stt_model || ""), browser: "reconocimiento del navegador" }[this.engine] +
@@ -743,6 +748,7 @@
     const el = document.createElement("div"); el.className = "approval"; el.id = `ap-${a.id}`;
     el.innerHTML = `<h4>⚠ APROBACIÓN REQUERIDA ${a.level === "admin" ? "· ADMIN" : ""}</h4>
       <div><b>${esc(a.agent)}</b>${a.remote ? " (nodo remoto)" : ""} quiere usar <b>${esc(a.tool)}</b> <span class="tag ${a.risk}">${a.risk}</span></div>
+      ${a.motivo ? `<div class="muted">${esc(a.motivo)}</div>` : ""}${a.diferida ? `<div class="muted">Quedó pendiente: al aprobarla, la tarea se reanuda.</div>` : ""}
       <pre class="code" style="max-height:140px;margin:8px 0">${esc(JSON.stringify(a.args, null, 1))}</pre>
       <div class="row" style="justify-content:flex-end"><button class="btn danger sm">DENEGAR</button><button class="btn ok sm">APROBAR</button></div>`;
     const [deny, ok] = $$("button", el);
@@ -1191,7 +1197,7 @@
     $$("[data-cancel]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/bolsa/orden/${b.dataset.cancel}/cancelar`, { body: {} }); loaders.bolsa(); })));
     $$("[data-confirm]").forEach((b) => (b.onclick = guard(async () => {
       const o = d.ordenes.find((x) => String(x.id) === b.dataset.confirm);
-      const t = prompt(`Orden REAL: ${o.lado} ${o.cantidad} ${o.simbolo} (${o.tipo}). Nexus-Office no la envía a ningún bróker: la ejecutas tú después.\nEscribe ${d.confirmacion} para confirmarla.`);
+      const t = prompt(`Orden REAL: ${o.lado} ${o.cantidad} ${o.simbolo} (${o.tipo}). Agente IA no la envía a ningún bróker: la ejecutas tú después.\nEscribe ${d.confirmacion} para confirmarla.`);
       if (t == null) return; await api(`/api/bolsa/orden/${o.id}/confirmar`, { body: { confirmacion: t } }); toast("Orden confirmada: ejecútala en tu bróker"); loaders.bolsa(); })));
     $$("[data-fill]").forEach((b) => (b.onclick = guard(async () => {
       const px = prompt("Precio de ejecución en tu bróker (divisa del valor):"); if (!px) return;
@@ -1318,10 +1324,10 @@
     const profs = await api("/api/office/profiles"), act = profs.find((p) => p.active), box = $("#office-panel");
     const chips = (p) => p.agents.map((a) => `<span class="tag${a.gremio ? " accent" : ""}" title="${esc(a.description)}">${esc(a.icon)} ${esc(a.name)}</span>`).join("");
     box.innerHTML = `<h3>PERFIL DE OFICINA</h3>
-      <p class="muted">${act ? `<b>${esc(act.icon)} ${esc(act.name)}</b> · ${esc(act.sector)} · ${esc(act.description)}` : "Sin perfil: agentes por defecto de Nexus-Office. Elige el tipo de pyme para convertir esta instalación en su oficina, con agentes de oficina y del gremio, cada uno con su propio grafo de conocimiento."}</p>
+      <p class="muted">${act ? `<b>${esc(act.icon)} ${esc(act.name)}</b> · ${esc(act.sector)} · ${esc(act.description)}` : "Sin perfil: agentes por defecto de Agente IA. Elige el tipo de pyme para convertir esta instalación en su oficina, con agentes de oficina y del gremio, cada uno con su propio grafo de conocimiento."}</p>
       ${act ? `<div class="row">${chips(act)}</div>` : ""}
       <div class="row admin-only" style="margin-top:12px"><select class="input" id="office-select" style="flex:1 1 260px;min-width:0">
-        <option value="">— Sin perfil (agentes por defecto de Nexus-Office) —</option>${profs.map((p) => `<option value="${p.id}" ${p.active ? "selected" : ""}>${esc(p.icon)} ${esc(p.name)} · ${p.agents.length} agentes</option>`).join("")}</select>
+        <option value="">— Sin perfil (agentes por defecto de Agente IA) —</option>${profs.map((p) => `<option value="${p.id}" ${p.active ? "selected" : ""}>${esc(p.icon)} ${esc(p.name)} · ${p.agents.length} agentes</option>`).join("")}</select>
         <button class="btn primary" id="office-apply">APLICAR</button></div>
       <div class="row admin-only" id="office-preview" style="margin-top:8px"></div>`;
     const sel = $("#office-select"), prev = () => { const p = profs.find((x) => x.id === sel.value); $("#office-preview").innerHTML = p ? chips(p) : ""; };
@@ -1380,20 +1386,33 @@
 
   /* ================================================================ vista: MODELOS */
   const FIT = { ideal: "ideal", ok: "compatible", pesado: "pesado", no_cabe: "no cabe" };
+  // filtro por formato: el motor que lo ejecuta y como se reconoce cada formato (catalogo y ficheros de un repositorio)
+  const FMT = {
+    gguf: { motor: "llama-server", cat: (f) => f === "gguf", file: /\.gguf$/i },
+    onnx: { motor: "ONNX Runtime GenAI", cat: (f) => f === "onnx-genai" || f === "onnx", file: /(\.onnx(\.data|_data)?|genai_config\.json)$/i },
+    litertlm: { motor: "LiteRT-LM", cat: (f) => f === "litertlm", file: /\.(litertlm|task|tflite)$/i },
+    genie: { motor: "Qualcomm Genie", cat: (f) => f === "genie", file: /(genie_config\.json|\.bin|tokenizer\.json|htp_backend_ext_config\.json)$/i },
+    safetensors: { motor: "Transformers / sd.cpp", cat: (f) => ["safetensors", "transformers", "diffusers"].includes(f), file: /\.safetensors$/i },
+  };
+  const fmtSel = () => FMT[$("#fmt-filter").value];
+  const MOTOR_DE = { gguf: "llama-server", litertlm: "LiteRT-LM", "onnx-genai": "ONNX Runtime GenAI", genie: "Qualcomm Genie" };
   let jobsTimer = null;
   loaders.models = async () => {
     const [rec, m] = await Promise.all([api("/api/models/recommended"), api("/api/models")]);
     $("#rec-profile").textContent = `perfil ${rec.profile.tier} · hasta ${rec.profile.max_model_b}B · ideal ${rec.profile.recommended_model_b}B`;
     const active = Object.values(m.active);
-    const items = rec.items.slice().sort((a, b) => (b.sector ? 1 : 0) - (a.sector ? 1 : 0));   // los de tu oficina, primero
+    const fr = fmtSel();
+    const items = rec.items.filter((r) => !fr || fr.cat(r.formato || (/\.gguf$/i.test(r.file || "") ? "gguf" : ""))).sort((a, b) => (b.sector ? 1 : 0) - (a.sector ? 1 : 0));   // los de tu oficina, primero
     $("#rec-grid").innerHTML = items.map((r) => `<div class="item col" style="gap:6px"><div class="row"><span class="tag accent">${r.kind}</span><b style="flex:1">${esc(r.name)}</b>${r.best ? '<span class="tag ok">★ recomendado</span>' : ""}${r.best_especialidad ? `<span class="tag ok">★ IA ${esc(r.especialidad)} para este equipo</span>` : ""}${r.sector ? '<span class="tag warn">◆ para tu oficina</span>' : ""}</div>
-      ${r.sector ? `<div class="d"><b>Para tu oficina:</b> ${esc(r.sector)}</div>` : ""}<div class="d">${esc(r.desc)}</div><div class="row mono muted"><span class="tag ${r.fit}">${FIT[r.fit]}</span><span>${r.size_mb >= 1000 ? (r.size_mb / 1024).toFixed(1) + " GB" : r.size_mb + " MB"}</span>${r.vision ? '<span class="tag">visión</span>' : ""}${r.baseline ? '<span class="tag">base CPU</span>' : ""}</div>
+      ${r.sector ? `<div class="d"><b>Para tu oficina:</b> ${esc(r.sector)}</div>` : ""}<div class="d">${esc(r.desc)}</div><div class="row mono muted"><span class="tag ${r.fit}">${FIT[r.fit]}</span><span>${r.size_mb >= 1000 ? (r.size_mb / 1024).toFixed(1) + " GB" : r.size_mb + " MB"}</span>${r.vision ? '<span class="tag">visión</span>' : ""}${r.baseline ? '<span class="tag">base CPU</span>' : ""}${r.motor_nombre ? `<span class="tag ${r.motor_ok ? "ok" : "warn"}">${esc(r.motor_nombre)}${r.motor_ok ? "" : " · no incluido aquí"}</span>` : ""}</div>
       <div>${r.installed ? (active.includes(r.id) ? '<span class="tag ok">● activo</span>' : `<button class="btn sm" data-act="${r.id}">ACTIVAR</button>`) : `<button class="btn sm ${r.fit === "no_cabe" ? "danger" : "primary"}" data-rec="${r.id}">DESCARGAR</button>`}</div></div>`).join("");
-    $("#catalog-list").innerHTML = m.catalog.map((c) => `<div class="item row"><span class="tag accent">${c.kind}</span><div style="flex:1"><div class="t">${esc(c.name)}</div><div class="d mono">${c.format} · ${fmtB(c.size)} · ${esc(c.source)}${c.vision ? " · visión" : ""}${c.meta?.quant ? " · " + c.meta.quant : ""}</div></div>
-      ${active.includes(c.id) ? '<span class="tag ok">activo</span>' : ["llm", "image", "tts", "embed"].includes(c.kind) ? `<button class="btn sm" data-act="${c.id}">ACTIVAR</button>` : ""}<button class="btn danger sm admin-only" data-delm="${c.id}">✕</button></div>`).join("") || `<span class="muted">Ningún modelo instalado. Descarga uno recomendado.</span>`;
+    const ff = fmtSel();
+    $("#fmt-note").textContent = ff ? `se ejecutan con ${ff.motor}` : "";
+    $("#catalog-list").innerHTML = m.catalog.filter((c) => !ff || ff.cat(c.format)).map((c) => `<div class="item row"><span class="tag accent">${c.kind}</span><div style="flex:1"><div class="t">${esc(c.name)}</div><div class="d mono">${c.format} · ${fmtB(c.size)} · ${esc(c.source)}${c.vision ? " · visión" : ""}${c.meta?.quant ? " · " + c.meta.quant : ""}${c.acelera ? " · " + esc(c.acelera) : ""}${MOTOR_DE[c.format] ? " · " + MOTOR_DE[c.format] : ""}</div></div>
+      ${active.includes(c.id) ? '<span class="tag ok">activo</span>' : ["llm", "image", "tts", "embed"].includes(c.kind) ? `<button class="btn sm" data-act="${c.id}">ACTIVAR</button>` : ""}<button class="btn danger sm admin-only" data-delm="${c.id}">✕</button></div>`).join("") || `<span class="muted">${ff ? "Ningún modelo instalado de este formato." : "Ningún modelo instalado. Descarga uno recomendado."}</span>`;
     if (m.ollama.length) $("#catalog-list").insertAdjacentHTML("beforeend", `<div class="item"><b>Ollama local:</b> ${m.ollama.map((o) => `<button class="btn sm" data-spec="ollama:${esc(o)}">${esc(o)}</button>`).join(" ")}</div>`);
     $("#src-select").innerHTML = m.sources.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
-    $$("[data-rec]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/models/recommended/${b.dataset.rec}`, { body: {} }); toast("Descarga iniciada"); watchJobs(); })));
+    $$("[data-rec]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/models/recommended/${b.dataset.rec}`, { body: {} }); toast("Descarga iniciada: al terminar queda activado y con su motor configurado"); watchJobs(); })));
     $$("[data-act]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/models/activate/${b.dataset.act}`, { body: {} }); toast("Modelo activado"); loadStatus(); loaders.models(); })));
     $$("[data-delm]").forEach((b) => (b.onclick = guard(async () => { if (!confirm("¿Quitar del catálogo y borrar ficheros?")) return; await api(`/api/models/${b.dataset.delm}?files=true`, { method: "DELETE" }); loaders.models(); })));
     $$("[data-spec]").forEach((b) => (b.onclick = guard(async () => { await api("/api/models/activate-spec", { body: { spec: b.dataset.spec } }); toast("LLM cambiado"); loadStatus(); })));
@@ -1412,7 +1431,7 @@
   $("#src-go").onclick = guard(async () => {
     const src = $("#src-select").value, q = $("#src-q").value.trim(); if (!q) return;
     $("#src-results").innerHTML = `<div class="chip"><span class="spin"></span>buscando en ${src}…</div>`; $("#src-files").innerHTML = "";
-    const res = await api(`/api/models/search?source=${src}&q=${encodeURIComponent(q)}&kind=${$("#src-kind").value}`);
+    const res = await api(`/api/models/search?source=${src}&q=${encodeURIComponent(q)}&kind=${$("#src-kind").value}&formato=${$("#fmt-filter").value}`);
     $("#src-results").innerHTML = res.map((r) => `<div class="item" data-repo="${esc(r.id)}" style="cursor:pointer"><div class="t">${esc(r.name)}</div><div class="d mono">${r.downloads ? "↓ " + r.downloads.toLocaleString() : ""} ${esc(r.task || "")}</div></div>`).join("") || `<span class="muted">Sin resultados.</span>`;
     $$("#src-results [data-repo]").forEach((el) => (el.onclick = guard(async () => {
       $("#src-files").innerHTML = `<div class="chip"><span class="spin"></span>listando ficheros…</div>`;
@@ -1420,7 +1439,7 @@
       const isRepo = files.some((f) => /(^|\/)(config|model_index)\.json$/.test(f.path)) && ["huggingface", "modelscope"].includes(src);
       const FITN = { ideal: "ideal", ok: "cabe", pesado: "pesado", "?": "" };
       $("#src-files").innerHTML = `<div class="row"><b style="flex:1">${esc(el.dataset.repo)}</b>${isRepo ? '<button class="btn sm primary" id="dl-repo">DESCARGAR REPOSITORIO COMPLETO</button>' : ""}</div>` +
-        files.filter((f) => !/\.(md|txt|gitattributes|json|png|jpg)$/i.test(f.path) || /onnx\.json$/.test(f.path)).slice(0, 120).map((f) => `<div class="item"><div class="row">
+        files.filter((f) => (!/\.(md|txt|gitattributes|json|png|jpg)$/i.test(f.path) || /(onnx|genai_config|genie_config)\.json$/.test(f.path)) && (!fmtSel() || fmtSel().file.test(f.path))).slice(0, 120).map((f) => `<div class="item"><div class="row">
           <span style="flex:1" class="mono">${f.recommended ? "★ " : ""}${esc(f.path)}</span><span class="muted mono">${f.size ? fmtB(f.size) : ""}</span>
           <button class="btn sm ${f.recommended ? "primary" : ""}" data-dl="${esc(f.path)}">↓</button></div>
           <div class="row" style="margin-top:4px">${f.kind ? `<span class="tag accent">${esc(f.kind)}</span>` : ""}${f.quant ? `<span class="tag">${esc(f.quant)}</span>` : ""}
@@ -1430,11 +1449,100 @@
       $("#dl-repo") && ($("#dl-repo").onclick = guard(async () => { await api("/api/models/download-repo", { body: { source: src, repo: el.dataset.repo, kind: $("#src-kind").value } }); toast("Descargando el repositorio completo"); watchJobs(); }));
     })));
   });
-  $("#imp-go").onclick = guard(async () => { const r = await api("/api/models/import", { body: { path: $("#imp-path").value.trim(), copy_file: $("#imp-copy").checked } }); toast(`Importado: ${r.name} (${r.kind}, ${r.format})`); loaders.models(); });
+  $("#fmt-filter").onchange = guard(() => loaders.models());
+  async function importModel(path) {
+    const r = await api("/api/models/import", { body: { path, copy_file: $("#imp-copy").checked } });
+    toast(`Importado: ${r.name} (${r.kind}, ${r.format})`); loaders.models();
+  }
+  $("#imp-go").onclick = guard(() => importModel($("#imp-path").value.trim()));
+
+  /* ---- explorador de archivos para importar: el del sistema si la interfaz va en el mismo equipo; si no (movil,
+     acceso remoto, servicio sin escritorio), el propio, que navega por las carpetas del equipo de Agente IA */
+  const FX = { path: "", sel: null, dialogo: null };
+  async function fxSystem(carpeta) {
+    const r = await api("/api/fs/dialogo", { body: { carpeta } });
+    if (r.unavailable) { FX.dialogo = false; return false; }
+    if (r.path) { $("#imp-path").value = r.path; $("#fx-dialog").open && $("#fx-dialog").close(); await importModel(r.path); }
+    return true;   // elegido o cancelado
+  }
+  async function fxOpen(carpeta) {
+    if (FX.dialogo !== false && await fxSystem(carpeta).catch(() => false)) return;
+    const dlg = $("#fx-dialog"); if (!dlg.open) dlg.showModal();
+    await fxLoad($("#imp-path").value.trim() || FX.path);
+  }
+  async function fxLoad(ruta) {
+    let d;
+    try { d = await api(`/api/fs/listar?ruta=${encodeURIComponent(ruta || "")}&todos=${$("#fx-all").checked ? 1 : 0}`); }
+    catch (e) { toast(e.message, true); if (ruta) return fxLoad(""); return; }
+    FX.path = d.path; FX.parent = d.parent; FX.dialogo = d.dialogo; fxPick(d.modelo ? { path: d.path, formato: d.modelo, dir: true } : null);
+    $("#fx-path").value = d.path; $("#fx-up").disabled = !d.parent; $("#fx-system").style.display = d.dialogo ? "" : "none";
+    $("#fx-roots").innerHTML = d.roots.map((r) => `<button class="btn sm" data-fxr="${esc(r.path)}" title="${esc(r.path)}">${esc(r.name)}</button>`).join("");
+    $("#fx-info").textContent = `${d.dirs.length} carpetas · ${d.files.length} ${$("#fx-all").checked ? "archivos" : "modelos"}`;
+    $("#fx-list").innerHTML = d.dirs.map((x) => `<div class="item" data-fxd="${esc(x.path)}" data-fmt="${esc(x.modelo)}">📁<span class="n">${esc(x.name)}</span>${x.modelo ? `<span class="tag ok">${esc(x.modelo)}</span>` : ""}</div>`).join("") +
+      d.files.map((x) => `<div class="item" data-fxf="${esc(x.path)}" data-fmt="${esc(x.formato)}">📄<span class="n">${esc(x.name)}</span>${x.formato ? `<span class="tag accent">${esc(x.formato)}</span>` : ""}<span class="muted mono">${fmtB(x.size)}</span></div>`).join("") ||
+      `<span class="muted">No hay modelos en esta carpeta. Marca «todos los archivos» para verlo todo.</span>`;
+    $$("[data-fxr]").forEach((b) => (b.onclick = () => fxLoad(b.dataset.fxr)));
+    // carpeta: un toque la elige si es un modelo (ONNX GenAI, Genie) y dos entran; un archivo se elige y con dos se importa
+    $$("#fx-list [data-fxd]").forEach((el) => {
+      el.onclick = () => (el.dataset.fmt ? fxPick({ path: el.dataset.fxd, formato: el.dataset.fmt, dir: true }, el) : fxLoad(el.dataset.fxd));
+      el.ondblclick = () => fxLoad(el.dataset.fxd);
+    });
+    $$("#fx-list [data-fxf]").forEach((el) => {
+      el.onclick = () => fxPick({ path: el.dataset.fxf, formato: el.dataset.fmt }, el);
+      el.ondblclick = guard(() => fxImport());
+    });
+  }
+  function fxPick(sel, el) {
+    FX.sel = sel; $$("#fx-list .item.sel").forEach((x) => x.classList.remove("sel")); el && el.classList.add("sel");
+    $("#fx-ok").disabled = !sel;
+    $("#fx-sel").textContent = sel ? `${sel.dir ? "Carpeta" : "Archivo"}: ${sel.path}${sel.formato ? ` (${sel.formato})` : ""}` : "Elige un archivo de modelo (.gguf, .onnx, .litertlm, .safetensors…) o la carpeta de un modelo ONNX GenAI o Genie.";
+  }
+  async function fxImport() {
+    if (!FX.sel) return;
+    $("#imp-path").value = FX.sel.path; $("#fx-dialog").close(); await importModel(FX.sel.path);
+  }
+  $("#imp-browse").onclick = guard(() => fxOpen(false));
+  $("#imp-browse-dir").onclick = guard(() => fxOpen(true));
+  $("#fx-up").onclick = () => FX.parent && fxLoad(FX.parent);
+  $("#fx-go").onclick = () => fxLoad($("#fx-path").value.trim());
+  $("#fx-path").onkeydown = (e) => { if (e.key === "Enter") fxLoad(e.target.value.trim()); };
+  $("#fx-all").onchange = () => fxLoad(FX.path);
+  $("#fx-here").onclick = () => fxPick({ path: FX.path, dir: true });
+  $("#fx-system").onclick = guard(() => fxSystem(!!(FX.sel && FX.sel.dir)));
+  $("#fx-cancel").onclick = () => $("#fx-dialog").close();
+  $("#fx-ok").onclick = guard(() => fxImport());
   $("#spec-go").onclick = guard(async () => { await api("/api/models/activate-spec", { body: { spec: $("#spec-in").value.trim() } }); toast("LLM externo activado"); loadStatus(); });
 
   /* ================================================================ vista: HERRAMIENTAS */
+  const pctm = (x) => `${Math.round((x || 0) * 100)} %`;
+  async function loadMetricas() {
+    const m = await api(`/api/metricas?dias=${$("#met-dias").value}`), g = m.global;
+    if (!g.tareas) { $("#met-box").innerHTML = `<span class="muted">Sin tareas en este periodo.</span>`; return; }
+    const kpi = (lbl, val, hint) => `<div class="setting"><div class="lbl"><b>${lbl}</b><div class="muted">${hint}</div></div><b class="mono">${val}</b></div>`;
+    $("#met-box").innerHTML = kpi("Tasa de éxito", pctm(g.tasa_exito), `${g.tareas} tareas${g.valoradas ? ` · ${pctm(g.tasa_exito_valorada)} de las valoradas` : ""}`)
+      + kpi("Latencia por tarea", `${g.latencia_p50_s} s`, `p95 ${g.latencia_p95_s} s · primer token ${g.primer_token_p50_s} s · ${g.tokens_por_tarea} tokens${g.coste_total ? ` · ${g.coste_por_tarea.toFixed(4)} €` : ""}`)
+      + kpi("Escalado humano", pctm(g.tasa_escalado_humano), `tareas que pidieron aprobación · ${g.aprobaciones_rechazadas_o_pendientes} rechazadas o pendientes`)
+      + kpi("Precisión de herramientas", pctm(g.precision_herramientas), `${g.llamadas_herramientas} llamadas · ${pctm(g.precision_herramientas_sin_reparar)} sin reparar`)
+      + kpi("Adaptación al estilo", `${g.correcciones_estilo_por_100}`, `correcciones de estilo por cada 100 tareas (debe bajar) · ${g.reformulaciones_por_100} reformulaciones`)
+      + (g.posibles_inyecciones ? kpi("Posibles inyecciones", g.posibles_inyecciones, "texto externo que intentaba dar órdenes") : "")
+      + `<details><summary class="muted" style="cursor:pointer">Por agente</summary><table class="tbl"><tr><th>AGENTE</th><th>TAREAS</th><th>ÉXITO</th><th>P50</th><th>HERRAMIENTAS</th></tr>${Object.entries(m.por_agente).map(([k, a]) => `<tr><td>${esc(k)}</td><td>${a.tareas}</td><td>${pctm(a.tasa_exito)}</td><td>${a.latencia_p50_s} s</td><td>${pctm(a.precision_herramientas)}</td></tr>`).join("")}</table></details>`;
+  }
+  const ESTILO_DIMS = { longitud: ["Corto", "Detallado"], formalidad: ["Tú", "Usted"], formato: ["Prosa", "Listas y tablas"], tecnico: ["Sencillo", "Técnico"], emojis: ["Sin emojis", "Con emojis"], tono: ["Directo", "Cercano"] };
+  async function loadEstilo() {
+    $("#est-user").value = usuario();
+    const p = await api("/api/estilo");
+    $("#est-box").innerHTML = Object.entries(ESTILO_DIMS).map(([k, [a, b]]) => { const d = p.dims[k] || {};
+      return `<div class="setting"><div class="lbl"><b>${a} ↔ ${b}</b><div class="muted">${d.locked ? "fijado por ti" : d.signals ? `${d.signals} señales · confianza ${pctm(d.confidence)}` : "aún sin datos"}</div></div>
+        <input type="range" min="-100" max="100" value="${Math.round((d.value || 0) * 100)}" data-est="${k}" style="width:140px"></div>`; }).join("")
+      + (p.routines.length ? `<div class="muted" style="margin-top:6px">Rutinas: ${p.routines.map((r) => `${esc(r.seq)} (${r.count})`).join(" · ")}</div>` : "")
+      + (p.recent.length ? `<details><summary class="muted" style="cursor:pointer">Últimas señales</summary>${p.recent.slice(0, 8).map((r) => `<div class="muted">${esc(r.kind)} · ${esc(r.dim || "-")} · «${esc(r.text || "valoración")}»</div>`).join("")}</details>` : "");
+    $$("[data-est]").forEach((r) => (r.onchange = guard(async () => { await api("/api/estilo", { method: "PUT", body: { dim: r.dataset.est, value: Number(r.value) / 100, fijar: true } }); toast("Estilo fijado"); loadEstilo(); })));
+  }
+  $("#met-dias") && ($("#met-dias").onchange = guard(loadMetricas));
+  $("#est-user-save") && ($("#est-user-save").onclick = guard(async () => { try { localStorage.setItem("nexus_usuario", $("#est-user").value.trim()); } catch {} toast("Perfil de usuario cambiado"); loadEstilo(); }));
+  $("#est-reset") && ($("#est-reset").onclick = guard(async () => { if (!confirm("¿Olvidar todo lo aprendido de tu estilo?")) return; await api("/api/estilo", { method: "DELETE" }); loadEstilo(); }));
   loaders.tools = async () => {
+    loadMetricas().catch(() => {}); loadEstilo().catch(() => {});
     const d = await api("/api/tools");
     $("#pending-list").innerHTML = d.pending.map((p) => `<div class="item"><b>${esc(p.agent)}</b> → ${esc(p.tool)} <span class="tag ${p.risk}">${p.risk}</span><span class="muted"> · requiere ${p.level}</span></div>`).join("") || `<span class="muted">Nada pendiente.</span>`;
     d.pending.forEach(showApproval);
@@ -1500,13 +1608,13 @@
       $("#lan-box").innerHTML = `<div class="row"><span class="tag ${l.listening_lan ? "ok" : "warn"}">${l.listening_lan ? "accesible desde la red" : "solo este equipo"}</span>
           <span class="muted">Clave de red: <b class="mono">${esc(l.key)}</b></span>
           <button class="btn sm admin-only" id="lan-toggle">${l.listening_lan ? "DESACTIVAR ACCESO DE RED" : "PERMITIR ACCESO DESDE LA RED"}</button></div>
-        ${l.listening_lan ? "" : '<div class="muted">Activa el acceso de red (modo admin) y reinicia Nexus-Office para usarlo desde otros dispositivos.</div>'}
-        <div class="muted">Abre una de estas direcciones en el móvil, tablet o consola (o búscalas con la app Android Nexus-Office):</div>
+        ${l.listening_lan ? "" : '<div class="muted">Activa el acceso de red (modo admin) y reinicia Agente IA para usarlo desde otros dispositivos.</div>'}
+        <div class="muted">Abre una de estas direcciones en el móvil, tablet o consola (o búscalas con la app Android Agente IA):</div>
         ${l.urls.map((u) => `<div class="invite row"><span style="flex:1">${esc(u)}</span><button class="btn sm" data-copy="${esc(u)}">COPIAR</button></div>`).join("")}
-        ${term ? `<div class="muted">Nexus-Office completo en Android (Termux):</div><div class="invite row"><span style="flex:1">${esc(term)}</span><button class="btn sm" data-copy="${esc(term)}">COPIAR</button></div>` : ""}`;
+        ${term ? `<div class="muted">Agente IA completo en Android (Termux):</div><div class="invite row"><span style="flex:1">${esc(term)}</span><button class="btn sm" data-copy="${esc(term)}">COPIAR</button></div>` : ""}`;
       $$("[data-copy]").forEach((b) => (b.onclick = () => navigator.clipboard?.writeText(b.dataset.copy).then(() => toast("Copiado"))));
       $("#lan-toggle") && ($("#lan-toggle").onclick = guard(async () => { const r = await api("/api/lan/enable", { body: { enabled: !l.listening_lan } });
-        toast(`Guardado (${r.host}). Reinicia Nexus-Office para aplicarlo.`); loaders.net(); }));
+        toast(`Guardado (${r.host}). Reinicia Agente IA para aplicarlo.`); loaders.net(); }));
     }).catch(() => ($("#lan-box").innerHTML = '<span class="muted">Disponible solo desde el propio equipo.</span>'));
     if (S.token) { guard(remoteBox)(); guard(vpnBox)(); }
   };
@@ -1519,18 +1627,18 @@
     const cmds = (list) => list.map((c) => `<div class="invite row"><span class="mono" style="flex:1;white-space:pre-wrap">${esc(c)}</span><button class="btn sm" data-copy="${esc(c)}">COPIAR</button></div>`).join("");
     box.innerHTML = `
       <div class="row"><span class="tag ${state[0]}">${state[1]}</span><span class="muted mono">Curve25519 · ChaCha20‑Poly1305 · clave precompartida por dispositivo</span></div>
-      <div class="muted">La app <b>Nexus-Office VPN</b> para Android crea un túnel WireGuard cifrado solo hacia este PC: funciona en casa y fuera (datos móviles), sin exponer Nexus-Office a internet. Solo viaja por el túnel el tráfico de la app.</div>
+      <div class="muted">La app <b>Agente IA VPN</b> para Android crea un túnel WireGuard cifrado solo hacia este PC: funciona en casa y fuera (datos móviles), sin exponer Agente IA a internet. Solo viaja por el túnel el tráfico de la app.</div>
       <div class="setting"><div class="lbl"><b>Activar VPN</b><small>Puerto UDP del túnel (ábrelo en el router para usarla fuera de casa)</small></div>
         <div class="row"><input class="input" id="vpn-port" type="number" min="1" max="65535" value="${v.port}" style="width:110px">
           <label class="switch"><input type="checkbox" id="vpn-on" ${v.enabled ? "checked" : ""}><span></span></label></div></div>
       ${v.enabled ? `
-      ${v.listening_lan ? "" : '<div class="notice bad">Nexus-Office solo escucha en este equipo: reinícialo para que la app lo alcance por el túnel.</div>'}
+      ${v.listening_lan ? "" : '<div class="notice bad">Agente IA solo escucha en este equipo: reinícialo para que la app lo alcance por el túnel.</div>'}
       <div class="remote-sub">1 · Túnel en este PC (${esc(ins[plat].title)})</div>
       <div class="row"><button class="btn sm primary" id="vpn-apply">LEVANTAR / RECARGAR TÚNEL</button><button class="btn sm" id="vpn-conf">⤓ DESCARGAR ${esc("nexusvpn.conf")}</button>
         <button class="btn sm" id="vpn-upnp">ABRIR UDP ${v.port} EN EL ROUTER (UPnP)</button></div>
       <div id="vpn-apply-res"></div>
       ${v.wireguard ? "" : `<div class="muted">Instala WireGuard:</div>${cmds(ins[plat].install)}`}
-      <div class="muted">${v.tunnel_up ? "Tras añadir o quitar dispositivos, recarga el túnel:" : "Para levantarlo a mano (si Nexus-Office no tiene permisos de administrador):"}</div>
+      <div class="muted">${v.tunnel_up ? "Tras añadir o quitar dispositivos, recarga el túnel:" : "Para levantarlo a mano (si Agente IA no tiene permisos de administrador):"}</div>
       ${cmds(v.tunnel_up ? ins[plat].reload : ins[plat].up)}
       <details><summary class="muted">Otros sistemas (Windows, Linux, macOS, WSL)</summary>${order.slice(1).map((p) => `<div class="remote-sub">${esc(ins[p].title)}</div>${cmds([...ins[p].install, ...ins[p].up])}`).join("")}</details>
       <div class="remote-sub">2 · Añadir un móvil</div>
@@ -1543,7 +1651,7 @@
         : '<span class="muted">Ninguno todavía.</span>'}</div>` : ""}`;
     $$("#vpn-box [data-copy]").forEach((b) => (b.onclick = () => copyText(b.dataset.copy)));
     const save = guard(async () => { const x = await api("/api/vpn/enable", { body: { enabled: $("#vpn-on").checked, port: +$("#vpn-port").value } });
-      toast(x.restart_required ? "VPN activada. Reinicia Nexus-Office para que escuche por el túnel." : "Guardado"); vpnBox(); });
+      toast(x.restart_required ? "VPN activada. Reinicia Agente IA para que escuche por el túnel." : "Guardado"); vpnBox(); });
     $("#vpn-on").onchange = save; $("#vpn-port").onchange = save;
     if (!v.enabled) return;
     $("#vpn-conf").onclick = guard(async () => { const r = await api("/api/vpn/server.conf", { raw: true }); if (!r.ok) throw new Error(r.statusText); saveFile("nexusvpn.conf", await r.text(), "text/plain;charset=utf-8"); });
@@ -1558,7 +1666,7 @@
     $("#vpn-add").onclick = guard(async () => {
       const x = await api("/api/vpn/peers", { body: { name: $("#vpn-name").value.trim(), lookup_public_ip: $("#vpn-pubip").checked } });
       $("#vpn-add-box").innerHTML = `<div class="panel col" style="margin-top:8px">
-          <div class="muted"><b>App Nexus-Office VPN:</b> «Conectar por VPN» → pega este código. Contiene la clave privada del móvil: <b>se muestra una sola vez</b> y no lo compartas.</div>
+          <div class="muted"><b>App Agente IA VPN:</b> «Conectar por VPN» → pega este código. Contiene la clave privada del móvil: <b>se muestra una sola vez</b> y no lo compartas.</div>
           <div class="invite row"><span style="flex:1;word-break:break-all">${esc(x.code)}</span><button class="btn sm" data-copy="${esc(x.code)}">COPIAR</button></div>
           <div class="row"><button class="btn sm" id="vpn-dl-code">⤓ DESCARGAR CÓDIGO</button><button class="btn sm" id="vpn-dl-conf">⤓ DESCARGAR .conf (app WireGuard oficial)</button></div>
           <div class="muted">Direcciones incluidas: ${x.endpoints.map(esc).join(" · ")}. Ahora <b>recarga el túnel</b> del PC para que acepte el móvil nuevo.</div></div>`;
@@ -1575,7 +1683,7 @@
     const box = $("#remote-box"); if (!S.token || !box) return;
     const r = await api("/api/remote");
     const up = r.upnp || {}, ago = (t) => (t ? (Date.now() / 1000 - t < 120 ? "ahora" : new Date(t * 1000).toLocaleString()) : "—");
-    const state = r.listening ? ["ok", `escuchando en el puerto ${r.port}`] : r.enabled ? ["warn", "activado: reinicia Nexus-Office para abrir el puerto"] : ["", "desactivado"];
+    const state = r.listening ? ["ok", `escuchando en el puerto ${r.port}`] : r.enabled ? ["warn", "activado: reinicia Agente IA para abrir el puerto"] : ["", "desactivado"];
     box.innerHTML = `
       <div class="row"><span class="tag ${state[0]}">${state[1]}</span><span class="muted mono">${esc(r.crypto)}</span></div>
       <div class="setting"><div class="lbl"><b>Permitir acceso desde internet</b><small>Puerto HTTPS propio; el puerto local (${S.fullCfg?.server?.port || 8775}) no cambia</small></div>
@@ -1589,7 +1697,7 @@
         <button class="btn sm" id="rm-ip">DETECTAR IP PÚBLICA</button></div>
       ${up.error ? `<div class="notice bad">UPnP: ${esc(up.error)}. Abre el puerto TCP ${r.port} a mano en el router hacia este equipo, o usa Tailscale/ZeroTier.</div>` : ""}
       ${up.mapped ? `<div class="notice" style="border-color:var(--ok)">Puerto ${r.port} abierto en el router hacia ${esc(up.internal || "este equipo")}. IP pública: <b>${esc(up.external_ip)}</b></div>` : ""}
-      ${up.cgnat || r.behind_cgnat ? `<div class="notice bad">Tu operador comparte la IP pública (CGNAT): abrir puertos no basta. Usa Tailscale o ZeroTier (Nexus-Office detecta su dirección) o un túnel como Cloudflare Tunnel apuntando a https://localhost:${r.port}.</div>` : ""}
+      ${up.cgnat || r.behind_cgnat ? `<div class="notice bad">Tu operador comparte la IP pública (CGNAT): abrir puertos no basta. Usa Tailscale o ZeroTier (Agente IA detecta su dirección) o un túnel como Cloudflare Tunnel apuntando a https://localhost:${r.port}.</div>` : ""}
       ${r.urls.length ? r.urls.map((u) => `<div class="invite row"><span class="tag ${u.kind === "internet" ? "accent" : ""}">${esc(u.kind)}</span><span style="flex:1">${esc(u.url)}</span><button class="btn sm" data-copy="${esc(u.url)}">COPIAR</button></div>`).join("") : '<span class="muted">Sin direcciones todavía.</span>'}
       <div class="remote-sub">Emparejar un dispositivo nuevo</div>
       <div class="row"><input class="input" id="rm-name" placeholder="Nombre (p. ej. Móvil de Ana)" maxlength="40" style="flex:1"><button class="btn primary" id="rm-pair">GENERAR CÓDIGO</button></div>
@@ -1604,7 +1712,7 @@
     $("#rm-wizard").onclick = () => { go("settings"); setTimeout(() => { $("#router-panel").scrollIntoView({ behavior: "smooth" }); guard(routerWizard)(); }, 300); };
     const save = guard(async () => {
       const x = await api("/api/remote/enable", { body: { enabled: $("#rm-on").checked, port: +$("#rm-port").value } });
-      toast(x.restart_required ? "Guardado. Reinicia Nexus-Office para aplicarlo." : "Guardado"); remoteBox();
+      toast(x.restart_required ? "Guardado. Reinicia Agente IA para aplicarlo." : "Guardado"); remoteBox();
     });
     $("#rm-on").onchange = save; $("#rm-port").onchange = save;
     const upnp = (open) => guard(async () => { toast(open ? "Buscando el router…" : "Cerrando el puerto…"); await api("/api/remote/upnp", { body: { open } }); remoteBox(); });
@@ -1612,7 +1720,7 @@
     $("#rm-ip").onclick = guard(async () => { const x = await api("/api/remote/public-ip", { body: {} }); toast("IP pública: " + x.public_ip); remoteBox(); });
     $("#rm-cert").onclick = guard(async () => {
       if (!confirm("¿Regenerar el certificado? Las apps emparejadas dejarán de conectar hasta volver a emparejarlas.")) return;
-      await api("/api/remote/certificate", { body: {} }); toast("Certificado nuevo. Reinicia Nexus-Office."); remoteBox();
+      await api("/api/remote/certificate", { body: {} }); toast("Certificado nuevo. Reinicia Agente IA."); remoteBox();
     });
     $$("[data-revoke]").forEach((b) => (b.onclick = guard(async () => {
       if (!confirm("¿Revocar el acceso de este dispositivo? Se desconecta al momento.")) return;
@@ -1651,10 +1759,10 @@
     const step = (n, cls, title, body) => `<div class="step ${cls}"><div class="n">${cls === "ok" ? "✓" : n}</div><div class="body"><h4>${title}</h4>${body}</div></div>`;
     const copyRow = (k, v) => `<dt>${k}</dt><dd>${esc(v)}</dd><button class="btn sm ghost" data-copy="${esc(v)}">COPIAR</button>`;
     const s1 = d.listening ? ["ok", `Escuchando en el puerto ${port} con TLS 1.3.`]
-      : d.enabled ? ["warn", "Activado, falta <b>reiniciar Nexus-Office</b> para abrir el puerto."]
+      : d.enabled ? ["warn", "Activado, falta <b>reiniciar Agente IA</b> para abrir el puerto."]
       : ["bad", `Desactivado. <button class="btn sm primary" id="rw-enable">ACTIVAR (PUERTO ${port})</button>`];
     box.innerHTML = `<div class="steps">
-      ${step(1, s1[0], "Acceso remoto en Nexus-Office", `<div>${s1[1]}</div>`)}
+      ${step(1, s1[0], "Acceso remoto en Agente IA", `<div>${s1[1]}</div>`)}
       ${step(2, d.gateway ? "ok" : "bad", "Tu router", d.gateway ? `
         <div><b>${esc(d.brand_name)}</b>${d.page_title && d.page_title !== d.brand_name ? ` · «${esc(d.page_title)}»` : ""} en <span class="mono">${esc(d.gateway)}</span>
           · este equipo: <span class="mono">${esc(d.local_ip)}</span>${d.interface.name ? ` (${esc(d.interface.name)})` : ""}</div>
@@ -1670,16 +1778,16 @@
           ${copyRow("IP interna (este equipo)", rule.internal_ip)}${copyRow("Puerto interno (LAN)", String(rule.internal_port))}</dl>
         ${d.interface.mac ? `<div class="muted">Recomendado: en el apartado DHCP del router, <b>reserva la IP ${esc(rule.internal_ip)}</b> para este equipo (MAC <span class="mono">${esc(d.interface.mac)}</span>
           <button class="btn sm ghost" data-copy="${esc(d.interface.mac)}">COPIAR MAC</button>) para que la regla siga valiendo tras reiniciar.</div>` : ""}
-        ${d.upnp_igd ? "" : '<div class="muted">Alternativa sin tocar el router: Tailscale o ZeroTier en el PC y en el móvil (Nexus-Office muestra su dirección en Red COOP → Acceso remoto).</div>'}`)}
+        ${d.upnp_igd ? "" : '<div class="muted">Alternativa sin tocar el router: Tailscale o ZeroTier en el PC y en el móvil (Agente IA muestra su dirección en Red COOP → Acceso remoto).</div>'}`)}
       ${step(4, "", "Comprobar desde internet", `<div class="row"><button class="btn sm" id="rw-check">COMPROBAR AHORA</button><span class="muted">Consulta tu IP pública e intenta conectar a ella.</span></div><div id="rw-check-res"></div>`)}
       ${step(5, "", "Conectar la app Android", `<div class="row"><button class="btn sm primary" id="rw-pair">GENERAR CÓDIGO PARA LA APP</button>
-        <span class="muted">En el móvil: app Nexus-Office → «Conectar desde internet» → pega el código. Para probarlo de verdad, desactiva la Wi‑Fi y usa datos móviles.</span></div><div id="rw-pair-res"></div>`)}
+        <span class="muted">En el móvil: app Agente IA → «Conectar desde internet» → pega el código. Para probarlo de verdad, desactiva la Wi‑Fi y usa datos móviles.</span></div><div id="rw-pair-res"></div>`)}
       </div><div class="row"><button class="btn sm ghost" id="router-scan">BUSCAR DE NUEVO</button></div>`;
     $$("#router-box [data-copy]").forEach((b) => (b.onclick = () => copyText(b.dataset.copy)));
     $$("#router-box [data-open]").forEach((b) => (b.onclick = () => openExternal(b.dataset.open)));
     $("#router-scan").onclick = guard(routerWizard);
     $("#rw-enable") && ($("#rw-enable").onclick = guard(async () => {
-      await api("/api/remote/enable", { body: { enabled: true, port } }); toast("Acceso remoto activado: reinicia Nexus-Office para abrir el puerto"); routerWizard();
+      await api("/api/remote/enable", { body: { enabled: true, port } }); toast("Acceso remoto activado: reinicia Agente IA para abrir el puerto"); routerWizard();
     }));
     $("#rw-upnp") && ($("#rw-upnp").onclick = guard(async () => {
       const x = await api("/api/remote/upnp", { body: { open: true } });
@@ -1691,7 +1799,7 @@
       res.innerHTML = x.reachable
         ? `<div class="notice" style="border-color:var(--ok)">Accesible desde internet: <b class="mono">${esc(x.url)}</b> responde con TLS 1.3. Ya puedes emparejar la app.</div>`
         : x.behind_cgnat ? `<div class="notice bad">Tu operador comparte la IP pública (CGNAT, IP ${esc(x.public_ip)}): abrir puertos no basta. Pide a tu operador una IP pública (a veces gratis, «salir de CGNAT») o usa Tailscale / ZeroTier.</div>`
-        : !x.listening ? '<div class="notice bad">Nexus-Office aún no escucha en el puerto remoto: actívalo (paso 1) y reinicia Nexus-Office.</div>'
+        : !x.listening ? '<div class="notice bad">Agente IA aún no escucha en el puerto remoto: actívalo (paso 1) y reinicia Agente IA.</div>'
         : `<div class="notice">Tu IP pública es <b class="mono">${esc(x.public_ip)}</b>, pero desde este equipo no responde el puerto ${x.port}. O la regla del router aún no está bien, o tu router no permite la prueba desde dentro de casa (es frecuente): la prueba definitiva es el móvil con datos móviles en <span class="mono">${esc(x.url)}</span>.</div>`;
     });
     $("#rw-pair").onclick = guard(async () => {
@@ -1797,7 +1905,7 @@
     const box = $("#service-box");
     if (window.NexusApp && NexusApp.setBootStart) {   // app Android autonoma: servicio en primer plano al encender el movil
       const on = NexusApp.bootStart();
-      box.innerHTML = `<div class="row"><span style="flex:1">${on ? "Nexus-Office arranca solo al encender el móvil." : "Nexus-Office arranca al abrir la app."}</span>
+      box.innerHTML = `<div class="row"><span style="flex:1">${on ? "Agente IA arranca solo al encender el móvil." : "Agente IA arranca al abrir la app."}</span>
         <button class="btn sm ${on ? "" : "primary"}" id="svc-toggle">${on ? "DESACTIVAR" : "ARRANCAR AL ENCENDER"}</button></div>`;
       $("#svc-toggle").onclick = () => { NexusApp.setBootStart(!on); serviceBox(); };
       return;
@@ -1805,7 +1913,7 @@
     const st = await api("/api/service").catch(() => null);
     if (!st || !st.supported) { box.innerHTML = '<span class="muted">No disponible en este dispositivo.</span>'; return; }
     const kinds = { systemd: "systemd", cron: "cron @reboot", launchd: "launchd", windows: "Programador de tareas", termux: "termux-services" };
-    box.innerHTML = `<div class="row"><span style="flex:1">${st.registered ? `<span class="tag ok">activo</span> ${esc(kinds[st.kind] || st.kind)} · <span class="mono muted">${esc(st.registered)}</span>` : "Sin servicio: Nexus-Office arranca cuando lo abres."}</span>
+    box.innerHTML = `<div class="row"><span style="flex:1">${st.registered ? `<span class="tag ok">activo</span> ${esc(kinds[st.kind] || st.kind)} · <span class="mono muted">${esc(st.registered)}</span>` : "Sin servicio: Agente IA arranca cuando lo abres."}</span>
       <span class="admin-only">${st.registered ? '<button class="btn sm danger" id="svc-off">QUITAR</button>' : '<label class="muted"><input type="checkbox" id="svc-red"> accesible desde la red local</label> <button class="btn sm primary" id="svc-on">INSTALAR SERVICIO</button>'}</span></div>
       <div class="muted" style="margin-top:6px">${st.admin_os ? "Con permisos de administrador: arrancará con el equipo." : "Sin permisos de administrador arranca al iniciar sesión; para que arranque con el equipo instálalo desde el instalador o con <span class=mono>sudo … -m nexus servicio instalar</span>."}</div>
       <div class="user-only muted">Entra en modo administrador para cambiarlo.</div>`;
@@ -1817,8 +1925,8 @@
     $("#mon-session").textContent = `sesión ${m.session} · ${Math.round(m.uptime_s / 60)} min · ${m.summary.llm_calls} llamadas · ${m.summary.avg_tps} tok/s`;
     lines($("#mon-chart"), [m.samples.map((s) => s.cpu), m.samples.map((s) => s.ram_pct), m.samples.map((s) => s.gpu_util || 0)], ["#00f0ff", "#ff3df2", "#7cff6b"]);
   }
-  $("#shutdown").onclick = guard(async () => { if (!confirm("¿Apagar Nexus-Office? Se guardará el rendimiento de la sesión para el autoajuste.")) return;
-    await api("/api/admin/shutdown", { body: {} }); toast("Nexus-Office se está apagando…"); });
+  $("#shutdown").onclick = guard(async () => { if (!confirm("¿Apagar Agente IA? Se guardará el rendimiento de la sesión para el autoajuste.")) return;
+    await api("/api/admin/shutdown", { body: {} }); toast("Agente IA se está apagando…"); });
   $("#redetect").onclick =guard(async () => { toast("Detectando hardware…"); await api("/api/hardware/redetect", { body: {} }); loaders.system(); loadStatus(); });
 
   /* ================================================================ vista: AJUSTES */
@@ -1962,16 +2070,18 @@
   loaders.chat = async () => { await loadSessions(); };
 
   // utilidades para los modulos de la interfaz que viven en otros ficheros (js/kgadmin.js)
-  window.NexusUI = { api, toast, esc, guard, ago, fmtB, saveFile, agents: () => S.agents, admin: () => !!S.token,
+  loaders.beta = async () => { if (window.NexusBeta) await NexusBeta.load(); };   // laboratorio BETA (js/beta.js)
+
+  window.NexusUI = { api, toast, esc, guard, ago, fmtB, saveFile, agents: () => S.agents, admin: () => !!S.token, cfg: () => S.cfg,
                      agentName: (id) => agentName(id), refreshGraph: () => { loadGraph().catch(() => {}); } };
 
   /* ================================================================ selector de inicio: motor llama y CPU/GPU/NPU */
   const Accel = {
-    d: null, engine: "auto", accel: "auto",
+    d: null, engine: "auto", accel: "auto", runtime: "auto",
     async open(force) {
       const d = this.d = await api("/api/accel");
       if (!force && !d.ask) return;
-      this.engine = d.engine; this.accel = d.accel;
+      this.engine = d.engine; this.accel = d.accel; this.runtime = d.runtime || "auto";
       const n = typeof d.capas === "number", sel = $("#accel-capas"), num = $("#accel-capas-n");
       sel.value = n ? "n" : d.capas || "auto"; num.value = n ? d.capas : num.value; num.disabled = !n;
       const tot = String((d.effective || {}).offloaded || "").split("/")[1];
@@ -1986,21 +2096,32 @@
       const opt = (list, cur, key) => list.map((o) => `<button type="button" data-${key}="${o.id}" class="${o.id === cur ? "on" : ""} ${o.available ? "" : "na"}">${esc(o.label)}${o.note ? `<small>${esc(o.note)}</small>` : ""}</button>`).join("");
       $("#accel-engines").innerHTML = opt(this.d.engines, this.engine, "eng");
       $("#accel-accels").innerHTML = opt(this.d.accels, this.accel, "acc");
-      $$("[data-eng]").forEach((b) => (b.onclick = () => { this.engine = b.dataset.eng; this.render(); }));
+      // runtimes concretos del motor elegido (variantes de llama.cpp o aceleradores de LiteRT-LM, ONNX y Genie)
+      const rts = (this.d.runtimes || {})[this.engine === "auto" ? "llamaserver" : this.engine] || [];
+      if (!rts.some((r) => r.id === this.runtime)) this.runtime = "auto";
+      $("#accel-runtimes").innerHTML = opt(rts, this.runtime, "rt");
+      $$("[data-eng]").forEach((b) => (b.onclick = () => { if (this.engine !== b.dataset.eng) this.runtime = "auto"; this.engine = b.dataset.eng; this.render(); }));
       $$("[data-acc]").forEach((b) => (b.onclick = () => { this.accel = b.dataset.acc; this.render(); }));
-      const a = this.d.accels.find((x) => x.id === this.accel), e = this.d.engines.find((x) => x.id === this.engine);
-      $("#accel-note").textContent = [e && !e.available ? `${e.label}: ${e.note}; se usará el siguiente disponible` : "", a && !a.available ? a.note : ""].filter(Boolean).join(" · ");
+      $$("[data-rt]").forEach((b) => (b.onclick = () => { this.runtime = b.dataset.rt; this.render(); }));
+      const a = this.d.accels.find((x) => x.id === this.accel), e = this.d.engines.find((x) => x.id === this.engine), r = rts.find((x) => x.id === this.runtime);
+      $("#accel-note").textContent = [e && !e.available ? `${e.label}: ${e.note}; se usará el siguiente disponible` : "", a && !a.available ? a.note : "", r && !r.available ? `${r.label}: ${r.note}` : ""].filter(Boolean).join(" · ");
     },
     result(r) {
       const eff = r.effective || {};
-      $("#accel-result").innerHTML = `Ahora: <b>${esc(r.selected)}</b> · perfil ${esc(r.profile.accelerator)}${r.profile.gpu_layers ? " (capas en GPU)" : ""}` +
+      $("#accel-result").innerHTML = `Ahora: <b>${esc(r.selected)}</b>${eff.acelerador ? ` · ${esc(eff.acelerador)}` : ""}${eff.variante ? ` (${esc(eff.variante)})` : ""} · perfil ${esc(r.profile.accelerator)}${r.profile.gpu_layers ? " (capas en GPU)" : ""}` +
         (eff.device ? ` · el modelo está en <b>${esc(eff.device)}</b>${eff.offloaded ? ` (${esc(eff.offloaded)} capas)` : ""}${eff.detail ? ` · ${esc(eff.detail)}` : ""}${eff.ok === false ? ` <span class="tag warn">se pidió ${esc(eff.requested)}</span>` : ""}` : "") +
         (r.tokens_s ? ` · ${r.tokens_s} tok/s` : "") + (r.error ? `<div class="bad">${esc(r.error)}</div>` : "");
     },
     capas() { const v = $("#accel-capas").value; return v === "n" ? Math.max(1, +$("#accel-capas-n").value || 1) : v; },
-    async apply() { await api("/api/accel", { body: { engine: this.engine, accel: this.accel, remember: $("#accel-remember").checked, capas: this.capas() } }); },
+    async apply() { await api("/api/accel", { body: { engine: this.engine, accel: this.accel, runtime: this.runtime, remember: $("#accel-remember").checked, capas: this.capas() } }); },
   };
-  $("#accel-go").onclick = guard(async () => { await Accel.apply(); $("#accel-dialog").close(); toast("Motor y acelerador aplicados"); loadStatus(); });
+  // el dialogo se cierra al pulsar, sin esperar a la respuesta: mientras sigue abierto (modal) el chat no recibe el
+  // teclado y lo que se escribe nada mas arrancar se pierde; si falla, vuelve a abrirse con el error
+  $("#accel-go").onclick = async () => {
+    $("#accel-dialog").close();
+    try { await Accel.apply(); toast("Motor y acelerador aplicados"); loadStatus(); }
+    catch (e) { toast(e.message, true); $("#accel-dialog").showModal(); }
+  };
   $("#accel-test").onclick = guard(async () => {
     const b = $("#accel-test"); b.disabled = true; $("#accel-result").innerHTML = `<span class="spin"></span> Cargando el modelo y probando…`;
     try { await Accel.apply(); const r = await api("/api/accel/test", { body: {} }); Accel.d = { ...Accel.d, ...r }; Accel.result(r); toast(r.ok ? "Prueba correcta" : "La prueba ha fallado", !r.ok); }
@@ -2054,7 +2175,7 @@
       if (d.act === "engine" || d.act === "accel") {
         const cur = await api("/api/accel");
         busy("Aplicando… (se reinicia el modelo)");
-        await api("/api/accel", { body: { engine: d.act === "engine" ? d.v : cur.engine, accel: d.act === "accel" ? d.v : cur.accel, remember: true } });
+        await api("/api/accel", { body: { engine: d.act === "engine" ? d.v : cur.engine, accel: d.act === "accel" ? d.v : cur.accel, runtime: d.act === "engine" ? "auto" : cur.runtime, remember: true } });
       } else if (d.act === "model") {
         busy("Cargando el modelo…"); await api(`/api/models/activate/${encodeURIComponent(d.v)}`, { body: {} });
       } else if (d.act === "hwp") {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Nexus-Office</title>
+<title>Agente IA</title>
 <style>
   :root { --bg:#04060c; --panel:rgba(10,18,34,.75); --line:rgba(0,240,255,.2); --text:#d8f6ff; --muted:#6f8aa3; --accent:#00f0ff; --accent2:#ff3df2; --bad:#ff4d6d; }
   * { box-sizing: border-box; }
@@ -30,8 +30,8 @@
 </style>
 </head>
 <body>
-<h1>Nexus-Office</h1>
-<div class="sub">Conecta con tu Nexus-Office de Windows, Linux o macOS (red local, internet o VPN)</div>
+<h1>Agente IA</h1>
+<div class="sub">Conecta con tu Agente IA de Windows, Linux o macOS (red local, internet o VPN)</div>
 <div id="error" class="card err" style="display:none"></div>
 
 <div class="card" id="vpn-card">
@@ -66,8 +66,8 @@
 </div>
 
 <div class="card">
-  <h2>Buscar Nexus-Office en mi red</h2>
-  <div class="muted">El móvil debe estar en la misma Wi‑Fi que el PC con Nexus-Office, y en el PC debe estar activado <b>Red COOP → Conectar dispositivos → Permitir acceso desde la red</b>.</div>
+  <h2>Buscar Agente IA en mi red</h2>
+  <div class="muted">El móvil debe estar en la misma Wi‑Fi que el PC con Agente IA, y en el PC debe estar activado <b>Red COOP → Conectar dispositivos → Permitir acceso desde la red</b>.</div>
   <button class="primary" id="btn-scan">BUSCAR</button>
   <div id="found"></div>
   <input id="key" placeholder="Clave de red (la ves en el PC)" autocomplete="off">
@@ -80,7 +80,7 @@
 </div>
 
 <div class="card">
-  <h2>Nexus-Office en este móvil</h2>
+  <h2>Agente IA en este móvil</h2>
   <div class="muted">La IA del propio teléfono sigue disponible, sin conexión. Vuelve a ella cuando quieras.</div>
   <button class="primary" id="btn-local">USAR NEXUS-OFFICE EN ESTE MÓVIL</button>
 </div>
@@ -103,7 +103,7 @@
   $("#key").oninput = updateCmd;
   window.__nexusScan = (list, ip) => {
     $("#btn-scan").disabled = false; $("#btn-scan").textContent = "BUSCAR DE NUEVO";
-    $("#found").innerHTML = list.length ? "" : `<div class="muted" style="margin-top:8px">No se encontró Nexus-Office en ${ip || "la red"}. ¿Está activado el acceso de red en el PC?</div>`;
+    $("#found").innerHTML = list.length ? "" : `<div class="muted" style="margin-top:8px">No se encontró Agente IA en ${ip || "la red"}. ¿Está activado el acceso de red en el PC?</div>`;
     list.forEach((s) => {
       const d = document.createElement("div"); d.className = "srv";
       d.innerHTML = `<span class="dot"></span><b>${s.name} <span class="muted">${s.host}</span></b><span class="muted">v${s.version}</span>`;

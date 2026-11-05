@@ -1,5 +1,5 @@
 @echo off
-rem Nexus-Office (edicion C++) - preparacion en Windows. Uso:
+rem Agente IA (edicion C++) - preparacion en Windows. Uso:
 rem   install.bat [--oficina=<perfil>] [--servicio [--red]] [--modelos=auto^|todos^|no]
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
@@ -21,5 +21,5 @@ nexus-office.exe --version || exit /b 1
 if not "%OFICINA%"=="" nexus-office.exe oficina %OFICINA%
 if /i "%MODELOS%"=="no" (nexus-office.exe modelos) else if /i "%MODELOS%"=="todos" (nexus-office.exe modelos --descargar --todos) else (nexus-office.exe modelos --descargar)
 if "%SERVICIO%"=="1" nexus-office.exe servicio instalar %RED%
-echo [Nexus-Office] Listo. Arranca con start.bat
+echo [Agente IA] Listo. Arranca con start.bat
 exit /b 0

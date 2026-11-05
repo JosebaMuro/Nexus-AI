@@ -477,7 +477,7 @@ int main(const std::vector<std::string>& args) {
   try {
     if (action == "instalar") {
       say("Servicio instalado: " + install(host, port));
-      say("Nexus-Office arrancara solo; abre http://127.0.0.1:" + std::to_string(port) +
+      say("Agente IA arrancara solo; abre http://127.0.0.1:" + std::to_string(port) +
           (host == "0.0.0.0" ? " (o http://<ip-del-equipo>:" + std::to_string(port) + " desde la red)" : ""));
     } else if (action == "quitar") {
       auto done = uninstall();

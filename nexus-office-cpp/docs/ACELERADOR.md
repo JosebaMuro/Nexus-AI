@@ -1,8 +1,8 @@
 # Motor de IA y acelerador (CPU, GPU o NPU)
 
-Desde la versión 2.0, al arrancar Nexus-Office puedes elegir a mano **con qué motor** se ejecuta el modelo de IA y
+Desde la versión 2.0, al arrancar Agente IA puedes elegir a mano **con qué motor** se ejecuta el modelo de IA y
 **en qué chip**: el procesador (CPU), la tarjeta gráfica (GPU) o la unidad de IA (NPU). Si no eliges nada, lo decide
-Nexus-Office según tu equipo, como hasta ahora.
+Agente IA según tu equipo, como hasta ahora.
 
 ## Dónde se elige
 - **Al arrancar** aparece la ventana **MOTOR Y ACELERADOR**. Muestra tu procesador, memoria, GPU y NPU detectadas, y
@@ -24,7 +24,7 @@ modelo más grande en una gráfica pequeña), y si se bloquea el modelo en RAM (
 
 | Perfil de serie | Para qué |
 |---|---|
-| **Automático** | Lo decide Nexus-Office según el equipo (como siempre) |
+| **Automático** | Lo decide Agente IA según el equipo (como siempre) |
 | **Rendimiento** | GPU, modelo entero en la VRAM y contexto máximo |
 | **Equilibrado** | GPU si la hay, contexto moderado (8192) |
 | **Modelo grande** | Parte del modelo en la VRAM y el resto y el contexto en la RAM (bloqueada) |
@@ -32,7 +32,7 @@ modelo más grande en una gráfica pequeña), y si se bloquea el modelo en RAM (
 | **Solo CPU** | Sin GPU ni NPU |
 
 Se elige en el menú **PERFIL** de la barra superior, que muestra solo lo que tu hardware permite. **Editar perfiles**
-crea, copia o cambia los tuyos (si cambias uno de serie y lo borras, vuelve a ser el original). Al activar uno, Nexus-Office reinicia el motor con esos
+crea, copia o cambia los tuyos (si cambias uno de serie y lo borras, vuelve a ser el original). Al activar uno, Agente IA reinicia el motor con esos
 valores. API: `GET /api/hw/perfiles`, `PUT` y `DELETE /api/hw/perfiles/{id}`, `POST /api/hw/perfiles/{id}/activar`.
 Configuración: `hardware.perfil` y `hardware.perfiles`.
 
@@ -44,7 +44,7 @@ Configuración: `hardware.perfil` y `hardware.perfiles`.
 - Los dispositivos **de software** (llvmpipe, lavapipe, SwiftShader) no se usan nunca: en Linux sin driver de
   Vulkan aparecían como «GPU» e iban más lentos que la CPU. Si es lo único que hay, se queda en CPU y lo dice.
 - El nombre de la GPU se reconoce aunque llama.cpp le añada sufijos (por ejemplo «Intel(R) UHD Graphics 770 (ADL-S GT1)»).
-- Si la GPU elegida falla al arrancar, Nexus-Office vuelve a la CPU y lo muestra en el menú **IA** (`gpu_error`).
+- Si la GPU elegida falla al arrancar, Agente IA vuelve a la CPU y lo muestra en el menú **IA** (`gpu_error`).
 
 No se ha podido probar con dos GPU físicas; la elección se ha probado con la salida real de `--list-devices` de varios equipos.
 
@@ -61,6 +61,26 @@ llama-server va **incluido en los instaladores offline** con todas sus variantes
 La opción **llama.cpp integrado** de la edición Python (llama-cpp-python dentro del programa) no existe en la edición
 C++: el selector la muestra como no disponible y llama-server, que es el mismo llama.cpp, hace su trabajo.
 
+### Elegir motor y runtime a mano (2.8)
+En **MOTOR Y ACELERADOR** hay tres grupos: el **motor** (Automático, llama-server, LiteRT-LM, ONNX Runtime GenAI,
+Qualcomm Genie), **CPU/GPU/NPU** y el **runtime concreto** de ese motor. Automático elige según el hardware; a mano
+se fuerza uno. Lo que no va en el paquete de ese sistema sale desactivado con el motivo.
+
+| Motor | Runtimes que se pueden elegir | Formato del modelo |
+|---|---|---|
+| llama-server | CPU, CPU sin AVX2, CUDA 12, CUDA 13, ROCm, Vulkan, SYCL, OpenVINO, Metal, OpenCL Adreno, Snapdragon/Hexagon, CANN, WebGPU (los que traiga el paquete) | `.gguf` |
+| LiteRT-LM | CPU, GPU, NPU (Google Tensor, Hexagon, MediaTek APU, Intel) | `.litertlm` |
+| ONNX Runtime GenAI | el del modelo, CPU, CUDA, DirectML, QNN, OpenVINO, VitisAI | carpeta con `genai_config.json` |
+| Qualcomm Genie | NPU Hexagon (HTP) | carpeta con `genie_config.json` (Qualcomm AI Hub) |
+
+Con un motor elegido a mano se usa su modelo activo; si no hay ninguno de su formato, el selector lo dice. En la
+vista **Modelos**, el filtro **Formato** enseña solo los modelos de un motor. Terminal:
+`nexus-office run --motor litert --acelerador npu`, `nexus-office run --motor onnx --runtime cuda`,
+`nexus-office run --motor llamaserver --runtime vulkan`. Configuración: `llm.engine`, `llm.motor_acelerador`,
+`hardware.llama_variant_manual`.
+
+La lista completa de motores por hardware, con lo que no se puede incluir y por qué, está en el CHANGELOG (2.8.0).
+
 ### LiteRT-LM y ONNX Runtime GenAI (2.5)
 Son motores para los equipos y móviles donde llama.cpp no aprovecha el acelerador: los **Pixel** (Tensor), los
 **Snapdragon 8 Elite** y **Dimensity** con modelos `.litertlm` compilados para su NPU, y los portátiles **Snapdragon X
@@ -68,7 +88,7 @@ Elite/Plus** con modelos ONNX para QNN. Se eligen solos por el formato del model
 una carpeta con `genai_config.json` a ONNX Runtime GenAI; los GGUF siguen en llama-server.
 
 - Cada motor corre en un proceso aparte (`nexus-office motor litert|onnx ...`) con la misma API que llama-server. Si
-  el driver de la NPU o de la GPU falla, cae ese proceso y no Nexus-Office, y se prueba el siguiente acelerador:
+  el driver de la NPU o de la GPU falla, cae ese proceso y no Agente IA, y se prueba el siguiente acelerador:
   **NPU → GPU → CPU**.
 - LiteRT-LM solo intenta la NPU si el modelo está compilado para ese SoC (lleva `sm8750`, `mt6991`, `tensor_g4`... en
   el nombre) y el equipo tiene NPU; si no, GPU y CPU. ONNX Runtime GenAI usa el proveedor para el que se exportó el
@@ -78,7 +98,7 @@ una carpeta con `genai_config.json` a ONNX Runtime GenAI; los GGUF siguen en lla
 - Aún no admiten imágenes ni herramientas: el chat se manda como texto.
 
 Ollama ya no aparece en el selector porque es otra aplicación que hay que instalar aparte y no viene en el paquete.
-Si lo tienes instalado, Nexus-Office lo sigue usando cuando no hay otro motor.
+Si lo tienes instalado, Agente IA lo sigue usando cuando no hay otro motor.
 
 ## Aceleradores
 
@@ -94,8 +114,11 @@ Si lo tienes instalado, Nexus-Office lo sigue usando cuando no hay otro motor.
     móvil no lo permite, pasa solo a la GPU y luego a la CPU.
   - **Snapdragon X Elite/Plus en Windows ARM**: ONNX Runtime GenAI con **QNN** en la NPU Hexagon (modelos ONNX
     exportados para QNN); los GGUF van a la GPU Adreno por OpenCL.
-  - **Google Tensor, Snapdragon 8 Elite y Dimensity** (Android): LiteRT-LM con los modelos `.litertlm` de su SoC,
-    si el móvil trae las bibliotecas *dispatch* de su NPU; si no, la GPU del móvil.
+  - **Google Tensor, Snapdragon 8 Gen 2 o posterior y Dimensity** (Android, 2.8): LiteRT-LM con los modelos
+    `.litertlm` de su SoC. La APK trae los *dispatch* de NPU de Google Tensor, Qualcomm y MediaTek y las bibliotecas
+    QNN HTP; la NPU del Pixel usa además la biblioteca del sistema (`libedgetpu_litert.so`) y la de MediaTek el
+    NeuroPilot del móvil. Si faltan, la GPU del móvil.
+  - **Qualcomm Genie** (2.8): modelos de Qualcomm AI Hub en la NPU Hexagon (Android, Windows ARM, Linux ARM).
   - **AMD Ryzen AI y Apple Neural Engine**: llama.cpp no puede ejecutar ahí el modelo de texto. El selector lo dice y
     usa la GPU (o la CPU).
 
@@ -146,7 +169,7 @@ Si lo tienes instalado, Nexus-Office lo sigue usando cuando no hay otro motor.
   de 12 núcleos se contaba como de 4.
 
 ## Cómo se comprueba que acelera de verdad
-Tras arrancar llama-server, Nexus-Office lee su registro (`logs/llama-server.log`) y anota el dispositivo real: capas
+Tras arrancar llama-server, Agente IA lee su registro (`logs/llama-server.log`) y anota el dispositivo real: capas
 cargadas en la GPU, dispositivo CUDA, Vulkan o Metal, la NPU Hexagon u OpenVINO. Si lo pedido no se ha cumplido
 (por ejemplo, falta el driver de la GPU), lo dice en el selector y en el registro, y el modelo sigue en lo que sí
 funciona.

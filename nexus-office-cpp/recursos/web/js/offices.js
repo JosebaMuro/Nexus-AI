@@ -1,4 +1,4 @@
-/* Nexus-Office — Despachos de los agentes: cada agente tiene su despacho y se le ve trabajar en lo que hace de verdad
+/* Agente IA — Despachos de los agentes: cada agente tiene su despacho y se le ve trabajar en lo que hace de verdad
  * (/api/agentes/actividad y los eventos «agent_activity»): piensa con la mano en la barbilla y se toma un café, escribe
  * en el portatil, busca en la web, lee documentos, dibuja en la tableta, compone con cascos, habla por telefono con la
  * IA online, se va a la reunion del salon y se manda avioncitos de papel con los demas cuando delega.

@@ -375,12 +375,21 @@ std::vector<std::shared_ptr<ToolSpec>> ToolRegistry::all() {
   return order_;
 }
 
+// lista de herramientas de un agente: nombres, "*" (todas) y exclusiones "!nombre" o "!riesgo:high" (minimo privilegio)
 std::vector<std::shared_ptr<ToolSpec>> ToolRegistry::for_agent(const std::vector<std::string>& allowed) {
   if (allowed.empty()) return {};
   bool every = std::find(allowed.begin(), allowed.end(), "*") != allowed.end();
+  std::set<std::string> excluded, excluded_risk;
+  for (auto& a : allowed)
+    if (a.size() > 1 && a[0] == '!') {
+      if (a.rfind("!riesgo:", 0) == 0) excluded_risk.insert(a.substr(8));
+      else excluded.insert(a.substr(1));
+    }
   std::vector<std::shared_ptr<ToolSpec>> out;
-  for (auto& t : all())
-    if (t->enabled && (every || std::find(allowed.begin(), allowed.end(), t->name) != allowed.end())) out.push_back(t);
+  for (auto& t : all()) {
+    if (!t->enabled || excluded.count(t->name) || excluded_risk.count(t->risk)) continue;
+    if (every || std::find(allowed.begin(), allowed.end(), t->name) != allowed.end()) out.push_back(t);
+  }
   return out;
 }
 

@@ -139,7 +139,7 @@ std::string VPN::server_conf() {
   ensure_server_keys();
   auto n = network();
   std::vector<std::string> lines = {
-      "# Nexus-Office VPN (WireGuard) - tunel de este PC. Lo genera Nexus-Office: no lo edites a mano.",
+      "# Agente IA VPN (WireGuard) - tunel de este PC. Lo genera Agente IA: no lo edites a mano.",
       "# Importalo en WireGuard (Windows/macOS) o usalo con wg-quick (Linux/macOS). Red " + net_text() + ".",
       "[Interface]",
       "PrivateKey = " + jstr(state, "server_private"),
@@ -164,7 +164,7 @@ fs::path VPN::write_conf() {
 }
 
 std::string VPN::client_conf(const json& peer, const std::string& priv, const std::string& endpoint) {
-  return join({"# Nexus-Office VPN - dispositivo «" + jstr(peer, "name") + "» (para la app WireGuard oficial)", "[Interface]",
+  return join({"# Agente IA VPN - dispositivo «" + jstr(peer, "name") + "» (para la app WireGuard oficial)", "[Interface]",
                "PrivateKey = " + priv, "Address = " + jstr(peer, "ip") + "/32", "", "[Peer]",
                "PublicKey = " + jstr(state, "server_public"), "PresharedKey = " + jstr(peer, "psk"), "Endpoint = " + endpoint,
                "AllowedIPs = " + server_ip() + "/32", "PersistentKeepalive = " + std::to_string(KEEPALIVE), ""},
@@ -295,9 +295,9 @@ json VPN::instructions() {
         {"install", {"winget install WireGuard.WireGuard"}},
         {"up",
          {win_exe + " /installtunnelservice '" + conf + "'",
-          "New-NetFirewallRule -DisplayName 'Nexus-Office VPN (WireGuard)' -Direction Inbound -Protocol UDP -LocalPort " + port_s +
+          "New-NetFirewallRule -DisplayName 'Agente IA VPN (WireGuard)' -Direction Inbound -Protocol UDP -LocalPort " + port_s +
               " -Action Allow",
-          "New-NetFirewallRule -DisplayName 'Nexus-Office por la VPN' -Direction Inbound -Protocol TCP -LocalPort " + http +
+          "New-NetFirewallRule -DisplayName 'Agente IA por la VPN' -Direction Inbound -Protocol TCP -LocalPort " + http +
               " -RemoteAddress " + net + " -Action Allow"}},
         {"reload", {win_exe + " /uninstalltunnelservice " + ifc, "Start-Sleep 2", win_exe + " /installtunnelservice '" + conf + "'"}},
         {"down", {win_exe + " /uninstalltunnelservice " + ifc}}}},
@@ -319,13 +319,13 @@ json VPN::instructions() {
         {"reload", {"sudo wg-quick down '" + conf + "'", "sudo wg-quick up '" + conf + "'"}},
         {"down", {"sudo wg-quick down '" + conf + "'"}}}},
       {"wsl",
-       {{"title", "WSL (Nexus-Office dentro de Ubuntu en Windows)"},
+       {{"title", "WSL (Agente IA dentro de Ubuntu en Windows)"},
         {"install",
          {"En Windows, %UserProfile%\\.wslconfig →  [wsl2]  networkingMode=mirrored   (y luego: wsl --shutdown)",
           "sudo apt install wireguard-tools"}},
         {"up",
          {"sudo install -m 600 '" + conf + "' /etc/wireguard/" + ifc + ".conf", "sudo wg-quick up " + ifc,
-          "(PowerShell admin) New-NetFirewallHyperVRule -Name NexusVPN -DisplayName 'Nexus-Office VPN' -Direction Inbound "
+          "(PowerShell admin) New-NetFirewallHyperVRule -Name NexusVPN -DisplayName 'Agente IA VPN' -Direction Inbound "
           "-VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol UDP -LocalPorts " + port_s}},
         {"reload",
          {"sudo install -m 600 '" + conf + "' /etc/wireguard/" + ifc + ".conf",
@@ -375,7 +375,7 @@ json VPN::apply() {
       }
       out = proc::run({tool, "/installtunnelservice", S(conf_file)}, 60, cap);
     } else {
-      return {{"applied", false}, {"platform", plat}, {"reason", "Nexus-Office no se ejecuta con permisos de administrador"},
+      return {{"applied", false}, {"platform", plat}, {"reason", "Agente IA no se ejecuta con permisos de administrador"},
               {"commands", cmds}};
     }
   } catch (const std::exception& e) {

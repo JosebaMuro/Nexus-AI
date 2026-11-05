@@ -1,4 +1,4 @@
-/* Nexus-Office — interfaz holografica */
+/* Agente IA — interfaz holografica */
 :root {
   --bg: #04060c;
   --bg2: #070b16;
@@ -309,6 +309,16 @@ dialog { border: 1px solid var(--line-strong); border-radius: 18px; background: 
 dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
 .accel-dialog { width: min(560px, 94vw); }
 .avlib-dialog { width: min(860px, 96vw); max-height: 92vh; }
+.fx-dialog { width: min(760px, 96vw); max-height: 92vh; display: flex; flex-direction: column; gap: 8px; }
+.fx-dialog:not([open]) { display: none; }
+.fx-roots { display: flex; flex-wrap: wrap; gap: 6px; }
+.fx-list { overflow-y: auto; min-height: 200px; max-height: 52vh; gap: 4px; }
+.fx-list .item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; min-width: 0; }
+.fx-list .item .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-list .item.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--shade)); }
+.fx-sel { font-size: .8rem; overflow-wrap: anywhere; }
+[data-layout] .fx-dialog .fx-nav > .btn { flex: 0 0 auto; width: auto; }
+[data-layout] .fx-dialog .fx-nav > .input { flex: 1 1 auto; width: auto; font-size: .85rem; }
 .avlib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 .avlib-card { border: 1px solid var(--line); border-radius: 12px; background: var(--shade); padding: 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .avlib-card .th { aspect-ratio: 1; border-radius: 8px; background: #0b0f18 center/cover no-repeat; display: grid; place-items: center; font-size: 34px; color: var(--muted); overflow: hidden; }
@@ -626,3 +636,48 @@ body.flat .panel::before, body.flat .panel::after { display: none; }
 .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: livepulse 1.6s infinite; }
 .live-dot.off { background: var(--muted); box-shadow: none; animation: none; }
 @keyframes livepulse { 50% { opacity: .35; } }
+
+/* ================================================================ laboratorio BETA (js/beta.js) */
+.beta-tag { font: 800 10px var(--font-hud); letter-spacing: .2em; padding: 3px 8px 3px 10px; border-radius: 6px; cursor: pointer;
+  color: var(--on-accent); background: linear-gradient(90deg, var(--accent), var(--accent2)); border: 0; box-shadow: var(--glow); }
+.beta-tag:hover { filter: brightness(1.15); }
+.beta-head { align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.beta-head #beta-info { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.beta-opts { flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 14px; }
+.beta-opts label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.beta-opts .input { width: auto; }
+.beta-cards { gap: 12px; }
+.beta-stat { padding: 12px 14px; gap: 4px; }
+.beta-stat .v small { font: 500 11px var(--font-mono); color: var(--muted); text-shadow: none; }
+.beta-stat .tag { align-self: flex-start; }
+.beta-scroll { max-height: 420px; overflow: auto; }
+#view-beta :is(td, dd, p).ok { color: var(--ok); } #view-beta :is(td, dd, p).warn { color: var(--warn); } #view-beta :is(td, dd, p).bad { color: var(--bad); }
+#view-beta details summary { cursor: pointer; margin: 10px 0 6px; }
+.beta-themes { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.beta-swatch { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px; border-radius: 12px; cursor: pointer; width: 112px;
+  background: var(--shade); border: 1px solid var(--line); color: var(--text); font: 600 11px var(--font-ui); }
+.beta-swatch:hover, .beta-swatch.on { border-color: var(--accent); box-shadow: var(--glow); }
+.beta-swatch i { display: flex; gap: 4px; align-items: flex-end; justify-content: center; width: 100%; height: 42px; border-radius: 8px; padding: 6px;
+  box-shadow: inset 0 0 0 1px rgba(127,127,127,.25); }
+.beta-swatch b { flex: 1; height: 60%; border-radius: 4px; } .beta-swatch b:first-child { height: 100%; }
+.beta-gallery { display: flex; flex-direction: column; gap: 12px; }
+.beta-gallery .row { flex-wrap: wrap; gap: 8px; align-items: center; }
+.beta-gallery .input { width: auto; flex: 1; min-width: 140px; }
+.beta-msgs { display: flex; flex-direction: column; gap: 10px; }
+.beta-msgs .msg { animation: none; }
+.beta-sample { display: inline-block; padding: 2px 10px; border-radius: 6px; font-weight: 700; box-shadow: inset 0 0 0 1px rgba(127,127,127,.25); }
+.beta-stars { display: flex; gap: 6px; }
+.beta-stars button { font-size: 30px; line-height: 1; background: none; border: 0; cursor: pointer; color: var(--line-strong); transition: transform .15s, color .15s; }
+.beta-stars button.on { color: var(--warn); text-shadow: 0 0 12px color-mix(in srgb, var(--warn) 60%, transparent); }
+.beta-stars button:hover { transform: scale(1.15); }
+.beta-zonas { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.beta-zona { display: grid; grid-template-columns: 110px 1fr 34px 28px; gap: 10px; align-items: center; font-size: 13px; }
+#view-beta .list, #beta-op-list { display: flex; flex-direction: column; gap: 8px; }
+#beta-hud { position: fixed; right: 12px; bottom: 12px; z-index: 90; display: flex; flex-direction: column; gap: 2px; min-width: 190px; cursor: pointer;
+  padding: 8px 12px; border-radius: 10px; background: rgba(0,0,0,.78); color: #e9f3f7; border: 1px solid rgba(255,255,255,.15);
+  font: 11px/1.45 var(--font-mono); box-shadow: 0 6px 24px rgba(0,0,0,.4); pointer-events: auto; }
+#beta-hud b { font: 700 20px var(--font-hud); } #beta-hud b small { font-size: 11px; color: #9fb3bd; }
+#beta-hud .ok { color: #6bff8f; } #beta-hud .warn { color: #ffc65c; } #beta-hud .bad { color: #ff6b81; }
+[data-layout="phone"] #beta-hud { bottom: calc(72px + env(safe-area-inset-bottom)); right: 8px; min-width: 0; font-size: 10px; }
+[data-layout="phone"] .beta-tag { display: none; }
+[data-layout="phone"] .beta-zona { grid-template-columns: 90px 1fr 30px 24px; }

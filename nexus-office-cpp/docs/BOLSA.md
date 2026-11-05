@@ -1,6 +1,6 @@
 # Oficina de bolsa e inversiones y mesa simulada
 
-El perfil `bolsa-inversiones` convierte Nexus-Office en la oficina de una pyme o un despacho que trabaja con bolsa,
+El perfil `bolsa-inversiones` convierte Agente IA en la oficina de una pyme o un despacho que trabaja con bolsa,
 fondos, ETF, renta fija y criptoactivos. Trae una **mesa de bolsa simulada** para practicar sin dinero en un entorno
 que imita uno real, en Windows, macOS, Linux, Raspberry Pi y Android. Desde la 2.1 la mesa usa **cotizaciones
 reales** cuando hay conexión, y sin ella sigue simulada desde el último precio real.
@@ -121,7 +121,7 @@ nada se ejecute por su cuenta:
 1. Cualquier orden (tuya o de un agente) queda **por confirmar**. No se envía a ningún sitio.
 2. Solo una persona puede confirmarla, escribiendo `CONFIRMO`: en la app con el modo **ADMIN** activo, o en la
    terminal con `nexus-office bolsa confirmar <id>`. Ningún agente tiene una herramienta para confirmar.
-3. **Nexus-Office no se conecta a ningún bróker.** La orden confirmada la ejecutas tú en tu bróker.
+3. **Agente IA no se conecta a ningún bróker.** La orden confirmada la ejecutas tú en tu bróker.
 4. Después registras la ejecución real (precio, comisiones) con *REGISTRAR EJECUCIÓN* o
    `nexus-office bolsa ejecucion <id> <precio> --comision <euros>`, y la cartera se actualiza.
 
@@ -147,7 +147,7 @@ nexus-office bolsa confirmar <id>
 nexus-office bolsa ejecucion <id> 6.12 --comision 8
 ```
 
-En la app Nexus-Office autónomo de Android la mesa está en la sección **BOLSA** igual que en el escritorio.
+En la app Agente IA autónomo de Android la mesa está en la sección **BOLSA** igual que en el escritorio.
 
 ## API
 

@@ -22,7 +22,7 @@ const uint64_t MAX_BYTES = 300'000'000;
 const std::vector<std::string> EXT_OK = {".glb", ".vrm", ".gltf"};
 const std::vector<std::string> IPFS_GATEWAYS = {"https://dweb.link/ipfs/", "https://ipfs.io/ipfs/",
                                                 "https://gateway.pinata.cloud/ipfs/", "https://w3s.link/ipfs/"};
-const http::Headers UA = {{"User-Agent", "Mozilla/5.0 (compatible; Nexus-Office avatares)"}};
+const http::Headers UA = {{"User-Agent", "Mozilla/5.0 (compatible; Agente IA avatares)"}};
 
 std::string safe(const std::string& name) {
   std::string out;

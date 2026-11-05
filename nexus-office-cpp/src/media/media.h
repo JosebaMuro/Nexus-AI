@@ -1,7 +1,7 @@
 // Multimedia (nexus/media y nexus/prompt_enhancer.py): imagen, musica, voz y mejorador de prompts.
 //
 // Edicion C++: la imagen neuronal usa stable-diffusion.cpp (sd-cli) igual que la version Python; sin modelo se
-// genera arte procedural. La voz usa Piper (ejecutable) o la voz del sistema, y el dictado whisper.cpp
+// el compositor de escenas dibuja lo que dice el prompt (media/scene.h). La voz usa Piper (ejecutable) o la voz del sistema, y el dictado whisper.cpp
 // (whisper-cli). La musica procedural es la misma teoria musical sintetizada en C++.
 #pragma once
 #include <atomic>

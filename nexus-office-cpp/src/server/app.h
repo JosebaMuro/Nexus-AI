@@ -26,6 +26,7 @@ class WebSocket;
 
 namespace nx {
 class Services;
+class DB;
 }
 
 namespace nx::server {
@@ -152,5 +153,10 @@ class App {
 };
 
 void register_routes(App& app);   // routes.cpp
+// rutas_agentes.cpp: metricas por tarea, estilo de cada usuario y aprobaciones diferidas
+void register_agent_routes(App& app);
+std::string user_of(Ctx& c);                       // usuario final de la peticion ("" = el titular)
+std::string sanitize_user(const std::string& raw);
+json metricas(DB& db, double since, const std::string& user = "", const std::string& agent = "");
 
 }  // namespace nx::server

@@ -64,6 +64,7 @@ Services::Services(bool detect_hardware) : config(get_config()) {
       *graph, embedder_getter(),
       [this] { return agents ? agents->list() : std::vector<agents::AgentSpec>{}; }, &config);
   learner = std::make_unique<mem::Learner>(*db, *memory, *graph, *organizer);
+  estilo = std::make_unique<mem::StyleLearner>(*db);
   rag = std::make_unique<rag::RAGStore>(*db, embedder_getter());
   rag->graph = graph.get();   // cada documento se enlaza en el grafo general o en el de su agente
   llm = std::make_unique<llm::LLMManager>(cfg, models->catalog, profile, monitor.get(), runtimes.get());
@@ -109,6 +110,10 @@ Services::Services(bool detect_hardware) : config(get_config()) {
     return a && !a->name.empty() ? a->name : aid;
   };
   learner->namer = graph->namer;
+  // una aprobacion que caduco (o sobrevivio a un reinicio) se aprueba despues: la tarea se reanuda
+  supervisor->on_deferred = [this](const json& row, bool approved, const std::string& approver) {
+    if (agents) agents->resume_deferred(row, approved, approver);
+  };
   try {   // oficina de pyme: cada agente de la oficina estrena su propio subgrafo sembrado
     office::ensure(*this);
   } catch (const std::exception& e) {
@@ -203,7 +208,7 @@ void Services::start() {
 void Services::shutdown() {
   if (shut_) return;
   shut_ = true;
-  L.info("Apagando Nexus-Office...");
+  L.info("Apagando Agente IA...");
   hilo.reset();   // espera al plegado en curso antes de parar el LLM
   if (coop) coop->stop();
   if (llm) {

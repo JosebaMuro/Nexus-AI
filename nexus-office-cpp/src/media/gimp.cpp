@@ -993,7 +993,7 @@ json GimpEngine::status(bool refresh) {
   } else {
     out["nota"] =
         "GIMP no esta disponible en este equipo: las ediciones se hacen con Pillow (mismas operaciones; el formato "
-        "XCF y los scripts de GIMP no estan disponibles). Los instaladores de escritorio de Nexus-Office lo traen "
+        "XCF y los scripts de GIMP no estan disponibles). Los instaladores de escritorio de Agente IA lo traen "
         "incluido; en Android no existe GIMP.";
   }
   return out;

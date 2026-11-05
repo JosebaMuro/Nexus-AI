@@ -22,6 +22,8 @@ def run(args, ctx):
 - **Comunidad**: `data/tools/community/*.py`, solo tras aprobación. Son el único sitio donde se usa Python: se ejecutan con el Python del sistema si lo hay (sin él, no están disponibles). Su manifiesto se lee por AST (sin ejecutar el código) y se ejecutan en un **subproceso aislado** (`python -I`, entorno mínimo, directorio sandbox, límite de tiempo).
 
 ## Supervisión
+
+Desde la beta 2.8, si el turno ya leyó contenido de terceros (web, documentos, ficheros, memoria), las herramientas que escriben, gastan o ejecutan **suben un escalón**, y las aprobaciones sin respuesta quedan pendientes y se reanudan al aprobarlas. La lista `tools` de un agente admite exclusiones (`"!web_fetch"`, `"!riesgo:high"`). Ver [AGENTES.md](AGENTES.md).
 | Política | Comportamiento |
 |---|---|
 | `auto` | Se ejecuta directamente. |

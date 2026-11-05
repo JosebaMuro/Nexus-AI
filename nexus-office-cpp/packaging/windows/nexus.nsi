@@ -1,8 +1,8 @@
-; Nexus-Office 2.1 (edicion C++) - instalador grafico de Windows (NSIS 3). Lo genera
+; Agente IA 2.1 (edicion C++) - instalador grafico de Windows (NSIS 3). Lo genera
 ; nexus-construir paquetes (makensis funciona tambien en Linux): nexus-office.exe, la interfaz web y los
 ; motores de IA (llama-server, sd-cli, piper y whisper) van dentro del .exe. Se instala junto a la edicion Python
 ; sin pisarla (carpeta y entrada de «Aplicaciones» propias).
-; Defines que pasa nexus-construir: VERSION, ARCH (x64|arm64), PAYLOAD (carpeta Nexus-Office preparada), OUTFILE, ICON,
+; Defines que pasa nexus-construir: VERSION, ARCH (x64|arm64), PAYLOAD (carpeta Agente IA preparada), OUTFILE, ICON,
 ; LICENSE, PROFILES (fichero .nsh con los perfiles de oficina).
 ; Opciones de linea de comandos (tambien en modo silencioso /S):
 ;   /OFICINA=herreria  /SERVICIO  /RED  /MODELOS=auto|todos|no  /D=C:\ruta  (la ultima, siempre al final)
@@ -25,25 +25,25 @@ RequestExecutionLevel user
 !include FileFunc.nsh
 !include x64.nsh
 
-Name "Nexus-Office ${VERSION} (C++)"
+Name "Agente IA ${VERSION} (C++)"
 OutFile "${OUTFILE}"
 InstallDir "$LOCALAPPDATA\Nexus-Office-C"
 InstallDirRegKey HKCU "Software\Nexus-Office-C" "InstallDir"
-BrandingText "Nexus-Office ${VERSION} (${ARCH})"
+BrandingText "Agente IA ${VERSION} (${ARCH})"
 VIProductVersion "${NUMVER}.0"
-VIAddVersionKey "ProductName" "Nexus-Office"
-VIAddVersionKey "FileDescription" "Instalador de Nexus-Office (oficina de IA local)"
+VIAddVersionKey "ProductName" "Agente IA"
+VIAddVersionKey "FileDescription" "Instalador de Agente IA (oficina de IA local)"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
-VIAddVersionKey "LegalCopyright" "Nexus-Office"
+VIAddVersionKey "LegalCopyright" "Agente IA"
 
 !define MUI_ICON "${ICON}"
 !define MUI_UNICON "${ICON}"
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TITLE "Instalar Nexus-Office ${VERSION} (edicion C++)"
-!define MUI_WELCOMEPAGE_TEXT "Nexus-Office es una oficina de inteligencia artificial que funciona entera en este equipo, sin enviar nada a internet.$\r$\n$\r$\nEsta es la edicion C++: un unico programa nativo, mas ligero y rapido de arrancar, con la misma interfaz. El instalador incluye todo lo necesario (no descarga programas). Solo el modelo de IA, elegido segun tu hardware, se descarga si hay internet.$\r$\n$\r$\nLa carpeta de instalacion es portable: puedes elegir un disco USB."
+!define MUI_WELCOMEPAGE_TITLE "Instalar Agente IA ${VERSION} (edicion C++)"
+!define MUI_WELCOMEPAGE_TEXT "Agente IA es una oficina de inteligencia artificial que funciona entera en este equipo, sin enviar nada a internet.$\r$\n$\r$\nEsta es la edicion C++: un unico programa nativo, mas ligero y rapido de arrancar, con la misma interfaz. El instalador incluye todo lo necesario (no descarga programas). Solo el modelo de IA, elegido segun tu hardware, se descarga si hay internet.$\r$\n$\r$\nLa carpeta de instalacion es portable: puedes elegir un disco USB."
 !define MUI_FINISHPAGE_RUN
-!define MUI_FINISHPAGE_RUN_TEXT "Abrir Nexus-Office"
+!define MUI_FINISHPAGE_RUN_TEXT "Abrir Agente IA"
 !define MUI_FINISHPAGE_RUN_FUNCTION OpenNexus
 !define MUI_FINISHPAGE_SHOWREADME "$INSTDIR\docs\USUARIO.md"
 !define MUI_FINISHPAGE_SHOWREADME_TEXT "Ver el manual de usuario"
@@ -78,7 +78,7 @@ Function .onInit
     ${EndIf}
   ${Else}
     ${IfNot} ${RunningX64}
-      MessageBox MB_ICONEXCLAMATION "Nexus-Office necesita Windows de 64 bits." /SD IDOK
+      MessageBox MB_ICONEXCLAMATION "Agente IA necesita Windows de 64 bits." /SD IDOK
       Abort
     ${EndIf}
   ${EndIf}
@@ -138,9 +138,9 @@ Function OptionsPage
   Pop $0
   ${NSD_CreateDropList} 0 13u 100% 120u ""
   Pop $hCombo
-  ${NSD_CB_AddString} $hCombo "(ninguno): agentes generales de Nexus-Office"
+  ${NSD_CB_AddString} $hCombo "(ninguno): agentes generales de Agente IA"
   !include "${PROFILES}"
-  ${NSD_CB_SelectString} $hCombo "(ninguno): agentes generales de Nexus-Office"
+  ${NSD_CB_SelectString} $hCombo "(ninguno): agentes generales de Agente IA"
   ${If} $Oficina != ""
     ${NSD_CB_SelectString} $hCombo "$Oficina:"
   ${EndIf}
@@ -149,7 +149,7 @@ Function OptionsPage
   ${If} $Modelos != "no"
     ${NSD_Check} $hMod
   ${EndIf}
-  ${NSD_CreateCheckbox} 0 50u 100% 12u "Arrancar Nexus-Office como servicio al encender el equipo (pide permiso de administrador)"
+  ${NSD_CreateCheckbox} 0 50u 100% 12u "Arrancar Agente IA como servicio al encender el equipo (pide permiso de administrador)"
   Pop $hServ
   ${If} $Servicio == "1"
     ${NSD_Check} $hServ
@@ -162,7 +162,7 @@ Function OptionsPage
   ${NSD_CreateCheckbox} 0 80u 100% 12u "Crear acceso directo en el escritorio"
   Pop $hDesk
   ${NSD_Check} $hDesk
-  ${NSD_CreateLabel} 0 100u 100% 30u "El modelo se elige segun la memoria, la grafica y el procesador detectados. Sin internet, Nexus-Office lo recomienda y lo podras descargar despues desde Modelos > Recomendados."
+  ${NSD_CreateLabel} 0 100u 100% 30u "El modelo se elige segun la memoria, la grafica y el procesador detectados. Sin internet, Agente IA lo recomienda y lo podras descargar despues desde Modelos > Recomendados."
   Pop $0
   nsDialogs::Show
 FunctionEnd
@@ -205,10 +205,10 @@ Function OptionsLeave
   ${EndIf}
 FunctionEnd
 
-Section "Nexus-Office" SecMain
+Section "Agente IA" SecMain
   SectionIn RO
   SetOutPath "$INSTDIR"
-  DetailPrint "Copiando Nexus-Office (programa nativo y motores de IA incluidos)..."
+  DetailPrint "Copiando Agente IA (programa nativo y motores de IA incluidos)..."
   File /r "${PAYLOAD}\*.*"
   File "/oname=$INSTDIR\nexus.ico" "${ICON}"
 
@@ -240,21 +240,21 @@ Section "Nexus-Office" SecMain
     ${EndIf}
   ${EndIf}
 
-  CreateDirectory "$SMPROGRAMS\Nexus-Office (C++)"
-  CreateShortcut "$SMPROGRAMS\Nexus-Office (C++)\Nexus-Office.lnk" "$INSTDIR\nexus-office-w.exe" "run" "$INSTDIR\nexus.ico" 0 SW_SHOWNORMAL "" "Abrir Nexus-Office"
-  CreateShortcut "$SMPROGRAMS\Nexus-Office (C++)\Nexus-Office (consola).lnk" "$INSTDIR\start.bat" "" "$INSTDIR\nexus.ico"
-  CreateShortcut "$SMPROGRAMS\Nexus-Office (C++)\Manual de usuario.lnk" "$INSTDIR\docs\USUARIO.md"
-  CreateShortcut "$SMPROGRAMS\Nexus-Office (C++)\Desinstalar Nexus-Office.lnk" "$INSTDIR\uninstall.exe"
+  CreateDirectory "$SMPROGRAMS\Agente IA (C++)"
+  CreateShortcut "$SMPROGRAMS\Agente IA (C++)\Nexus-Office.lnk" "$INSTDIR\nexus-office-w.exe" "run" "$INSTDIR\nexus.ico" 0 SW_SHOWNORMAL "" "Abrir Agente IA"
+  CreateShortcut "$SMPROGRAMS\Agente IA (C++)\Agente IA (consola).lnk" "$INSTDIR\start.bat" "" "$INSTDIR\nexus.ico"
+  CreateShortcut "$SMPROGRAMS\Agente IA (C++)\Manual de usuario.lnk" "$INSTDIR\docs\USUARIO.md"
+  CreateShortcut "$SMPROGRAMS\Agente IA (C++)\Desinstalar Nexus-Office.lnk" "$INSTDIR\uninstall.exe"
   ${If} $Escritorio == "1"
-    CreateShortcut "$DESKTOP\Nexus-Office (C++).lnk" "$INSTDIR\nexus-office-w.exe" "run" "$INSTDIR\nexus.ico" 0 SW_SHOWNORMAL "" "Abrir Nexus-Office"
+    CreateShortcut "$DESKTOP\Agente IA (C++).lnk" "$INSTDIR\nexus-office-w.exe" "run" "$INSTDIR\nexus.ico" 0 SW_SHOWNORMAL "" "Abrir Agente IA"
   ${EndIf}
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
   WriteRegStr HKCU "Software\Nexus-Office-C" "InstallDir" "$INSTDIR"
   !define UNINST "Software\Microsoft\Windows\CurrentVersion\Uninstall\Nexus-Office-C"
-  WriteRegStr HKCU "${UNINST}" "DisplayName" "Nexus-Office (edicion C++)"
+  WriteRegStr HKCU "${UNINST}" "DisplayName" "Agente IA (edicion C++)"
   WriteRegStr HKCU "${UNINST}" "DisplayVersion" "${VERSION}"
-  WriteRegStr HKCU "${UNINST}" "Publisher" "Nexus-Office"
+  WriteRegStr HKCU "${UNINST}" "Publisher" "Agente IA"
   WriteRegStr HKCU "${UNINST}" "DisplayIcon" "$INSTDIR\nexus.ico"
   WriteRegStr HKCU "${UNINST}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "${UNINST}" "UninstallString" '"$INSTDIR\uninstall.exe"'
@@ -276,8 +276,8 @@ Section "Uninstall"
   nsExec::Exec 'taskkill /F /IM nexus-office-w.exe'
   nsExec::Exec 'taskkill /F /IM nexus-office.exe'
   nsExec::Exec 'taskkill /F /IM llama-server.exe'
-  Delete "$DESKTOP\Nexus-Office (C++).lnk"
-  RMDir /r "$SMPROGRAMS\Nexus-Office (C++)"
+  Delete "$DESKTOP\Agente IA (C++).lnk"
+  RMDir /r "$SMPROGRAMS\Agente IA (C++)"
   MessageBox MB_YESNO|MB_ICONQUESTION "¿Borrar tambien tus datos (conversaciones, documentos, modelos de IA y configuracion)?$\r$\nSi eliges No, quedan en $INSTDIR\data" /SD IDNO IDYES all
     ; se conservan los datos
     Push $0

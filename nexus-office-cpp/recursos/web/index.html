@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<title>Nexus-Office</title>
+<title>Agente IA</title>
 <meta name="description" content="Agente de IA multimodal portable con memoria, aprendizaje y sistema de agentes">
 <meta name="theme-color" content="#04060c">
 <link rel="manifest" href="/static/manifest.webmanifest">
@@ -21,7 +21,8 @@
 
 <div class="app">
   <header class="topbar">
-    <div class="logo" data-text="Nexus-Office">Nexus-Office<small id="ver">v1</small></div>
+    <div class="logo" data-text="Agente IA">Agente IA<small id="ver">v1</small></div>
+    <button class="beta-tag" title="Versión beta: rendimiento y aspecto en pruebas. Abre el Laboratorio BETA">BETA</button>
     <div class="pills">
       <button class="pill pill-menu" data-menu="ia" title="Motor y modelo de IA"><span class="dot live" id="dot-llm"></span>IA <b id="pill-llm">…</b><i>▾</i></button>
       <button class="pill pill-menu" data-menu="perfil" title="Perfil de hardware, acelerador y GPU"><span class="dot ok"></span>PERFIL <b id="pill-profile">…</b><i>▾</i></button>
@@ -47,6 +48,7 @@
     <button data-view="devices"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span class="tip">DISPOSITIVOS</span></button>
     <button data-view="net"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span class="tip">RED COOP</span></button>
     <button data-view="system"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/><rect x="9.5" y="9.5" width="5" height="5"/></svg><span class="tip">SISTEMA</span></button>
+    <button data-view="beta"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7.5 15h9"/></svg><span class="tip">LAB. BETA</span></button>
     <button id="rail-more" class="more" aria-label="Más secciones"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span class="tip">MÁS</span><span class="badge hidden" id="badge-more"></span></button>
     <div class="spacer"></div>
     <button data-view="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="tip">AJUSTES</span></button>
@@ -83,7 +85,7 @@
             <div class="composer-box">
               <button class="icon-btn" id="btn-attach" title="Adjuntar imagen, documento o comprimido (ZIP, RAR, 7z) con un proyecto o documentación"><svg viewBox="0 0 24 24"><path d="M21 12.5l-8.5 8.5a5 5 0 0 1-7-7L14 5.5a3.3 3.3 0 0 1 4.7 4.7L10.2 18.7a1.7 1.7 0 0 1-2.4-2.4L15.5 8.6"/></svg></button>
               <input type="file" id="file-attach" accept="image/*,.zip,.rar,.7z,.tar,.gz,.tgz,.bz2,.xz,.pdf,.docx,.odt,.ods,.odp,.pptx,.xlsx,.epub,.rtf,.txt,.md,.html,.htm,.csv,.json" multiple hidden>
-              <textarea id="input" rows="1" placeholder="Escribe a Nexus-Office… (Shift+Enter: nueva línea)"></textarea>
+              <textarea id="input" rows="1" placeholder="Escribe a Agente IA… (Shift+Enter: nueva línea)"></textarea>
               <button class="icon-btn" id="btn-enhance" title="Mejorar el prompt"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8zM19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9zM5 15l.7 1.6L7.3 17l-1.6.7L5 19.3l-.7-1.6L2.7 17l1.6-.4z"/></svg></button>
               <button class="icon-btn" id="btn-speak" title="Leer respuestas en voz alta"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg></button>
               <button class="icon-btn" id="btn-mic" title="Dictar un mensaje"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
@@ -166,7 +168,7 @@
         <div class="row"><input class="input" id="rag-url" placeholder="https://…  →  PDF estructurado + biblioteca + conocimiento" style="flex:1"><button class="btn primary" id="rag-url-go">PROCESAR URL</button></div>
         <div class="row"><input class="input" id="rag-crawl" placeholder="https://docs…  →  rastrear la documentación y aprenderla" style="flex:1"><input class="input" id="rag-crawl-max" type="number" min="1" max="100000" value="40" title="Máximo de páginas en total. Si no cabe en un lote, se rastrea por lotes correlativos y reanudables" style="width:6.5em"><select class="input" id="rag-crawl-scope" title="Ámbito del rastreo" style="width:auto"><option value="path">esta sección</option><option value="domain" title="Todas las páginas, documentos y subdominios, sin límite, y un grafo de conocimiento multicapa importable en un agente">todo el dominio + grafo</option></select><button class="btn primary" id="rag-crawl-go">RASTREAR</button></div>
         <div id="rag-jobs" class="list"></div>
-        <div class="row"><button class="btn sm" id="rag-kg-import" title="Paquete .zip de conocimiento de un dominio (descargado con ⬇ ZIP aquí o en otro Nexus-Office). Va al grafo elegido en «Importar en»">IMPORTAR CONOCIMIENTO DE DOMINIO (.zip)</button><input type="file" id="rag-kg-file" accept=".zip" hidden></div>
+        <div class="row"><button class="btn sm" id="rag-kg-import" title="Paquete .zip de conocimiento de un dominio (descargado con ⬇ ZIP aquí o en otro Agente IA). Va al grafo elegido en «Importar en»">IMPORTAR CONOCIMIENTO DE DOMINIO (.zip)</button><input type="file" id="rag-kg-file" accept=".zip" hidden></div>
         <div class="drop" id="rag-drop">Suelta aquí documentos (PDF, Word, OpenDocument, PowerPoint, Excel, EPUB, RTF, HTML, TXT, MD, código…) o comprimidos ZIP, RAR, 7z o tar.gz con un proyecto o documentación (o haz clic). Puedes soltar muchos a la vez: se leen en paralelo.</div>
         <input type="file" id="rag-file" hidden multiple>
         <div id="rag-progress"></div>
@@ -262,7 +264,7 @@
           <div class="row" style="margin-top:8px"><select class="input" id="bc-tarifa" style="flex:1 1 200px;min-width:0"></select>
             <select class="input" id="bc-modo" style="flex:1 1 140px;min-width:0"><option value="simulado">Simulada (sin dinero)</option><option value="real">Real (seguimiento, requiere admin)</option></select></div>
           <div class="row" style="margin-top:10px"><button class="btn primary" id="bc-new">+ NUEVA CARTERA</button><button class="btn" id="bc-reset">REINICIAR LA ACTUAL</button></div>
-          <p class="muted" style="margin-top:8px">En una cartera real nada se ejecuta solo: cada orden espera a que la confirmes tú y luego la ejecutas en tu bróker. Nexus-Office no se conecta a ningún bróker.</p>
+          <p class="muted" style="margin-top:8px">En una cartera real nada se ejecuta solo: cada orden espera a que la confirmes tú y luego la ejecutas en tu bróker. Agente IA no se conecta a ningún bróker.</p>
         </div>
         <div class="panel"><h3>Precios reales o activos propios</h3>
           <p class="muted">Pega cierres «fecha;cierre» (o un CSV con columnas Date y Close) para anclar el valor a datos reales y usar su volatilidad.</p>
@@ -303,7 +305,10 @@
     <section class="view" id="view-models">
       <div class="view-title">GESTOR DE MODELOS</div>
       <div class="panel"><h3>Recomendados para tu hardware <span class="sub" id="rec-profile"></span></h3><div class="grid g3" id="rec-grid"></div></div>
-      <div class="grid g2" style="margin-top:16px">
+      <div class="row" style="margin-top:16px;gap:8px"><span class="muted">Formato:</span>
+        <select class="input" id="fmt-filter" style="width:auto"><option value="">todos</option><option value="gguf">GGUF (llama.cpp)</option><option value="onnx">ONNX (ONNX Runtime GenAI)</option><option value="litertlm">LiteRT-LM (Tensor, NPU de móvil)</option><option value="genie">Genie (NPU Snapdragon, QNN)</option><option value="safetensors">safetensors / Transformers</option></select>
+        <span class="muted" id="fmt-note"></span></div>
+      <div class="grid g2" style="margin-top:8px">
         <div class="panel"><h3>Instalados</h3><div class="list" id="catalog-list"></div></div>
         <div class="panel"><h3>Descargas</h3><div class="list" id="jobs-list"><span class="muted">Sin descargas activas</span></div></div>
       </div>
@@ -316,7 +321,8 @@
       </div>
       <div class="panel admin-only col" style="margin-top:16px">
         <h3>Importar modelo local · Modelo externo</h3>
-        <div class="row"><input class="input" id="imp-path" placeholder="C:\ruta\modelo.gguf  o carpeta" style="flex:1"><label class="row muted"><span class="switch"><input type="checkbox" id="imp-copy"><span></span></span>copiar</label><button class="btn" id="imp-go">IMPORTAR</button></div>
+        <div class="row" style="flex-wrap:wrap"><button class="btn primary" id="imp-browse" title="Abrir el explorador de archivos para elegir el modelo">📂 BUSCAR ARCHIVO…</button><button class="btn" id="imp-browse-dir" title="Carpeta de un modelo ONNX GenAI, Genie o safetensors">📁 CARPETA…</button>
+          <input class="input" id="imp-path" placeholder="o escribe la ruta: C:\ruta\modelo.gguf  o carpeta" style="flex:1 1 220px;min-width:0"><label class="row muted"><span class="switch"><input type="checkbox" id="imp-copy"><span></span></span>copiar</label><button class="btn" id="imp-go">IMPORTAR</button></div>
         <div class="row"><input class="input" id="spec-in" placeholder="ollama:qwen3-vl:2b · openai:gpt-4o-mini · peer:NODO" style="flex:1"><button class="btn" id="spec-go">USAR COMO LLM</button></div>
       </div>
     </section>
@@ -327,6 +333,14 @@
       <div class="grid g2">
         <div class="panel"><h3>Aprobaciones pendientes</h3><div class="list" id="pending-list"><span class="muted">Nada pendiente</span></div></div>
         <div class="panel"><h3>Política de supervisión</h3><div id="policy-box"></div></div>
+      </div>
+      <div class="grid g2" style="margin-top:16px">
+        <div class="panel"><h3>Métricas clave <span class="sub">últimos <select class="input" id="met-dias" style="width:auto;display:inline-block"><option value="1">1 día</option><option value="7" selected>7 días</option><option value="30">30 días</option></select></span></h3><div id="met-box"><span class="muted">Sin tareas todavía.</span></div></div>
+        <div class="panel"><h3>Mi estilo <span class="sub">lo que Agente IA ha aprendido de cómo trabajas</span></h3>
+          <div class="row" style="margin-bottom:8px"><input class="input" id="est-user" placeholder="Tu nombre (vacío = titular de este equipo)" style="flex:1"><button class="btn sm" id="est-user-save">USAR</button></div>
+          <div id="est-box"></div>
+          <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn danger sm" id="est-reset">OLVIDAR MI ESTILO</button></div>
+        </div>
       </div>
       <div class="panel" style="margin-top:16px"><h3>Repositorio de herramientas</h3><div id="tools-table"></div></div>
       <div class="panel admin-only" style="margin-top:16px"><h3>Propuestas de los agentes <span class="sub">revisión humana obligatoria</span></h3><div class="list" id="proposals-list"></div></div>
@@ -393,12 +407,82 @@
         <div class="panel"><h3>Autoajuste adaptativo <span class="sub">se aplica en cada arranque</span></h3><div class="list" id="tune-list"></div></div>
         <div class="panel"><h3>Runtimes nativos <span class="sub">llama.cpp · stable-diffusion.cpp</span></h3><div id="runtimes-box"></div></div>
       </div>
-      <div class="panel" style="margin-top:16px"><h3>Arranque automático <span class="sub">Nexus-Office como servicio: se inicia solo al encender el equipo</span></h3><div id="service-box"><span class="muted">Comprobando…</span></div></div>
+      <div class="panel" style="margin-top:16px"><h3>Arranque automático <span class="sub">Agente IA como servicio: se inicia solo al encender el equipo</span></h3><div id="service-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel" style="margin-top:16px"><h3>Comprobación y autorreparación <span class="sub">se revisa todo en cada arranque y se arregla solo</span></h3><div id="salud-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel" style="margin-top:16px"><h3>Descargas <span class="sub">instaladores para los equipos y móviles de la oficina</span></h3><div id="downloads-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel" style="margin-top:16px"><h3>Drivers de la tarjeta gráfica <span class="sub">actualización oficial, siempre confirmada por ti</span></h3><div id="drivers-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel admin-only" style="margin-top:16px"><h3>Historial de sesiones</h3><div id="history-table"></div></div>
       <div class="panel admin-only" style="margin-top:16px"><h3>Registro <span class="sub"><button class="btn sm" id="accel-open">MOTOR Y CPU/GPU/NPU</button> <button class="btn sm" id="redetect">RE-DETECTAR HARDWARE</button> <button class="btn danger sm" id="shutdown">APAGAR NEXUS-OFFICE</button></span></h3><pre class="code" id="logs"></pre></div>
+    </section>
+
+    <!-- ================= LABORATORIO BETA ================= -->
+    <section class="view" id="view-beta">
+      <div class="view-title">LABORATORIO BETA · RENDIMIENTO Y ASPECTO</div>
+      <div class="row beta-head"><div class="row" id="beta-tabs"></div><span class="muted mono" id="beta-info"></span>
+        <button class="btn sm ghost" id="beta-hud-btn" title="Alt+Mayús+P">MOSTRAR HUD</button></div>
+
+      <div class="beta-pane" data-pane="rend">
+        <div class="panel"><h3>Banco de pruebas <span class="sub">CPU, memoria, disco, IA e interfaz; se guarda para comparar versiones y equipos</span></h3>
+          <div class="row beta-opts">
+            <label>Rondas de IA <select class="input" id="beta-opt-rondas"><option>1</option><option selected>3</option><option>5</option><option>10</option></select></label>
+            <label>Tokens por respuesta <select class="input" id="beta-opt-tokens"><option>64</option><option selected>128</option><option>256</option><option>512</option></select></label>
+            <label><input type="checkbox" id="beta-opt-sis" checked> CPU, memoria y disco</label>
+            <label><input type="checkbox" id="beta-opt-llm" checked> IA (primer token y tokens/s)</label>
+            <label><input type="checkbox" id="beta-opt-fluidez" checked> fluidez de la interfaz</label>
+            <button class="btn primary" id="beta-run">MEDIR AHORA</button>
+            <button class="btn sm" id="beta-export">EXPORTAR JSON</button>
+            <button class="btn sm" id="beta-report" title="Equipo, mediciones, API y opiniones en Markdown">INFORME .MD</button>
+          </div>
+          <div class="grid g4 beta-cards" id="beta-cards"></div>
+        </div>
+        <div class="grid g2" style="margin-top:16px">
+          <div class="panel"><h3>IA · última medición</h3><div id="beta-llm"></div></div>
+          <div class="panel"><h3>Navegador <span class="sub">métricas de esta página</span></h3><div id="beta-vitals"></div></div>
+        </div>
+        <div class="grid g2" style="margin-top:16px">
+          <div class="panel"><h3>API <span class="sub"><button class="btn sm ghost" id="beta-reset-api">PONER A CERO</button></span></h3><div id="beta-api"></div></div>
+          <div class="panel"><h3>Fluidez <span class="sub"><button class="btn sm" id="beta-fluidez-run">MEDIR FLUIDEZ</button></span></h3><div id="beta-fluidez"></div></div>
+        </div>
+        <div class="panel" style="margin-top:16px"><h3>Historial de mediciones</h3><div id="beta-hist" class="beta-scroll"></div></div>
+      </div>
+
+      <div class="beta-pane hidden" data-pane="aspecto">
+        <div class="panel"><h3>Temas <span class="sub">vista previa sin guardar; el tuyo se cambia en Ajustes</span></h3><div class="beta-themes" id="beta-themes"></div>
+          <div class="row" style="margin-top:12px"><span class="muted">Efectos visuales</span><span class="row" id="beta-fx"></span>
+            <span class="muted" style="margin-left:16px">Disposición</span><span class="row" id="beta-layout"></span></div></div>
+        <div class="grid g2" style="margin-top:16px">
+          <div class="panel"><h3>Galería de componentes</h3>
+            <div class="beta-gallery">
+              <div class="row"><button class="btn primary">PRINCIPAL</button><button class="btn">NORMAL</button><button class="btn ghost">FANTASMA</button><button class="btn ok">CORRECTO</button><button class="btn danger">PELIGRO</button><button class="btn" disabled>INACTIVO</button></div>
+              <div class="row"><button class="btn sm primary">PEQUEÑO</button><span class="tag">etiqueta</span><span class="tag accent">acento</span><span class="tag low">bajo</span><span class="tag medium">medio</span><span class="tag high">alto</span>
+                <span class="pill"><span class="dot ok live"></span>PÍLDORA <b>activa</b></span></div>
+              <div class="row"><input class="input" placeholder="Campo de texto"><select class="input"><option>Desplegable</option></select>
+                <label class="switch"><input type="checkbox" checked><span></span></label><label><input type="checkbox" checked> casilla</label></div>
+              <div class="bar"><i style="width:62%"></i></div>
+              <div class="notice">Aviso informativo con <b>énfasis</b> y un <a href="#beta">enlace</a>.</div>
+              <div class="notice bad">Aviso de error.</div>
+              <div class="beta-msgs"><div class="msg user"><div class="who">TÚ</div><div class="bubble">¿Puedes preparar la factura de marzo?</div></div>
+                <div class="msg ai"><div class="who">CONTABLE</div><div class="bubble">Claro. He preparado la factura <b>F-2026-031</b> por 1.240,00 €.</div></div></div>
+              <dl class="kv"><dt>Clave</dt><dd>valor monoespaciado</dd><dt>Estado</dt><dd class="ok">correcto</dd></dl>
+              <table class="tbl"><tr><th>Concepto</th><th>Importe</th></tr><tr><td>Servicio mensual</td><td>1.000,00 €</td></tr><tr><td>IVA 21 %</td><td>210,00 €</td></tr></table>
+              <pre class="code">nexus-office bench --rondas 3 --informe</pre>
+              <div class="row"><button class="btn sm" id="beta-gallery-toast">AVISO</button><button class="btn sm danger" id="beta-gallery-toast-err">ERROR</button>
+                <div class="stat"><span class="k">Estadística</span><span class="v">42,7</span></div></div>
+            </div></div>
+          <div class="panel"><h3>Contraste <span class="sub">WCAG 2.1 del tema que estás viendo</span></h3><div id="beta-contrast"></div></div>
+        </div>
+      </div>
+
+      <div class="beta-pane hidden" data-pane="opinion">
+        <div class="grid g2">
+          <div class="panel col"><h3>Tu opinión sobre el aspecto <span class="sub">se guarda con el tema, la pantalla y las métricas</span></h3>
+            <label class="muted">Zona <select class="input" id="beta-zona"></select></label>
+            <div class="beta-stars" id="beta-stars"></div>
+            <textarea class="input" id="beta-op-text" rows="5" maxlength="4000" placeholder="¿Qué te gusta, qué cuesta leer, qué va lento o qué cambiarías?"></textarea>
+            <div class="row"><button class="btn primary" id="beta-op-send">ENVIAR OPINIÓN</button></div></div>
+          <div class="panel"><h3>Resumen <span class="sub">nota media por zona</span></h3><div id="beta-op-list" class="beta-scroll"></div></div>
+        </div>
+      </div>
     </section>
 
     <!-- ================= AJUSTES ================= -->
@@ -494,11 +578,21 @@
   <div class="avlib-grid" id="avlib-mine"></div>
   <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="avlib-close">CERRAR</button></div>
 </dialog>
+<dialog id="fx-dialog" class="fx-dialog">
+  <h2>BUSCAR EL MODELO A IMPORTAR</h2>
+  <div class="fx-roots" id="fx-roots"></div>
+  <div class="row fx-nav" style="flex-wrap:nowrap"><button class="btn sm" id="fx-up" title="Carpeta de arriba">↑</button><input class="input mono" id="fx-path" style="flex:1;min-width:0"><button class="btn sm" id="fx-go">IR</button></div>
+  <div class="row muted" style="justify-content:space-between;font-size:.8rem"><span id="fx-info"></span><label class="row" style="gap:6px"><input type="checkbox" id="fx-all"> todos los archivos</label></div>
+  <div class="list fx-list" id="fx-list"></div>
+  <div class="muted mono fx-sel" id="fx-sel">Elige un archivo de modelo (.gguf, .onnx, .litertlm, .safetensors…) o la carpeta de un modelo ONNX GenAI o Genie.</div>
+  <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" id="fx-system" style="display:none">EXPLORADOR DEL SISTEMA…</button><button class="btn" id="fx-here">USAR ESTA CARPETA</button><button class="btn" id="fx-cancel">CANCELAR</button><button class="btn primary" id="fx-ok" disabled>IMPORTAR</button></div>
+</dialog>
 <dialog id="accel-dialog" class="accel-dialog">
   <h2>MOTOR Y ACELERADOR</h2>
   <p class="muted" id="accel-hw">Detectando…</p>
-  <div class="accel-group"><div class="lbl">Motor llama</div><div class="accel-opts" id="accel-engines"></div></div>
+  <div class="accel-group"><div class="lbl">Motor de IA</div><div class="accel-opts" id="accel-engines"></div></div>
   <div class="accel-group"><div class="lbl">Acelerar la IA con</div><div class="accel-opts" id="accel-accels"></div></div>
+  <div class="accel-group"><div class="lbl">Runtime del motor (CUDA, ROCm, Vulkan, Hexagon, NPU Tensor…)</div><div class="accel-opts" id="accel-runtimes"></div></div>
   <div class="accel-group"><div class="lbl">Capas del modelo en la GPU / NPU</div>
     <div class="row" style="gap:8px;flex-wrap:wrap"><select class="input" id="accel-capas" style="flex:1;min-width:200px"><option value="auto">Automático (las que quepan)</option><option value="todas">Todas: modelo entero en la GPU/NPU</option><option value="ninguna">Ninguna: todo en la CPU</option><option value="n">Número de capas…</option></select>
     <input class="input" id="accel-capas-n" type="number" min="1" max="999" value="20" style="width:110px" title="Capas en la GPU/NPU; el resto va en la CPU"></div>
@@ -524,6 +618,7 @@
 <script type="module" src="/static/js/avatar3d.js"></script>
 <script src="/static/js/lounge.js"></script>
 <script src="/static/js/offices.js"></script>
+<script src="/static/js/beta.js"></script>
 <script src="/static/js/app.js"></script>
 <script src="/static/js/kgadmin.js"></script>
 </body>

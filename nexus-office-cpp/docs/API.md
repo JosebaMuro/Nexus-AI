@@ -29,18 +29,19 @@ Eventos recibidos: `session`, `agent`, `state` (`thinking|tool|idle`), `token`, 
 | `GET /api/lounge`, `POST /api/lounge/meet`, `POST /api/lounge/say`, `POST /api/lounge/proposals/{id}` | Salón. |
 | `GET /api/tools`, `POST /api/approvals/{id}`, `GET /api/tools/audit`, `GET/POST/PUT /api/proposals…` | Herramientas. |
 | `GET /api/models`, `/recommended`, `/search?source=&q=`, `/files?source=&repo=`; `POST /api/models/download`, `/recommended/{id}`, `/import`, `/activate/{id}`, `/activate-spec` | Modelos. |
+| `GET /api/fs/listar?ruta=&todos=`; `POST /api/fs/dialogo {carpeta}` (Admin) | Explorador para importar modelos: carpetas y ficheros de modelo con su formato, y el selector de archivos del sistema (solo desde el mismo equipo). |
 | `GET /api/coop`, `POST /api/coop/create|join|start|stop|chat|ping/{n}|agent`, `GET /api/coop/invite` | Red cooperativa. |
-| `GET /api/vpn`, `POST /api/vpn/enable` `{enabled, port}`, `POST /api/vpn/peers` `{name, lookup_public_ip}`, `DELETE /api/vpn/peers/{id}`, `GET /api/vpn/server.conf`, `POST /api/vpn/apply`, `POST /api/vpn/upnp` *(admin)* | VPN WireGuard para la app Nexus-Office VPN (ver [VPN.md](VPN.md)). |
+| `GET /api/vpn`, `POST /api/vpn/enable` `{enabled, port}`, `POST /api/vpn/peers` `{name, lookup_public_ip}`, `DELETE /api/vpn/peers/{id}`, `GET /api/vpn/server.conf`, `POST /api/vpn/apply`, `POST /api/vpn/upnp` *(admin)* | VPN WireGuard para la app Agente IA VPN (ver [VPN.md](VPN.md)). |
 | `GET /api/office/profiles`, `POST /api/office/profile` `{id, reset_agents}` *(admin; `id` vacío quita el perfil)* | Perfiles de oficina para pymes (ver [OFICINA.md](OFICINA.md)). |
 
 ## Servicio y descargas
 | Método y ruta | Descripción |
 |---|---|
-| `GET /api/service` | Arranque automático: `{kind, registered, supported, admin_os, port}`. `kind`: `systemd`, `cron`, `launchd`, `windows` o `termux`; `registered`: dónde está registrado (vacío si no lo está); `admin_os`: si Nexus-Office corre con permisos de administrador del sistema (con ellos arranca con el equipo, sin ellos al iniciar sesión). En la app Android autónoma devuelve `{kind: "android", supported: false}`: allí lo gestiona la propia app. |
+| `GET /api/service` | Arranque automático: `{kind, registered, supported, admin_os, port}`. `kind`: `systemd`, `cron`, `launchd`, `windows` o `termux`; `registered`: dónde está registrado (vacío si no lo está); `admin_os`: si Agente IA corre con permisos de administrador del sistema (con ellos arranca con el equipo, sin ellos al iniciar sesión). En la app Android autónoma devuelve `{kind: "android", supported: false}`: allí lo gestiona la propia app. |
 | `POST /api/service` `{action: "instalar"\|"quitar", red}` *(admin)* | Instala o quita el servicio con el puerto de `server.port`. `red: true` escucha en `0.0.0.0`; si no, usa `server.host`. Devuelve `{ok, detail}`; `400` con el motivo si falla. Ver [SERVICIO.md](SERVICIO.md). |
-| `GET /api/downloads` | Instaladores de `<datos>/descargas/`: `{folder, host, host_label, files: [{name, path, size, platform, label}]}`. `platform`: `windows-x64`, `windows-arm64`, `linux-x86_64`, `linux-aarch64`, `macos-arm64`, `macos-x86_64`, `android`, `codigo`, `docs` u `otros`; `host` es la del equipo donde corre Nexus-Office. |
+| `GET /api/downloads` | Instaladores de `<datos>/descargas/`: `{folder, host, host_label, files: [{name, path, size, platform, label}]}`. `platform`: `windows-x64`, `windows-arm64`, `linux-x86_64`, `linux-aarch64`, `macos-arm64`, `macos-x86_64`, `android`, `codigo`, `docs` u `otros`; `host` es la del equipo donde corre Agente IA. |
 | `GET /descargas/{path}` | Descarga un fichero de `<datos>/descargas/` (`path` como lo da `/api/downloads`; las APK con su tipo MIME de Android). `404` si no existe o sale de la carpeta. |
-| `GET /api/package/termux` | Solo desde la app Nexus-Office autónomo: `tar.gz` con su `nexus-office` para Android, sus bibliotecas, los recursos e `install-termux.sh`, para instalarlo en Termux. En un PC no hay binario de Android que dar. |
+| `GET /api/package/termux` | Solo desde la app Agente IA autónomo: `tar.gz` con su `nexus-office` para Android, sus bibliotecas, los recursos e `install-termux.sh`, para instalarlo en Termux. En un PC no hay binario de Android que dar. |
 
 Desde otro dispositivo de la red, estas rutas exigen la clave de red, como todas salvo `/api/ping`.
 

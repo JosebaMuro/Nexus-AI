@@ -1,6 +1,6 @@
 {
-  "name": "Nexus-Office",
-  "short_name": "Nexus-Office",
+  "name": "Agente IA",
+  "short_name": "Agente IA",
   "description": "Agente de IA multimodal portable con memoria, aprendizaje y agentes",
   "start_url": "/",
   "scope": "/",

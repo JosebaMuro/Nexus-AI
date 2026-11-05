@@ -5,6 +5,8 @@
 //   Android es el que mejor va en los Pixel y en los moviles con NPU que llama.cpp no sabe usar.
 // * ONNX Runtime GenAI (Microsoft): carpetas con genai_config.json. DirectML (cualquier GPU en Windows), QNN (NPU de
 //   los Snapdragon X Elite/Plus en Windows ARM), OpenVINO (NPU Intel), VitisAI (NPU AMD Ryzen AI), CUDA y CPU.
+// * Qualcomm Genie (QAIRT, 2.8): carpetas con genie_config.json (modelos de Qualcomm AI Hub compilados para la NPU
+//   Hexagon). Android, Windows ARM y Linux ARM con Snapdragon.
 //
 // Ninguno se enlaza al compilar: su biblioteca (liblitert-lm.so, onnxruntime-genai.dll...) va en
 // bundled/runtimes/<motor>/<variante>/ y se carga al ejecutar. Cada motor corre en un proceso aparte
@@ -24,7 +26,7 @@
 namespace nx::motores {
 
 struct Info {
-  std::string id;        // litert | onnx
+  std::string id;        // litert | onnx | genie
   std::string nombre;    // para mostrar
   std::string formato;   // formato de modelo del catalogo: litertlm | onnx-genai
   std::string lib;       // biblioteca (sin prefijo ni extension)
@@ -35,8 +37,18 @@ std::string motor_de_formato(const std::string& formato);   // "" si ninguno
 
 // carpeta con la biblioteca del motor: NEXUS_RUNTIME_<MOTOR> (carpeta o fichero), data/runtimes/<motor>/<variante>,
 // bundled/runtimes/<motor>/<variante> o, en Android, la carpeta de bibliotecas de la app. nullopt si no hay.
-std::optional<fs::path> lib_path(const std::string& motor);
-json estado();   // {litert: {lib, variante}, onnx: {...}} para Sistema > Runtimes
+// Con variante, primero la de esa carpeta (onnx/cuda, onnx/qnn...): cada proveedor de ONNX Runtime va en la suya.
+std::optional<fs::path> lib_path(const std::string& motor, const std::string& variante = "");
+std::vector<std::string> variantes(const std::string& motor);   // carpetas incluidas con la biblioteca del motor
+json estado();   // {litert: {lib, variante, variantes}, onnx: {...}, genie: {...}} para Sistema > Runtimes
+
+// aceleradores que se pueden pedir a mano para un motor (selector de inicio), con la variante que los trae
+struct Acelerador {
+  std::string id, nombre, variante;
+};
+std::vector<Acelerador> aceleradores(const std::string& motor);
+// variante (carpeta) con la que se arranca un acelerador; "" = la primera que haya
+std::string variante_para(const std::string& motor, const std::string& acelerador, const json& entry);
 
 // aceleradores que se prueban, en orden, para un motor y un modelo con este perfil (p. ej. {"npu", "gpu", "cpu"})
 std::vector<std::string> orden(const std::string& motor, const json& profile, const json& entry);
@@ -65,8 +77,9 @@ class Motor {
 
 std::unique_ptr<Motor> abrir_litert(const Config& c);   // std::runtime_error si no se puede
 std::unique_ptr<Motor> abrir_onnx(const Config& c);
+std::unique_ptr<Motor> abrir_genie(const Config& c);
 
-// «nexus-office motor <litert|onnx> --modelo X --puerto N [--acelerador gpu] [--lib DIR] [--hilos N] [--ctx N]»:
+// «nexus-office motor <litert|onnx|genie> --modelo X --puerto N [--acelerador gpu] [--lib DIR] [--hilos N] [--ctx N]»:
 // sirve /health, /v1/models y /v1/chat/completions (con y sin stream)
 int main_motor(const std::vector<std::string>& argv);
 

@@ -135,7 +135,7 @@ public class EscritorioActivity extends Activity implements NexusVpnService.List
                 } else {
                     handler.cancel();
                     view.loadUrl(SETUP + "#error=" + Uri.encode("certificado no reconocido: posible suplantacion del servidor. "
-                            + "Vuelve a emparejar con un codigo nuevo de tu Nexus-Office."));
+                            + "Vuelve a emparejar con un codigo nuevo de tu Agente IA."));
                 }
             }
 
@@ -307,7 +307,7 @@ public class EscritorioActivity extends Activity implements NexusVpnService.List
                     }
                 }
                 if (!failJs.isEmpty()) js(failJs);
-                else loadOnUi(SETUP + "#error=" + Uri.encode("ninguna direccion de tu Nexus-Office responde (¿esta encendido y con el acceso remoto activo?)"));
+                else loadOnUi(SETUP + "#error=" + Uri.encode("ninguna direccion de tu Agente IA responde (¿esta encendido y con el acceso remoto activo?)"));
             }
         }).start();
     }
@@ -708,13 +708,13 @@ public class EscritorioActivity extends Activity implements NexusVpnService.List
                 JSONObject o = new JSONObject(new String(Base64.decode(body, Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP), "UTF-8"));
                 JSONArray urls = o.getJSONArray("u");
                 String pin = o.getString("f").replace(":", "").toUpperCase(Locale.ROOT);
-                if (urls.length() == 0 || pin.length() != 64) return "Codigo incompleto: genera otro en tu Nexus-Office.";
+                if (urls.length() == 0 || pin.length() != 64) return "Codigo incompleto: genera otro en tu Agente IA.";
                 prefs.edit().putString("remote_urls", urls.toString()).putString("pin", pin).putString("mode", "remote").remove("url").apply();
                 connectRemote(o.getString("c"), "window.__nexusRemoteFail && window.__nexusRemoteFail("
                         + JSONObject.quote("Ninguna direccion responde. Comprueba que el acceso remoto esta activo y el puerto abierto.") + ")");
                 return "";
             } catch (Exception e) {
-                return "Codigo no valido: copialo entero desde tu Nexus-Office.";
+                return "Codigo no valido: copialo entero desde tu Agente IA.";
             }
         }
 
@@ -800,7 +800,7 @@ public class EscritorioActivity extends Activity implements NexusVpnService.List
                 JSONObject o = new JSONObject(sb.toString());
                 if (o.optBoolean("nexus")) {
                     found.add(new JSONObject().put("host", host).put("port", port)
-                            .put("name", o.optString("name", "Nexus-Office")).put("version", o.optString("version")).toString());
+                            .put("name", o.optString("name", "Agente IA")).put("version", o.optString("version")).toString());
                 }
             } catch (Exception ignored) {
             }
@@ -812,7 +812,7 @@ public class EscritorioActivity extends Activity implements NexusVpnService.List
             Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
             if (lang != null && !lang.isEmpty()) i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang);
-            i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Habla con Nexus-Office");
+            i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Habla con Agente IA");
             try {
                 startActivityForResult(i, REQ_VOICE);
             } catch (ActivityNotFoundException e) {
@@ -897,7 +897,7 @@ public class EscritorioActivity extends Activity implements NexusVpnService.List
         @JavascriptInterface
         public void copy(String text) {
             ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            cm.setPrimaryClip(ClipData.newPlainText("Nexus-Office", text));
+            cm.setPrimaryClip(ClipData.newPlainText("Agente IA", text));
         }
 
         /** Guarda un fichero generado en la webui (codigo, respuesta...): el sistema pregunta donde. */

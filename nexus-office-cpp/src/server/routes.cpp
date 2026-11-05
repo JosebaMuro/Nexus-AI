@@ -13,6 +13,7 @@
 #include "core/android_tune.h"
 #include "core/services.h"
 #include "core/system.h"
+#include "core/explorador.h"
 #include "gen/data.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
@@ -38,6 +39,7 @@
 #include "office/office.h"
 #include "rag/rag.h"
 #include "server/app.h"
+#include "server/beta.h"
 #include "tools/tools.h"
 #include "util/archive.h"
 #include "util/crypto.h"
@@ -219,7 +221,7 @@ void register_routes(App& app) {
   };
 
   app.get("/api/ping", [](Ctx& c) -> Out {
-    std::string name = c.app.ready() ? c.app.S().config.str("user.assistant_name") : "Nexus-Office";
+    std::string name = c.app.ready() ? c.app.S().config.str("user.assistant_name") : "Agente IA";
     return json{{"nexus", true}, {"version", NEXUS_VERSION}, {"name", name}, {"edition", "cpp"}};
   });
 
@@ -254,7 +256,7 @@ void register_routes(App& app) {
       if (is_file(f) && !contains(S(f), "__pycache__"))
         files.push_back({"Nexus-Office/nexus/" + S(fs::relative(f, paths::package()).generic_u8string()), read_text(f)});
     files.push_back({"Nexus-Office/install-termux.sh",
-                     "#!/data/data/com.termux/files/usr/bin/sh\n# Nexus-Office (edicion C++) en Termux\nset -e\n"
+                     "#!/data/data/com.termux/files/usr/bin/sh\n# Agente IA (edicion C++) en Termux\nset -e\n"
                      "cd \"$(dirname \"$0\")\"\nchmod +x nexus-office\n"
                      "printf '#!/data/data/com.termux/files/usr/bin/sh\\ncd \"%s\"\\nLD_LIBRARY_PATH=\"%s:$LD_LIBRARY_PATH\" exec ./nexus-office \"$@\"\\n' "
                      "\"$(pwd)\" \"$(pwd)\" > start.sh\nchmod +x start.sh\n"
@@ -264,7 +266,7 @@ void register_routes(App& app) {
                {{"Content-Disposition", std::string("attachment; filename=Nexus-Office-") + NEXUS_VERSION + "-termux.tar.gz"}}};
 #else
     throw HttpErr(501, "Este equipo no lleva el binario de Android: en Termux descarga el paquete de Android "
-                       "(Nexus-Office-...-android-arm64) de la pagina de descargas o instala la APK de Nexus-Office.");
+                       "(Nexus-Office-...-android-arm64) de la pagina de descargas o instala la APK de Agente IA.");
 #endif
   });
 
@@ -465,7 +467,7 @@ void register_routes(App& app) {
     json res;
     try {
       res = sys2::accel_apply(c.app.S(), c.bs("engine", "auto"), c.bs("accel", "auto"), c.bb("remember", true),
-                              c.b("capas", nullptr));
+                              c.b("capas", nullptr), c.bs("runtime", "auto"));
     } catch (const std::invalid_argument& e) {
       throw HttpErr(400, e.what());
     }
@@ -679,6 +681,12 @@ void register_routes(App& app) {
     long long mid = (long long)jnum(c.b("message_id"));
     int score = (int)jnum(c.b("score"));
     json res = s.learner->feedback(mid, score, c.bs("comment", ""));
+    try {   // el estilo se ajusta para quien hizo la tarea (o, si no consta, para quien valora)
+      auto t = s.db->one("SELECT user_id FROM tasks WHERE message_id=? ORDER BY id DESC LIMIT 1", {mid});
+      auto m = s.db->one("SELECT content FROM messages WHERE id=?", {mid});
+      if (m && s.estilo) s.estilo->on_feedback(t ? jstr(*t, "user_id") : user_of(c), jstr(*m, "content"), score);
+    } catch (const std::exception&) {
+    }
     if (auto msg = s.db->one("SELECT session_id, agent FROM messages WHERE id=?", {mid})) {
       auto q = s.db->one(
           "SELECT content FROM messages WHERE session_id=? AND id<? AND role='user' ORDER BY id DESC LIMIT 1",
@@ -1801,6 +1809,9 @@ void register_routes(App& app) {
     return j;
   });
 
+  // ------------------------------------------------------------------ metricas, estilo y aprobaciones diferidas
+  register_agent_routes(app);
+
   // ------------------------------------------------------------------ herramientas
   app.get("/api/tools", [](Ctx& c) -> Out {
     Services& s = c.app.S();
@@ -1897,7 +1908,8 @@ void register_routes(App& app) {
     for (auto* k : {"source", "q"})
       if (!c.has_q(k)) throw missing_field("query", k);
     try {
-      return c.app.S().models->search(source, c.q("q"), c.q("kind"));
+      std::string fmt = c.has_q("formato") ? c.q("formato") : "";
+      return c.app.S().models->search(source, c.q("q"), fmt.empty() ? c.q("kind") : "fmt:" + fmt);
     } catch (const std::out_of_range& e) {
       throw HttpErr(502, source + ": " + key_msg(e));
     } catch (const std::exception& e) {
@@ -1939,6 +1951,24 @@ void register_routes(App& app) {
     c.app.S().models->cancel(c.p("jid"));
     return json{{"ok", true}};
   });
+
+  // explorador de archivos para importar modelos: el selector del sistema solo si la interfaz se abre en el mismo
+  // equipo (no por el puerto remoto: el dialogo saldria en el PC y no en el movil que lo pide)
+  app.get("/api/fs/listar", [](Ctx& c) -> Out {
+    try {
+      json r = explorador::listar(c.q("ruta"), c.qb("todos", false));
+      r["dialogo"] = !c.remote && c.local() && explorador::dialogo_disponible();
+      return r;
+    } catch (const std::runtime_error& e) {
+      throw HttpErr(404, e.what());
+    }
+  }, true);
+
+  app.post("/api/fs/dialogo", [](Ctx& c) -> Out {
+    if (c.remote || !c.local())
+      return json{{"unavailable", true}, {"detail", "el selector del sistema solo se abre en el equipo de Agente IA"}};
+    return explorador::dialogo(c.bb("carpeta", false));
+  }, true);
 
   app.post("/api/models/import", [](Ctx& c) -> Out {
     std::string path = c.bs("path");
@@ -2066,7 +2096,7 @@ void register_routes(App& app) {
     if (!res) {
       r.limiter.fail("pair:" + c.host);
       L.warning("Emparejamiento remoto rechazado desde ", c.host);
-      throw HttpErr(401, "Codigo incorrecto o caducado (pide uno nuevo en tu Nexus-Office)");
+      throw HttpErr(401, "Codigo incorrecto o caducado (pide uno nuevo en tu Agente IA)");
     }
     auto& [token, dev] = *res;
     r.limiter.reset("pair:" + c.host);
@@ -2247,6 +2277,9 @@ void register_routes(App& app) {
     r.cert(true);
     return merged(r.status(), {{"restart_required", true}});
   }, true);
+
+  // ------------------------------------------------------------------ beta: rendimiento y aspecto (server/beta.cpp)
+  beta::register_routes(app);
 }
 
 }  // namespace nx::server

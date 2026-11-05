@@ -23,7 +23,7 @@
 3. Objetos grandes: seleccionar un trozo limpio del fondo, copiar, pegar como capa, moverlo encima, máscara de capa
    para fundir los bordes.
 4. El plugin Resynthesizer («Heal selection», relleno según contenido) no viene con GIMP; G'MIC trae filtros de
-   relleno («Inpaint»). Nexus-Office no los instala.
+   relleno («Inpaint»). Agente IA no los instala.
 
 ## Piel (retrato) de forma natural
 - Separación de frecuencias: duplicar la capa dos veces; a la de abajo Desenfoque gaussiano (radio 4-8 px en una foto

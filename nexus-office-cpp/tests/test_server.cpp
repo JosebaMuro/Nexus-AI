@@ -10,6 +10,7 @@
 #include "tools/tools.h"
 #include "util/fs.h"
 #include "util/net.h"
+#include "util/text.h"
 
 using namespace nx;
 
@@ -61,7 +62,7 @@ TEST("servidor: API, administrador, memoria, biblioteca y chat por WebSocket") {
   for (auto* k : {"profile", "llm", "memory", "graph", "rag", "voice", "image"}) CHECK(status.contains(k));
 
   auto index = c.Get("/");
-  CHECK(index && index->status == 200 && index->body.find("Nexus-Office") != std::string::npos);
+  CHECK(index && index->status == 200 && index->body.find("Agente IA") != std::string::npos);
   auto js = c.Get("/static/js/app.js");
   CHECK(js && js->status == 200);
 
@@ -98,9 +99,15 @@ TEST("servidor: API, administrador, memoria, biblioteca y chat por WebSocket") {
   auto rs = c.Get("/api/rag/search?q=IVA");
   CHECK(rs && rs->status == 200 && !body(rs).empty());
 
-  // multimedia sin modelos: imagen procedimental y musica compuesta
+  // multimedia sin modelos: la escena del prompt (o arte abstracto si se pide) y musica compuesta
   auto img = c.Post("/api/image/generate", R"({"prompt":"un faro al atardecer","seed":3})", "application/json");
   CHECK(img && img->status == 200 && !jstr(body(img), "url").empty());
+  CHECK_EQ(jstr(body(img), "engine"), std::string("escena"));
+  CHECK(contains(jstr(body(img), "note"), "modelo de imagen"));
+  auto abs = c.Post("/api/image/generate", R"({"prompt":"un fractal abstracto morado"})", "application/json");
+  CHECK(abs && jstr(body(abs), "engine") == "procedural");
+  auto raro = c.Post("/api/image/generate", R"({"prompt":"xyzzy qwerty"})", "application/json");
+  CHECK(raro && contains(jstr(body(raro), "note"), "No he reconocido"));
   auto mus = c.Post("/api/music/generate", R"({"prompt":"musica tranquila","seconds":3})", "application/json");
   CHECK(mus && mus->status == 200 && !body(mus).contains("path"));
 
