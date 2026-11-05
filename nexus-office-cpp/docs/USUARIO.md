@@ -262,6 +262,28 @@ En *Ajustes > Avatar* puedes **buscar y descargar avatares 3D gratuitos** de Int
 ### Salón
 Representación gráfica de los agentes reunidos. Mira cómo conversan, cómo se delegan tareas y qué habilidades han demostrado. Pulsa **Convocar reunión** o escribe algo en el salón. Mientras dura una reunión el botón muestra *REUNIÓN EN CURSO…* y no se puede convocar otra encima. La **Transcripción** recoge todo lo dicho y funciona igual en ordenador, móvil y tableta.
 
+### Agentes: crea tu equipo con el asistente
+Cada agente es como un empleado especializado. En *Agentes*, como administrador, pulsa **✨ Asistente de agentes**
+(o **✨ Configurar** en la ficha de uno que ya tengas) y responde cuatro pasos:
+
+1. **Puesto.** Elige un puesto parecido de la lista (recepción, contabilidad, comercial, fontanero, peluquería, más de
+   70 oficios) o *Desde cero*. Hay buscador y filtros (*General*, *Oficina*, *Oficios y profesiones*). El puesto trae su
+   especialidad, sus herramientas y, en los oficios, datos de su gremio para su grafo de conocimiento.
+2. **Forma de ser.** Nombre, qué hace en una frase, icono, color y aspecto en el salón. Con un clic: trato (tú, usted o
+   desenfadado), respuestas (breves, normales o detalladas), creatividad (precisa, equilibrada o creativa), iniciativa
+   (propone ideas o solo lo que pidas) e idioma. Puedes añadir reglas propias, una por línea («No des precios sin
+   consultar la tarifa»).
+3. **Qué sabe y qué hace.** Su especialidad, las palabras que le llaman (las preguntas con esas palabras le llegan
+   solas), qué puede hacer por paquetes en lenguaje sencillo (memoria y cálculo, documentos de la empresa, crear
+   ficheros, internet, imágenes y música, programar, trabajo en equipo, bolsa simulada o todas), a quién puede pasar
+   trabajo, qué modelo de IA usa y si tiene memoria propia.
+4. **Revisar.** Ves su ficha, los avisos (por ejemplo, que escribir ficheros pide permiso) y las instrucciones que se han
+   redactado solas. Puedes retocarlas a mano; *Volver a redactarlas* deshace tus retoques. Al **Guardar** se abre el
+   chat con el agente para probarlo.
+
+Todo funciona sin conexión. Lo que eliges se guarda con el agente, así que al volver a abrir el asistente lo ves igual.
+El botón *Nuevo (editor avanzado)* sigue disponible para quien prefiera rellenar todos los campos a mano.
+
 ### Núcleo
 Explora tu grafo de conocimiento en 3D (arrastra para girar, rueda para acercar), busca recuerdos, borra los que no quieras y enséñale datos nuevos.
 

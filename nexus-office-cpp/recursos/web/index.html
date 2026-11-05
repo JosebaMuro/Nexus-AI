@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<title>Agente IA</title>
+<title>Nexus-Office</title>
 <meta name="description" content="Agente de IA multimodal portable con memoria, aprendizaje y sistema de agentes">
 <meta name="theme-color" content="#04060c">
 <link rel="manifest" href="/static/manifest.webmanifest">
@@ -21,7 +21,7 @@
 
 <div class="app">
   <header class="topbar">
-    <div class="logo" data-text="Agente IA">Agente IA<small id="ver">v1</small></div>
+    <div class="logo" data-text="Nexus-Office">Nexus-Office<small id="ver">v1</small></div>
     <button class="beta-tag" title="Versión beta: rendimiento y aspecto en pruebas. Abre el Laboratorio BETA">BETA</button>
     <div class="pills">
       <button class="pill pill-menu" data-menu="ia" title="Motor y modelo de IA"><span class="dot live" id="dot-llm"></span>IA <b id="pill-llm">…</b><i>▾</i></button>
@@ -85,7 +85,7 @@
             <div class="composer-box">
               <button class="icon-btn" id="btn-attach" title="Adjuntar imagen, documento o comprimido (ZIP, RAR, 7z) con un proyecto o documentación"><svg viewBox="0 0 24 24"><path d="M21 12.5l-8.5 8.5a5 5 0 0 1-7-7L14 5.5a3.3 3.3 0 0 1 4.7 4.7L10.2 18.7a1.7 1.7 0 0 1-2.4-2.4L15.5 8.6"/></svg></button>
               <input type="file" id="file-attach" accept="image/*,.zip,.rar,.7z,.tar,.gz,.tgz,.bz2,.xz,.pdf,.docx,.odt,.ods,.odp,.pptx,.xlsx,.epub,.rtf,.txt,.md,.html,.htm,.csv,.json" multiple hidden>
-              <textarea id="input" rows="1" placeholder="Escribe a Agente IA… (Shift+Enter: nueva línea)"></textarea>
+              <textarea id="input" rows="1" placeholder="Escribe a Nexus-Office… (Shift+Enter: nueva línea)"></textarea>
               <button class="icon-btn" id="btn-enhance" title="Mejorar el prompt"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8zM19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9zM5 15l.7 1.6L7.3 17l-1.6.7L5 19.3l-.7-1.6L2.7 17l1.6-.4z"/></svg></button>
               <button class="icon-btn" id="btn-speak" title="Leer respuestas en voz alta"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg></button>
               <button class="icon-btn" id="btn-mic" title="Dictar un mensaje"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
@@ -168,7 +168,7 @@
         <div class="row"><input class="input" id="rag-url" placeholder="https://…  →  PDF estructurado + biblioteca + conocimiento" style="flex:1"><button class="btn primary" id="rag-url-go">PROCESAR URL</button></div>
         <div class="row"><input class="input" id="rag-crawl" placeholder="https://docs…  →  rastrear la documentación y aprenderla" style="flex:1"><input class="input" id="rag-crawl-max" type="number" min="1" max="100000" value="40" title="Máximo de páginas en total. Si no cabe en un lote, se rastrea por lotes correlativos y reanudables" style="width:6.5em"><select class="input" id="rag-crawl-scope" title="Ámbito del rastreo" style="width:auto"><option value="path">esta sección</option><option value="domain" title="Todas las páginas, documentos y subdominios, sin límite, y un grafo de conocimiento multicapa importable en un agente">todo el dominio + grafo</option></select><button class="btn primary" id="rag-crawl-go">RASTREAR</button></div>
         <div id="rag-jobs" class="list"></div>
-        <div class="row"><button class="btn sm" id="rag-kg-import" title="Paquete .zip de conocimiento de un dominio (descargado con ⬇ ZIP aquí o en otro Agente IA). Va al grafo elegido en «Importar en»">IMPORTAR CONOCIMIENTO DE DOMINIO (.zip)</button><input type="file" id="rag-kg-file" accept=".zip" hidden></div>
+        <div class="row"><button class="btn sm" id="rag-kg-import" title="Paquete .zip de conocimiento de un dominio (descargado con ⬇ ZIP aquí o en otro Nexus-Office). Va al grafo elegido en «Importar en»">IMPORTAR CONOCIMIENTO DE DOMINIO (.zip)</button><input type="file" id="rag-kg-file" accept=".zip" hidden></div>
         <div class="drop" id="rag-drop">Suelta aquí documentos (PDF, Word, OpenDocument, PowerPoint, Excel, EPUB, RTF, HTML, TXT, MD, código…) o comprimidos ZIP, RAR, 7z o tar.gz con un proyecto o documentación (o haz clic). Puedes soltar muchos a la vez: se leen en paralelo.</div>
         <input type="file" id="rag-file" hidden multiple>
         <div id="rag-progress"></div>
@@ -201,14 +201,6 @@
           <input type="file" id="ana-file" accept="image/*" hidden>
           <input class="input" id="ana-q" placeholder="Pregunta sobre la imagen (opcional)">
           <div id="ana-result"></div>
-        </div>
-        <div class="panel col">
-          <h3>Generador de vídeo <span class="sub">secuencia de imágenes · WebM/MP4</span></h3>
-          <p class="muted" style="margin:0">Monta un vídeo con tus imágenes: orden, duración, transiciones, movimiento, títulos y música. Funciona sin conexión.</p>
-          <div class="row"><a class="btn primary" href="/static/video.html">🎬 ABRIR EL GENERADOR</a>
-            <button class="btn" id="vid-last" title="Monta un AVI con las últimas imágenes generadas (la misma herramienta que usan los agentes)">⚡ VÍDEO RÁPIDO CON LAS ÚLTIMAS</button></div>
-          <div id="vid-result"></div>
-          <div class="gallery" id="vid-gallery"></div>
         </div>
         <div class="panel"><h3>Galería</h3><div class="gallery" id="gallery"></div></div>
       </div>
@@ -272,7 +264,7 @@
           <div class="row" style="margin-top:8px"><select class="input" id="bc-tarifa" style="flex:1 1 200px;min-width:0"></select>
             <select class="input" id="bc-modo" style="flex:1 1 140px;min-width:0"><option value="simulado">Simulada (sin dinero)</option><option value="real">Real (seguimiento, requiere admin)</option></select></div>
           <div class="row" style="margin-top:10px"><button class="btn primary" id="bc-new">+ NUEVA CARTERA</button><button class="btn" id="bc-reset">REINICIAR LA ACTUAL</button></div>
-          <p class="muted" style="margin-top:8px">En una cartera real nada se ejecuta solo: cada orden espera a que la confirmes tú y luego la ejecutas en tu bróker. Agente IA no se conecta a ningún bróker.</p>
+          <p class="muted" style="margin-top:8px">En una cartera real nada se ejecuta solo: cada orden espera a que la confirmes tú y luego la ejecutas en tu bróker. Nexus-Office no se conecta a ningún bróker.</p>
         </div>
         <div class="panel"><h3>Precios reales o activos propios</h3>
           <p class="muted">Pega cierres «fecha;cierre» (o un CSV con columnas Date y Close) para anclar el valor a datos reales y usar su volatilidad.</p>
@@ -303,7 +295,7 @@
     <!-- ================= AGENTES ================= -->
     <section class="view" id="view-agents">
       <div class="view-title">SISTEMA DE AGENTES</div>
-      <div class="row admin-only" style="margin-bottom:14px"><button class="btn primary" id="agent-wizard">✨ ASISTENTE DE AGENTES</button><button class="btn" id="agent-new">+ NUEVO (EDITOR AVANZADO)</button><span class="muted">El asistente te guía paso a paso: plantilla, identidad, personalidad, conocimiento, herramientas y equipo.</span></div>
+      <div class="row admin-only" style="margin-bottom:14px"><button class="btn primary" id="agent-wizard">✨ ASISTENTE DE AGENTES</button><button class="btn" id="agent-new">+ NUEVO (EDITOR AVANZADO)</button><span class="muted">El asistente te guía en cuatro pasos: puesto, forma de ser, qué sabe y qué hace, y revisar.</span></div>
       <div class="panel" id="office-panel" style="margin-bottom:16px"></div>
       <div class="grid g3" id="agents-grid"></div>
       <div class="panel admin-only hidden" id="agent-editor" style="margin-top:16px"></div>
@@ -344,7 +336,7 @@
       </div>
       <div class="grid g2" style="margin-top:16px">
         <div class="panel"><h3>Métricas clave <span class="sub">últimos <select class="input" id="met-dias" style="width:auto;display:inline-block"><option value="1">1 día</option><option value="7" selected>7 días</option><option value="30">30 días</option></select></span></h3><div id="met-box"><span class="muted">Sin tareas todavía.</span></div></div>
-        <div class="panel"><h3>Mi estilo <span class="sub">lo que Agente IA ha aprendido de cómo trabajas</span></h3>
+        <div class="panel"><h3>Mi estilo <span class="sub">lo que Nexus-Office ha aprendido de cómo trabajas</span></h3>
           <div class="row" style="margin-bottom:8px"><input class="input" id="est-user" placeholder="Tu nombre (vacío = titular de este equipo)" style="flex:1"><button class="btn sm" id="est-user-save">USAR</button></div>
           <div id="est-box"></div>
           <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn danger sm" id="est-reset">OLVIDAR MI ESTILO</button></div>
@@ -415,7 +407,7 @@
         <div class="panel"><h3>Autoajuste adaptativo <span class="sub">se aplica en cada arranque</span></h3><div class="list" id="tune-list"></div></div>
         <div class="panel"><h3>Runtimes nativos <span class="sub">llama.cpp · stable-diffusion.cpp</span></h3><div id="runtimes-box"></div></div>
       </div>
-      <div class="panel" style="margin-top:16px"><h3>Arranque automático <span class="sub">Agente IA como servicio: se inicia solo al encender el equipo</span></h3><div id="service-box"><span class="muted">Comprobando…</span></div></div>
+      <div class="panel" style="margin-top:16px"><h3>Arranque automático <span class="sub">Nexus-Office como servicio: se inicia solo al encender el equipo</span></h3><div id="service-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel" style="margin-top:16px"><h3>Comprobación y autorreparación <span class="sub">se revisa todo en cada arranque y se arregla solo</span></h3><div id="salud-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel" style="margin-top:16px"><h3>Descargas <span class="sub">instaladores para los equipos y móviles de la oficina</span></h3><div id="downloads-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel" style="margin-top:16px"><h3>Drivers de la tarjeta gráfica <span class="sub">actualización oficial, siempre confirmada por ti</span></h3><div id="drivers-box"><span class="muted">Comprobando…</span></div></div>

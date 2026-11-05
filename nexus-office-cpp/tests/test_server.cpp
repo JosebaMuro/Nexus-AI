@@ -84,6 +84,25 @@ TEST("servidor: API, administrador, memoria, biblioteca y chat por WebSocket") {
   auto agent = c.Put("/api/agents", adm, R"({"id":"probador","name":"Probador","keywords":["prueba"]})", "application/json");
   CHECK(agent && agent->status == 200 && jstr(body(agent), "id") == "probador");
 
+  // asistente de agentes: catalogo, vista previa (sin guardar) y guardado con el conocimiento del oficio
+  auto wz = c.Get("/api/agents/asistente");
+  CHECK(wz && wz->status == 200 && body(wz)["plantillas"].size() > 50 && !body(wz)["paquetes"].empty());
+  auto wz_anon = c.Post("/api/agents/asistente", R"({"respuestas":{"nombre":"Ana"}})", "application/json");
+  CHECK(wz_anon && wz_anon->status == 403);
+  auto wz_vista = c.Post("/api/agents/asistente", adm, R"({"respuestas":{"plantilla":"fontanero","nombre":"Fontanera"}})", "application/json");
+  CHECK(wz_vista && wz_vista->status == 200 && !truthy(body(wz_vista)["guardado"]));
+  CHECK(contains(jstr(body(wz_vista)["agente"], "system_prompt"), "Te llamas Fontanera."));
+  auto wz_mal = c.Post("/api/agents/asistente", adm, R"({"respuestas":{"nombre":""}})", "application/json");
+  CHECK(wz_mal && wz_mal->status == 400);
+  auto wz_ok = c.Post("/api/agents/asistente", adm, R"({"respuestas":{"plantilla":"fontanero","nombre":"Fontanera"},"guardar":true})", "application/json");
+  CHECK(wz_ok && wz_ok->status == 200 && truthy(body(wz_ok)["guardado"]));
+  CHECK_EQ(jstr(body(wz_ok)["agente"], "id"), std::string("fontanera"));
+  CHECK(body(wz_ok)["sembradas"].get<int>() > 0);
+  CHECK_EQ(jstr(body(wz_ok)["agente"]["perfil"], "plantilla"), std::string("fontanero"));
+  auto wz_edit = c.Post("/api/agents/asistente", adm, R"({"respuestas":{"plantilla":"fontanero","nombre":"Fontanera","longitud":"breves"},"editar":"fontanera","guardar":true})", "application/json");
+  CHECK(wz_edit && wz_edit->status == 200 && jstr(body(wz_edit)["agente"], "id") == "fontanera");
+  CHECK_EQ(jstr(body(wz_edit)["agente"]["perfil"], "longitud"), std::string("breves"));
+
   // memoria y grafo
   auto mem = c.Post("/api/memory", R"({"content":"Me llamo Ana y trabajo en una carpinteria de Bilbao"})", "application/json");
   CHECK(mem && mem->status == 200 && body(mem).contains("id"));

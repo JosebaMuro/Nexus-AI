@@ -4,9 +4,11 @@
 
 #include <algorithm>
 #include <csignal>
+#include <set>
 #include <thread>
 
 #include "agents/agents.h"
+#include "agents/asistente.h"
 #include "coop/coop.h"
 #include "remote/remote.h"
 #include "core/service.h"
@@ -1472,6 +1474,59 @@ void register_routes(App& app) {
       throw HttpErr(400, e.what());
     }
     return json{{"ok", true}};
+  }, true);
+
+  // ------------------------------------------------------------------ asistente de configuracion de agentes
+  // plantillas de puesto, paquetes de herramientas (solo los instalados), agentes para el equipo y modelos
+  app.get("/api/agents/asistente", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    std::set<std::string> hay;
+    for (auto& t : s.tools->list()) hay.insert(jstr(t, "name"));
+    json paq = json::array();
+    for (auto p : agents::asistente::paquetes()) {
+      json tl = json::array();
+      for (auto& t : p["tools"])
+        if (hay.count(t.get<std::string>())) tl.push_back(t);
+      if (tl.empty()) continue;
+      p["tools"] = tl;
+      paq.push_back(p);
+    }
+    json equipo = json::array();
+    for (auto& a : s.agents->all())
+      equipo.push_back({{"id", a.id}, {"name", a.name}, {"icon", a.icon}, {"color", a.color},
+                        {"description", a.description}, {"enabled", a.enabled}});
+    json modelos = json::array({{{"id", "default"}, {"nombre", "Automático: el modelo general del equipo"}},
+                                {{"id", "especialidad:finanzas"}, {"nombre", "IA de finanzas (si está instalada)"}},
+                                {{"id", "nube:"}, {"nombre", "IA online con tu clave (si no hay, la local)"}}});
+    return json{{"plantillas", agents::asistente::plantillas()}, {"paquetes", paq}, {"agentes", equipo},
+                {"modelos", modelos}, {"vacio", agents::asistente::perfil_de(nullptr)}};
+  });
+
+  // respuestas -> ficha y prompt (vista previa); con "guardar": true la guarda y siembra el conocimiento del puesto
+  app.post("/api/agents/asistente", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    std::vector<std::string> herramientas, ids;
+    for (auto& t : s.tools->list()) herramientas.push_back(jstr(t, "name"));
+    for (auto& a : s.agents->all()) ids.push_back(a.id);
+    std::string editando = c.bs("editar", "");
+    if (!editando.empty() && std::find(ids.begin(), ids.end(), editando) == ids.end())
+      throw HttpErr(404, "no existe el agente " + editando);
+    json out;
+    try {
+      out = agents::asistente::construir(c.b("respuestas"), herramientas, ids, editando);
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
+    out["guardado"] = false;
+    if (truthy(c.b("guardar", false))) {
+      auto spec = s.agents->save(out["agente"]);
+      out["agente"] = spec.to_json();
+      out["guardado"] = true;
+      out["sembradas"] = s.graph ? agents::asistente::sembrar(*s.graph, spec.id,
+                                                              agents::asistente::plantilla(jstr(spec.perfil, "plantilla")))
+                                 : 0;
+    }
+    return out;
   }, true);
 
   // ------------------------------------------------------------------ oficina (perfiles de pyme)

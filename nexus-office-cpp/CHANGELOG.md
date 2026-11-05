@@ -5,7 +5,16 @@
 Version mayor de **Agente IA** (antes Nexus-Office), con el nombre nuevo en todo lo que ve el usuario (interfaz, instaladores, manuales, web de
 descarga y app de Android, con identificador `ai.agente.ia`). Reune en una sola version estable todo lo de la 2.10.0 y la
 2.10.0-beta.1 (mas abajo): Laboratorio BETA de rendimiento y aspecto, imagenes con sd.cpp dentro de la APK, modelos
-GGUF ligeros, generador de video y asistente visual de agentes.
+GGUF ligeros, generador de video y un asistente de agentes nuevo, mas sencillo.
+
+### Asistente de configuración de agentes
+- **✨ Asistente de agentes** en *Agentes*: crea o ajusta un agente («empleado») en cuatro pasos sencillos (sustituye al de siete pasos de la 2.10.0): puesto
+  (más de 70 plantillas con buscador, o desde cero), forma de ser (trato, extensión, creatividad, iniciativa, idioma y
+  reglas propias con un clic), qué sabe y qué hace (especialidad, palabras clave, paquetes de herramientas en lenguaje
+  sencillo, equipo, modelo y memoria) y revisar (ficha, avisos e instrucciones redactadas, que se pueden retocar).
+- Al guardar recibe el conocimiento de su oficio en su grafo y se abre el chat para probarlo. Lo elegido se guarda
+  con el agente (`perfil`) para volver a abrir el asistente igual. El editor avanzado sigue disponible.
+- Nueva API `GET/POST /api/agents/asistente`; la ficha y el prompt se redactan en C++ (`src/agents/asistente.cpp`).
 
 ## Agente IA 2.10.0-cpp
 

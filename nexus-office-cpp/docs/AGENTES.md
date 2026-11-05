@@ -1,6 +1,6 @@
 # Arquitectura agéntica: seguridad, estilo, métricas y evaluación
 
-Desde la beta 2.8, los agentes de Agente IA siguen las prácticas de la guía de implementación de IA agéntica: tratan
+Desde la beta 2.8, los agentes de Nexus-Office siguen las prácticas de la guía de implementación de IA agéntica: tratan
 como datos lo que llega de fuera, aplican mínimo privilegio, piden permiso cuando el turno se ha contaminado, aprenden
 el tono y la forma de trabajar de cada persona, miden cada tarea y tienen un banco de evaluación. Todo funciona en local,
 sin internet, igual en Windows, Linux, macOS y Android, y en la red cooperativa entre equipos.
@@ -56,7 +56,7 @@ tocar el fichero (se desactiva con `seguridad.nexus_minimo_privilegio = false`).
 
 Cada aprobación se guarda en la tabla `aprobaciones`. Si nadie responde en `tools.approval_timeout_s` segundos (600 por
 defecto, antes 180), la herramienta devuelve al agente que la acción queda **pendiente** y el agente se lo dice al
-usuario. La aprobación sigue en *Herramientas → Aprobaciones pendientes* aunque Agente IA se reinicie. Al aprobarla
+usuario. La aprobación sigue en *Herramientas → Aprobaciones pendientes* aunque Nexus-Office se reinicie. Al aprobarla
 más tarde (desde el PC o el móvil), `Supervisor::resolve` la marca y `AgentManager::resume_deferred` ejecuta la acción
 con la llamada exacta ya aprobada y relanza al agente con el resultado para que termine la tarea. Si se rechaza, queda
 anotado en la conversación. `GET /api/aprobaciones?estado=pendiente|aprobada|rechazada` lista el historial.
@@ -137,19 +137,28 @@ La prueba `evaluacion: el banco rápido...` de `nexus-tests` exige al menos un 8
 herramientas en el modo rápido, para que un cambio no los empeore sin que se note. El modo completo sirve para comparar
 modelos antes de cambiar el recomendado.
 
-## Asistente visual de agentes (2.10)
+## Asistente de configuración
 
-*Agentes → ✨ Asistente de agentes* (o *Configurar* en la tarjeta de un agente) crea o retoca un agente en siete pasos
-(`recursos/web/js/asistente-agentes.js`):
+`src/agents/asistente.{h,cpp}` (servidor) y `recursos/web/js/asistente-agentes.js` (interfaz) crean o ajustan un agente
+en cuatro pasos: puesto, forma de ser, qué sabe y qué hace, y revisar. La interfaz solo recoge las respuestas; la
+ficha y el prompt se redactan en C++.
 
-1. **Plantilla**: diez oficios de oficina (atención al cliente, comercial, contable, marketing, diseño, investigación,
-   programación, RRHH, legal) o copiar un agente existente.
-2. **Identidad**: nombre, identificador, rol, descripción, icono, colores y voz.
-3. **Personalidad**: tono, creatividad (temperatura) e iniciativa, longitud de respuesta, idioma, rasgos y reglas.
-4. **Conocimiento**: especialidad, palabras clave para el enrutado, memoria y ejemplos.
-5. **Herramientas**: agrupadas por tipo con su nivel de riesgo y conjuntos prediseñados.
-6. **Equipo**: modelo, en quién delega y si está activo.
-7. **Revisar**: el prompt generado (editable) y el resultado.
-
-Las respuestas del asistente se guardan en el campo `perfil` del agente para volver a abrirlo tal cual; el prompt
-final es el que usa el agente. Se guarda con `PUT /api/agents` como el editor avanzado.
+- **Plantillas** (`plantillas()`): los agentes de serie de `recursos/agents/defaults` (salvo el coordinador `nexus`) y
+  el catálogo de oficina `recursos/office/agentes` (grupos *General*, *Oficina* y *Oficios y profesiones*). Cada una
+  lleva ya sus respuestas (`perfil_de()`): paquetes deducidos de sus herramientas y creatividad de su temperatura.
+- **Respuestas** (`perfil`): `plantilla, nombre, puesto, descripcion, icono, color, sexo, trato (cercano|usted|desenfadado),
+  longitud (breves|normales|detalladas), creatividad (precisa|equilibrada|creativa), proactivo, idioma (es|auto),
+  reglas, especialidad, palabras, paquetes, modelo, memoria, delegar, prompt_manual`. Lo que falte se toma de la
+  plantilla. Se guardan en la clave `perfil` del YAML del agente (solo si existe; los YAML de siempre no cambian).
+- **Prompt** (`redactar_prompt()`): la base es el prompt de la plantilla (con «Te llamas X.» si se cambia el nombre) o,
+  desde cero, «Eres X, puesto de {assistant_name}…» con su especialidad; después, *Forma de trabajar:* con una línea
+  por respuesta y las reglas propias. `prompt_manual` no vacío sustituye todo lo redactado.
+- **Herramientas**: ocho paquetes sin solapes (`paquetes()`); se filtran a las instaladas, y las de la plantilla que
+  no son de ningún paquete se conservan. `todas` = `["*"]`. Creatividad → temperatura 0,2 / 0,5 / 0,9.
+- **Comprobaciones** (`construir()`): nombre obligatorio; id a partir del nombre sin acentos y con sufijo `-2`, `-3`…
+  si está ocupado (al editar se conserva); solo delega en agentes que existen y nunca en sí mismo, y solo con el
+  paquete de equipo; sin palabras clave usa su nombre y puesto para el enrutado; avisos en lenguaje sencillo.
+- **Conocimiento**: al guardar, `sembrar()` pasa al grafo del agente las relaciones `grafo` de su plantilla (como al
+  aplicar un perfil de oficina).
+- **API**: `GET /api/agents/asistente` y `POST /api/agents/asistente` `{respuestas, editar, guardar}` (admin).
+  Pruebas en `tests/test_asistente.cpp` y `tests/test_server.cpp`.

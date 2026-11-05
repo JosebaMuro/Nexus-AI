@@ -334,6 +334,36 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
 .accel-opts button.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .accel-opts button.na { opacity: .6; }
 .accel-note { color: var(--warn); font-size: 12.5px; min-height: 1em; } .accel-result { font-size: 13px; margin: 6px 0 10px; }
+/* asistente de agentes (js/asistente-agentes.js) */
+.awz { width: min(900px, 96vw); max-height: 94vh; padding: 0; flex-direction: column; overflow: hidden; }
+.awz[open] { display: flex; }
+.awz-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px 8px; } .awz-head h2 { flex: 1; margin: 0; }
+.awz-pasos { display: flex; gap: 6px; padding: 0 20px 10px; overflow-x: auto; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.awz-pasos button { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; color: var(--muted); cursor: pointer; white-space: nowrap; font-size: 13px; }
+.awz-pasos button.on { background: var(--accent); border-color: var(--accent); color: #001018; font-weight: 700; }
+.awz-pasos button.hecho { color: var(--accent); border-color: var(--line-strong); }
+.awz-body { padding: 16px 20px; overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.awz-foot { display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); flex-shrink: 0; } .awz-sp { flex: 1; }
+.awz-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.awz-campo .lbl { font: 700 10.5px var(--font-hud); letter-spacing: .16em; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; }
+.awz-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line-strong); border-radius: 10px; overflow: hidden; }
+.awz-seg button { background: none; border: 0; padding: 7px 12px; color: var(--text); cursor: pointer; font-size: 13px; }
+.awz-seg button.on { background: var(--accent); color: #001018; font-weight: 700; }
+.awz-tpls { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.awz-tpl { text-align: left; display: flex; flex-direction: column; gap: 3px; background: var(--shade); border: 1px solid var(--line); border-left: 3px solid var(--c, var(--accent)); border-radius: 12px; padding: 10px 12px; cursor: pointer; color: var(--text); }
+.awz-tpl:hover, .awz-tpl.on { border-color: var(--accent); box-shadow: var(--glow); }
+.awz-tpl .i { font-size: 22px; } .awz-tpl span:not(.i) { font-size: 12.5px; color: var(--muted); } .awz-tpl small { font-size: 11px; color: var(--accent); }
+.awz-ico { width: 36px; height: 36px; font-size: 18px; background: var(--shade); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; color: var(--text); }
+.awz-ico.on { border-color: var(--accent); box-shadow: var(--glow); }
+.awz-paqs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.awz-paq { display: flex; gap: 10px; align-items: flex-start; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--shade); }
+.awz-paq.on { border-color: var(--accent); } .awz-paq .i { font-size: 20px; } .awz-paq small { display: block; color: var(--muted); font-size: 12px; }
+.awz-chip { border: 1px solid var(--line-strong); border-radius: 999px; padding: 4px 11px; cursor: pointer; background: none; color: var(--text); font-size: 13px; }
+.awz-chip.on { background: color-mix(in srgb, var(--accent) 22%, transparent); border-color: var(--accent); }
+.awz-ficha { display: flex; gap: 14px; padding: 14px; border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: 12px; background: var(--shade); }
+.awz-ficha .ico { font-size: 34px; }
+.awz-avisos { margin: 0; padding-left: 18px; color: var(--warn); font-size: 13px; }
+@media (max-width: 600px) { .awz-head, .awz-body, .awz-foot { padding-left: 14px; padding-right: 14px; } .awz-pasos { padding: 0 14px 10px; } }
 dialog h2 { margin: 0 0 6px; font: 700 15px var(--font-hud); letter-spacing: .22em; color: var(--accent); }
 .pin-input { text-align: center; font: 700 26px var(--font-mono); letter-spacing: .5em; }
 .lightbox { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.85); display: grid; place-items: center; cursor: zoom-out; }
