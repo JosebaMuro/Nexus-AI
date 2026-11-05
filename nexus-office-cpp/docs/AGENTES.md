@@ -1,6 +1,6 @@
 # Arquitectura agéntica: seguridad, estilo, métricas y evaluación
 
-Desde la beta 2.8, los agentes de Nexus-Office siguen las prácticas de la guía de implementación de IA agéntica: tratan
+Desde la beta 2.8, los agentes de Agente IA siguen las prácticas de la guía de implementación de IA agéntica: tratan
 como datos lo que llega de fuera, aplican mínimo privilegio, piden permiso cuando el turno se ha contaminado, aprenden
 el tono y la forma de trabajar de cada persona, miden cada tarea y tienen un banco de evaluación. Todo funciona en local,
 sin internet, igual en Windows, Linux, macOS y Android, y en la red cooperativa entre equipos.
@@ -56,7 +56,7 @@ tocar el fichero (se desactiva con `seguridad.nexus_minimo_privilegio = false`).
 
 Cada aprobación se guarda en la tabla `aprobaciones`. Si nadie responde en `tools.approval_timeout_s` segundos (600 por
 defecto, antes 180), la herramienta devuelve al agente que la acción queda **pendiente** y el agente se lo dice al
-usuario. La aprobación sigue en *Herramientas → Aprobaciones pendientes* aunque Nexus-Office se reinicie. Al aprobarla
+usuario. La aprobación sigue en *Herramientas → Aprobaciones pendientes* aunque Agente IA se reinicie. Al aprobarla
 más tarde (desde el PC o el móvil), `Supervisor::resolve` la marca y `AgentManager::resume_deferred` ejecuta la acción
 con la llamada exacta ya aprobada y relanza al agente con el resultado para que termine la tarea. Si se rechaza, queda
 anotado en la conversación. `GET /api/aprobaciones?estado=pendiente|aprobada|rechazada` lista el historial.
