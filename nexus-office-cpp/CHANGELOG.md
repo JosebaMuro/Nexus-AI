@@ -2,8 +2,8 @@
 
 ## Agente IA 2.10.0-cpp
 
-Version estable de la 2.10 (incluye todo lo de la 2.10.0-beta.1, mas abajo). La APK se actualiza encima de la beta
-(versionCode 21001, misma clave «Agente IA»).
+Version estable de la 2.10 (incluye todo lo de la 2.10.0-beta.1, mas abajo). La APK (versionCode 21001) va firmada con
+la clave de Nexus, no con la de la beta.1: si tienes la beta.1 instalada, desinstalala antes de instalar esta.
 
 ### Imagenes en el movil: sd.cpp viene dentro de la APK
 - **Arreglado: «no se puede instalar sd.cpp» en Snapdragon 8 (y en cualquier Android).** El instalador descargaba los
