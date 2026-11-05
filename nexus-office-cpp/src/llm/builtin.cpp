@@ -57,6 +57,14 @@ std::optional<std::pair<std::string, json>> detect_intent(const std::string& tex
   if (tools.count("calculator") && !expr.empty() && MATH.match(expr) && MATH.fullmatch(expr) && OPS.test(expr))
     return std::make_pair(std::string("calculator"), json{{"expression", expr}});
   if (tools.count("datetime_now") && TIME.test(low)) return std::make_pair(std::string("datetime_now"), json::object());
+  static const Rx VID(R"(\b(v[ií]deo|montaje|slideshow|presentaci[oó]n animada)\b.*\b(im[aá]gen|imagenes|fotos?|dibujos?)|\b(im[aá]gen\w*|fotos?)\b.*\bv[ií]deo\b)", Rx::I);
+  if (tools.count("crear_video") && VID.test(low)) {
+    json args = json::object();
+    static const Rx NUM(R"(\b(\d{1,2})\s+(?:[uú]ltimas\s+)?(?:im[aá]genes|fotos))", Rx::I);
+    if (auto n = NUM.search(low)) args["ultimas"] = std::stoi(n->str(1));
+    if (contains(low, "vertical") || contains(low, "reels") || contains(low, "tiktok")) args["formato"] = "9:16";
+    return std::make_pair(std::string("crear_video"), args);
+  }
   if (auto m = IMG.search(text); tools.count("generate_image") && m) {
     std::string p = strip_u(m->str(1), U" .");
     return std::make_pair(std::string("generate_image"), json{{"prompt", p.empty() ? text : p}});
@@ -181,6 +189,9 @@ std::string BuiltinBackend::after_tool(const std::string& name, const std::strin
   if (name == "datetime_now")
     return "Ahora son las **" + S_(data, "time") + "** del " + S_(data, "weekday") + " " + S_(data, "date") + ".";
   if (name == "generate_image") return "Aquí tienes la imagen (" + S_(data, "engine") + "):\n\n![imagen](" + S_(data, "url") + ")";
+  if (name == "crear_video")
+    return "He montado el vídeo (" + S_(data, "images") + " imágenes, " + S_(data, "seconds") + " s):\n\n[🎬 Vídeo (AVI)](" +
+           S_(data, "url") + ") · [Abrir en el editor de vídeo](" + S_(data, "editor") + ")";
   if (name == "compose_music")
     return "He compuesto una pieza en **" + S_(data, "key") + "**, " + S_(data, "tempo") + " BPM, estilo *" +
            S_(data, "mood") + "*:\n\n[audio](" + S_(data, "url") + ")";

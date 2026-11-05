@@ -1004,7 +1004,19 @@
     const o = await api("/api/outputs");
     $("#gallery").innerHTML = o.images.map((u) => `<img src="${u}" loading="lazy">`).join("") || `<span class="muted">Aún no hay imágenes.</span>`;
     $$("#gallery img").forEach((i) => (i.onclick = () => lightbox(i.src)));
+    $("#vid-gallery").innerHTML = (o.videos || []).slice(0, 8).map((u) => u.endsWith(".avi")
+      ? `<a class="tag" href="${u}" download>🎬 ${esc(u.split("/").pop())}</a>`
+      : `<video src="${u}" controls preload="metadata" style="width:100%;max-height:160px;border-radius:8px"></video>`).join("");
   };
+  $("#vid-last").onclick = guard(async () => {
+    $("#vid-last").disabled = true; $("#vid-result").innerHTML = `<div class="chip"><span class="spin"></span>montando el vídeo…</div>`;
+    try {
+      const v = await api("/api/video/rapido", { body: { ultimas: 8 } });
+      $("#vid-result").innerHTML = `<div class="row"><a class="btn" href="${v.url}" download>⬇ AVI (${v.images} imágenes, ${v.seconds} s)</a><a class="btn primary" href="${v.editor}">ABRIR EN EL EDITOR</a></div>`;
+      loaders.studio();
+    } catch (e) { $("#vid-result").innerHTML = `<div class="muted">${esc(e.message)}</div>`; }
+    finally { $("#vid-last").disabled = false; }
+  });
   // ---- mejorador de prompts
   async function enhanceInto(el, target, style = "", negEl = null, btn = null) {
     const text = el.value.trim(); if (!text) return toast("Escribe primero una idea", true);
@@ -1346,7 +1358,9 @@
       <p class="muted">${esc(a.description)}</p>
       <div class="row">${(a.tools[0] === "*" ? ["todas"] : a.tools).slice(0, 7).map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>
       <div class="row" style="margin-top:8px">${a.keywords.slice(0, 6).map((k) => `<span class="tag accent">${esc(k)}</span>`).join("")}</div>
-      <div class="row admin-only" style="margin-top:12px"><button class="btn sm" data-edit="${a.id}">EDITAR</button></div></div>`).join("");
+      <div class="row admin-only" style="margin-top:12px"><button class="btn sm primary" data-wiz="${a.id}" title="Asistente visual">✨ CONFIGURAR</button><button class="btn sm" data-edit="${a.id}" title="Editor avanzado (todos los campos a mano)">EDITAR</button></div></div>`).join("");
+    $$("[data-wiz]").forEach((b) => (b.onclick = () => window.AgentWizard && AgentWizard.open(S.agents.find((a) => a.id === b.dataset.wiz), tools)));
+    $("#agent-wizard").onclick = () => window.AgentWizard ? AgentWizard.open(null, tools) : toast("El asistente no se ha cargado", true);
     $$("[data-edit]").forEach((b) => (b.onclick = () => editAgent(S.agents.find((a) => a.id === b.dataset.edit), tools)));
     $("#agent-new").onclick = () => editAgent({ id: "", name: "", description: "", system_prompt: "Eres un agente especialista de {assistant_name}.", model: "default", temperature: 0.7, max_tokens: null, tools: [], memory: true, can_delegate_to: [], keywords: [], specialty: "", color: "#00f0ff", icon: "◆", enabled: true, sexo: "" }, tools);
   };
@@ -2072,8 +2086,20 @@
   // utilidades para los modulos de la interfaz que viven en otros ficheros (js/kgadmin.js)
   loaders.beta = async () => { if (window.NexusBeta) await NexusBeta.load(); };   // laboratorio BETA (js/beta.js)
 
+  // app Android: lo compartido desde otra app (texto al chat; ficheros en la carpeta de trabajo sandbox/compartido)
+  window.__nexusShared = (d) => {
+    go("chat");
+    const files = (d && d.files) || [], text = ((d && d.text) || "").trim();
+    const imgs = files.filter((f) => /\.(png|jpe?g|webp|gif|bmp)$/i.test(f));
+    let t = text;
+    if (files.length) t += (t ? "\n\n" : "") + `Te he compartido ${files.length === 1 ? "este fichero" : "estos ficheros"} (carpeta de trabajo): ${files.join(", ")}`;
+    if (imgs.length > 1 && !text) t += "\n¿Montamos un vídeo con estas imágenes?";
+    const inp = $("#input"); inp.value = t; inp.dispatchEvent(new Event("input")); inp.focus();
+    toast(files.length ? `${files.length} fichero(s) recibidos en la carpeta de trabajo` : "Texto recibido");
+  };
+
   window.NexusUI = { api, toast, esc, guard, ago, fmtB, saveFile, agents: () => S.agents, admin: () => !!S.token, cfg: () => S.cfg,
-                     agentName: (id) => agentName(id), refreshGraph: () => { loadGraph().catch(() => {}); } };
+                     agentName: (id) => agentName(id), reloadAgents: () => { loaders.agents().catch(() => {}); }, refreshGraph: () => { loadGraph().catch(() => {}); } };
 
   /* ================================================================ selector de inicio: motor llama y CPU/GPU/NPU */
   const Accel = {

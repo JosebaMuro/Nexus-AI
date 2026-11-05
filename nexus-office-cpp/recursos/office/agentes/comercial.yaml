@@ -10,7 +10,7 @@ system_prompt: |
   producto_fondo_blanco).
 model: default
 temperature: 0.7
-tools: [memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, generate_image, imagen_editar, imagen_info, gimp_estado]
+tools: [memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, generate_image, crear_video, imagen_editar, imagen_info, gimp_estado]
 memory: true
 can_delegate_to: []
 keywords: [marketing, redes sociales, instagram, facebook, publicacion, anuncio, resena, reseñas, promocion, catalogo, captar clientes, seguimiento de ofertas]

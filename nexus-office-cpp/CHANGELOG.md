@@ -1,5 +1,46 @@
 # Cambios
 
+## Agente IA 2.10.0-cpp
+
+Version estable de la 2.10 (incluye todo lo de la 2.10.0-beta.1, mas abajo). La APK se actualiza encima de la beta
+(versionCode 21001, misma clave «Agente IA»).
+
+### Imagenes en el movil: sd.cpp viene dentro de la APK
+- **Arreglado: «no se puede instalar sd.cpp» en Snapdragon 8 (y en cualquier Android).** El instalador descargaba los
+  binarios de Linux de escritorio, que Android no deja ejecutar, y la generacion de imagenes caia siempre al compositor
+  de escenas. Ahora stable-diffusion.cpp se compila con el NDK y viaja en la APK en dos variantes: **GPU Vulkan**
+  (Adreno, Mali, Xclipse) y **CPU** (ARMv8.2 con dotprod). «Instalar» en el movil ya no descarga nada.
+- Si la GPU falla al generar (driver Vulkan inestable), se recuerda y la siguiente imagen va a la CPU sola.
+- Windows en ARM usa la version x64 de sd.cpp (emulada), que si existe.
+- Se usa `sd-server` junto a `sd-cli` en todas las plataformas (el modelo queda cargado entre imagenes).
+
+### Texto a imagen con modelos GGUF ligeros
+- Nuevos recomendados: **LCM SSD-1B Q4_K** (≈1 GB, 4 pasos, apto para movil) y **FLUX.2 klein 4B Q4_0** (calidad alta
+  con 12 GB de RAM o 6 GB de VRAM).
+- **TAESD**: decodificador diminuto que se usa solo cuando la VAE completa seria lenta (CPU, movil o poca VRAM);
+  la imagen sale varias veces mas rapido. SDXS, SD-Turbo y SDXL-Turbo lo traen como componente.
+- En el movil la pestaña *Recomendados* ya muestra los modelos de imagen marcados como aptos.
+
+### Generador de video
+- **Editor de video en HTML** (*Estudio → Generador de video* o `/static/video.html`): secuencia de imagenes con orden
+  por arrastre, duracion por imagen, transiciones (fundido, a negro, deslizar, zoom, cortinilla, corte), movimiento
+  Ken Burns, rotulos, tarjeta de titulo y musica. Exporta a MP4 o WebM en el propio navegador, sin conexion, y lo
+  guarda en la galeria.
+- **Herramienta `crear_video` para los agentes** (artista, diseñador grafico y comercial): monta un AVI (Motion JPEG)
+  con las ultimas imagenes generadas o las que se le indiquen, en 16:9, 9:16, 1:1 o 4:5, y deja el proyecto listo para
+  retocarlo en el editor. Tambien desde el boton *Video rapido con las ultimas* del Estudio (`POST /api/video/rapido`).
+
+### Asistente visual de agentes
+- **✨ Asistente de agentes** en la vista *Agentes*: siete pasos (plantilla, identidad, personalidad, conocimiento,
+  herramientas, equipo y revision) con diez plantillas de oficina, iconos y colores, controles de tono, creatividad e
+  iniciativa, rasgos, reglas, palabras clave, herramientas agrupadas por riesgo, modelo y delegacion. Una tarjeta
+  en vivo con un radar de personalidad muestra el resultado, y el prompt se genera solo (editable).
+- Cada agente tiene boton *Configurar* para abrirlo en el asistente; el editor avanzado sigue disponible.
+
+### APK
+- **Compartir con Agente IA** desde cualquier app (galeria, navegador, correo...): el texto va al chat y los ficheros a
+  la carpeta de trabajo de los agentes (`compartido/`), listos para leerlos, retocarlos o montar un video.
+
 ## Agente IA 2.10.0-beta.1-cpp
 
 **Nuevo nombre: Agente IA** (antes Nexus-Office). Cambia el nombre visible en la interfaz, los instaladores, los manuales, la web
