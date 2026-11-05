@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "agents/agents.h"
+#include "agents/asistente.h"
 #include "coop/coop.h"
 #include "remote/remote.h"
 #include "core/service.h"
@@ -1445,6 +1446,23 @@ void register_routes(App& app) {
       throw HttpErr(400, e.what());
     }
     return json{{"ok", true}};
+  }, true);
+
+  // asistente de configuracion: preguntas sencillas en vez del YAML; el borrador se guarda con PUT /api/agents
+  app.get("/api/agents/asistente", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    json cat = agents::asistente::catalogo();
+    cat["disponibles"] = agents::asistente::grupos_disponibles(s.tools->list(), s.config.get("tools.policy"));
+    return cat;
+  });
+
+  app.post("/api/agents/asistente/borrador", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    try {
+      return agents::asistente::borrador(c.body, s.agents->all(), s.tools->list(), s.config.get("tools.policy"));
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
   }, true);
 
   // ------------------------------------------------------------------ oficina (perfiles de pyme)
