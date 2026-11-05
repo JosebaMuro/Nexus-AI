@@ -27,7 +27,7 @@ COMMON=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$NDK/build/c
   -DSD_BUILD_EXAMPLES=ON -DSD_WEBP=OFF -DSD_WEBM=OFF)
 
 # programas que genera cada compilacion (nombres cambian entre versiones: se buscan por lo que existe)
-targets() { cmake --build "$1" --target help | grep -oE '^\.\.\. (sd-cli|sd-server|sd)\b' | awk '{print $2}' | sort -u; }
+targets() { cmake --build "$1" --target help | grep -oE '^\.\.\. [^ ]*(sd-cli|sd-server|sd)( |$)' | awk '{print $2}' | sort -u || true; }
 pick() {   # pick <build> <nombre-destino> <candidatos...>
   local b=$1 dest=$2; shift 2
   for n in "$@"; do
@@ -40,8 +40,9 @@ build() {   # build <nombre> <sufijo> <flags...>
   local name=$1 suf=$2; shift 2
   local b=$W/build-$name
   cmake -S "$W/sd" -B "$b" "${COMMON[@]}" "$@" >/dev/null
-  local t; t=$(targets "$b" | tr '\n' ' '); echo "[$name] objetivos: $t"
-  for x in $t; do cmake --build "$b" --target "$x" -j"$J" >/dev/null; done
+  local t; t=$(targets "$b" | tr '\n' ' ' || true); echo "[$name] objetivos: ${t:-(ninguno: se compila todo)}"
+  if [ -z "$t" ]; then cmake --build "$b" --target help | head -40; cmake --build "$b" -j"$J" 2>&1 | tail -25
+  else for x in $t; do cmake --build "$b" --target "$x" -j"$J" 2>&1 | tail -25; done; fi
   pick "$b" "libsd-cli$suf.so" sd-cli sd || { echo "[$name] sin sd-cli"; return 1; }
   pick "$b" "libsd-server$suf.so" sd-server || echo "[$name] este sd.cpp no trae sd-server: se usara sd-cli"
 }
