@@ -268,6 +268,21 @@ Explora tu grafo de conocimiento en 3D (arrastra para girar, rueda para acercar)
 ### Estudio
 Genera imágenes y música, analiza imágenes y revisa la galería.
 
+**Generador de vídeo**: pulsa *Abrir el generador* para montar un vídeo con tus imágenes (arrástralas, súbelas o
+tráelas de la galería de Agente IA). Elige el orden, cuánto dura cada imagen, la transición (fundido, a negro,
+deslizar, zoom, cortinilla o corte), el movimiento suave tipo Ken Burns, rótulos, una tarjeta de título y música.
+*Exportar* crea un MP4 o WebM en el propio navegador, sin conexión, y lo guarda en la galería. *Vídeo rápido con las
+últimas* hace un AVI al momento con las últimas imágenes generadas. También puedes pedírselo a un agente: *«Haz un vídeo
+vertical con las 6 últimas imágenes»* (herramienta `crear_video`); te devuelve el vídeo y un enlace para retocarlo en el
+editor.
+
+**En el móvil** el generador de imágenes (stable-diffusion.cpp) viene dentro de la APK, con GPU Vulkan y CPU: no hace
+falta instalar nada. Si la GPU falla, la siguiente imagen se hace en la CPU sola. Descarga un modelo de imagen apto para
+móvil en *Modelos → Recomendados* (por ejemplo **SDXS**, **SD-Turbo** o **LCM SSD-1B**).
+
+Para compartir fotos, enlaces o documentos desde otra app, usa *Compartir → Agente IA*: el texto aparece en el chat y
+los ficheros en la carpeta de trabajo de los agentes (`compartido/`).
+
 ### Bolsa
 Mesa de bolsa **simulada** para practicar sin dinero: cartera ficticia de 10.000 €, órdenes a mercado, limitadas y stop, comisiones, impuestos, cambio de divisa y deslizamiento. **Con conexión, los precios son cotizaciones reales** (Yahoo Finance, con el retraso de cada bolsa; CNBC, Google Finance, Stooq, Coinbase y Kraken de respaldo) y el cambio de divisa es el real; sin conexión la mesa sigue simulada desde el último precio real, solo con la bolsa abierta (en su hora local y con sus festivos). Nunca se usa dinero ni se envían órdenes reales, y nada de esto es asesoramiento financiero.
 
@@ -276,7 +291,9 @@ El **agente de bolsa autónomo** gestiona su propia cartera simulada con esos da
 ### Modelos
 En modo usuario verás los **recomendados para tu equipo** con una etiqueta: *ideal*, *compatible*, *pesado* o *no cabe*. Si el instalador no pudo descargar el modelo elegido (por ejemplo, sin internet), pulsa **Descargar** en el marcado con ★ y después **Activar**. Descarga también el modelo de **embeddings** (Qwen3-Embedding, 639 MB): mejora la búsqueda en tu biblioteca y en la memoria y se activa solo.
 
-Para generar imágenes de más calidad hay **Z-Image-Turbo** y **FLUX.1-schnell** en GGUF: se descargan con sus piezas
+Para generar imágenes con poco equipo hay modelos GGUF ligeros: **LCM SSD-1B** (≈1 GB, 4 pasos, sirve en el móvil) y
+**FLUX.2 klein 4B** (mucha calidad con 12 GB de RAM). En CPU, móvil o con poca VRAM se usa **TAESD**, un decodificador
+diminuto que acelera mucho el final de cada imagen. Para generar imágenes de más calidad hay **Z-Image-Turbo** y **FLUX.1-schnell** en GGUF: se descargan con sus piezas
 (VAE y codificadores de texto). Si copias a mano un GGUF de imagen que es solo el modelo de difusión, déjalo en la
 misma carpeta que sus piezas; *Imagen* te dice cuál falta. Los modelos `.litertlm` (LiteRT-LM, ideales en Pixel y
 Snapdragon) y las carpetas ONNX con `genai_config.json` también se pueden usar: Agente IA elige el motor solo.

@@ -1332,19 +1332,46 @@ void register_routes(App& app) {
   app.get("/api/outputs", [](Ctx& c) -> Out {
     long long limit = c.qi("limit", 60);
     json out = json::object();
-    for (auto* kind : {"images", "music", "docs"}) {
+    for (auto* kind : {"images", "music", "docs", "videos"}) {
       auto files = glob(paths::sub({"outputs", kind}), "*.*");
       std::stable_sort(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) { return mtime(a) > mtime(b); });
       json list = json::array();
       for (auto& f : files) {
         std::string ext = f.extension().string();
-        if (ext != ".png" && ext != ".jpg" && ext != ".wav" && ext != ".mid" && ext != ".pdf") continue;
+        if (ext != ".png" && ext != ".jpg" && ext != ".wav" && ext != ".mid" && ext != ".pdf" && ext != ".webm" &&
+            ext != ".mp4" && ext != ".avi")
+          continue;
         if ((long long)list.size() >= limit) break;
         list.push_back(std::string("/outputs/") + kind + "/" + S(f.filename()));
       }
       out[kind] = list;
     }
     return out;
+  });
+
+  // editor de video (video.html): el WebM/MP4 que monta el navegador se guarda en outputs/videos
+  app.post("/api/video/guardar", [](Ctx& c) -> Out {
+    auto f = c.file("video");
+    if (!f) throw missing_field("body", "video");
+    std::string ext = lower(P(f->filename).extension().string());
+    if (ext != ".webm" && ext != ".mp4") ext = contains(f->content_type, "mp4") ? ".mp4" : ".webm";
+    if (f->content.size() > (size_t)2 << 30) throw HttpErr(413, "Video demasiado grande");
+    std::string name = std::to_string((long long)now()) + "_" + media::slug_name(c.form("titulo", "video"), 40, "video") + ext;
+    fs::path out = paths::sub({"outputs", "videos"}) / P(name);
+    if (!write_file(out, f->content)) throw HttpErr(500, "No se pudo guardar el video");
+    return json{{"url", "/outputs/videos/" + name}, {"bytes", f->content.size()}};
+  });
+
+  // video rapido desde el Estudio: la misma herramienta que usan los agentes (crear_video)
+  app.post("/api/video/rapido", [](Ctx& c) -> Out {
+    tools::ToolContext tc;
+    tc.services = &c.app.S();
+    tc.agent = "estudio";
+    try {
+      return tools::crear_video(c.body.is_object() ? c.body : json::object(), tc);
+    } catch (const std::exception& e) {
+      throw HttpErr(400, e.what());
+    }
   });
 
   app.post("/api/prompt/enhance", [](Ctx& c) -> Out {

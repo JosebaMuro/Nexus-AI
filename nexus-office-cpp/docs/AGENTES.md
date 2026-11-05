@@ -136,3 +136,20 @@ nexus-office evaluar --tareas mis-tareas.json                  # tus propias tar
 La prueba `evaluacion: el banco rápido...` de `nexus-tests` exige al menos un 80 % de enrutado y un 90 % de
 herramientas en el modo rápido, para que un cambio no los empeore sin que se note. El modo completo sirve para comparar
 modelos antes de cambiar el recomendado.
+
+## Asistente visual de agentes (2.10)
+
+*Agentes → ✨ Asistente de agentes* (o *Configurar* en la tarjeta de un agente) crea o retoca un agente en siete pasos
+(`recursos/web/js/asistente-agentes.js`):
+
+1. **Plantilla**: diez oficios de oficina (atención al cliente, comercial, contable, marketing, diseño, investigación,
+   programación, RRHH, legal) o copiar un agente existente.
+2. **Identidad**: nombre, identificador, rol, descripción, icono, colores y voz.
+3. **Personalidad**: tono, creatividad (temperatura) e iniciativa, longitud de respuesta, idioma, rasgos y reglas.
+4. **Conocimiento**: especialidad, palabras clave para el enrutado, memoria y ejemplos.
+5. **Herramientas**: agrupadas por tipo con su nivel de riesgo y conjuntos prediseñados.
+6. **Equipo**: modelo, en quién delega y si está activo.
+7. **Revisar**: el prompt generado (editable) y el resultado.
+
+Las respuestas del asistente se guardan en el campo `perfil` del agente para volver a abrirlo tal cual; el prompt
+final es el que usa el agente. Se guarda con `PUT /api/agents` como el editor avanzado.

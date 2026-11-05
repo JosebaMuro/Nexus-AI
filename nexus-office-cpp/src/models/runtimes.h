@@ -24,6 +24,13 @@ fs::path bundled_dir();
 // entorno para lanzar el binario (Linux: su carpeta en LD_LIBRARY_PATH)
 std::map<std::string, std::string> lib_env(const fs::path& exe);
 std::string asset_pattern(const std::string& runtime, const std::string& variant);
+// Android: sd.cpp compilado con el NDK dentro de la APK (vulkan y cpu), y las variantes que han fallado en el movil
+std::vector<std::string> android_sd_variants();
+std::optional<fs::path> android_sd_exe(const std::string& variant);
+std::string sd_broken(const std::string& variant);
+void mark_sd_broken(const std::string& variant, const std::string& reason);
+// sd-server que acompana a un sd-cli (sd-cli -> sd-server, libsd-cli-vulkan.so -> libsd-server-vulkan.so)
+fs::path sd_server_for(const fs::path& cli);
 
 class RuntimeManager {
  public:

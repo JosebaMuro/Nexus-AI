@@ -202,6 +202,14 @@
           <input class="input" id="ana-q" placeholder="Pregunta sobre la imagen (opcional)">
           <div id="ana-result"></div>
         </div>
+        <div class="panel col">
+          <h3>Generador de vídeo <span class="sub">secuencia de imágenes · WebM/MP4</span></h3>
+          <p class="muted" style="margin:0">Monta un vídeo con tus imágenes: orden, duración, transiciones, movimiento, títulos y música. Funciona sin conexión.</p>
+          <div class="row"><a class="btn primary" href="/static/video.html">🎬 ABRIR EL GENERADOR</a>
+            <button class="btn" id="vid-last" title="Monta un AVI con las últimas imágenes generadas (la misma herramienta que usan los agentes)">⚡ VÍDEO RÁPIDO CON LAS ÚLTIMAS</button></div>
+          <div id="vid-result"></div>
+          <div class="gallery" id="vid-gallery"></div>
+        </div>
         <div class="panel"><h3>Galería</h3><div class="gallery" id="gallery"></div></div>
       </div>
     </section>
@@ -295,7 +303,7 @@
     <!-- ================= AGENTES ================= -->
     <section class="view" id="view-agents">
       <div class="view-title">SISTEMA DE AGENTES</div>
-      <div class="row admin-only" style="margin-bottom:14px"><button class="btn primary" id="agent-new">+ NUEVO AGENTE</button><span class="muted">Personaliza prompt, modelo, herramientas, memoria y delegación.</span></div>
+      <div class="row admin-only" style="margin-bottom:14px"><button class="btn primary" id="agent-wizard">✨ ASISTENTE DE AGENTES</button><button class="btn" id="agent-new">+ NUEVO (EDITOR AVANZADO)</button><span class="muted">El asistente te guía paso a paso: plantilla, identidad, personalidad, conocimiento, herramientas y equipo.</span></div>
       <div class="panel" id="office-panel" style="margin-bottom:16px"></div>
       <div class="grid g3" id="agents-grid"></div>
       <div class="panel admin-only hidden" id="agent-editor" style="margin-top:16px"></div>
@@ -620,6 +628,7 @@
 <script src="/static/js/offices.js"></script>
 <script src="/static/js/beta.js"></script>
 <script src="/static/js/app.js"></script>
+<script src="/static/js/asistente-agentes.js"></script>
 <script src="/static/js/kgadmin.js"></script>
 </body>
 </html>

@@ -112,7 +112,7 @@
     "params_b": 0.3,
     "repo": "concedo/sdxs-512-tinySDdistilled-GGUF",
     "file": "sdxs-512-tinySDdistilled_Q8_0.gguf",
-    "size_mb": 651,
+    "size_mb": 661,
     "min_ram_gb": 4,
     "baseline": true,
     "gen": {
@@ -120,7 +120,15 @@
       "cfg": 1.0,
       "size": 512
     },
-    "desc": "Destilado de un paso: segundos por imagen en CPU."
+    "desc": "Destilado de un paso: segundos por imagen en CPU y en el movil. Con TAESD (decodificador ligero) para que el movil no se atasque en la VAE.",
+    "componentes": {
+      "taesd": {
+        "repo": "madebyollin/taesd",
+        "file": "diffusion_pytorch_model.safetensors",
+        "size_mb": 10
+      }
+    },
+    "movil": true
   },
   {
     "id": "sd-turbo",
@@ -129,14 +137,22 @@
     "params_b": 0.9,
     "repo": "Green-Sky/SD-Turbo-GGUF",
     "file": "sd_turbo-f16-q8_0.gguf",
-    "size_mb": 1930,
+    "size_mb": 1940,
     "min_ram_gb": 8,
     "gen": {
       "steps": 2,
       "cfg": 1.0,
       "size": 512
     },
-    "desc": "Mas detalle; ~4x mas lento que SDXS en CPU."
+    "desc": "Mas detalle; ~4x mas lento que SDXS en CPU. Con TAESD en CPU y movil.",
+    "componentes": {
+      "taesd": {
+        "repo": "madebyollin/taesd",
+        "file": "diffusion_pytorch_model.safetensors",
+        "size_mb": 10
+      }
+    },
+    "movil": true
   },
   {
     "id": "sdxl-turbo",
@@ -145,7 +161,7 @@
     "params_b": 3.5,
     "repo": "OlegSkutte/sdxl-turbo-GGUF",
     "file": "sd_xl_turbo_1.0.q8_0.gguf",
-    "size_mb": 3909,
+    "size_mb": 3919,
     "min_ram_gb": 16,
     "min_vram_gb": 6,
     "gen": {
@@ -153,7 +169,69 @@
       "cfg": 1.0,
       "size": 512
     },
-    "desc": "Para GPU de 6 GB o mas."
+    "desc": "Para GPU de 6 GB o mas.",
+    "componentes": {
+      "taesd": {
+        "repo": "madebyollin/taesdxl",
+        "file": "diffusion_pytorch_model.safetensors",
+        "size_mb": 10
+      }
+    }
+  },
+  {
+    "id": "lcm-ssd-1b",
+    "kind": "image",
+    "name": "LCM SSD-1B · calidad SDXL ligera (GGUF Q4)",
+    "params_b": 1.3,
+    "repo": "OlegSkutte/LCM-SSD-1B-GGUF",
+    "file": "lcm-ssd-1b.q4_k.gguf",
+    "size_mb": 2140,
+    "min_ram_gb": 6,
+    "movil": true,
+    "componentes": {
+      "taesd": {
+        "repo": "madebyollin/taesdxl",
+        "file": "diffusion_pytorch_model.safetensors",
+        "size_mb": 10
+      }
+    },
+    "gen": {
+      "steps": 4,
+      "cfg": 1.0,
+      "size": 768,
+      "sampler": "lcm"
+    },
+    "desc": "SDXL destilado (SSD-1B) con LCM: 4 pasos, VAE y CLIP dentro del GGUF. Mucho mas ligero que SDXL-Turbo; va en moviles de 8 GB y en CPU."
+  },
+  {
+    "id": "flux2-klein-4b",
+    "kind": "image",
+    "name": "FLUX.2-klein 4B · 4 pasos (GGUF Q4)",
+    "params_b": 4,
+    "repo": "leejet/FLUX.2-klein-4B-GGUF",
+    "file": "flux-2-klein-4b-Q4_0.gguf",
+    "size_mb": 5306,
+    "min_ram_gb": 12,
+    "min_vram_gb": 6,
+    "componentes": {
+      "vae": {
+        "repo": "Comfy-Org/Flux-2-Klein-4B",
+        "file": "split_files/vae/flux2-vae.safetensors",
+        "size_mb": 321
+      },
+      "llm": {
+        "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+        "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+        "size_mb": 2500
+      }
+    },
+    "gen": {
+      "steps": 4,
+      "cfg": 1.0,
+      "size": 1024,
+      "sampler": "euler"
+    },
+    "desc": "La familia Flux en ligero (licencia Apache 2.0): 4B en Q4 con su VAE y el codificador Qwen3-4B (el mismo de Z-Image). Calidad Flux en GPU de 6 GB o en CPU con 12 GB."
   },
   {
     "id": "z-image-turbo",

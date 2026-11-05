@@ -743,6 +743,11 @@ void ModelManager::autoregister() {
   for (json items_tmp_ = catalog.items(); auto& [k, m] : items_tmp_.items()) {
     known.insert(jstr(m, "path"));
     if (m.value("mmproj", json()).is_string()) known.insert(m["mmproj"].get<std::string>());
+    // piezas de un modelo de imagen (VAE, TAESD, codificadores): no son modelos sueltos
+    json comps = m.value("componentes", json());
+    if (comps.is_object())
+      for (auto& [ck, cv] : comps.items())
+        if (cv.is_string() && ck != "llm") known.insert(cv.get<std::string>());   // el LLM tambien sirve para chatear
   }
   std::map<std::pair<std::string, std::string>, json> recs;
   for (auto& r : recommended_list())
@@ -750,7 +755,8 @@ void ModelManager::autoregister() {
   for (auto& f : glob(paths::models_dir(), "*", true)) {
     std::string ext = suffix_lower(f);
     if ((ext != ".gguf" && ext != ".safetensors" && ext != ".onnx") || known.count(S(f)) ||
-        contains(lower(S(f.filename())), "mmproj") || !is_file(f))
+        contains(lower(S(f.filename())), "mmproj") || contains(lower(S(f.parent_path().filename())), "taesd") ||
+        !is_file(f))
       continue;
     auto it = recs.find({S(f.parent_path().filename()), S(f.filename())});
     try {

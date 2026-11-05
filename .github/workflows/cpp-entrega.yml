@@ -484,6 +484,47 @@ jobs:
           cmake --build abuild --parallel 4
           cmake --install abuild --prefix aout/Nexus-Office --strip
           file aout/Nexus-Office/nexus-office; ls -la aout/Nexus-Office
+      - name: stable-diffusion.cpp para Android (NDK; CPU y GPU Vulkan)
+        run: |
+          set -e
+          # Android no deja ejecutar binarios descargados y sd.cpp no publica binarios para Android: se compilan aqui
+          # (estaticos, con la libc de Android) y van en la APK como lib/arm64-v8a/libsd-*.so
+          NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          SR=$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+          ST=${SD_TAG:-$(gh release view -R leejet/stable-diffusion.cpp --json tagName -q .tagName)}
+          echo "stable-diffusion.cpp $ST"
+          git clone -q --depth 1 --recursive --shallow-submodules -b "$ST" https://github.com/leejet/stable-diffusion.cpp sdsrc
+          git clone -q --depth 1 https://github.com/KhronosGroup/Vulkan-Headers vkh
+          sudo apt-get install -y -qq spirv-headers >/dev/null
+          # spirv.hpp al dia junto a las cabeceras de Vulkan: el compilador del NDK no mira /usr/include
+          git clone -q --depth 1 https://github.com/KhronosGroup/SPIRV-Headers spvh && cp -r spvh/include/spirv vkh/include/
+          mkdir -p sdlibs
+          comun=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake"
+                 -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DANDROID_STL=c++_static
+                 -DGGML_NATIVE=OFF -DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16 -DGGML_OPENMP=OFF -DGGML_CCACHE=OFF
+                 -DSD_BUILD_SHARED_LIBS=OFF -DBUILD_SHARED_LIBS=OFF)
+          sacar() {  # sacar <carpeta de build> <sufijo>
+            local b=$1/bin cli
+            cli=$(ls "$b/sd-cli" "$b/sd" 2>/dev/null | head -1)
+            [ -n "$cli" ] && [ -f "$b/sd-server" ] || { ls -la "$b"; return 1; }
+            "$NDK"/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip -o "sdlibs/libsd-cli$2.so" "$cli"
+            "$NDK"/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip -o "sdlibs/libsd-server$2.so" "$b/sd-server"
+          }
+          cmake -S sdsrc -B sdb-cpu "${comun[@]}" >/dev/null
+          cmake --build sdb-cpu --parallel 4 --target sd-cli sd-server 2>/dev/null || cmake --build sdb-cpu --parallel 4
+          sacar sdb-cpu ""
+          if cmake -S sdsrc -B sdb-vk "${comun[@]}" -DSD_VULKAN=ON -DVulkan_INCLUDE_DIR="$PWD/vkh/include" \
+               -DVulkan_LIBRARY="$SR/usr/lib/aarch64-linux-android/28/libvulkan.so" \
+               -DVulkan_GLSLC_EXECUTABLE="$NDK/shader-tools/linux-x86_64/glslc" -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH \
+               -DSPIRV-Headers_DIR=/usr/share/cmake/SPIRV-Headers >/dev/null \
+             && { cmake --build sdb-vk --parallel 4 --target sd-cli sd-server 2>/dev/null || cmake --build sdb-vk --parallel 4; } \
+             && sacar sdb-vk "-vulkan"; then
+            echo "sd.cpp Vulkan listo"
+          else
+            echo "::warning::sd.cpp con Vulkan no compila para Android: la APK lleva solo el de CPU"
+          fi
+          echo "$ST" > sdlibs/VERSION-sd.txt
+          file sdlibs/*.so; ls -la sdlibs
       - name: llama-server de la APK autonoma de la edicion Python (BASE)
         run: |
           set -e
@@ -519,7 +560,7 @@ jobs:
           rm -f glibs/lib/*.txt glibs/lib/LICENSE*
           ls -la glibs/lib/liblitert-lm.so glibs/lib/libLiteRtDispatch_*.so glibs/lib/libQnnHtp*.so glibs/lib/libGenie.so 2>&1 || true
           chmod +x construir/nexus-construir
-          (cd nexus-office-cpp && ../construir/nexus-construir apk --exe ../aout/Nexus-Office/nexus-office --libs ../alibs --recursos ../aout/Nexus-Office --gpu-libs ../glibs/lib)
+          (cd nexus-office-cpp && ../construir/nexus-construir apk --exe ../aout/Nexus-Office/nexus-office --libs ../alibs --recursos ../aout/Nexus-Office --gpu-libs ../glibs/lib --sd-libs ../sdlibs)
           "$BT/apksigner" verify --print-certs nexus-office-cpp/dist-apk/*.apk | head -4
       - uses: actions/upload-artifact@v4
         with:
@@ -560,6 +601,8 @@ jobs:
           script: |
             unzip -q -o -j apk/*.apk lib/arm64-v8a/libnexusoffice.so -d nx && adb push nx/libnexusoffice.so /data/local/tmp/nx && adb shell chmod 755 /data/local/tmp/nx
             adb shell /data/local/tmp/nx --version; adb shell /data/local/tmp/nx detect | head -30 || true
+            unzip -q -o -j apk/*.apk lib/arm64-v8a/libsd-cli.so -d nx && adb push nx/libsd-cli.so /data/local/tmp/sd && adb shell chmod 755 /data/local/tmp/sd
+            adb shell /data/local/tmp/sd --help | head -5; adb shell /data/local/tmp/sd --help | grep -q -- "--taesd"
             adb install -r apk/*.apk
             adb shell am start -n ai.agente.ia/ai.nexus.office.autonomo.MainActivity
             adb forward tcp:8775 tcp:8775

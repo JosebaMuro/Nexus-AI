@@ -926,5 +926,58 @@
     "permissions": [
       "network"
     ]
+  },
+  {
+    "name": "crear_video",
+    "description": "Monta un video a partir de una secuencia de imagenes (las generadas con generate_image o ficheros de la carpeta de trabajo): encuadre, zoom lento y fundido entre imagenes. Devuelve el video (AVI) y un enlace al editor web para exportarlo a WebM/MP4 con titulos y musica.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "imagenes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "URLs /outputs/images/... o rutas del sandbox, en orden. Vacio = las ultimas imagenes generadas"
+        },
+        "ultimas": {
+          "type": "integer",
+          "description": "si no se dan imagenes: cuantas de las ultimas generadas (6)"
+        },
+        "titulo": {
+          "type": "string"
+        },
+        "segundos_por_imagen": {
+          "type": "number"
+        },
+        "transicion": {
+          "type": "number",
+          "description": "segundos de fundido (0 = corte)"
+        },
+        "formato": {
+          "type": "string",
+          "enum": [
+            "16:9",
+            "1080p",
+            "9:16",
+            "1:1",
+            "4:3",
+            "480p"
+          ]
+        },
+        "fps": {
+          "type": "integer"
+        },
+        "movimiento": {
+          "type": "boolean",
+          "description": "zoom y desplazamiento lentos (Ken Burns)"
+        }
+      }
+    },
+    "risk": "low",
+    "permissions": [
+      "media"
+    ],
+    "timeout": 900
   }
 ]

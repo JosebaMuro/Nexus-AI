@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Generador de vídeo · Agente IA</title>
+<meta name="description" content="Monta un vídeo a partir de una secuencia de imágenes, sin conexión">
+<meta name="theme-color" content="#04060c">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<style>
+:root{--bg:#04060c;--panel:#0b1120;--panel2:#101a30;--line:#1d2b4a;--text:#e6f1ff;--muted:#8aa0c2;--acc:#00e5ff;--acc2:#ff3df2;--ok:#3dffa8;--warn:#ffb13d;--err:#ff5d6c;--r:12px}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#f4f7fc;--panel:#fff;--panel2:#eef3fb;--line:#d5deee;--text:#0d1a2e;--muted:#5b6b86;--acc:#0090b8;--acc2:#b4199e}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+header h1{font-size:17px;margin:0;letter-spacing:.04em}
+header h1 b{color:var(--acc)}
+header .sp{flex:1}
+a.back{color:var(--muted);text-decoration:none;font-size:14px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;padding:16px;max-width:1400px;margin:0 auto}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.panel h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.stage{position:relative;background:#000;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;max-height:62vh}
+.stage canvas{max-width:100%;max-height:62vh;display:block}
+.stage .empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:20px;gap:10px}
+.transport{display:flex;align-items:center;gap:10px;margin-top:10px}
+.transport input[type=range]{flex:1}
+.time{font:12px ui-monospace,monospace;color:var(--muted);min-width:92px;text-align:right}
+button,.btn{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:8px 12px;font:inherit;cursor:pointer;min-height:38px}
+button:hover{border-color:var(--acc)}
+button.primary{background:var(--acc);color:#001018;border-color:var(--acc);font-weight:700}
+button.danger{color:var(--err)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);margin-bottom:10px}
+label.f>span{display:flex;justify-content:space-between}
+select,input[type=text],input[type=number]{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;width:100%}
+input[type=range]{accent-color:var(--acc);width:100%}
+.check{display:flex;gap:8px;align-items:center;font-size:14px;margin-bottom:10px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:16px;text-align:center;color:var(--muted);margin-top:12px}
+.drop.on{border-color:var(--acc);color:var(--acc)}
+.strip{display:flex;gap:10px;overflow-x:auto;padding:10px 2px 4px;scroll-snap-type:x mandatory}
+.clip{flex:0 0 148px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px;scroll-snap-align:start;position:relative}
+.clip.cur{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.clip.drag{opacity:.4}
+.clip img{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:6px;display:block;background:#000}
+.clip .n{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.7);color:#fff;border-radius:6px;padding:0 6px;font-size:12px}
+.clip input{margin-top:6px;padding:4px 6px;font-size:13px}
+.clip .acts{display:flex;gap:4px;margin-top:6px}
+.clip .acts button{flex:1;padding:2px;min-height:30px;font-size:13px}
+.prog{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden;margin:10px 0}
+.prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+.msg{font-size:13px;color:var(--muted);min-height:1.4em}
+.msg.err{color:var(--err)}.msg.ok{color:var(--ok)}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:14px;max-width:min(900px,94vw);width:100%;padding:16px}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;max-height:60vh;overflow:auto;margin:10px 0}
+.grid label{position:relative;cursor:pointer}
+.grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:2px solid transparent;display:block}
+.grid input{position:absolute;top:6px;left:6px;width:20px;height:20px}
+.grid input:checked+img{border-color:var(--acc)}
+.result a{color:var(--acc)}
+video.out{width:100%;border-radius:10px;margin-top:10px;background:#000}
+.hint{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎬 Generador de <b>vídeo</b></h1>
+  <span class="sp"></span>
+  <a class="back" href="/" id="back">← Volver a Agente IA</a>
+</header>
+<main>
+  <section>
+    <div class="panel">
+      <div class="stage" id="stage"><canvas id="cv" width="1280" height="720"></canvas>
+        <div class="empty" id="empty"><div style="font-size:40px">🖼️</div><div>Añade imágenes para empezar: desde tu equipo, arrastrándolas aquí o desde las creadas en Agente IA.</div></div>
+      </div>
+      <div class="transport">
+        <button id="play" title="Reproducir / pausa (espacio)">▶</button>
+        <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Posición">
+        <span class="time" id="time">0:00 / 0:00</span>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <h2>Secuencia</h2>
+      <div class="row">
+        <button id="add">＋ Imágenes del equipo</button>
+        <button id="from-app">Desde Agente IA</button>
+        <button id="sort-name" title="Ordenar por nombre de fichero">A→Z</button>
+        <button id="reverse" title="Invertir el orden">⇄</button>
+        <button id="clear" class="danger">Vaciar</button>
+        <input type="file" id="files" accept="image/*" multiple hidden>
+      </div>
+      <div class="strip" id="strip"></div>
+      <div class="drop" id="drop">Suelta aquí imágenes (PNG, JPEG, WebP, GIF). Arrastra las miniaturas para cambiar el orden.</div>
+    </div>
+  </section>
+  <aside>
+    <div class="panel">
+      <h2>Ajustes</h2>
+      <label class="f"><span>Título del vídeo</span><input type="text" id="title" placeholder="Opcional: aparece al principio" maxlength="80"></label>
+      <label class="f"><span>Formato</span><select id="fmt">
+        <option value="1280x720">16:9 · 720p (horizontal)</option>
+        <option value="1920x1080">16:9 · 1080p</option>
+        <option value="720x1280">9:16 · vertical (reels, stories)</option>
+        <option value="1080x1080">1:1 · cuadrado</option>
+        <option value="1024x768">4:3</option>
+        <option value="854x480">480p (ligero)</option>
+      </select></label>
+      <label class="f"><span>Segundos por imagen <b id="dur-v">3</b></span><input type="range" id="dur" min="0.5" max="10" step="0.5" value="3"></label>
+      <label class="f"><span>Transición</span><select id="trans">
+        <option value="fade">Fundido</option><option value="black">Fundido a negro</option><option value="slide">Deslizar</option>
+        <option value="zoom">Zoom</option><option value="wipe">Cortinilla</option><option value="cut">Corte (sin transición)</option>
+      </select></label>
+      <label class="f"><span>Duración de la transición <b id="tdur-v">0.8</b> s</span><input type="range" id="tdur" min="0.1" max="2" step="0.1" value="0.8"></label>
+      <label class="f"><span>Encuadre</span><select id="fit">
+        <option value="cover">Llenar el cuadro (recorta bordes)</option><option value="contain">Imagen entera con fondo difuminado</option>
+      </select></label>
+      <label class="check"><input type="checkbox" id="kb" checked> Movimiento lento (zoom y desplazamiento)</label>
+      <label class="check"><input type="checkbox" id="caps"> Mostrar el pie de cada imagen</label>
+      <label class="f"><span>Imágenes por segundo</span><select id="fps"><option>24</option><option selected>30</option><option>60</option></select></label>
+      <label class="f"><span>Música (opcional)</span><input type="file" id="music" accept="audio/*"></label>
+      <div class="hint" id="music-n"></div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <h2>Exportar</h2>
+      <div class="row"><button class="primary" id="export">Crear vídeo</button><button id="cancel" hidden>Cancelar</button></div>
+      <div class="prog"><i id="bar"></i></div>
+      <div class="msg" id="msg">El vídeo se monta en tiempo real en este dispositivo, sin conexión.</div>
+      <div class="result" id="result"></div>
+    </div>
+  </aside>
+</main>
+
+<dialog id="pick">
+  <h2 style="margin:0">Imágenes creadas en Agente IA</h2>
+  <div class="grid" id="pick-grid"></div>
+  <div class="row"><button class="primary" id="pick-ok">Añadir seleccionadas</button><button id="pick-all">Todas</button><button id="pick-close">Cerrar</button></div>
+</dialog>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const cv = $("#cv"), ctx = cv.getContext("2d");
+const S = { clips: [], playing: false, t: 0, last: 0, music: null, musicName: "", recording: null, sel: 0 };
+
+function opts() {
+  const [w, h] = $("#fmt").value.split("x").map(Number);
+  return { w, h, dur: +$("#dur").value, trans: $("#trans").value, tdur: Math.min(+$("#tdur").value, +$("#dur").value * 0.5),
+    fit: $("#fit").value, kb: $("#kb").checked, caps: $("#caps").checked, fps: +$("#fps").value, title: $("#title").value.trim() };
+}
+function clipDur(c, o) { return c.dur || o.dur; }
+function total(o = opts()) {
+  let t = 0; S.clips.forEach((c) => (t += clipDur(c, o)));
+  return t + (o.title ? 2.5 : 0);
+}
+function fmtT(s) { s = Math.max(0, s); return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`; }
+function msg(t, cls = "") { const m = $("#msg"); m.textContent = t; m.className = "msg " + cls; }
+
+/* ---------- imagenes ---------- */
+function loadImg(src, name) {
+  return new Promise((ok) => {
+    const im = new Image();
+    im.onload = () => ok({ im, src, name: name || src.split("/").pop(), cap: "", dur: 0 });
+    im.onerror = () => ok(null);
+    im.src = src;
+  });
+}
+async function addSources(list) {
+  const got = await Promise.all(list.map(([src, name]) => loadImg(src, name)));
+  const ok = got.filter(Boolean);
+  S.clips.push(...ok);
+  if (ok.length < got.length) msg(`${got.length - ok.length} fichero(s) no son imágenes legibles`, "err");
+  render(); draw();
+}
+function addFiles(files) {
+  const imgs = [...files].filter((f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(f.name));
+  addSources(imgs.map((f) => [URL.createObjectURL(f), f.name]));
+}
+function render() {
+  const o = opts();
+  $("#empty").style.display = S.clips.length ? "none" : "flex";
+  const strip = $("#strip");
+  strip.innerHTML = "";
+  S.clips.forEach((c, i) => {
+    const d = document.createElement("div");
+    d.className = "clip" + (i === S.sel ? " cur" : "");
+    d.draggable = true;
+    d.innerHTML = `<span class="n">${i + 1}</span><img alt=""><input type="text" placeholder="Pie de imagen" value=""><div class="row" style="margin-top:6px;gap:4px"><input type="number" min="0.5" max="30" step="0.5" title="Segundos (vacío = los de ajustes)" placeholder="${o.dur} s" style="flex:1"></div><div class="acts"><button title="Antes">◀</button><button title="Después">▶</button><button title="Quitar" class="danger">✕</button></div>`;
+    d.querySelector("img").src = c.src;
+    const [cap, dur] = d.querySelectorAll("input");
+    cap.value = c.cap; dur.value = c.dur || "";
+    cap.oninput = () => { c.cap = cap.value; draw(); };
+    dur.oninput = () => { c.dur = +dur.value || 0; updateTime(); };
+    const [prev, next, del] = d.querySelectorAll(".acts button");
+    prev.onclick = () => move(i, i - 1); next.onclick = () => move(i, i + 1);
+    del.onclick = () => { S.clips.splice(i, 1); render(); draw(); };
+    d.querySelector("img").onclick = () => { S.sel = i; S.t = startOf(i) + 0.01; render(); draw(); };
+    d.ondragstart = (e) => { e.dataTransfer.setData("text/clip", String(i)); d.classList.add("drag"); };
+    d.ondragend = () => d.classList.remove("drag");
+    d.ondragover = (e) => { if (e.dataTransfer.types.includes("text/clip")) e.preventDefault(); };
+    d.ondrop = (e) => { const from = +e.dataTransfer.getData("text/clip"); if (!isNaN(from)) { e.preventDefault(); e.stopPropagation(); move(from, i); } };
+    strip.appendChild(d);
+  });
+  updateTime();
+}
+function move(a, b) {
+  if (b < 0 || b >= S.clips.length || a === b) return;
+  const [c] = S.clips.splice(a, 1); S.clips.splice(b, 0, c); S.sel = b; render(); draw();
+}
+function startOf(i, o = opts()) { let t = o.title ? 2.5 : 0; for (let k = 0; k < i; k++) t += clipDur(S.clips[k], o); return t; }
+
+/* ---------- composicion de un fotograma ---------- */
+function place(c, o, p, k, idx) {
+  const im = c.im, iw = im.naturalWidth, ih = im.naturalHeight;
+  let s = o.fit === "cover" ? Math.max(o.w / iw, o.h / ih) : Math.min(o.w / iw, o.h / ih);
+  let dx = 0, dy = 0, z = 1;
+  if (o.kb) {
+    const inn = idx % 2 === 0, q = inn ? p : 1 - p;
+    z = 1 + 0.1 * q;
+    const dir = idx % 4 < 2 ? 1 : -1;
+    dx = dir * (p - 0.5) * o.w * 0.04; dy = (idx % 3 === 0 ? -1 : 1) * (p - 0.5) * o.h * 0.03;
+  }
+  s *= z * (k.zoom || 1);
+  const w = iw * s, h = ih * s;
+  return { x: (o.w - w) / 2 + dx + (k.dx || 0), y: (o.h - h) / 2 + dy + (k.dy || 0), w, h };
+}
+function drawClip(c, o, p, idx, k = {}) {
+  if (o.fit === "contain") {   // fondo: la misma imagen ampliada y difuminada
+    ctx.save(); ctx.filter = "blur(28px) brightness(.55)";
+    const iw = c.im.naturalWidth, ih = c.im.naturalHeight, s = Math.max(o.w / iw, o.h / ih) * 1.1;
+    ctx.drawImage(c.im, (o.w - iw * s) / 2 + (k.dx || 0), (o.h - ih * s) / 2 + (k.dy || 0), iw * s, ih * s);
+    ctx.restore();
+  }
+  const r = place(c, o, p, k, idx);
+  ctx.drawImage(c.im, r.x, r.y, r.w, r.h);
+  if (o.caps && c.cap) caption(c.cap, o);
+}
+function caption(text, o) {
+  const fs = Math.round(o.h * 0.045);
+  ctx.save(); ctx.font = `600 ${fs}px system-ui, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+  const w = Math.min(ctx.measureText(text).width + fs, o.w * 0.92);
+  ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect((o.w - w) / 2, o.h - fs * 2.6, w, fs * 1.7);
+  ctx.fillStyle = "#fff"; ctx.fillText(text, o.w / 2, o.h - fs * 1.15, o.w * 0.9); ctx.restore();
+}
+function titleCard(text, o, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createLinearGradient(0, 0, o.w, o.h); g.addColorStop(0, "#04060c"); g.addColorStop(1, "#14203d");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, o.w, o.h);
+  const fs = Math.round(Math.min(o.w, o.h) * 0.08);
+  ctx.font = `800 ${fs}px system-ui, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#e6f1ff"; ctx.shadowColor = "#00e5ff"; ctx.shadowBlur = fs * 0.4;
+  ctx.fillText(text, o.w / 2, o.h / 2, o.w * 0.9); ctx.restore();
+}
+function frameAt(t, o = opts()) {
+  if (cv.width !== o.w || cv.height !== o.h) { cv.width = o.w; cv.height = o.h; $("#stage").style.aspectRatio = `${o.w}/${o.h}`; }
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, o.w, o.h);
+  if (!S.clips.length) return;
+  if (o.title && t < 2.5) {
+    drawClip(S.clips[0], o, 0, 0);
+    titleCard(o.title, o, t < 2 ? 1 : 1 - (t - 2) / 0.5);
+    return;
+  }
+  let acc = o.title ? 2.5 : 0, i = 0;
+  while (i < S.clips.length - 1 && t >= acc + clipDur(S.clips[i], o)) acc += clipDur(S.clips[i++], o);
+  const c = S.clips[i], d = clipDur(c, o), local = Math.min(t - acc, d), p = d > 0 ? local / d : 0;
+  const into = local - (d - o.tdur), nx = S.clips[i + 1];
+  if (o.trans !== "cut" && nx && into > 0) {
+    const a = Math.min(1, into / o.tdur), e = a * a * (3 - 2 * a);   // suavizado
+    switch (o.trans) {
+      case "fade": drawClip(c, o, p, i); ctx.globalAlpha = e; drawClip(nx, o, 0, i + 1); ctx.globalAlpha = 1; break;
+      case "black":
+        if (e < 0.5) { drawClip(c, o, p, i); ctx.fillStyle = `rgba(0,0,0,${e * 2})`; }
+        else { drawClip(nx, o, 0, i + 1); ctx.fillStyle = `rgba(0,0,0,${2 - e * 2})`; }
+        ctx.fillRect(0, 0, o.w, o.h); break;
+      case "slide": drawClip(c, o, p, i, { dx: -e * o.w }); drawClip(nx, o, 0, i + 1, { dx: (1 - e) * o.w }); break;
+      case "zoom": drawClip(c, o, p, i, { zoom: 1 + e * 0.6 }); ctx.globalAlpha = e; drawClip(nx, o, 0, i + 1); ctx.globalAlpha = 1; break;
+      case "wipe":
+        drawClip(c, o, p, i); ctx.save(); ctx.beginPath(); ctx.rect(0, 0, o.w * e, o.h); ctx.clip(); drawClip(nx, o, 0, i + 1); ctx.restore(); break;
+    }
+  } else drawClip(c, o, p, i);
+  const cur = i; if (cur !== S.sel && !S.recording) { S.sel = cur; [...$("#strip").children].forEach((el, k) => el.classList.toggle("cur", k === cur)); }
+}
+function draw() { frameAt(S.t); updateTime(); }
+function updateTime() {
+  const T = total();
+  $("#time").textContent = `${fmtT(S.t)} / ${fmtT(T)}`;
+  $("#seek").value = T ? Math.round((S.t / T) * 1000) : 0;
+}
+
+/* ---------- reproduccion ---------- */
+function loop(ts) {
+  if (!S.playing) return;
+  const dt = S.last ? (ts - S.last) / 1000 : 0; S.last = ts;
+  S.t += dt;
+  const T = total();
+  if (S.t >= T) { S.t = S.recording ? T : 0; if (!S.recording) { pause(); draw(); return; } }
+  frameAt(S.t); updateTime();
+  if (S.recording) { $("#bar").style.width = `${Math.min(100, (S.t / T) * 100)}%`; if (S.t >= T) return stopRec(); }
+  requestAnimationFrame(loop);
+}
+function play() { if (!S.clips.length) return; S.playing = true; S.last = 0; $("#play").textContent = "❚❚"; if (S.music && !S.recording) { S.music.currentTime = S.t; S.music.play().catch(() => {}); } requestAnimationFrame(loop); }
+function pause() { S.playing = false; $("#play").textContent = "▶"; if (S.music) S.music.pause(); }
+$("#play").onclick = () => (S.playing ? pause() : play());
+$("#seek").oninput = (e) => { S.t = (e.target.value / 1000) * total(); if (S.music) S.music.currentTime = S.t; draw(); };
+document.addEventListener("keydown", (e) => { if (e.code === "Space" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $("#play").click(); } });
+
+/* ---------- exportar (MediaRecorder) ---------- */
+function bestMime() {
+  const c = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+  return c.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
+}
+async function exportVideo() {
+  if (!S.clips.length) return msg("Añade al menos una imagen", "err");
+  if (!window.MediaRecorder || !cv.captureStream) return msg("Este navegador no puede grabar vídeo (falta MediaRecorder). Prueba con Chrome, Edge, Firefox o la app de Android.", "err");
+  const o = opts(), mime = bestMime();
+  pause(); S.t = 0; frameAt(0, o);
+  const stream = cv.captureStream(o.fps);
+  let actx = null;
+  if (S.music) {
+    try {
+      actx = new AudioContext();
+      // un <audio> solo se puede conectar una vez a WebAudio: uno nuevo en cada exportacion
+      S.music.pause(); S.music = new Audio(S.musicUrl);
+      const src = actx.createMediaElementSource(S.music), gain = actx.createGain(), dest = actx.createMediaStreamDestination();
+      src.connect(gain); gain.connect(dest);
+      const T = total(o);
+      gain.gain.setValueAtTime(1, actx.currentTime); gain.gain.setValueAtTime(1, actx.currentTime + Math.max(0, T - 1.5));
+      gain.gain.linearRampToValueAtTime(0, actx.currentTime + T);
+      dest.stream.getAudioTracks().forEach((tr) => stream.addTrack(tr));
+      S.music.currentTime = 0; S.music.play();
+    } catch (e) { msg("La música no se pudo mezclar: " + e.message, "err"); }
+  }
+  const pixels = o.w * o.h, bps = pixels >= 1920 * 1080 ? 12e6 : pixels >= 1280 * 720 ? 6e6 : 3e6;
+  const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: bps } : { videoBitsPerSecond: bps });
+  const chunks = [];
+  rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  rec.onstop = () => finish(new Blob(chunks, { type: rec.mimeType || mime || "video/webm" }), o, actx);
+  S.recording = rec; rec.start(1000);
+  $("#export").disabled = true; $("#cancel").hidden = false; $("#result").innerHTML = "";
+  msg(`Grabando ${fmtT(total(o))} de vídeo (${(rec.mimeType || mime || "webm").split(";")[0]})… no cambies de pestaña.`);
+  play();
+}
+function stopRec(cancel) {
+  const rec = S.recording; if (!rec) return;
+  S.recording = null; S.cancelled = !!cancel; pause();
+  if (rec.state !== "inactive") rec.stop();
+}
+async function finish(blob, o, actx) {
+  if (actx) actx.close().catch(() => {});
+  if (S.music) { S.music.pause(); }
+  $("#export").disabled = false; $("#cancel").hidden = true;
+  if (S.cancelled) { $("#bar").style.width = "0"; return msg("Cancelado"); }
+  $("#bar").style.width = "100%";
+  const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+  const name = (o.title || "video").replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").slice(0, 40) || "video";
+  const url = URL.createObjectURL(blob);
+  $("#result").innerHTML = `<video class="out" controls src="${url}"></video><div class="row" style="margin-top:8px"><a class="btn" download="${name}.${ext}" href="${url}">⬇ Descargar ${ext.toUpperCase()} (${(blob.size / 1048576).toFixed(1)} MB)</a></div><div class="msg" id="saved"></div>`;
+  msg("Vídeo listo", "ok");
+  // dentro de Agente IA: se guarda tambien en sus salidas (y en el movil, desde ahi se comparte o descarga)
+  try {
+    const fd = new FormData(); fd.append("video", blob, `${name}.${ext}`); fd.append("titulo", o.title || name);
+    const r = await fetch("/api/video/guardar", { method: "POST", body: fd });
+    if (r.ok) { const j = await r.json(); $("#saved").innerHTML = `Guardado en Agente IA: <a href="${j.url}" target="_blank" rel="noopener">${j.url.split("/").pop()}</a>`; }
+  } catch (e) { /* fuera de Agente IA: solo descarga */ }
+}
+$("#export").onclick = exportVideo;
+$("#cancel").onclick = () => stopRec(true);
+
+/* ---------- entradas ---------- */
+$("#add").onclick = () => $("#files").click();
+$("#files").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
+$("#clear").onclick = () => { if (S.clips.length && confirm("¿Quitar todas las imágenes?")) { S.clips = []; S.t = 0; render(); draw(); } };
+$("#reverse").onclick = () => { S.clips.reverse(); render(); draw(); };
+$("#sort-name").onclick = () => { S.clips.sort((a, b) => a.name.localeCompare(b.name, "es", { numeric: true })); render(); draw(); };
+const drop = $("#drop");
+for (const el of [drop, $("#stage")]) {
+  el.addEventListener("dragover", (e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); drop.classList.add("on"); } });
+  el.addEventListener("dragleave", () => drop.classList.remove("on"));
+  el.addEventListener("drop", (e) => { if (!e.dataTransfer.files.length) return; e.preventDefault(); drop.classList.remove("on"); addFiles(e.dataTransfer.files); });
+}
+for (const id of ["fmt", "dur", "trans", "tdur", "fit", "kb", "caps", "fps", "title"])
+  $("#" + id).addEventListener("input", () => { $("#dur-v").textContent = $("#dur").value; $("#tdur-v").textContent = $("#tdur").value; render(); draw(); });
+$("#music").onchange = (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  if (S.music) S.music.pause();
+  S.musicUrl = URL.createObjectURL(f); S.music = new Audio(S.musicUrl);
+  $("#music-n").textContent = "♪ " + f.name + " (se recorta y se funde al final del vídeo)";
+};
+$("#from-app").onclick = async () => {
+  let list = [];
+  try { list = (await (await fetch("/api/outputs?limit=200")).json()).images || []; } catch (e) { return msg("Solo disponible dentro de Agente IA", "err"); }
+  if (!list.length) return msg("Aún no hay imágenes creadas en Agente IA", "err");
+  $("#pick-grid").innerHTML = list.map((u) => `<label><input type="checkbox" value="${u}"><img loading="lazy" src="${u}" alt=""></label>`).join("");
+  $("#pick").showModal();
+};
+$("#pick-all").onclick = () => document.querySelectorAll("#pick-grid input").forEach((i) => (i.checked = true));
+$("#pick-close").onclick = () => $("#pick").close();
+$("#pick-ok").onclick = () => {
+  const sel = [...document.querySelectorAll("#pick-grid input:checked")].map((i) => [i.value]);
+  $("#pick").close(); addSources(sel.reverse());   // la lista viene de la mas reciente a la mas antigua
+};
+
+/* ---------- proyecto creado por un agente (crear_video) ---------- */
+(async () => {
+  const q = new URLSearchParams(location.search), pr = q.get("proyecto");
+  if (!pr || !pr.startsWith("/outputs/")) return;
+  try {
+    const p = await (await fetch(pr)).json();
+    if (p.titulo) $("#title").value = p.titulo;
+    if (p.segundos) { $("#dur").value = p.segundos; $("#dur-v").textContent = p.segundos; }
+    if (p.transicion != null) { if (+p.transicion === 0) $("#trans").value = "cut"; else { $("#tdur").value = p.transicion; $("#tdur-v").textContent = p.transicion; } }
+    const F = { "16:9": "1280x720", "1080p": "1920x1080", "9:16": "720x1280", "1:1": "1080x1080", "4:3": "1024x768", "480p": "854x480" };
+    if (F[p.formato]) $("#fmt").value = F[p.formato];
+    await addSources((p.imagenes || []).map((u) => [u]));
+    msg("Proyecto cargado: revisa el orden y pulsa «Crear vídeo».", "ok");
+  } catch (e) { msg("No se pudo abrir el proyecto: " + e.message, "err"); }
+})();
+render(); draw();
+</script>
+</body>
+</html>
