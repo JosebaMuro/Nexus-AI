@@ -156,6 +156,22 @@
     "desc": "Para GPU de 6 GB o mas."
   },
   {
+    "id": "sdxl-lightning-4step-q4",
+    "kind": "image",
+    "name": "SDXL-Lightning 4 pasos · Q4_0 (ligero, GPU Adreno)",
+    "params_b": 3.5,
+    "repo": "mzwing/SDXL-Lightning-GGUF",
+    "file": "sdxl_lightning_4step.q4_0.gguf",
+    "size_mb": 2640,
+    "min_ram_gb": 8,
+    "gen": {
+      "steps": 4,
+      "cfg": 1.0,
+      "size": 768
+    },
+    "desc": "SDXL cuantizado a Q4_0: el formato que mejor rinde con OpenCL en Adreno (Snapdragon). Mas calidad que SD-Turbo con ~1,3 GB menos que el Q8. Sin probar en movil: compara tiempos y resultado."
+  },
+  {
     "id": "z-image-turbo",
     "kind": "image",
     "name": "Z-Image-Turbo · fotorrealista (GGUF)",

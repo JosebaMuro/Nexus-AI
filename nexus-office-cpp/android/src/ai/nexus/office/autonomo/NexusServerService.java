@@ -281,6 +281,15 @@ public class NexusServerService extends Service {
 
     /** La variante de llama-server mas rapida que admite esta CPU (i8mm > dotprod > ARMv8 basico). */
     private static String llamaBinary(String libs) {
+        return cpuBinary(libs, "libllama-server");
+    }
+
+    /** Lo mismo para sd-cli (stable-diffusion.cpp, motor de imagen): libsd-cli-i8mm.so, libsd-cli-dotprod.so, libsd-cli.so. */
+    private static String sdBinary(String libs) {
+        return cpuBinary(libs, "libsd-cli");
+    }
+
+    private static String cpuBinary(String libs, String base) {
         String feats = "";
         try {
             java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader("/proc/cpuinfo"));
@@ -293,9 +302,9 @@ public class NexusServerService extends Service {
             // sin /proc/cpuinfo: la variante basica
         }
         List<String> names = new ArrayList<String>();
-        if (feats.contains(" i8mm ") && feats.contains(" asimddp ")) names.add("libllama-server-i8mm.so");
-        if (feats.contains(" asimddp ")) names.add("libllama-server-dotprod.so");
-        names.add("libllama-server.so");
+        if (feats.contains(" i8mm ") && feats.contains(" asimddp ")) names.add(base + "-i8mm.so");
+        if (feats.contains(" asimddp ")) names.add(base + "-dotprod.so");
+        names.add(base + ".so");
         for (String n : names) {
             File f = new File(libs, n);
             if (f.isFile()) return f.getAbsolutePath();
@@ -335,6 +344,11 @@ public class NexusServerService extends Service {
         // llama.cpp con GPU (Vulkan/OpenCL) y NPU (Hexagon): lo usa si la sonda de hardware las encuentra
         File gpu = new File(libs, "libllama-server-gpu.so");
         if (gpu.isFile()) env.put("NEXUS_RUNTIME_LLAMA_GPU", gpu.getAbsolutePath());
+        // motor de imagen: stable-diffusion.cpp no publica binarios de Android, la APK lleva los suyos (CPU y OpenCL Adreno)
+        String sd = sdBinary(libs);
+        if (sd != null) env.put("NEXUS_RUNTIME_SD", sd);
+        File sdGpu = new File(libs, "libsd-cli-gpu.so");
+        if (sdGpu.isFile()) env.put("NEXUS_RUNTIME_SD_GPU", sdGpu.getAbsolutePath());
         env.put("NEXUS_ANDROID_LIBS", libs);
         env.put("NEXUS_DNS", dnsServers());
         env.put("NEXUS_DEVICE_STATE", new File(data, "device_state.json").getAbsolutePath());

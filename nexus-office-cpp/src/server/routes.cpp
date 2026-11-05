@@ -1335,7 +1335,41 @@ void register_routes(App& app) {
       }
       out[kind] = list;
     }
+    // videos: outputs/videos/<id>/video.mp4|webm (los deja el generador de video: recursos/web/video.html)
+    json vids = json::array();
+    {
+      std::vector<fs::path> found;
+      for (auto& d : glob(paths::sub({"outputs", "videos"}), "*"))
+        if (is_dir(d))
+          for (const char* e : {"mp4", "webm"})
+            if (is_file(d / P(std::string("video.") + e))) found.push_back(d / P(std::string("video.") + e));
+      std::stable_sort(found.begin(), found.end(), [](const fs::path& a, const fs::path& b) { return mtime(a) > mtime(b); });
+      for (auto& f : found) {
+        if ((long long)vids.size() >= limit) break;
+        vids.push_back("/outputs/videos/" + S(f.parent_path().filename()) + "/" + S(f.filename()));
+      }
+    }
+    out["videos"] = vids;
     return out;
+  });
+
+  // Generador de video (recursos/web/video.html): el navegador codifica el video y lo deja en outputs/videos/<id>/
+  app.post("/api/video/guardar", [](Ctx& c) -> Out {
+    auto f = c.file("file");
+    if (!f) throw missing_field("body", "file");
+    std::string low = lower(base_name(f->filename, "video.webm"));
+    std::string ext = ends_with(low, ".mp4") ? "mp4" : ends_with(low, ".webm") ? "webm" : "";
+    if (ext.empty()) throw HttpErr(400, "Formatos admitidos: MP4 o WebM");
+    if (f->content.size() > 1000000000) throw HttpErr(400, "Video demasiado grande (max. 1 GB)");
+    static const Rx ID(R"(^[A-Za-z0-9_-]{1,80}$)");
+    std::string id = c.q("id");
+    if (id.empty()) id = "v" + std::to_string((long long)now());
+    else if (!ID.test(id)) throw HttpErr(400, "id no valido");
+    fs::path dir = paths::sub({"outputs", "videos"}) / P(id);
+    mkdirs(dir);
+    write_file(dir / P("video." + ext), f->content);
+    std::string url = "/outputs/videos/" + id + "/video." + ext;
+    return json{{"url", url}, {"size", f->content.size()}, {"markdown", "[video](" + url + ")"}};
   });
 
   app.post("/api/prompt/enhance", [](Ctx& c) -> Out {

@@ -205,6 +205,10 @@ SdPlan sd_plan(const json& model, const json& profile, const std::string& varian
     if (threads > 0) p.perf_args.insert(p.perf_args.end(), {"-t", std::to_string(threads)});
     if (size >= 1024 && has("--vae-tiling")) p.perf_args.push_back("--vae-tiling");
   }
+  // movil: la memoria es compartida con el sistema y escasa; la VAE por teselas evita el pico de memoria del final
+  if (sys::is_android() && has("--vae-tiling") &&
+      std::find(p.perf_args.begin(), p.perf_args.end(), "--vae-tiling") == p.perf_args.end())
+    p.perf_args.push_back("--vae-tiling");
   json gen = model.value("gen", json::object());
   if (gen.is_object() && !jstr(gen, "sampler").empty() && has("--sampling-method"))
     p.perf_args.insert(p.perf_args.end(), {"--sampling-method", jstr(gen, "sampler")});
@@ -365,6 +369,7 @@ json ImageEngine::generate(const std::string& prompt, const std::string& negativ
       }
       // una GPU que no arranca (Metal virtual, driver roto...): antes del compositor se prueba en la CPU
       auto cpu = starts_with(sd->variant, "cpu") ? std::nullopt : rt_.exe("sd", profile_(), "cpu");
+      if (sd->variant == "opencl-adreno") runtimes::mark_sd_gpu_broken();   // en esta sesion ya no se prueba la GPU
       if (cpu && starts_with(cpu->variant, "cpu")) {
         L.warning("sd.cpp fallo en ", sd->variant, " (", uright(msg, 200), "); se reintenta en la CPU");
         try {
@@ -434,7 +439,11 @@ std::string ImageEngine::english(const std::string& prompt) {
 
 bool ImageEngine::via_server(const fs::path& cli, const SdPlan& plan, const json& req, const fs::path& out,
                              std::string& why) {
-  fs::path exe = cli.parent_path() / P(std::string("sd-server") + (sys::is_windows() ? ".exe" : ""));
+  // la APK de Android lleva libsd-cli[-gpu].so y libsd-server[-gpu].so (solo se ejecuta lo que va en lib/)
+  std::string cn = S(cli.filename());
+  fs::path exe = cli.parent_path() /
+                 P(starts_with(cn, "libsd-cli") ? "libsd-server" + cn.substr(9)
+                                                : std::string("sd-server") + (sys::is_windows() ? ".exe" : ""));
   std::string mode = config_.str("media.sd_servidor", "auto");
   if (mode == "no" || mode == "off" || !is_file(exe)) return false;
   std::lock_guard<std::mutex> lk(mu_);

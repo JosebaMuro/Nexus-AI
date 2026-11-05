@@ -565,6 +565,96 @@
     "timeout": 900
   },
   {
+    "name": "generar_video",
+    "description": "Crea un video a partir de una secuencia de imagenes (las de la carpeta de trabajo, adjuntos/, imagenes/ o las generadas en /outputs/images/). Prepara la lista y devuelve el enlace de la pagina generadora de video, que codifica el video en el navegador (MP4 o WebM, sin instalar nada, tambien en el movil) con transiciones (corte, fundido, deslizar, zoom), movimiento suave opcional, titulo, textos por imagen y una pista de audio opcional (p. ej. la de compose_music). Proporciones 16:9, 9:16, 1:1 y 4:3. Al abrir el enlace el video se genera solo y se guarda en /outputs/videos/; entrega el enlace al usuario con [Generar el video](enlace)",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "imagenes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "imagenes en el orden del video, p. ej. [\"imagenes/a.png\", \"/outputs/images/1700000000_gato.png\"]; «ultima» = la mas reciente. Formatos png, jpg, webp, gif o bmp (las tif, xcf o psd se convierten antes con imagen_editar)"
+        },
+        "segundos": {
+          "type": "number",
+          "default": 3,
+          "description": "duracion de cada imagen en segundos (0,5 a 30)"
+        },
+        "transicion": {
+          "type": "string",
+          "enum": [
+            "corte",
+            "fundido",
+            "deslizar",
+            "zoom"
+          ],
+          "default": "fundido"
+        },
+        "transicion_segundos": {
+          "type": "number",
+          "default": 0.6,
+          "description": "duracion de la transicion; como mucho la mitad de lo que dura cada imagen"
+        },
+        "proporcion": {
+          "type": "string",
+          "enum": [
+            "16:9",
+            "9:16",
+            "1:1",
+            "4:3"
+          ],
+          "default": "16:9",
+          "description": "16:9 horizontal, 9:16 vertical (historias, reels), 1:1 cuadrado"
+        },
+        "ajuste": {
+          "type": "string",
+          "enum": [
+            "cubrir",
+            "ajustar"
+          ],
+          "default": "cubrir",
+          "description": "cubrir recorta para llenar el cuadro; ajustar muestra la imagen entera sobre un fondo difuminado"
+        },
+        "movimiento": {
+          "type": "boolean",
+          "default": false,
+          "description": "acercamiento lento sobre cada imagen (efecto Ken Burns)"
+        },
+        "fps": {
+          "type": "integer",
+          "default": 30,
+          "description": "fotogramas por segundo (10 a 60)"
+        },
+        "titulo": {
+          "type": "string",
+          "description": "titulo que sale al principio sobre la primera imagen"
+        },
+        "textos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "pie de texto de cada imagen, en el mismo orden (vacio = sin texto)"
+        },
+        "audio": {
+          "type": "string",
+          "description": "pista de audio: ruta de la carpeta de trabajo o /outputs/music/... (wav, mp3, ogg, m4a, aac, flac)"
+        }
+      },
+      "required": [
+        "imagenes"
+      ]
+    },
+    "risk": "low",
+    "permissions": [
+      "media",
+      "filesystem"
+    ],
+    "timeout": 120
+  },
+  {
     "name": "enhance_prompt",
     "description": "Mejora un prompt para imagen, musica o chat (estilo, detalle, calidad, traduccion)",
     "parameters": {
