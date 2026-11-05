@@ -496,6 +496,8 @@ jobs:
           git clone -q --depth 1 --recursive --shallow-submodules -b "$ST" https://github.com/leejet/stable-diffusion.cpp sdsrc
           git clone -q --depth 1 https://github.com/KhronosGroup/Vulkan-Headers vkh
           sudo apt-get install -y -qq spirv-headers >/dev/null
+          # spirv.hpp al dia junto a las cabeceras de Vulkan: el compilador del NDK no mira /usr/include
+          git clone -q --depth 1 https://github.com/KhronosGroup/SPIRV-Headers spvh && cp -r spvh/include/spirv vkh/include/
           mkdir -p sdlibs
           comun=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake"
                  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DANDROID_STL=c++_static
