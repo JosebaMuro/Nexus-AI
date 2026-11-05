@@ -8,6 +8,7 @@
 // Las respuestas del asistente se guardan en el campo «perfil» del agente: al volver a abrirlo se ve igual. El prompt
 // de sistema se genera aqui, en C++, a partir de la plantilla y de esas respuestas.
 #pragma once
+#include <map>
 #include <string>
 #include <vector>
 
@@ -34,8 +35,10 @@ std::string redactar_prompt(const json& plantilla, const json& r);
 // respuestas -> {agente (listo para AgentManager::save, con "perfil"), avisos}
 //   existentes: herramientas instaladas (vacio = no filtrar); agentes: ids de los agentes que ya hay
 //   editando: id del agente que se esta ajustando ("" = nuevo: si el id esta ocupado se le pone sufijo)
+//   palabras_otros: palabras clave de los demas agentes (aviso si se repiten: el enrutado se repartiria)
 json construir(const json& r, const std::vector<std::string>& existentes, const std::vector<std::string>& agentes,
-               const std::string& editando = "");
+               const std::string& editando = "",
+               const std::map<std::string, std::vector<std::string>>& palabras_otros = {});
 // siembra el grafo de conocimiento del agente con el de su plantilla (clave "grafo"); devuelve cuantas relaciones
 int sembrar(mem::KnowledgeGraph& graph, const std::string& aid, const json& plantilla);
 

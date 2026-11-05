@@ -224,7 +224,7 @@ std::string redactar_prompt(const json& t, const json& r) {
 }
 
 json construir(const json& r_in, const std::vector<std::string>& existentes, const std::vector<std::string>& agentes,
-               const std::string& editando) {
+               const std::string& editando, const std::map<std::string, std::vector<std::string>>& palabras_otros) {
   if (!r_in.is_object()) throw std::invalid_argument("faltan las respuestas del asistente");
   json t = plantilla(jstr(r_in, "plantilla"));
   // lo que no venga se toma de la plantilla (o de los valores por defecto)
@@ -288,6 +288,16 @@ json construir(const json& r_in, const std::vector<std::string>& existentes, con
     if (!p.empty() && p != lower(nombre)) palabras.push_back(p);
   }
   r["palabras"] = palabras;
+  for (auto& [otro, suyas] : palabras_otros) {   // palabras que ya llaman a otro agente
+    if (otro == id) continue;
+    std::vector<std::string> rep;
+    for (auto& w : palabras)
+      for (auto& x : suyas)
+        if (normalize(w) == normalize(x)) rep.push_back(w);
+    if (!rep.empty())
+      avisos.push_back("«" + join(rep, "», «") + "» ya llama a «" + otro +
+                       "»: esas preguntas se repartirán entre los dos (cámbialas si quieres que vayan solo a uno).");
+  }
 
   std::string manual = trim(jstr(r, "prompt_manual"));
   std::string modelo = trim(jstr(r, "modelo"));

@@ -15,6 +15,7 @@
     proactivo: [[true, "Propone ideas"], [false, "Solo lo que pidas"]],
     idioma: [["es", "Siempre en español"], ["auto", "En el idioma del usuario"]],
   };
+  const PERMISO = { ask: "🔒 Te pide permiso para algunas acciones", admin: "🔒 Pide permiso al administrador para algunas acciones", deny: "⛔ Bloqueado por la política de herramientas" };
   let W = null;   // { d (catalogo), r (respuestas), editar, paso, grupo, q, vista }
 
   const $ = (s) => W.el.querySelector(s);
@@ -121,7 +122,7 @@
       ${tpl && tpl.conocimiento ? `<p class="muted">📖 Al guardar recibe ${tpl.conocimiento} datos de su oficio en su grafo de conocimiento.</p>` : ""}
       <div class="awz-campo"><div class="lbl">Qué puede hacer</div><div class="awz-paqs">
         ${W.d.paquetes.map((p) => `<label class="awz-paq ${todas || r.paquetes.includes(p.id) ? "on" : ""}"><input type="checkbox" data-paq="${p.id}" ${todas || r.paquetes.includes(p.id) ? "checked" : ""} ${todas ? "disabled" : ""}>
-          <span class="i">${p.icono}</span><span><b>${esc(p.nombre)}</b><small>${esc(p.desc)}</small></span></label>`).join("")}
+          <span class="i">${p.icono}</span><span><b>${esc(p.nombre)}</b><small>${esc(p.desc)}</small>${PERMISO[p.permiso] ? `<small class="awz-perm">${PERMISO[p.permiso]}</small>` : ""}</span></label>`).join("")}
         <label class="awz-paq ${todas ? "on" : ""}"><input type="checkbox" data-paq="todas" ${todas ? "checked" : ""}><span class="i">∞</span><span><b>Todas</b><small>Cualquier herramienta, también las que se instalen más adelante.</small></span></label>
       </div></div>
       ${equipo ? `<div class="awz-campo"><div class="lbl">Puede pasar trabajo a</div><div class="row" style="flex-wrap:wrap;gap:6px">

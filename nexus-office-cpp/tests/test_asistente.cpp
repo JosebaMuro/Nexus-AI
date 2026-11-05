@@ -75,6 +75,12 @@ TEST("asistente: desde cero, prompt redactado con la forma de ser elegida") {
     lanza = true;
   }
   CHECK(lanza);
+  // palabras que ya llaman a otro agente: aviso
+  json dup = as::construir(json{{"nombre", "Caja"}, {"palabras", {"Factura", "ticket"}}}, {}, {"contable"}, "",
+                           {{"contable", {"factura", "iva"}}});
+  bool aviso_dup = false;
+  for (auto& x : dup["avisos"]) aviso_dup |= contains(x.get<std::string>(), "«Factura» ya llama a «contable»");
+  CHECK(aviso_dup);
 }
 
 TEST("asistente: plantilla de oficio, id libre, herramientas instaladas y equipo valido") {

@@ -1480,15 +1480,26 @@ void register_routes(App& app) {
   // plantillas de puesto, paquetes de herramientas (solo los instalados), agentes para el equipo y modelos
   app.get("/api/agents/asistente", [](Ctx& c) -> Out {
     Services& s = c.app.S();
-    std::set<std::string> hay;
-    for (auto& t : s.tools->list()) hay.insert(jstr(t, "name"));
+    std::map<std::string, std::string> riesgo;   // herramienta instalada -> riesgo
+    for (auto& t : s.tools->list()) riesgo[jstr(t, "name")] = jstr(t, "risk", "low");
+    // permiso que pedira cada paquete segun tools.policy (lo mas estricto de sus herramientas)
+    json pol = s.config.get("tools.policy", json::object());
+    static const std::vector<std::string> ORDEN = {"auto", "ask", "admin", "deny"};
     json paq = json::array();
     for (auto p : agents::asistente::paquetes()) {
       json tl = json::array();
-      for (auto& t : p["tools"])
-        if (hay.count(t.get<std::string>())) tl.push_back(t);
+      size_t nivel = 0;
+      for (auto& t : p["tools"]) {
+        auto it = riesgo.find(t.get<std::string>());
+        if (it == riesgo.end()) continue;
+        tl.push_back(t);
+        std::string d = pol.is_object() && pol.contains(it->second) ? jstr(pol, it->second) : "admin";
+        size_t i = std::find(ORDEN.begin(), ORDEN.end(), d) - ORDEN.begin();
+        nivel = std::max(nivel, std::min(i, ORDEN.size() - 1));
+      }
       if (tl.empty()) continue;
       p["tools"] = tl;
+      p["permiso"] = ORDEN[nivel];
       paq.push_back(p);
     }
     json equipo = json::array();
@@ -1507,13 +1518,17 @@ void register_routes(App& app) {
     Services& s = c.app.S();
     std::vector<std::string> herramientas, ids;
     for (auto& t : s.tools->list()) herramientas.push_back(jstr(t, "name"));
-    for (auto& a : s.agents->all()) ids.push_back(a.id);
+    std::map<std::string, std::vector<std::string>> palabras;
+    for (auto& a : s.agents->all()) {
+      ids.push_back(a.id);
+      if (a.enabled) palabras[a.id] = a.keywords;
+    }
     std::string editando = c.bs("editar", "");
     if (!editando.empty() && std::find(ids.begin(), ids.end(), editando) == ids.end())
       throw HttpErr(404, "no existe el agente " + editando);
     json out;
     try {
-      out = agents::asistente::construir(c.b("respuestas"), herramientas, ids, editando);
+      out = agents::asistente::construir(c.b("respuestas"), herramientas, ids, editando, palabras);
     } catch (const std::invalid_argument& e) {
       throw HttpErr(400, e.what());
     }

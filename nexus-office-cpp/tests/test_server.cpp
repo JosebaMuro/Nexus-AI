@@ -87,6 +87,10 @@ TEST("servidor: API, administrador, memoria, biblioteca y chat por WebSocket") {
   // asistente de agentes: catalogo, vista previa (sin guardar) y guardado con el conocimiento del oficio
   auto wz = c.Get("/api/agents/asistente");
   CHECK(wz && wz->status == 200 && body(wz)["plantillas"].size() > 50 && !body(wz)["paquetes"].empty());
+  for (auto& p : body(wz)["paquetes"]) {   // permiso segun tools.policy: escribir ficheros nunca es automatico
+    if (jstr(p, "id") == "basico") CHECK_EQ(jstr(p, "permiso"), std::string("auto"));
+    if (jstr(p, "id") == "escribir") CHECK(jstr(p, "permiso") != "auto");
+  }
   auto wz_anon = c.Post("/api/agents/asistente", R"({"respuestas":{"nombre":"Ana"}})", "application/json");
   CHECK(wz_anon && wz_anon->status == 403);
   auto wz_vista = c.Post("/api/agents/asistente", adm, R"({"respuestas":{"plantilla":"fontanero","nombre":"Fontanera"}})", "application/json");
