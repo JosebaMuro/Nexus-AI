@@ -1,5 +1,12 @@
 # Cambios
 
+## Agente IA 3.0.0-cpp
+
+Version mayor de **Agente IA** (antes Nexus-Office), con el nombre nuevo en todo lo que ve el usuario (interfaz, instaladores, manuales, web de
+descarga y app de Android, con identificador `ai.agente.ia`). Reune en una sola version estable todo lo de la 2.10.0 y la
+2.10.0-beta.1 (mas abajo): Laboratorio BETA de rendimiento y aspecto, imagenes con sd.cpp dentro de la APK, modelos
+GGUF ligeros, generador de video y asistente visual de agentes.
+
 ## Agente IA 2.10.0-cpp
 
 Version estable de la 2.10 (incluye todo lo de la 2.10.0-beta.1, mas abajo). La APK (versionCode 21001) va firmada con

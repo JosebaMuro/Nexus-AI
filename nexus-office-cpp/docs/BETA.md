@@ -1,4 +1,4 @@
-# Versión beta 2.10.0-beta.1: pruebas de rendimiento y aspecto
+# Laboratorio BETA: pruebas de rendimiento y aspecto (desde la 2.10.0-beta.1)
 
 Esta beta trae herramientas para **medir el rendimiento** de Agente IA en cada equipo y para **evaluar su aspecto**,
 y guarda todo en `data/beta/` para comparar versiones, equipos y temas. No cambia el comportamiento de la oficina.
