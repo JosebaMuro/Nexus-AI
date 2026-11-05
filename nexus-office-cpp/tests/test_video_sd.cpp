@@ -121,7 +121,8 @@ TEST("sd.cpp en Android: viene en la APK, no se descarga y cae a la CPU si la GP
 }
 
 TEST("sd.cpp: sd-server junto a sd-cli y Windows ARM usa el de x64") {
-  CHECK_EQ(S(runtimes::sd_server_for(P("/x/sd-cli")).filename()), std::string(sys::is_windows() ? "sd-server.exe" : "sd-server"));
+  CHECK_EQ(S(runtimes::sd_server_for(P("/x/sd-cli")).filename()), std::string("sd-server"));
+  CHECK_EQ(S(runtimes::sd_server_for(P("/x/sd-cli.exe")).filename()), std::string("sd-server.exe"));
   CHECK_EQ(S(runtimes::sd_server_for(P("/x/libsd-cli.so")).filename()), std::string("libsd-server.so"));
 }
 
