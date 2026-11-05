@@ -36,7 +36,9 @@ jobs:
       - name: Dejar las bibliotecas en la rama android-sd-libs
         run: |
           cd /tmp/out
+          # GitHub rechaza ficheros de mas de 100 MB: el tar.gz se parte en trozos de 90 MB (cpp-entrega.yml los une)
           tar czf android-sd-libs.tar.gz lib && sha256sum android-sd-libs.tar.gz > SHA256SUMS.txt
+          split -b 90M -d android-sd-libs.tar.gz android-sd-libs.part. && rm android-sd-libs.tar.gz
           git init -q -b android-sd-libs && git add . \
             && git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm "stable-diffusion.cpp Android ($GITHUB_SHA)"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" android-sd-libs

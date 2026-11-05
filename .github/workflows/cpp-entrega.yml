@@ -436,7 +436,7 @@ jobs:
           # stable-diffusion.cpp (imagenes) para Android: libsd-*.so de android-sd-libs (workflow android-sd.yml); opcional
           SD=()
           if git fetch -q --depth 1 origin android-sd-libs 2>/dev/null; then
-            git show FETCH_HEAD:android-sd-libs.tar.gz > sd.tgz
+            for f in $(git ls-tree --name-only FETCH_HEAD | grep '^android-sd-libs.part\.' | sort); do git show FETCH_HEAD:$f; done > sd.tgz
             (git show FETCH_HEAD:SHA256SUMS.txt | grep android-sd-libs.tar.gz | sed 's|  .*|  sd.tgz|' | sha256sum -c -)
             mkdir -p sdlibs && tar xzf sd.tgz -C sdlibs && ls -la sdlibs/lib && SD=(--sd-libs ../sdlibs/lib)
           else
