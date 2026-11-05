@@ -318,6 +318,7 @@
     const inline = (t) => esc(t)
       .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, a, u) => `<img src="${safeUrl(u)}" alt="${a}" loading="lazy">`)
       .replace(/\[audio\]\(([^)\s]+)\)/g, (m, u) => `<audio controls src="${safeUrl(u)}"></audio>`)
+      .replace(/\[video\]\(([^)\s]+)\)/g, (m, u) => `<video controls playsinline preload="metadata" src="${safeUrl(u)}" style="max-width:100%;max-height:60vh;border-radius:6px"></video>`)
       .replace(/\[([^\]]+)\]\((\/outputs\/docs\/[^)\s]+\.pdf)\)/g, (m, a, u) => `<a class="doc-card" href="${safeUrl(u)}" target="_blank" rel="noopener"><span class="ic">PDF</span><span><b>${a.replace(/^📄\s*/, "")}</b><small>abrir · descargar · archivado en la biblioteca RAG</small></span></a>`)
       .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, a, u) => `<a href="${safeUrl(u)}" target="_blank" rel="noopener">${a}</a>`)
       .replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<i>$2</i>");
@@ -998,6 +999,9 @@
     const o = await api("/api/outputs");
     $("#gallery").innerHTML = o.images.map((u) => `<img src="${u}" loading="lazy">`).join("") || `<span class="muted">Aún no hay imágenes.</span>`;
     $$("#gallery img").forEach((i) => (i.onclick = () => lightbox(i.src)));
+    // vídeos hechos con el generador (imágenes → vídeo): se ven aquí y el botón abre el generador con las últimas imágenes
+    $("#video-open").onclick = () => window.open("/static/video.html" + (o.images.length ? "?i=" + o.images.slice(0, 12).reverse().map(encodeURIComponent).join(",") : ""), "_blank");
+    $("#video-list").innerHTML = (o.videos || []).map((u) => `<video controls playsinline preload="metadata" src="${u}"></video>`).join("") || `<span class="muted">Aún no hay vídeos.</span>`;
   };
   // ---- mejorador de prompts
   async function enhanceInto(el, target, style = "", negEl = null, btn = null) {
@@ -1342,6 +1346,9 @@
       <div class="row" style="margin-top:8px">${a.keywords.slice(0, 6).map((k) => `<span class="tag accent">${esc(k)}</span>`).join("")}</div>
       <div class="row admin-only" style="margin-top:12px"><button class="btn sm" data-edit="${a.id}">EDITAR</button></div></div>`).join("");
     $$("[data-edit]").forEach((b) => (b.onclick = () => editAgent(S.agents.find((a) => a.id === b.dataset.edit), tools)));
+    const wiz = (a) => window.NexusAgentWizard.open(a, tools, () => loaders.agents());
+    $("#agent-wizard").onclick = () => wiz(null);
+    $$("[data-edit]").forEach((b) => { const w = document.createElement("button"); w.className = "btn sm"; w.textContent = "ASISTENTE"; w.onclick = () => wiz(S.agents.find((a) => a.id === b.dataset.edit)); b.after(w); });
     $("#agent-new").onclick = () => editAgent({ id: "", name: "", description: "", system_prompt: "Eres un agente especialista de {assistant_name}.", model: "default", temperature: 0.7, max_tokens: null, tools: [], memory: true, can_delegate_to: [], keywords: [], specialty: "", color: "#00f0ff", icon: "◆", enabled: true, sexo: "" }, tools);
   };
   function editAgent(a, tools) {

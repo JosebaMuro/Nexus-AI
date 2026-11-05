@@ -1,5 +1,27 @@
 # Cambios
 
+## Nexus-Office 2.8.0-cpp
+
+### Imágenes en Snapdragon (stable-diffusion.cpp en Android)
+- Causa del fallo: upstream no publica ningún `sd-cli` para Android/Linux ARM64, así que el instalador no tenía qué
+  descargar y la app caía en imágenes procedurales sin IA. Ahora la APK lleva el motor: `libsd-cli*.so` (CPU base,
+  dotprod, i8mm) y `libsd-cli-gpu.so` (OpenCL de Adreno), compilados con el NDK en el workflow `android-sd.yml`
+  (`packaging/android/build_sd.sh`) y empaquetados con `nexus-construir apk --sd-libs`.
+- En el móvil se elige la variante de GPU si hay Adreno con OpenCL; si falla, se marca como rota y se repite en la
+  CPU sin perder la imagen. «Instalar sd.cpp» ya no falla en silencio: en Android usa el motor incluido y en otros
+  ARM64 explica cómo compilarlo (`NEXUS_RUNTIME_SD`).
+- Catálogo: SDXL-Lightning 4 pasos Q4_0 (GGUF de 2,6 GB; Q4_0 es el formato que mejor encaja con OpenCL de Adreno).
+  Sin medir todavía en un móvil real.
+
+### Asistente de agentes
+- Agentes → «✦ ASISTENTE»: siete pasos con vista previa en vivo (plantilla, identidad con icono y color, prompt y
+  tono, modelo, herramientas con su riesgo, memoria/delegación y revisión). El editor plano sigue como «avanzado».
+
+### Vídeo desde imágenes
+- Herramienta `generar_video` y página `/static/video.html`: una secuencia de imágenes se convierte en vídeo (MP4 o
+  WebM) en el propio navegador, con transiciones (fundido, deslizar, zoom), movimiento suave, textos, audio y
+  proporciones 16:9, 9:16, 1:1 y 4:3. Estudio → «Vídeo desde imágenes». Los vídeos quedan en `outputs/videos/`.
+
 ## Nexus-Office 2.7.0-cpp
 
 ### IA especializada para la bolsa

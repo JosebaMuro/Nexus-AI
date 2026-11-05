@@ -433,8 +433,17 @@ jobs:
           # LiteRT-LM (Google) para los .litertlm: CPU y GPU del movil (y la NPU con el dispatch del fabricante)
           U=$(curl -fsSL "https://pypi.org/pypi/litert-lm-api/$LITERT/json" | jq -r '[.urls[] | select(.filename | test("android.*arm64"))][0].url')
           curl -fsSL -o lt.whl "$U" && unzip -q -o -j lt.whl '*/liblitert-lm.so' -d glibs/lib && ls -la glibs/lib/liblitert-lm.so
+          # stable-diffusion.cpp (imagenes) para Android: libsd-*.so de android-sd-libs (workflow android-sd.yml); opcional
+          SD=()
+          if git fetch -q --depth 1 origin android-sd-libs 2>/dev/null; then
+            for f in $(git ls-tree --name-only FETCH_HEAD | grep '^android-sd-libs.part\.' | sort); do git show FETCH_HEAD:$f; done > sd.tgz
+            (git show FETCH_HEAD:SHA256SUMS.txt | grep android-sd-libs.tar.gz | sed 's|  .*|  sd.tgz|' | sha256sum -c -)
+            mkdir -p sdlibs && tar xzf sd.tgz -C sdlibs && ls -la sdlibs/lib && SD=(--sd-libs ../sdlibs/lib)
+          else
+            echo "::warning::sin rama android-sd-libs: la APK sale sin stable-diffusion.cpp (ejecuta el workflow android-sd.yml)"
+          fi
           chmod +x construir/nexus-construir
-          (cd nexus-office-cpp && ../construir/nexus-construir apk --exe ../aout/Nexus-Office/nexus-office --libs ../alibs --recursos ../aout/Nexus-Office --gpu-libs ../glibs/lib)
+          (cd nexus-office-cpp && ../construir/nexus-construir apk --exe ../aout/Nexus-Office/nexus-office --libs ../alibs --recursos ../aout/Nexus-Office --gpu-libs ../glibs/lib "${SD[@]}")
           "$BT/apksigner" verify --print-certs nexus-office-cpp/dist-apk/*.apk | head -4
       - uses: actions/upload-artifact@v4
         with:

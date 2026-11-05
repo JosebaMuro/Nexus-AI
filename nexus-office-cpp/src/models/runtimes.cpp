@@ -1,10 +1,12 @@
 #include "models/runtimes.h"
 
 #include <algorithm>
+#include <atomic>
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
+#include "hardware/android_accel.h"
 #include "util/archive.h"
 #include "util/crypto.h"
 #include "util/http.h"
@@ -143,7 +145,10 @@ std::vector<std::string> bundled_variants(const std::string& runtime) {
 
 std::map<std::string, std::string> lib_env(const fs::path& exe) {
   std::map<std::string, std::string> e;
-  if (sys::is_linux()) {
+  if (sys::is_android() && starts_with(S(exe.filename()), "libsd-")) {
+    // sd-cli de la APK: su carpeta y las del sistema (libOpenCL.so del fabricante esta en /vendor/lib64)
+    e = hw::android_accel::gpu_env(S(exe.parent_path()));
+  } else if (sys::is_linux()) {
     std::string cur = env("LD_LIBRARY_PATH");
     e["LD_LIBRARY_PATH"] = S(exe.parent_path()) + (cur.empty() ? "" : ":" + cur);
   } else if (sys::is_macos()) {
@@ -268,7 +273,34 @@ json RuntimeManager::installed() {
   return out;
 }
 
+// stable-diffusion.cpp no publica binarios para Android ni para Linux ARM64: la APK lleva los suyos, compilados con el
+// NDK (libsd-cli*.so, ver packaging/android/build_sd.sh) y la app los recibe en NEXUS_RUNTIME_SD (CPU) y
+// NEXUS_RUNTIME_SD_GPU (OpenCL, solo GPU Adreno). Si la GPU falla una vez se deja de intentar en esta sesion.
+static std::atomic<bool> sd_gpu_broken{false};
+void mark_sd_gpu_broken() { sd_gpu_broken = true; }
+
+// el OpenCL del Adreno lo ve la sonda de llama.cpp: si ella lo ve, sd.cpp tambien lo cargara
+static bool adreno_opencl() {
+  try {
+    json g = hw::android_accel::detect().value("gpu", json::object());
+    for (auto& d : g.value("devices", json::array()))
+      if (jstr(d, "backend") == "opencl" && lower(jstr(d, "name")).find("adreno") != std::string::npos) return true;
+  } catch (const std::exception&) {
+  }
+  return false;
+}
+
+static std::optional<Found> android_sd(const std::string& preferred) {
+  std::string gpu = env("NEXUS_RUNTIME_SD_GPU"), cpu = env("NEXUS_RUNTIME_SD");
+  if (preferred != "cpu" && !gpu.empty() && is_file(P(gpu)) && !sd_gpu_broken && adreno_opencl())
+    return Found{P(gpu), "opencl-adreno"};
+  if (!cpu.empty() && is_file(P(cpu))) return Found{P(cpu), "cpu"};
+  return std::nullopt;
+}
+
 std::optional<Found> RuntimeManager::exe(const std::string& runtime, const json& profile, const std::string& preferred) {
+  if (runtime == "sd" && sys::is_android())
+    if (auto f = android_sd(preferred)) return f;
   std::string forced = env(("NEXUS_RUNTIME_" + upper(runtime)).c_str());
   if (!forced.empty() && is_file(P(forced))) return Found{P(forced), "embedded"};
   std::vector<std::string> order;
@@ -304,6 +336,22 @@ json RuntimeManager::progress() {
 fs::path RuntimeManager::install(const std::string& runtime, const std::string& variant) {
   std::string key = runtime + ":" + variant;
   set_progress(key, {{"status", "buscando"}, {"done", 0}, {"total", 0}});
+  // Android y Linux ARM64: en las releases de leejet/stable-diffusion.cpp no hay binarios para estas plataformas (solo
+  // Linux x86_64, macOS arm64 y Windows), asi que descargar «sd-...-Linux-...-aarch64.zip» nunca podia funcionar.
+  if (runtime == "sd" && arch_tag() == "arm64" && os_tag() == "linux") {
+    std::string bundled = env("NEXUS_RUNTIME_SD");
+    if (sys::is_android() && !bundled.empty() && is_file(P(bundled))) {
+      set_progress(key, {{"status", "instalado"}, {"done", 1}, {"total", 1}, {"note", "incluido en la app"}});
+      L.info("sd.cpp ya viene dentro de la app: ", bundled);
+      return P(bundled);
+    }
+    std::string msg = sys::is_android()
+        ? "Esta app no lleva el motor de imagen (stable-diffusion.cpp): actualiza a una APK que lo incluya (2.8 o posterior)"
+        : "stable-diffusion.cpp no publica binarios para Linux ARM64: compilalo con cmake (-DSD_VULKAN=ON si hay "
+          "Vulkan) y ponlo en data/runtimes/sd/cpu/sd-cli, o define NEXUS_RUNTIME_SD con la ruta del sd-cli";
+    set_progress(key, {{"status", "error"}, {"error", msg}});
+    throw std::runtime_error(msg);
+  }
   try {
     json releases = http::get_json("https://api.github.com/repos/" + repo(runtime) + "/releases", {}, {{"per_page", "10"}});
     Rx pat(asset_pattern(runtime, variant));

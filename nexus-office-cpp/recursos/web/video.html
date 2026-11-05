@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Generador de vídeo · Nexus-Office</title>
+<link rel="icon" href="/static/icon.svg">
+<style>
+  :root { --bg:#04060c; --panel:#0a1020; --line:#16304a; --fg:#d8f6ff; --mut:#7c97ad; --acc:#00f0ff; --ok:#3dff9a; --bad:#ff5470; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  header { display:flex; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); }
+  header h1 { margin:0; font-size:15px; letter-spacing:.12em; color:var(--acc); font-weight:700; text-transform:uppercase; }
+  header a { color:var(--mut); text-decoration:none; margin-left:auto; font-size:13px; }
+  main { display:grid; grid-template-columns:minmax(260px,380px) 1fr; gap:14px; padding:14px 16px; max-width:1300px; margin:auto; }
+  @media (max-width:820px) { main { grid-template-columns:1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  h2 { margin:0 0 8px; font-size:12px; letter-spacing:.14em; color:var(--mut); text-transform:uppercase; }
+  button, .btn { font:inherit; color:var(--fg); background:#0d1a2e; border:1px solid var(--line); border-radius:6px; padding:7px 12px; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--acc); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:var(--acc); color:#001419; border-color:var(--acc); font-weight:700; }
+  button.sm { padding:2px 8px; font-size:13px; }
+  input, select, textarea { font:inherit; color:var(--fg); background:#060c18; border:1px solid var(--line); border-radius:6px; padding:6px 8px; width:100%; }
+  label { display:block; font-size:12px; color:var(--mut); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  #drop { border:2px dashed var(--line); border-radius:8px; padding:16px; text-align:center; color:var(--mut); margin-bottom:10px; }
+  #drop.over { border-color:var(--acc); color:var(--fg); }
+  #list { display:flex; flex-direction:column; gap:6px; max-height:420px; overflow:auto; }
+  .it { display:grid; grid-template-columns:54px 1fr auto; gap:8px; align-items:center; background:#060c18; border:1px solid var(--line); border-radius:6px; padding:5px; }
+  .it img { width:54px; height:40px; object-fit:cover; border-radius:4px; }
+  .it input { padding:3px 6px; font-size:13px; }
+  .it .acts { display:flex; gap:3px; }
+  canvas { width:100%; height:auto; max-height:62vh; background:#000; border-radius:6px; display:block; object-fit:contain; }
+  .stage { display:flex; flex-direction:column; gap:10px; }
+  progress { width:100%; height:10px; accent-color:var(--acc); }
+  #msg { font-size:13px; color:var(--mut); min-height:1.4em; }
+  #msg.bad { color:var(--bad); } #msg.ok { color:var(--ok); }
+  #result video { width:100%; max-height:62vh; background:#000; border-radius:6px; }
+  .hidden { display:none !important; }
+  code { background:#060c18; padding:1px 5px; border-radius:4px; font-size:13px; word-break:break-all; }
+</style>
+</head>
+<body data-estado="vacio">
+<header>
+  <h1>◆ Generador de vídeo</h1>
+  <span style="color:var(--mut);font-size:13px">Imágenes → vídeo, en tu navegador</span>
+  <a href="/">← Nexus-Office</a>
+</header>
+<noscript><p style="padding:16px">Este generador necesita JavaScript.</p></noscript>
+<main>
+  <section class="panel">
+    <h2>1 · Imágenes</h2>
+    <div id="drop">Arrastra aquí las imágenes<br><button id="add" type="button" style="margin-top:8px">Elegir imágenes…</button>
+      <input id="files" type="file" accept="image/*" multiple class="hidden"></div>
+    <div id="list" aria-label="Imágenes del vídeo"></div>
+    <h2 style="margin-top:14px">2 · Ajustes</h2>
+    <div class="grid2">
+      <label>Segundos por imagen<input id="seg" type="number" min="0.5" max="30" step="0.5" value="3"></label>
+      <label>Transición<select id="trans"><option value="fundido">Fundido</option><option value="deslizar">Deslizar</option><option value="zoom">Zoom + fundido</option><option value="corte">Corte</option></select></label>
+      <label>Duración transición (s)<input id="td" type="number" min="0.1" max="3" step="0.1" value="0.6"></label>
+      <label>Proporción<select id="prop"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option></select></label>
+      <label>Ajuste<select id="fit"><option value="cubrir">Llenar el cuadro (recorta)</option><option value="ajustar">Imagen entera, fondo difuminado</option></select></label>
+      <label>Fotogramas/s<select id="fps"><option>24</option><option selected>30</option><option>60</option></select></label>
+    </div>
+    <label style="margin-top:8px"><input id="ken" type="checkbox" style="width:auto"> Acercamiento lento en cada imagen</label>
+    <label style="margin-top:8px">Título (al principio)<input id="title" type="text" maxlength="80" placeholder="Opcional"></label>
+    <label style="margin-top:8px">Audio (opcional)<input id="audio" type="file" accept="audio/*"></label>
+    <div id="audioname" style="font-size:12px;color:var(--mut)"></div>
+  </section>
+
+  <section class="stage">
+    <div class="panel">
+      <h2>3 · Vista previa</h2>
+      <canvas id="cv" width="1280" height="720"></canvas>
+      <div class="row" style="margin-top:8px">
+        <button id="prev" type="button">▶ Previsualizar</button>
+        <button id="gen" type="button" class="primary">● Generar vídeo</button>
+        <span id="dur" style="color:var(--mut);font-size:13px"></span>
+      </div>
+      <progress id="bar" value="0" max="1" class="hidden"></progress>
+      <div id="msg" role="status"></div>
+    </div>
+    <div class="panel hidden" id="result">
+      <h2>Resultado</h2>
+      <video id="vid" controls playsinline></video>
+      <div class="row" style="margin-top:8px"><a id="dl" class="btn" download>⬇ Descargar</a><span id="info" style="color:var(--mut);font-size:13px"></span></div>
+      <div id="saved" class="hidden" style="margin-top:8px;font-size:13px"></div>
+    </div>
+    <p style="color:var(--mut);font-size:12px;margin:0">El vídeo se codifica aquí mismo, en tiempo real: dura lo que dure y la pestaña debe quedar visible mientras se genera. No se sube nada a internet.</p>
+  </section>
+</main>
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const SIZES = { "16:9": [1280, 720], "9:16": [720, 1280], "1:1": [1080, 1080], "4:3": [1024, 768] };
+const P = new URLSearchParams(location.search);
+const st = { items: [], audio: null, busy: false, id: P.get("id") || "", result: null };
+const cv = $("#cv"), ctx = cv.getContext("2d");
+const layers = new Map();
+
+const num = (el, d) => { const v = parseFloat($(el).value); return Number.isFinite(v) ? v : d; };
+const ease = (p) => p * p * (3 - 2 * p);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+function say(t, cls) { const m = $("#msg"); m.textContent = t || ""; m.className = cls || ""; }
+function estado(e) { document.body.dataset.estado = e; }
+
+function opts() {
+  const seg = clamp(num("#seg", 3), 0.5, 30), trans = $("#trans").value;
+  return { seg, trans, td: trans === "corte" ? 0 : clamp(num("#td", 0.6), 0.1, seg / 2), prop: $("#prop").value, fit: $("#fit").value,
+           fps: +$("#fps").value || 30, ken: $("#ken").checked, title: $("#title").value.trim() };
+}
+function timeline() {
+  const o = opts(), n = st.items.length;
+  return { ...o, n, starts: st.items.map((_, i) => i * (o.seg - o.td)), total: Math.max(0.1, n * o.seg - Math.max(0, n - 1) * o.td) };
+}
+function setSize() { const [w, h] = SIZES[$("#prop").value] || SIZES["16:9"]; if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; layers.clear(); } }
+
+/* ---------------------------------------------------------------- imágenes */
+async function loadImg(url) {
+  const img = new Image(); img.src = url;
+  try { await img.decode(); } catch { throw new Error("no se pudo abrir la imagen " + url.slice(0, 80)); }
+  return img;
+}
+async function addUrl(url, name, texto) { st.items.push({ url, name: name || url.split("/").pop(), img: await loadImg(url), texto: texto || "" }); }
+async function addFiles(files) {
+  for (const f of files) {
+    if (!f.type.startsWith("image/")) continue;
+    try { await addUrl(URL.createObjectURL(f), f.name); } catch (e) { say(e.message, "bad"); }
+  }
+  refresh();
+}
+function refresh() {
+  layers.clear();
+  $("#list").innerHTML = "";
+  st.items.forEach((it, i) => {
+    const d = document.createElement("div"); d.className = "it";
+    d.innerHTML = `<img alt=""><div><div class="nm" style="font-size:12px;color:var(--mut)"></div><input class="tx" type="text" placeholder="Texto al pie (opcional)" maxlength="120"></div>
+      <div class="acts"><button class="sm" data-a="up" title="Subir">↑</button><button class="sm" data-a="down" title="Bajar">↓</button><button class="sm" data-a="del" title="Quitar">✕</button></div>`;
+    d.querySelector("img").src = it.url; d.querySelector(".nm").textContent = (i + 1) + ". " + it.name;
+    const inp = d.querySelector(".tx"); inp.value = it.texto; inp.oninput = () => { it.texto = inp.value; draw(0); };
+    d.querySelectorAll("button").forEach((b) => (b.onclick = () => {
+      const a = b.dataset.a;
+      if (a === "del") st.items.splice(i, 1);
+      else if (a === "up" && i > 0) [st.items[i - 1], st.items[i]] = [st.items[i], st.items[i - 1]];
+      else if (a === "down" && i < st.items.length - 1) [st.items[i + 1], st.items[i]] = [st.items[i], st.items[i + 1]];
+      refresh();
+    }));
+    $("#list").appendChild(d);
+  });
+  setSize(); const tl = timeline();
+  $("#dur").textContent = st.items.length ? `${st.items.length} imágenes · ${tl.total.toFixed(1)} s · ${cv.width}×${cv.height}` : "";
+  $("#gen").disabled = $("#prev").disabled = !st.items.length;
+  estado(st.items.length ? "listo-para-generar" : "vacio");
+  draw(0);
+}
+
+/* ---------------------------------------------------------------- dibujo */
+// capa de una imagen a tamaño de lienzo (llenar o entera con fondo difuminado); solo se guardan las cercanas
+function layer(i) {
+  if (layers.has(i)) return layers.get(i);
+  for (const k of [...layers.keys()]) if (Math.abs(k - i) > 2) layers.delete(k);
+  const W = cv.width, H = cv.height, img = st.items[i].img, c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d"), cover = Math.max(W / img.width, H / img.height);
+  if ($("#fit").value === "ajustar") {
+    g.fillStyle = "#05070d"; g.fillRect(0, 0, W, H);
+    try { g.filter = "blur(28px) brightness(.6)"; } catch {}
+    g.drawImage(img, (W - img.width * cover) / 2, (H - img.height * cover) / 2, img.width * cover, img.height * cover);
+    g.filter = "none";
+    const s = Math.min(W / img.width, H / img.height);
+    g.drawImage(img, (W - img.width * s) / 2, (H - img.height * s) / 2, img.width * s, img.height * s);
+  } else {
+    g.drawImage(img, (W - img.width * cover) / 2, (H - img.height * cover) / 2, img.width * cover, img.height * cover);
+  }
+  layers.set(i, c); return c;
+}
+function wrap(g, text, maxW) {
+  const out = []; let line = "";
+  for (const w of text.split(/\s+/)) { const t = line ? line + " " + w : w; if (g.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; }
+  if (line) out.push(line); return out;
+}
+function label(text, alpha, big) {
+  const W = cv.width, H = cv.height; if (!text || alpha <= 0) return;
+  const fs = Math.round(H * (big ? 0.075 : 0.042)); ctx.save(); ctx.globalAlpha = clamp(alpha, 0, 1);
+  ctx.font = `700 ${fs}px system-ui, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const lines = wrap(ctx, text, W * 0.84), lh = fs * 1.25, h = lines.length * lh + fs * 0.9, y0 = big ? (H - h) / 2 : H - h - H * 0.04;
+  ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(W * 0.04, y0, W * 0.92, h);
+  ctx.fillStyle = "#fff"; lines.forEach((l, k) => ctx.fillText(l, W / 2, y0 + fs * 0.45 + lh * (k + 0.5)));
+  ctx.restore();
+}
+function draw(t) {
+  const W = cv.width, H = cv.height; ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+  const tl = timeline(); if (!tl.n) return;
+  const act = []; for (let i = 0; i < tl.n; i++) if (t >= tl.starts[i] && t < tl.starts[i] + tl.seg) act.push(i);
+  if (!act.length) act.push(t >= tl.total ? tl.n - 1 : 0);
+  let cur = act[0];
+  for (const i of act) {
+    const local = clamp(t - tl.starts[i], 0, tl.seg); let alpha = 1, ox = 0, sc = 1;
+    if (i > 0 && local < tl.td) {                       // entra sobre la anterior
+      const p = ease(local / tl.td); cur = i;
+      if (tl.trans === "fundido") alpha = p;
+      else if (tl.trans === "deslizar") ox = (1 - p) * W;
+      else if (tl.trans === "zoom") { alpha = p; sc = 1.15 - 0.15 * p; }
+    }
+    if (i < tl.n - 1 && local > tl.seg - tl.td && tl.td > 0) {   // sale
+      const p = ease((local - (tl.seg - tl.td)) / tl.td);
+      if (tl.trans === "deslizar") ox = -p * W * 0.25; else if (tl.trans === "zoom") sc *= 1 + 0.05 * p;
+    }
+    if (tl.ken) sc *= 1 + 0.08 * (local / tl.seg);
+    ctx.save(); ctx.globalAlpha = alpha; ctx.translate(W / 2 + ox, H / 2); ctx.scale(sc, sc);
+    ctx.drawImage(layer(i), -W / 2, -H / 2); ctx.restore();
+  }
+  const local = t - tl.starts[cur];
+  if (st.items[cur] && st.items[cur].texto) label(st.items[cur].texto, tl.td ? Math.min(1, local / Math.max(tl.td, 0.3)) : 1, false);
+  if (tl.title && t < 2.4) label(tl.title, Math.min(1, t / 0.4, (2.4 - t) / 0.4), true);
+}
+
+/* ---------------------------------------------------------------- previsualizar y grabar */
+function play(total, onFrame) {
+  return new Promise((res) => {
+    const t0 = performance.now(); let stop = false;
+    const step = () => {
+      if (stop) return res(false);
+      const t = Math.min(total, (performance.now() - t0) / 1000); draw(t); onFrame && onFrame(t);
+      if (t >= total) return res(true);
+      document.hidden ? setTimeout(step, 33) : requestAnimationFrame(step);
+    };
+    play.cancel = () => { stop = true; }; step();
+  });
+}
+function pickMime() {
+  const list = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+  return window.MediaRecorder ? list.find((m) => MediaRecorder.isTypeSupported(m)) || "" : "";
+}
+async function loadAudio(actx) {
+  if (!st.audio) return null;
+  const buf = await (await fetch(st.audio.url)).arrayBuffer();
+  return actx.decodeAudioData(buf);
+}
+async function generar() {
+  if (st.busy || !st.items.length) return;
+  const mime = pickMime(); if (!mime) { say("Este navegador no sabe grabar vídeo (MediaRecorder). Prueba con Chrome, Edge o Firefox.", "bad"); estado("error"); return; }
+  st.busy = true; estado("generando"); $("#gen").disabled = $("#prev").disabled = true; $("#result").classList.add("hidden");
+  const tl = timeline(), bar = $("#bar"); bar.classList.remove("hidden"); bar.value = 0; say("Generando…");
+  let actx = null;
+  try {
+    const stream = cv.captureStream(tl.fps);
+    if (st.audio) {
+      actx = new (window.AudioContext || window.webkitAudioContext)(); await actx.resume();
+      if (actx.state !== "running") throw new Error("el navegador necesita un toque para activar el audio: pulsa «Generar vídeo»");
+      const buf = await loadAudio(actx), dest = actx.createMediaStreamDestination(), src = actx.createBufferSource(), gain = actx.createGain();
+      src.buffer = buf; src.connect(gain); gain.connect(dest);
+      const now = actx.currentTime; gain.gain.setValueAtTime(1, now + Math.max(0, tl.total - 1)); gain.gain.linearRampToValueAtTime(0, now + tl.total);
+      stream.addTrack(dest.stream.getAudioTracks()[0]); src.start(now); src.stop(now + tl.total + 0.2);
+    }
+    const bps = clamp(Math.round(cv.width * cv.height * tl.fps * 0.1), 1.5e6, 14e6);
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bps }), chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    const stopped = new Promise((r) => (rec.onstop = r));
+    rec.start(250);
+    const ok = await play(tl.total + 0.15, (t) => { bar.value = Math.min(1, t / tl.total); $("#msg").textContent = `Generando… ${Math.round(100 * Math.min(1, t / tl.total))} % (${t.toFixed(0)} / ${tl.total.toFixed(0)} s)`; });
+    await new Promise((r) => setTimeout(r, 200)); rec.stop(); await stopped; stream.getTracks().forEach((k) => k.stop());
+    if (!ok) throw new Error("cancelado");
+    const type = mime.split(";")[0], ext = type === "video/mp4" ? "mp4" : "webm", blob = new Blob(chunks, { type });
+    if (!blob.size) throw new Error("el navegador no ha producido ningún dato de vídeo");
+    mostrar(blob, ext, tl);
+  } catch (e) { say("No se pudo generar: " + e.message, "bad"); estado("error"); }
+  finally { if (actx) actx.close().catch(() => {}); st.busy = false; $("#gen").disabled = $("#prev").disabled = !st.items.length; bar.classList.add("hidden"); }
+}
+function mostrar(blob, ext, tl) {
+  const url = URL.createObjectURL(blob); $("#vid").src = url; $("#dl").href = url; $("#dl").download = `video.${ext}`;
+  $("#info").textContent = `${ext.toUpperCase()} · ${(blob.size / 1048576).toFixed(1)} MB · ${tl.total.toFixed(1)} s`;
+  $("#result").classList.remove("hidden"); say("Vídeo listo", "ok"); estado("listo");
+  st.result = { ext, bytes: blob.size, mime: blob.type, segundos: tl.total, url: null };
+  guardar(blob, ext);
+}
+async function guardar(blob, ext) {   // lo deja en outputs/videos/<id>/ para verlo luego en el chat
+  try {
+    const fd = new FormData(); fd.append("file", new File([blob], `video.${ext}`, { type: blob.type }));
+    const r = await fetch("/api/video/guardar" + (st.id ? "?id=" + encodeURIComponent(st.id) : ""), { method: "POST", body: fd });
+    if (!r.ok) return;
+    const j = await r.json(); st.result.url = j.url;
+    const s = $("#saved"); s.classList.remove("hidden"); s.innerHTML = `Guardado en Nexus-Office: <code></code><br>En el chat se ve con <code></code>`;
+    const c = s.querySelectorAll("code"); c[0].textContent = j.url; c[1].textContent = j.markdown;
+    estado("guardado");
+  } catch { /* sin servidor (p. ej. abierto como archivo): queda la descarga */ }
+}
+
+/* ---------------------------------------------------------------- arranque */
+async function fromManifest(url) {
+  const m = await (await fetch(url)).json();
+  $("#seg").value = m.segundos ?? 3; $("#trans").value = m.transicion || "fundido"; $("#td").value = m.transicion_segundos ?? 0.6;
+  $("#prop").value = m.proporcion || "16:9"; $("#fit").value = m.ajuste || "cubrir"; $("#fps").value = String(m.fps || 30);
+  $("#ken").checked = !!m.kenburns; $("#title").value = m.titulo || "";
+  setSize();
+  for (const it of m.imagenes || []) await addUrl(it.url, it.nombre, it.texto);
+  if (m.audio) { st.audio = { url: m.audio, name: m.audio.split("/").pop() }; $("#audioname").textContent = "Audio: " + st.audio.name; }
+}
+$("#add").onclick = () => $("#files").click();
+$("#files").onchange = (e) => addFiles(e.target.files);
+$("#audio").onchange = (e) => { const f = e.target.files[0]; st.audio = f ? { url: URL.createObjectURL(f), name: f.name } : null; $("#audioname").textContent = f ? "Audio: " + f.name : ""; };
+const drop = $("#drop");
+["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => addFiles(e.dataTransfer.files));
+["#seg", "#trans", "#td", "#prop", "#fit", "#fps", "#ken", "#title"].forEach((s) => $(s).addEventListener("change", refresh));
+$("#prev").onclick = async () => { if (st.busy) return; st.busy = true; $("#prev").disabled = $("#gen").disabled = true; await play(timeline().total); st.busy = false; $("#prev").disabled = $("#gen").disabled = false; };
+$("#gen").onclick = generar;
+window.NexusVideo = { estado: () => document.body.dataset.estado, resultado: () => st.result, imagenes: () => st.items.length, generar,
+  cargar: async (urls) => { for (const u of urls) await addUrl(u); refresh(); } };
+
+(async () => {
+  try {
+    if (P.get("m")) await fromManifest(P.get("m"));
+    const list = (P.get("i") || "").split(",").map((s) => s.trim()).filter(Boolean);
+    for (const u of list) await addUrl(u);
+  } catch (e) { say("No se pudo cargar la lista de imágenes: " + e.message, "bad"); }
+  refresh();
+  if (P.get("auto") === "1" && st.items.length) {
+    if (st.audio) say("Pulsa «Generar vídeo» para empezar (el audio necesita un toque en el navegador).");
+    else generar();
+  }
+})();
+</script>
+</body>
+</html>

@@ -24,6 +24,8 @@ fs::path bundled_dir();
 // entorno para lanzar el binario (Linux: su carpeta en LD_LIBRARY_PATH)
 std::map<std::string, std::string> lib_env(const fs::path& exe);
 std::string asset_pattern(const std::string& runtime, const std::string& variant);
+// Android: la GPU (OpenCL) fallo con sd.cpp; en esta sesion se usa el sd-cli de CPU
+void mark_sd_gpu_broken();
 
 class RuntimeManager {
  public:
