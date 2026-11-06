@@ -1437,10 +1437,44 @@ void register_routes(App& app) {
     return json{{"ok", true}};
   });
 
-  app.get("/api/voice", [](Ctx& c) -> Out { return c.app.S().voice->info(); });
+  // voz de cada agente ya resuelta (la general con la suya, o una distinta derivada de su id)
+  auto voces_agentes = [](Services& s) {
+    json out = json::object();
+    out["nexus"] = s.voice->voz_de("nexus", json::object());
+    int i = 0;
+    for (auto& a : s.agents->all()) out[a.id] = s.voice->voz_de(a.id, a.voz, a.id == "nexus" ? -1 : i++);
+    return out;
+  };
+  app.get("/api/voice", [voces_agentes](Ctx& c) -> Out {
+    json j = c.app.S().voice->info();
+    j["general"] = c.app.S().config.get("user.voz", json::object());
+    j["distinta"] = c.app.S().config.flag("user.voz_distinta", true);
+    j["agentes"] = voces_agentes(c.app.S());
+    return j;
+  });
+  app.get("/api/voice/voces", [](Ctx& c) -> Out { return c.app.S().voice->voces(); });
 
+  // texto a voz con la voz del agente que habla (agente) o una voz concreta para probarla en el editor (voz)
   app.post("/api/voice/tts", [](Ctx& c) -> Out {
-    auto res = c.app.S().voice->tts(c.bs("text"), c.bn("rate", 1.0));
+    auto& s = c.app.S();
+    json voz = json::object();
+    std::string ag = c.bs("agente", "");
+    if (c.has_b("voz") && c.b("voz").is_object()) {
+      voz = s.config.get("user.voz", json::object());
+      if (!voz.is_object()) voz = json::object();
+      for (auto& [k, x] : c.b("voz").items())
+        if (!x.is_null() && !(x.is_string() && x.get<std::string>().empty())) voz[k] = x;
+    } else if (!ag.empty()) {
+      auto a = s.agents->get(ag);
+      int i = 0, indice = -1;
+      for (auto& x : s.agents->all()) {   // mismo puesto que en GET /api/voice
+        if (x.id == ag) indice = ag == "nexus" ? -1 : i;
+        if (x.id != "nexus") ++i;
+      }
+      voz = s.voice->voz_de(ag, a ? a->voz : json::object(), indice);
+    } else
+      voz = s.voice->voz_de("", json::object());
+    auto res = s.voice->tts(c.bs("text"), c.bn("rate", 1.0), voz);
     if (!res) return Raw{204, "", "", {{"X-TTS-Engine", "browser"}}};   // sin motor local: la voz del navegador
     return Raw{200, res->first, "audio/wav", {{"X-TTS-Engine", res->second}}};
   });
@@ -1908,6 +1942,7 @@ void register_routes(App& app) {
 
   // ------------------------------------------------------------------ metricas, estilo y aprobaciones diferidas
   register_agent_routes(app);
+  register_pipeline_routes(app);
 
   // ------------------------------------------------------------------ herramientas
   app.get("/api/tools", [](Ctx& c) -> Out {

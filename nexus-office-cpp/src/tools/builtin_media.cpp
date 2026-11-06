@@ -5,6 +5,7 @@
 #include "llm/llm.h"
 #include "media/media.h"
 #include "media/video.h"
+#include "pipeline/pipeline.h"
 #include "rag/rag.h"
 #include "tools/tools.h"
 #include "util/crypto.h"
@@ -76,10 +77,39 @@ json generate_image(const json& args, ToolContext& ctx) {
   }
   std::optional<long long> seed;
   if (args.contains("seed") && args["seed"].is_number()) seed = (long long)args["seed"].get<double>();
-  json res = s.images->generate(prompt, negative, std::nullopt, std::nullopt, seed, idea);
+  json res;
+  if (s.pipeline) {
+    // orquestador -> difusion: el encargo va como descriptor de trabajo a la cola del motor de difusion, que lo
+    // genera en su hilo (NPU/GPU) y publica cada paso en el buffer de pantalla. El agente solo espera el resultado
+    pipeline::DescriptorTrabajo d;
+    d.prompt = prompt;
+    d.negativo = negative;
+    d.idea = idea;
+    d.semilla = seed;
+    d.origen = ctx.agent.empty() ? "agente" : ctx.agent;
+    uint64_t id = s.pipeline->difundir(std::move(d));
+    if (truthy(args.value("asincrona", json(false)))) {
+      return {{"trabajo", id},
+              {"estado", "en cola"},
+              {"pantalla", "/api/pipeline/pantalla"},
+              {"note", "La imagen se esta generando en segundo plano; aparecera en la pantalla de difusion"}};
+    }
+    if (ctx.emit) ctx.emit({{"type", "progress"}, {"text", "Generando la imagen (trabajo " + std::to_string(id) + ")"}});
+    res = s.pipeline->resultado(id).get();
+  } else {
+    res = s.images->generate(prompt, negative, std::nullopt, std::nullopt, seed, idea);
+  }
   if (!res.contains("prompt")) res["prompt"] = prompt;
   if (ctx.emit) ctx.emit({{"type", "media"}, {"kind", "image"}, {"url", res["url"]}, {"engine", res["engine"]}});
   return without_path(res);
+}
+
+// lo que ha visto el motor de percepcion (camara o frames enviados por la API), por significado
+json percepcion_buscar(const json& args, ToolContext& ctx) {
+  Services& s = *ctx.services;
+  if (!s.pipeline) return {{"resultados", json::array()}, {"note", "El motor de percepcion no esta activo"}};
+  json hits = s.pipeline->buscar(jstr(args, "query"), (int)jnum(args.value("k", json(5)), 5));
+  return {{"resultados", hits}, {"total", hits.size()}};
 }
 
 json compose_music(const json& args, ToolContext& ctx) {
@@ -155,7 +185,8 @@ json crear_video(const json& args, ToolContext& ctx) {
 namespace {
 
 Register r1("rag_search", rag_search), r2("rag_list", rag_list), r3("generate_image", generate_image),
-    r4("compose_music", compose_music), r5("enhance_prompt", enhance_prompt), r6("crear_video", crear_video);
+    r4("compose_music", compose_music), r5("enhance_prompt", enhance_prompt), r6("crear_video", crear_video),
+    r7("percepcion_buscar", percepcion_buscar);
 
 }  // namespace
 

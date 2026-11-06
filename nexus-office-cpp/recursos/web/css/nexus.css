@@ -712,3 +712,16 @@ body.flat .panel::before, body.flat .panel::after { display: none; }
 [data-layout="phone"] #beta-hud { bottom: calc(72px + env(safe-area-inset-bottom)); right: 8px; min-width: 0; font-size: 10px; }
 [data-layout="phone"] .beta-tag { display: none; }
 [data-layout="phone"] .beta-zona { grid-template-columns: 90px 1fr 30px 24px; }
+
+/* pipelines: pantalla de difusion y percepcion */
+.pipe-canvas { width: 100%; max-width: 512px; aspect-ratio: 1; background: var(--bg2, #0b0f1a); border: 1px solid var(--line); border-radius: 10px; opacity: .55; transition: opacity .3s; }
+.pipe-canvas.on { opacity: 1; }
+.pipe-video { width: 100%; max-width: 512px; border-radius: 10px; border: 1px solid var(--line); }
+.pipe-lista { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; font-size: 13px; }
+.pipe-lista li { padding: 4px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.venc-lista { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; font-size: 13px; }
+.venc-lista li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.venc-lista li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.venc-lista canvas { border-radius: 4px; flex: none; }
+#venc-prog { flex: 1; min-width: 0; }
+.voz-ed{margin-top:8px;padding-top:8px;border-top:1px solid var(--line,#1b2a3a)}.voz-agente .row{gap:8px;flex-wrap:wrap}

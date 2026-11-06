@@ -1,5 +1,6 @@
 // Ensamblado de todos los servicios de Nexus-Office (core.py).
 #pragma once
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -43,6 +44,12 @@ class VoiceEngine;
 namespace nx::coop {
 class CoopNode;
 }
+namespace nx::pipeline {
+class Pipeline;
+}
+namespace nx::mcp {
+class Gestor;
+}
 namespace nx::android_tune {
 class LiveTuner;
 }
@@ -52,6 +59,9 @@ class VPN;
 }  // namespace nx::remote
 
 namespace nx {
+namespace difusion {
+class CodificadorVision;
+}
 
 class Services {
  public:
@@ -98,12 +108,24 @@ class Services {
   std::unique_ptr<remote::RemoteAccess> remote;
   std::unique_ptr<remote::VPN> vpn;
   std::unique_ptr<android_tune::LiveTuner> android_tuner;   // solo en la app Android autonoma
+  // pipelines del dossier de arquitectura: percepcion -> base vectorial, difusion asincrona -> buffer de pantalla
+  std::unique_ptr<pipeline::Pipeline> pipeline;
+  std::function<void(const json&)> emitir_pipeline;
+  // clientes MCP (mcp.servidores): sus herramientas entran en el registro como mcp_<servidor>_<nombre>
+  std::unique_ptr<mcp::Gestor> mcp;   // lo pone el servidor (WebSocket a las interfaces)
+  // codificador de vision de la percepcion (CLIP/SigLIP en ONNX Runtime); nullptr si no hay modelo activo
+  std::shared_ptr<difusion::CodificadorVision> codificador_vision();
 
  private:
   std::mutex emb_mu_;
   mem::EmbedderPtr embedder_;
   bool shut_ = false;
   mem::EmbedderPtr make_embedder();
+ private:
+  std::mutex vision_mu_;
+  std::shared_ptr<difusion::CodificadorVision> vision_;
+  std::string vision_clave_;
+  double vision_fallo_ = 0;
 };
 
 }  // namespace nx

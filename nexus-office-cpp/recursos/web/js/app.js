@@ -283,7 +283,7 @@
   function onEvent(e) {
     switch (e.type) {
       case "session": S.session = e.session_id; local.set("nexus_session", e.session_id); break;
-      case "agent": if (current && !e.sub) current.setAgent(e); break;
+      case "agent": if (!e.sub) hablante = e.agent || hablante; if (current && !e.sub) current.setAgent(e); break;
       case "state": setState(e.state); break;
       case "token": current && current.append(e.text); if (Live.on && !e.sub) Live.token(e.text); break;
       case "reasoning": current && current.reason(e.text); break;
@@ -311,6 +311,7 @@
       case "lounge": onLounge(e.message); break;
       case "agent_activity": if (offices) offices.onActivity(e.activity); break;
       case "coop": onCoop(e.event); break;
+      case "pantalla": case "difusion": case "percepcion": if (window.NexusPipeline) NexusPipeline.onEvent(e); break;
       case "remote": if (e.event === "paired") { toast(`Dispositivo emparejado: ${e.device.name}`); if (S.view === "net") remoteBox(); } break;
     }
   }
@@ -363,10 +364,10 @@
     el.innerHTML = `<div class="who"><span class="aname">${esc(agentName(agent)).toUpperCase()}</span></div>
       <div class="bubble"><div class="chips"></div><details class="think hidden"><summary>💭 Razonando…</summary><div class="think-text"></div></details><div class="text ${done ? "" : "cursor"}"></div></div><div class="msg-actions"></div>`;
     box.appendChild(el);
-    let raw = initial; const text = $(".text", el), chips = $(".chips", el);
+    let raw = initial, quien = agent; const text = $(".text", el), chips = $(".chips", el);
     let pend = false, thinkOn = false; const render = () => { pend = false; text.innerHTML = md(raw); scroll(); };
     const api_ = {
-      setAgent(e) { el.style.setProperty("--agent", e.color); $(".aname", el).textContent = `${e.icon || ""} ${e.name}`.toUpperCase(); },
+      setAgent(e) { quien = e.agent || quien; el.style.setProperty("--agent", e.color); $(".aname", el).textContent = `${e.icon || ""} ${e.name}`.toUpperCase(); },
       append(t) { raw += t; if (!pend) { pend = true; requestAnimationFrame(render); } if (thinkOn) { thinkOn = false; $(".think summary", el).textContent = "💭 Razonamiento"; } },
       reason(t) { const d = $(".think", el); d.classList.remove("hidden"); thinkOn = true; const tt = $(".think-text", el); tt.textContent += t; if (d.open) tt.scrollTop = tt.scrollHeight; scroll(); },
       note(label, title) { const c = document.createElement("span"); c.className = "chip done assist"; c.textContent = label; c.title = title; chips.appendChild(c); },
@@ -375,7 +376,7 @@
       progress(t) { const c = [...chips.querySelectorAll(".chip:not(.done)")].pop(); if (c) { c.innerHTML = `<span class="spin"></span>${esc(c.dataset.tool)} › ${esc(t)}`; } },
       toolDone(e) { const c = [...chips.querySelectorAll(".chip:not(.done)")].reverse().find((x) => x.dataset.tool === e.name);
         if (c) { const err = /"error"/.test(e.result); c.className = "chip " + (err ? "err" : "done"); c.querySelector(".spin")?.remove(); c.insertAdjacentText("afterbegin", err ? "✕ " : "✓ "); c.title = e.result; } },
-      finish(e) { raw = e.text; render(); text.classList.remove("cursor"); actions(e.message_id, e.text); if (S.speak && !Live.on) speak(e.text); },
+      finish(e) { raw = e.text; render(); text.classList.remove("cursor"); actions(e.message_id, e.text); if (S.speak && !Live.on) speak(e.text, quien); },
       error(m) { raw += `\n\n**Error:** ${m}`; render(); text.classList.remove("cursor"); },
     };
     function actions(id, content) {
@@ -385,7 +386,7 @@
       const fb = (score, b) => guard(async () => { if (!id) return; await api("/api/feedback", { body: { message_id: id, score, comment: "" } });
         up.classList.remove("on"); down.classList.remove("on"); b.classList.add("on"); toast(score > 0 ? "Aprendido: respuesta valorada" : "Aprendido: lo tendré en cuenta"); })();
       up.onclick = () => fb(1, up); down.onclick = () => fb(-1, down);
-      sp.onclick = () => speak(content); cp.onclick = () => copyText(content);
+      sp.onclick = () => speak(content, quien); cp.onclick = () => copyText(content);
       dl.onclick = () => saveFile(`nexus-respuesta-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}.md`, content, "text/markdown;charset=utf-8");
     }
     if (done) { render(); actions(mid, initial); }
@@ -498,10 +499,11 @@
       let s = 0; for (const v of data) s += ((v - 128) / 128) ** 2; avatar.setLevel(Math.sqrt(s / data.length) * 5); requestAnimationFrame(f); })();
   }
   const plain = (t) => t.replace(/<tool>[\s\S]*?<\/tool>/g, "").replace(/!\[[^\]]*\]\([^)]*\)|\[audio\]\([^)]*\)/g, "").replace(/```[\s\S]*?```/g, " código ").replace(/[*_#`>|]/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").trim();
-  async function speak(text) {
+  async function speak(text, agente = hablante) {
     const t = plain(text); if (!t) return;
+    const voz = Voces.de(agente);
     try {
-      const res = await api("/api/voice/tts", { body: { text: t, rate: S.cfg.speech_rate || 1 }, raw: true });
+      const res = await api("/api/voice/tts", { body: { text: t, rate: S.cfg.speech_rate || 1, agente }, raw: true });
       if (res.status === 200) {
         const audio = new Audio(URL.createObjectURL(await res.blob()));
         actx = actx || new (window.AudioContext || window.webkitAudioContext)();
@@ -510,13 +512,12 @@
         setState("speaking"); await audio.play(); levelLoop(an, () => ended); return;
       }
     } catch (e) { /* fallback al navegador */ }
-    if (window.NexusApp && NexusApp.speak && NexusApp.speak(t, S.cfg.speech_rate || 1)) {   // app Android: voz del sistema
+    if (Voces.android(t, voz)) {   // app Android: voz del sistema
       setState("speaking"); const iv = setInterval(() => avatar.setLevel(0.3 + Math.random() * 0.5), 110);
       setTimeout(() => { clearInterval(iv); avatar.setLevel(0); setState("idle"); }, Math.min(30000, 300 + t.length * 65)); return;
     }
     if (!("speechSynthesis" in window)) return;
-    const u = new SpeechSynthesisUtterance(t); u.lang = (S.cfg.language || "es") + "-" + ((S.cfg.language || "es") === "en" ? "US" : "ES"); u.rate = S.cfg.speech_rate || 1;
-    const v = speechSynthesis.getVoices().find((v) => v.lang.startsWith(S.cfg.language || "es") && (!S.cfg.voice_name || v.name.includes(S.cfg.voice_name))); if (v) u.voice = v;
+    const u = Voces.utter(t, voz, agente);
     let on = true; u.onend = u.onerror = () => { on = false; avatar.setLevel(0); setState("idle"); };
     u.onboundary = () => avatar.setLevel(0.5 + Math.random() * 0.5);
     setState("speaking"); speechSynthesis.cancel(); speechSynthesis.speak(u);
@@ -682,15 +683,15 @@
     done(text) {
       if (!this.on) return;
       $("#live-said").textContent = plain(md2text(text)).slice(-900);
-      if (this.engine === "android") { const t = plain(text); if (t && NexusApp.speak(t, S.cfg.speech_rate || 1)) { this.ui("speaking", "HABLANDO"); this.fake(); } else this.listen(); return; }
+      if (this.engine === "android") { const t = plain(text); if (t && Voces.android(t, Voces.de(hablante))) { this.ui("speaking", "HABLANDO"); this.fake(); } else this.listen(); return; }
       if (this.buf.trim()) this.say(this.buf); this.buf = "";
       if (!this.queue.length && !this.playing) this.listen();
     },
     fake() { clearInterval(this.fakeIv); this.fakeIv = setInterval(() => this.phase === "speaking" ? this.level(0.3 + Math.random() * 0.5) : clearInterval(this.fakeIv), 110); },
-    say(part) { const t = plain(md2text(part)); if (!t) return; this.queue.push({ text: t, gen: this.gen, audio: null }); this.prefetch(); if (!this.playing) this.next(); },
+    say(part) { const t = plain(md2text(part)); if (!t) return; this.queue.push({ text: t, gen: this.gen, audio: null, agente: hablante }); this.prefetch(); if (!this.playing) this.next(); },
     prefetch() {   // la siguiente frase se sintetiza mientras suena la actual
       if (S.status?.voice?.tts_active === "browser") return;
-      for (const q of this.queue.slice(0, 2)) if (!q.audio) q.audio = api("/api/voice/tts", { body: { text: q.text, rate: S.cfg.speech_rate || 1 }, raw: true })
+      for (const q of this.queue.slice(0, 2)) if (!q.audio) q.audio = api("/api/voice/tts", { body: { text: q.text, rate: S.cfg.speech_rate || 1, agente: q.agente }, raw: true })
         .then((r) => (r.status === 200 ? r.blob() : null)).catch(() => null);
     },
     async next() {
@@ -711,8 +712,7 @@
         return;
       }
       if (!("speechSynthesis" in window)) return this.next();
-      const u = new SpeechSynthesisUtterance(q.text); u.lang = this.langTag(); u.rate = S.cfg.speech_rate || 1;
-      const v = speechSynthesis.getVoices().find((v) => v.lang.startsWith(S.cfg.language || "es") && (!S.cfg.voice_name || v.name.includes(S.cfg.voice_name))); if (v) u.voice = v;
+      const u = Voces.utter(q.text, Voces.de(q.agente), q.agente);
       u.onboundary = () => this.level(0.5 + Math.random() * 0.5);
       u.onend = u.onerror = () => { if (this.utt === u) { this.utt = null; this.level(0); this.next(); } };
       this.utt = u; speechSynthesis.speak(u);
@@ -787,7 +787,7 @@
     if (c.user.avatar_enabled !== false) applyAvatar(c.user.avatar_style || "geisha", c.user.avatar_model || "");
   }
   async function loadAgents() {
-    S.agents = await api("/api/agents");
+    S.agents = await api("/api/agents"); Voces.cargar(true).catch(() => {});
     const sel = $("#agent-select"), cur = sel.value || S.cfg.default_agent || "auto";
     sel.innerHTML = `<option value="auto">◇ Automático</option>` + S.agents.filter((a) => a.enabled).map((a) => `<option value="${a.id}">${esc(a.icon)} ${esc(a.name)}</option>`).join("");
     sel.value = [...sel.options].some((o) => o.value === cur) ? cur : "auto";
@@ -998,6 +998,7 @@
 
   /* ================================================================ vista: ESTUDIO */
   loaders.studio = async () => {
+    if (window.NexusPipeline) NexusPipeline.cargar();
     const st = S.status || (await api("/api/status"));
     $("#img-engine").textContent = `${st.image.engine}${st.image.model ? " · " + st.image.model : ""}${st.image.runtime ? " · " + st.image.runtime : ""}`;
     $("#vision-engine").textContent = st.llm.backend === "builtin" ? "análisis básico (sin LLM)" : "visión con " + st.llm.model;
@@ -1367,6 +1368,7 @@
     <label class="field" style="margin-top:10px">Prompt de sistema<textarea class="input" name="system_prompt" rows="5">${esc(a.system_prompt)}</textarea></label>
     <label class="field" style="margin-top:10px">Palabras clave de enrutado (coma)<input class="input" name="keywords" value="${esc(a.keywords.join(", "))}"></label>
     <label class="field" style="margin-top:10px">Especialidad: su saber hacer (áreas y términos, coma). Lo que encaja aquí va a su memoria propia; lo demás es común<textarea class="input" name="specialty" rows="2" placeholder="Vacío: generalista (todo lo que aprende es común)">${esc(a.specialty || "")}</textarea></label>
+    <div class="field" style="margin-top:10px">Voz <small class="muted">para reconocer quién habla; sin cambios usa la general${S.cfg.voz_distinta !== false ? " con un tono propio" : ""}</small><div id="ag-voz"></div></div>
     <label class="field" style="margin-top:10px">Puede delegar en (coma, * = todos)<input class="input" name="can_delegate_to" value="${esc(a.can_delegate_to.join(", "))}"></label>
     <div class="field" style="margin-top:10px">Herramientas<div class="row"><label class="row"><input type="checkbox" name="tool" value="*" ${a.tools.includes("*") ? "checked" : ""}> todas</label>${tools.map((t) => `<label class="row"><input type="checkbox" name="tool" value="${t.name}" ${a.tools.includes(t.name) ? "checked" : ""}> ${t.name} <span class="tag ${t.risk}">${t.risk}</span></label>`).join("")}</div></div>
     <div class="row" style="margin-top:12px"><label class="row"><span class="switch"><input type="checkbox" name="memory" ${a.memory ? "checked" : ""}><span></span></span>memoria</label>
@@ -1374,13 +1376,14 @@
       <span style="flex:1"></span>${a.id && a.id !== "nexus" ? '<button class="btn danger" id="ag-del">BORRAR</button>' : ""}<button class="btn ghost" id="ag-cancel">CANCELAR</button><button class="btn primary" id="ag-save">GUARDAR</button></div>`;
     const v = (n) => $(`[name=${n}]`, ed);
     const list = (s) => s.split(",").map((x) => x.trim()).filter(Boolean);
+    let edVoz = null; Voces.editor($("#ag-voz", ed), { ...(a.voz || {}) }, { probarTexto: a.name ? `Hola, soy ${a.name}.` : "" }).then((x) => (edVoz = x)).catch(() => {});
     $("#ag-cancel").onclick = () => ed.classList.add("hidden");
     $("#ag-save").onclick = guard(async () => {
       await api("/api/agents", { method: "PUT", body: { id: v("id").value, name: v("name").value, description: v("description").value, system_prompt: v("system_prompt").value,
         model: v("model").value || "default", temperature: v("temperature").value === "" ? null : +v("temperature").value, max_tokens: v("max_tokens").value === "" ? null : +v("max_tokens").value,
         tools: $$("[name=tool]:checked", ed).map((c) => c.value), memory: v("memory").checked, enabled: v("enabled").checked,
-        keywords: list(v("keywords").value), specialty: v("specialty").value.trim(), can_delegate_to: list(v("can_delegate_to").value), color: v("color").value, icon: v("icon").value || "◆", sexo: v("sexo").value } });
-      toast("Agente guardado"); ed.classList.add("hidden"); loaders.agents();
+        keywords: list(v("keywords").value), specialty: v("specialty").value.trim(), can_delegate_to: list(v("can_delegate_to").value), color: v("color").value, icon: v("icon").value || "◆", sexo: v("sexo").value, voz: edVoz ? edVoz.valor() : (a.voz || {}), perfil: a.perfil } });
+      toast("Agente guardado"); Voces.cargar(true).catch(() => {}); ed.classList.add("hidden"); loaders.agents();
     });
     $("#ag-del") && ($("#ag-del").onclick = guard(async () => { if (!confirm("¿Borrar agente?")) return; await api(`/api/agents/${a.id}`, { method: "DELETE" }); ed.classList.add("hidden"); loaders.agents(); }));
     ed.scrollIntoView({ behavior: "smooth" });
@@ -1406,12 +1409,12 @@
     const fr = fmtSel();
     const items = rec.items.filter((r) => !fr || fr.cat(r.formato || (/\.gguf$/i.test(r.file || "") ? "gguf" : ""))).sort((a, b) => (b.sector ? 1 : 0) - (a.sector ? 1 : 0));   // los de tu oficina, primero
     $("#rec-grid").innerHTML = items.map((r) => `<div class="item col" style="gap:6px"><div class="row"><span class="tag accent">${r.kind}</span><b style="flex:1">${esc(r.name)}</b>${r.best ? '<span class="tag ok">★ recomendado</span>' : ""}${r.best_especialidad ? `<span class="tag ok">★ IA ${esc(r.especialidad)} para este equipo</span>` : ""}${r.sector ? '<span class="tag warn">◆ para tu oficina</span>' : ""}</div>
-      ${r.sector ? `<div class="d"><b>Para tu oficina:</b> ${esc(r.sector)}</div>` : ""}<div class="d">${esc(r.desc)}</div><div class="row mono muted"><span class="tag ${r.fit}">${FIT[r.fit]}</span><span>${r.size_mb >= 1000 ? (r.size_mb / 1024).toFixed(1) + " GB" : r.size_mb + " MB"}</span>${r.vision ? '<span class="tag">visión</span>' : ""}${r.baseline ? '<span class="tag">base CPU</span>' : ""}${r.motor_nombre ? `<span class="tag ${r.motor_ok ? "ok" : "warn"}">${esc(r.motor_nombre)}${r.motor_ok ? "" : " · no incluido aquí"}</span>` : ""}</div>
+      ${r.sector ? `<div class="d"><b>Para tu oficina:</b> ${esc(r.sector)}</div>` : ""}<div class="d">${esc(r.desc)}</div><div class="row mono muted"><span class="tag ${r.fit}">${FIT[r.fit]}</span><span>${r.size_mb >= 1000 ? (r.size_mb / 1024).toFixed(1) + " GB" : r.size_mb + " MB"}</span>${r.vision ? '<span class="tag">visión</span>' : ""}${r.baseline ? '<span class="tag">base CPU</span>' : ""}${r.para_tu_chip ? '<span class="tag ok">para tu chip</span>' : ""}${r.motor_nombre ? `<span class="tag ${r.motor_ok ? "ok" : "warn"}">${esc(r.motor_nombre)}${r.motor_ok ? "" : " · no incluido aquí"}</span>` : ""}</div>
       <div>${r.installed ? (active.includes(r.id) ? '<span class="tag ok">● activo</span>' : `<button class="btn sm" data-act="${r.id}">ACTIVAR</button>`) : `<button class="btn sm ${r.fit === "no_cabe" ? "danger" : "primary"}" data-rec="${r.id}">DESCARGAR</button>`}</div></div>`).join("");
     const ff = fmtSel();
     $("#fmt-note").textContent = ff ? `se ejecutan con ${ff.motor}` : "";
     $("#catalog-list").innerHTML = m.catalog.filter((c) => !ff || ff.cat(c.format)).map((c) => `<div class="item row"><span class="tag accent">${c.kind}</span><div style="flex:1"><div class="t">${esc(c.name)}</div><div class="d mono">${c.format} · ${fmtB(c.size)} · ${esc(c.source)}${c.vision ? " · visión" : ""}${c.meta?.quant ? " · " + c.meta.quant : ""}${c.acelera ? " · " + esc(c.acelera) : ""}${MOTOR_DE[c.format] ? " · " + MOTOR_DE[c.format] : ""}</div></div>
-      ${active.includes(c.id) ? '<span class="tag ok">activo</span>' : ["llm", "image", "tts", "embed"].includes(c.kind) ? `<button class="btn sm" data-act="${c.id}">ACTIVAR</button>` : ""}<button class="btn danger sm admin-only" data-delm="${c.id}">✕</button></div>`).join("") || `<span class="muted">${ff ? "Ningún modelo instalado de este formato." : "Ningún modelo instalado. Descarga uno recomendado."}</span>`;
+      ${active.includes(c.id) ? '<span class="tag ok">activo</span>' : ["llm", "image", "tts", "embed", "vision-embed"].includes(c.kind) ? `<button class="btn sm" data-act="${c.id}">ACTIVAR</button>` : ""}<button class="btn danger sm admin-only" data-delm="${c.id}">✕</button></div>`).join("") || `<span class="muted">${ff ? "Ningún modelo instalado de este formato." : "Ningún modelo instalado. Descarga uno recomendado."}</span>`;
     if (m.ollama.length) $("#catalog-list").insertAdjacentHTML("beforeend", `<div class="item"><b>Ollama local:</b> ${m.ollama.map((o) => `<button class="btn sm" data-spec="ollama:${esc(o)}">${esc(o)}</button>`).join(" ")}</div>`);
     $("#src-select").innerHTML = m.sources.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
     $$("[data-rec]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/models/recommended/${b.dataset.rec}`, { body: {} }); toast("Descarga iniciada: al terminar queda activado y con su motor configurado"); watchJobs(); })));
@@ -1543,8 +1546,26 @@
   $("#met-dias") && ($("#met-dias").onchange = guard(loadMetricas));
   $("#est-user-save") && ($("#est-user-save").onclick = guard(async () => { try { localStorage.setItem("nexus_usuario", $("#est-user").value.trim()); } catch {} toast("Perfil de usuario cambiado"); loadEstilo(); }));
   $("#est-reset") && ($("#est-reset").onclick = guard(async () => { if (!confirm("¿Olvidar todo lo aprendido de tu estilo?")) return; await api("/api/estilo", { method: "DELETE" }); loadEstilo(); }));
+  const loadMcp = async () => {
+    const m = await api("/api/mcp");
+    const base = location.origin + m.url;
+    const clientes = Object.values(m.clientes || {});
+    $("#mcp-box").innerHTML = `<div class="setting"><div class="lbl"><b>Servidor MCP de Agente IA</b><span>Otros programas (asistentes de escritorio, editores) usan las herramientas de aquí, con la misma política de aprobaciones.
+      HTTP: <span class="mono">${esc(base)}</span> · stdio: <span class="mono">nexus-office mcp</span>${m.token ? " · fuera de este equipo con el token mcp.token" : ""}</span></div><button class="btn sm ghost" id="mcp-copiar">⧉ COPIAR URL</button></div>
+      ${clientes.length ? clientes.map((c) => `<div class="item"><b>${esc(c.nombre)}</b> ${c.ok ? `<span class="tag ok">conectado</span> <span class="muted">${c.herramientas} herramientas · ${esc((c.servidor || {}).name || "")}</span>` : `<span class="tag bad">sin conexión</span> <span class="muted">${esc(c.error || "")}</span>`}</div>`).join("") : `<div class="muted">Sin servidores MCP externos.</div>`}`;
+    $("#mcp-copiar").onclick = () => copyText(base);
+    if ($("#mcp-servidores") !== document.activeElement) $("#mcp-servidores").value = JSON.stringify(m.servidores || [], null, 2);
+  };
+  $("#mcp-guardar").onclick = guard(async () => {
+    let servidores;
+    try { servidores = JSON.parse($("#mcp-servidores").value || "[]"); } catch (e) { return toast("JSON no válido: " + e.message, true); }
+    await api("/api/mcp/servidores", { method: "PUT", body: { servidores } });
+    toast("Conectando con los servidores MCP…"); setTimeout(() => loaders.tools(), 2500);
+  });
+  $("#mcp-reconectar").onclick = guard(async () => { await api("/api/mcp/reconectar", { method: "POST" }); toast("Reconectando…"); setTimeout(() => loaders.tools(), 2500); });
+
   loaders.tools = async () => {
-    loadMetricas().catch(() => {}); loadEstilo().catch(() => {});
+    loadMetricas().catch(() => {}); loadEstilo().catch(() => {}); loadMcp().catch(() => {});
     const d = await api("/api/tools");
     $("#pending-list").innerHTML = d.pending.map((p) => `<div class="item"><b>${esc(p.agent)}</b> → ${esc(p.tool)} <span class="tag ${p.risk}">${p.risk}</span><span class="muted"> · requiere ${p.level}</span></div>`).join("") || `<span class="muted">Nada pendiente.</span>`;
     d.pending.forEach(showApproval);
@@ -1552,7 +1573,7 @@
     $("#policy-box").innerHTML = ["low", "medium", "high"].map((r) => `<div class="setting"><div class="lbl"><b>Riesgo <span class="tag ${r}">${r}</span></b></div>
       <select class="input" data-pol="${r}" style="width:auto" ${S.token ? "" : "disabled"}>${opts.map((o) => `<option value="${o}" ${pol[r] === o ? "selected" : ""}>${names[o]}</option>`).join("")}</select></div>`).join("") + `<div class="muted">Las peticiones de nodos remotos se elevan un nivel.</div>`;
     $$("[data-pol]").forEach((s) => (s.onchange = guard(async () => { await api("/api/config", { method: "PUT", body: { "tools.policy": { ...pol, [s.dataset.pol]: s.value } } }); toast("Política actualizada"); })));
-    $("#tools-table").innerHTML = `<table class="tbl"><tr><th>HERRAMIENTA</th><th>DESCRIPCIÓN</th><th>RIESGO</th><th>PERMISOS</th><th>ORIGEN</th><th class="admin-only">ACTIVA</th></tr>${d.tools.map((t) => `<tr><td class="mono">${esc(t.name)}</td><td>${esc(t.description)}</td><td><span class="tag ${t.risk}">${t.risk}</span></td><td class="mono muted">${esc(t.permissions.join(", "))}</td><td>${t.source === "community" ? '<span class="tag accent">comunidad</span>' : "integrada"}</td>
+    $("#tools-table").innerHTML = `<table class="tbl"><tr><th>HERRAMIENTA</th><th>DESCRIPCIÓN</th><th>RIESGO</th><th>PERMISOS</th><th>ORIGEN</th><th class="admin-only">ACTIVA</th></tr>${d.tools.map((t) => `<tr><td class="mono">${esc(t.name)}</td><td>${esc(t.description)}</td><td><span class="tag ${t.risk}">${t.risk}</span></td><td class="mono muted">${esc(t.permissions.join(", "))}</td><td>${t.source === "community" ? '<span class="tag accent">comunidad</span>' : t.source === "mcp" ? '<span class="tag accent">MCP</span>' : "integrada"}</td>
       <td class="admin-only"><label class="switch"><input type="checkbox" data-ten="${t.name}" ${t.enabled ? "checked" : ""}><span></span></label>${t.source === "community" ? ` <button class="btn danger sm" data-unin="${t.name}">✕</button>` : ""}</td></tr>`).join("")}</table>`;
     $$("[data-ten]").forEach((c) => (c.onchange = guard(() => api(`/api/tools/${c.dataset.ten}/enabled`, { body: { enabled: c.checked } }))));
     $$("[data-unin]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/tools/community/${b.dataset.unin}`, { method: "DELETE" }); loaders.tools(); })));
@@ -1933,8 +1954,133 @@
 
   /* ================================================================ vista: AJUSTES */
   const LAYOUT_NAMES = { phone: "Móvil", tablet: "Tablet", desktop: "Escritorio" };
+  /* ---- voces: la general (Ajustes) y la de cada agente (su configuración), para reconocer quién habla */
+  const Voces = {
+    info: null, lista: null,
+    async cargar(forzar) { if (!this.info || forzar) this.info = await api("/api/voice").catch(() => null); return this.info || {}; },
+    async disponibles() {
+      if (!this.lista) this.lista = await api("/api/voice/voces").catch(() => ({ piper: [], sistema: [], variantes: [], motores: ["browser"] }));
+      return this.lista;
+    },
+    de(agente) { const i = this.info || {}; return (i.agentes || {})[agente || "nexus"] || i.general || {}; },
+    semilla(id) { let h = 2166136261; for (const c of String(id || "")) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0; return h; },
+    navegador(voz, agente) {
+      const vs = "speechSynthesis" in window ? speechSynthesis.getVoices() : [], lang = S.cfg.language || "es";
+      const name = voz.navegador || S.cfg.voice_name;
+      let v = name ? vs.find((x) => x.name === name) || vs.find((x) => x.name.includes(name)) : null;
+      if (!v) { const c = vs.filter((x) => x.lang.startsWith(lang)); if (c.length) v = voz.auto && c.length > 1 ? c[this.semilla(agente) % c.length] : c[0]; }
+      return v;
+    },
+    // frase para la voz del navegador con el tono, la velocidad y el volumen de esa voz
+    utter(texto, voz, agente) {
+      const lang = S.cfg.language || "es", u = new SpeechSynthesisUtterance(texto);
+      u.lang = lang + "-" + (lang === "en" ? "US" : "ES");
+      u.rate = Math.min(4, (S.cfg.speech_rate || 1) * (voz.velocidad || 1));
+      u.pitch = Math.max(0, Math.min(2, voz.tono || 1)); u.volume = Math.max(0, Math.min(1, voz.volumen ?? 1));
+      const v = this.navegador(voz, agente); if (v) u.voice = v;
+      return u;
+    },
+    android(texto, voz) {
+      if (!(window.NexusApp && NexusApp.speak)) return false;
+      const rate = (S.cfg.speech_rate || 1) * (voz.velocidad || 1);
+      return NexusApp.speakVoz ? NexusApp.speakVoz(texto, rate, voz.tono || 1, voz.navegador || "") : NexusApp.speak(texto, rate);
+    },
+    async probar(voz, texto) {
+      texto = texto || "Hola, así sueno cuando hablo.";
+      const res = await api("/api/voice/tts", { body: { text: texto, rate: S.cfg.speech_rate || 1, voz }, raw: true });
+      if (res.status === 200) { const a = new Audio(URL.createObjectURL(await res.blob())); await a.play(); return; }
+      if (this.android(texto, voz)) return;
+      if ("speechSynthesis" in window) { speechSynthesis.cancel(); speechSynthesis.speak(this.utter(texto, voz, "")); }
+    },
+    resumen(v) {
+      const p = [];
+      if (v.motor && v.motor !== "auto") p.push({ piper: "Piper", sistema: "sistema", browser: "navegador" }[v.motor] || v.motor);
+      if (v.nombre) p.push(v.nombre); if (v.navegador) p.push(v.navegador);
+      if (v.hablante != null && v.hablante !== "") p.push("hablante " + v.hablante); if (v.variante) p.push("variante " + v.variante);
+      if (v.tono && v.tono !== 1) p.push("tono ×" + (+v.tono).toFixed(2)); if (v.velocidad && v.velocidad !== 1) p.push("velocidad ×" + (+v.velocidad).toFixed(2));
+      if (v.volumen != null && v.volumen !== 1) p.push("volumen " + Math.round(v.volumen * 100) + "%");
+      return p.join(" · ") || "la general";
+    },
+    // editor de una voz: motor, modelo Piper y hablante, voz del sistema (y variante de espeak), voz del navegador,
+    // velocidad, tono y volumen; devuelve { valor() } con solo lo que se ha cambiado
+    async editor(el, voz = {}, { probarTexto } = {}) {
+      const d = await this.disponibles(), nav = ("speechSynthesis" in window ? speechSynthesis.getVoices() : []);
+      const motores = ["auto", ...d.motores.filter((m) => m !== "auto")];
+      const NOM = { auto: "Automático", piper: "Piper (neuronal, sin conexión)", sistema: "Voz del sistema", browser: "Voz del navegador" };
+      const opt = (val, txt, sel) => `<option value="${esc(String(val))}" ${String(sel ?? "") === String(val) ? "selected" : ""}>${esc(txt)}</option>`;
+      const rango = (k, min, max, step, def) => `<label class="field">${{ velocidad: "Velocidad", tono: "Tono (grave · agudo)", volumen: "Volumen" }[k]} <b data-vv="${k}">${(voz[k] ?? def).toFixed(2)}</b>
+        <input type="range" data-v="${k}" min="${min}" max="${max}" step="${step}" value="${voz[k] ?? def}"></label>`;
+      el.innerHTML = `<div class="grid g3 voz-editor">
+        <label class="field">Motor<select class="input" data-v="motor">${motores.map((m) => opt(m, NOM[m] || m, voz.motor || "auto")).join("")}</select></label>
+        <label class="field" data-solo="piper">Modelo Piper<select class="input" data-v="modelo">${opt("", "El general", voz.modelo)}${d.piper.map((p) => opt(p.id, p.nombre, voz.modelo)).join("")}</select></label>
+        <label class="field" data-solo="piper">Hablante<select class="input" data-v="hablante"></select></label>
+        <label class="field" data-solo="sistema">Voz del sistema<select class="input" data-v="nombre">${opt("", "Automática", voz.nombre)}${d.sistema.map((s) => opt(s.nombre, s.descripcion ? `${s.descripcion} (${s.nombre})` : `${s.nombre} · ${s.idioma}`, voz.nombre)).join("")}</select></label>
+        ${d.variantes.length ? `<label class="field" data-solo="sistema">Variante<select class="input" data-v="variante">${opt("", "Ninguna", voz.variante)}${d.variantes.map((x) => opt(x, x, voz.variante)).join("")}</select></label>` : ""}
+        <label class="field" data-solo="browser">Voz del navegador<select class="input" data-v="navegador">${opt("", "Automática", voz.navegador)}${nav.map((v) => opt(v.name, `${v.name} · ${v.lang}`, voz.navegador)).join("")}</select></label>
+        ${rango("velocidad", 0.5, 2, 0.05, 1)}${rango("tono", 0.5, 1.6, 0.01, 1)}${rango("volumen", 0, 1.5, 0.05, 1)}
+      </div>
+      <div class="row" style="margin-top:6px"><input class="input" data-v="frase" placeholder="Frase de prueba" value="${esc(probarTexto || "")}" style="flex:1;min-width:0"><button class="btn sm" data-voz-probar>▶ PROBAR</button><button class="btn sm ghost" data-voz-reset>RESTABLECER</button></div>`;
+      const q = (k) => $(`[data-v="${k}"]`, el);
+      const hablantes = () => {
+        const m = d.piper.find((p) => p.id === q("modelo").value) || d.piper[0], hs = (m && m.hablantes) || [];
+        q("hablante").innerHTML = opt("", hs.length ? "Automático" : "Uno solo", voz.hablante) + hs.map((h) => opt(h.id, h.nombre, voz.hablante)).join("");
+        q("hablante").disabled = !hs.length;
+      };
+      const visibles = () => {
+        const m = q("motor").value, activo = m === "auto" ? (S.status?.voice?.tts_active || d.motores[0]) : m;
+        $$("[data-solo]", el).forEach((f) => (f.style.display = f.dataset.solo === activo || f.dataset.solo === "browser" ? "" : "none"));
+      };
+      q("modelo").onchange = () => { voz.hablante = undefined; hablantes(); };
+      q("motor").onchange = visibles;
+      $$("input[type=range]", el).forEach((r) => (r.oninput = () => ($(`[data-vv="${r.dataset.v}"]`, el).textContent = (+r.value).toFixed(2))));
+      hablantes(); visibles();
+      const valor = () => {
+        const v = {};
+        for (const k of ["motor", "modelo", "nombre", "variante", "navegador"]) { const x = q(k)?.value; if (x && !(k === "motor" && x === "auto")) v[k] = x; }
+        if (q("hablante").value !== "") v.hablante = +q("hablante").value;
+        for (const k of ["velocidad", "tono", "volumen"]) { const x = +q(k).value; if (Math.abs(x - 1) > 0.004) v[k] = x; }
+        return v;
+      };
+      $("[data-voz-probar]", el).onclick = guard(() => this.probar(valor(), q("frase").value.trim()));
+      $("[data-voz-reset]", el).onclick = () => this.editor(el, {}, { probarTexto: q("frase").value });
+      el._voz = { valor };
+      return el._voz;
+    },
+  };
+  let hablante = "nexus";   // agente que esta respondiendo (para hablar con su voz)
+
+  async function loadVoces() {
+    const info = await Voces.cargar(true), box = $("#voces-general"); if (!box) return;
+    await Voces.editor(box, { ...(info.general || {}) }, { probarTexto: "Hola, soy tu asistente." });
+    $("#voz-distinta").checked = info.distinta !== false;
+    const ags = S.agents.filter((a) => a.enabled);
+    $("#voces-agentes").innerHTML = ags.map((a) => {
+      const v = (info.agentes || {})[a.id] || {}, propia = a.voz && Object.keys(a.voz).length;
+      return `<div class="item voz-agente" style="--agent:${esc(a.color)}"><div class="row"><b style="color:var(--agent)">${esc(a.icon)} ${esc(a.name)}</b>
+        <span class="tag ${propia ? "accent" : ""}">${propia ? "voz propia" : v.auto ? "automática" : "la general"}</span><span class="muted" style="flex:1">${esc(Voces.resumen(v))}</span>
+        <button class="btn sm" data-vprobar="${a.id}">▶</button><button class="btn sm admin-only" data-veditar="${a.id}">EDITAR</button></div><div class="voz-ed hidden" data-ved="${a.id}"></div></div>`;
+    }).join("") || `<span class="muted">Sin agentes.</span>`;
+    $$("[data-vprobar]").forEach((b) => (b.onclick = guard(() => { const a = S.agents.find((x) => x.id === b.dataset.vprobar);
+      return Voces.probar(Voces.de(a.id), `Hola, soy ${a.name}.`); })));
+    $$("[data-veditar]").forEach((b) => (b.onclick = guard(async () => {
+      const a = S.agents.find((x) => x.id === b.dataset.veditar), box = $(`[data-ved="${a.id}"]`);
+      if (!box.classList.contains("hidden")) return box.classList.add("hidden");
+      box.classList.remove("hidden");
+      const ed = await Voces.editor(box, { ...(a.voz || {}) }, { probarTexto: `Hola, soy ${a.name}.` });
+      box.insertAdjacentHTML("beforeend", `<div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn sm ghost" data-vgen>USAR LA GENERAL</button><button class="btn sm primary" data-vguardar>GUARDAR SU VOZ</button></div>`);
+      const guardar = async (voz) => { await api("/api/agents", { method: "PUT", body: { ...a, voz } }); await loadAgents(); toast(`Voz de ${a.name} guardada`); loadVoces(); };
+      $("[data-vguardar]", box).onclick = guard(() => guardar(ed.valor()));
+      $("[data-vgen]", box).onclick = guard(() => guardar({}));
+    })));
+  }
+  $("#voces-guardar") && ($("#voces-guardar").onclick = guard(async () => {
+    const v = $("#voces-general")._voz ? $("#voces-general")._voz.valor() : {};
+    await api("/api/config", { method: "PUT", body: { "user.voz": v, "user.voz_distinta": $("#voz-distinta").checked } });
+    await loadConfig(); toast("Voz guardada"); loadVoces();
+  }));
+
   loaders.settings = async () => {
-    await loadConfig(); const u = S.cfg;
+    await loadConfig(); const u = S.cfg; loadVoces().catch(() => {});
     const voices = ("speechSynthesis" in window ? speechSynthesis.getVoices() : []).filter((v) => v.lang.startsWith(u.language || "es"));
     const row = (lbl, sub, ctrl) => `<div class="setting"><div class="lbl"><b>${lbl}</b>${sub ? `<small>${sub}</small>` : ""}</div>${ctrl}</div>`;
     const sw = (k) => `<label class="switch"><input type="checkbox" data-u="${k}" ${u[k] ? "checked" : ""}><span></span></label>`;

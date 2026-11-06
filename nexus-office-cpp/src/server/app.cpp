@@ -339,7 +339,8 @@ void App::dispatch(const Handler& h, bool admin_required, const std::vector<std:
     if (admin_required && !c.admin) throw HttpErr(403, "Requiere modo administrador");
     std::string ctype = req.get_header_value("Content-Type");
     if (!req.body.empty() && !starts_with(ctype, "multipart/form-data") &&
-        !starts_with(ctype, "application/x-www-form-urlencoded")) {
+        !starts_with(ctype, "application/x-www-form-urlencoded") && !starts_with(ctype, "image/") &&
+        !starts_with(ctype, "application/octet-stream") && !starts_with(ctype, "video/")) {   // binarios (frames de la camara): el cuerpo tal cual
       c.body = jparse(req.body);
       if (c.body.is_discarded()) throw HttpErr(422, unprocessable("body", "", "JSON decode error"));
     }
@@ -350,7 +351,16 @@ void App::dispatch(const Handler& h, bool admin_required, const std::vector<std:
     } else if (auto* r = std::get_if<Raw>(&out)) {
       res.status = r->status;
       for (auto& [k, v] : r->headers) res.set_header(k, v);
-      if (r->status != 204) res.set_content(r->body, r->mime);
+      if (r->status != 204 && r->vista) {
+        const char* p = r->vista;
+        const size_t n = r->vista_len;
+        res.set_content_provider(n, r->mime, [p, n, keep = r->retener](size_t off, size_t len, httplib::DataSink& sink) {
+          if (off < n) sink.write(p + off, std::min(len, n - off));
+          return true;
+        });
+      } else if (r->status != 204) {
+        res.set_content(r->body, r->mime);
+      }
     } else if (auto* f = std::get_if<FileOut>(&out)) {
       res.status = 200;
       send_file(res, *f);
@@ -406,6 +416,12 @@ void App::setup() {
     std::string host = req.remote_addr.empty() ? "127.0.0.1" : req.remote_addr;
     bool open = false;
     for (auto& p : OPEN_PATHS) open |= starts_with(req.path, p);
+    // MCP desde otro equipo: vale el token mcp.token (Authorization: Bearer) en lugar de la clave de red
+    if (!open && services_ && req.path == "/mcp") {
+      std::string tok = services_->config.str("mcp.token", "");
+      std::string auth = req.get_header_value("Authorization");
+      open = !tok.empty() && starts_with(auth, "Bearer ") && consteq(auth.substr(7), tok);
+    }
     if (!services_ || open || lan_ok(req, host)) {
       if (req.has_param("key") && !LOCAL.count(host))
         res.set_header("Set-Cookie", "nexus_key=" + req.get_param_value("key") +

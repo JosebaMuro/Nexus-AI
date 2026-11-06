@@ -1,5 +1,101 @@
 # Cambios
 
+## Agente IA 3.2.0-cpp
+
+Motores del dossier de arquitectura y todo lo que mejora el rendimiento, en una sola version (incluye la 3.1.0, que
+no se publico aparte). Tambien MCP y un codificador de video en el navegador.
+
+### Motor de difusion propio sobre ONNX Runtime
+- Si el modelo de imagen es una carpeta ONNX (diffusers/optimum, como SD-Turbo), Agente IA ya no usa
+  stable-diffusion.cpp: genera **dentro del proceso** con ONNX Runtime (tokenizador CLIP, codificador de texto, bucle
+  UNet con el planificador Euler y VAE). Cada paso publica su vista previa directamente en el buffer de pantalla.
+- Cada red va en el proveedor del chip: **QNN** (NPU Hexagon de Snapdragon, con cache del contexto compilado),
+  **TensorRT/CUDA** (NVIDIA), **ROCm** o **DirectML** (AMD), **OpenVINO** (Intel NPU/GPU), **DirectML** (cualquier GPU
+  en Windows), **CoreML** (Apple), **NNAPI** o **XNNPACK** (Android sin QNN) y CPU. Si uno falla se prueba el siguiente.
+- Modelo nuevo en el catalogo: **SD-Turbo ONNX** (una imagen en 1 a 4 pasos).
+
+### Memoria del acelerador y nucleos grandes
+- El asignador zero-copy pide la memoria que mejor ve el acelerador: **dma-buf** (rpcmem de Qualcomm o
+  `/dev/dma_heap`), **CUDA pinned** o **memoria registrada de HIP**; si no hay, memoria compartida y, al final, normal.
+- Los hilos de calculo (difusion, percepcion, llama-server con `--cpu-mask`) se fijan a los **nucleos grandes** de
+  CPUs big.LITTLE, Intel con nucleos P/E y Apple (cpufreq, CPU sets de Windows y QoS de macOS).
+
+### Motores LLM dentro del proceso
+- LiteRT-LM, ONNX Runtime GenAI y Qualcomm Genie corren **dentro de Agente IA** (sin HTTP ni copias entre procesos).
+  Si uno se cae, queda marcado y la siguiente vez se usa en su proceso aparte, como antes (`motores.en_proceso`;
+  `POST /api/hal/caidas/olvidar` lo reintenta).
+- **Matriz de motores por chip** (Snapdragon, Tensor, Exynos, Dimensity, Apple, NVIDIA, AMD, Intel...): que motor y
+  proveedor va primero para el LLM, la difusion y la vision. En Modelos, la etiqueta «para tu chip».
+
+### Percepcion con CLIP y SigLIP
+- Codificador de vision en ONNX Runtime (**CLIP** o **SigLIP**, modelos nuevos en el catalogo): cada frame se guarda
+  tambien como vector de imagen y, con CLIP, la busqueda en lo percibido compara el texto directamente con las imagenes.
+
+### MCP (Model Context Protocol)
+- **Servidor**: las herramientas de Agente IA para otros programas (asistentes de escritorio, editores, otros agentes)
+  por `POST /mcp` o por stdio con `nexus-office mcp`. Cada llamada pasa por el supervisor: misma politica por riesgo,
+  aprobaciones y auditoria. Fuera del equipo, clave de red o token `mcp.token`.
+- **Cliente**: los agentes usan herramientas de servidores MCP externos (`mcp.servidores`, por stdio o HTTP), que
+  aparecen como `mcp_<servidor>_<nombre>` con su riesgo. Panel **MCP** en Herramientas.
+
+### Voces de los agentes
+- **Editor de voces** en Ajustes (la voz general) y en la configuracion de cada agente (su voz propia): motor (Piper,
+  voz del sistema o del navegador), modelo Piper y hablante, voz del sistema (y variante en espeak), voz del navegador,
+  velocidad, tono y volumen, con boton para probarla.
+- Para **reconocer quien habla**, cada agente sin voz propia usa la general con un tono distinto (y otro hablante si el
+  modelo Piper tiene varios); se puede desactivar. Funciona igual con Piper, la voz del sistema, el navegador y la app
+  de Android. `POST /api/voice/tts` acepta `agente` o `voz`; `GET /api/voice/voces` lista las voces del equipo.
+
+### Video con imagenes
+- En el Estudio, **Video con imagenes**: una serie de imagenes (o de la galeria) a un video WebM con fundidos, Ken
+  Burns o cortes, codificado en el navegador con WebCodecs (VP9/VP8 con aceleracion por hardware) y sin conexion.
+  Se descarga o se guarda en Agente IA (`POST /api/media/video/subir`).
+
+### Notas
+- La APK va firmada con la clave de siempre (Nexus): si tienes instalada la 3.0.0, desinstalala antes de instalar esta.
+
+## Agente IA 3.1.0-cpp
+
+Adapta el runtime al **dossier de arquitectura** (agente de IA unificado para dispositivos moviles): tres capas,
+compilacion cruzada con CMake 3.28, memoria zero-copy con colas lock-free y pipelines desacoplados de percepcion,
+razonamiento y difusion.
+
+### Tres capas
+- **Orquestacion multiagente** (`agents/`, `tools/`, `office/`), **motor core multiplataforma** (`llm/`, `memory/`,
+  `rag/`, `media/`, `pipeline/`, `server/`) y **abstraccion de hardware** (`hal/` nueva y `hardware/`). Las capas de
+  arriba piden memoria y colas a `hal/` y el dispositivo al perfil; ningun modulo de arriba conoce un SDK de acelerador.
+
+### Capa de abstraccion de hardware (`src/hal/`)
+- **Asignador zero-copy**: bloques alineados a pagina (lo que piden Vulkan, OpenCL, CUDA y el DMA de las NPU para usar
+  memoria de la CPU sin copiarla), respaldados por memoria compartida (memfd en Linux y Android, CreateFileMapping en
+  Windows) con su descriptor para pasarlos a un proceso hijo, referencias contadas y pools que reciclan bloques con una
+  lista libre lock-free. El ultimo frame de la pantalla sale por HTTP directamente del bloque, sin copiarlo.
+- **Buffers circulares lock-free** con atomicos: SPSC (un productor, un consumidor), MPMC (cola de Vyukov) y triple
+  buffer para el ultimo frame. Paso entre hilos medido: **~0,3 µs** de ida (`GET /api/hal/latencia`).
+
+### Pipelines desacoplados (`src/pipeline/`)
+- **Percepcion**: los frames (camara del Estudio o `POST /api/pipeline/frame`) entran por un ring y un hilo propio los
+  describe con la red de vision en la GPU/NPU (llama-server con mmproj) o, sin ella, con estadisticas y una huella
+  visual; descarta los repetidos y guarda descripcion, embedding y huella en la **base vectorial local** (`percepcion`).
+  El orquestador la consulta con la herramienta nueva `percepcion_buscar`.
+- **Orquestador -> difusion**: `generate_image` ya no genera dentro del agente: envia un **descriptor de trabajo** a la
+  cola del motor de difusion (con `asincrona: true` ni siquiera espera). El LLM sigue con su cuantizacion mixta (pesos
+  GGUF Q4_K y cache KV en q8_0).
+- **Difusion asincrona al buffer de pantalla**: un hilo propio ejecuta sd.cpp en la NPU/GPU; con sd-cli reciente publica
+  la vista previa de cada paso, y al final la imagen, en el buffer de pantalla (triple buffer). Un presentador avisa por
+  WebSocket y la interfaz lo pinta en un `OffscreenCanvas` dentro de un Web Worker, fuera del hilo principal.
+- En el Estudio: paneles **Pantalla de difusion** (encargar sin esperar, ver cada paso) y **Percepcion** (camara,
+  busqueda en lo percibido).
+
+### Compilacion cruzada
+- CMake 3.28 y `CMakePresets.json` con presets por plataforma: `linux` (ELF autocontenido), `windows` y `windows-dll`
+  (exe + `nexus_core.dll`, con el runtime de MSVC al lado), `android` y `android-so` (`libnexus_core.so` para la APK,
+  con `c++_shared`), y variantes con SDK.
+- Opciones `NEXUS_CORE_SHARED` y `NEXUS_SDK_CUDA|VULKAN|OPENCL|QNN|NNAPI|DIRECTML|OPENVINO`, que activan cada SDK de
+  hardware solo si se pide (por defecto ninguno: los motores se cargan en tiempo de ejecucion y el binario vale para
+  cualquier equipo). `GET /api/hal` dice que SDK lleva la compilacion y que artefacto es.
+- La entrega no cambia de forma: los paquetes siguen siendo el ejecutable autocontenido de siempre.
+
 ## Agente IA 3.0.0-cpp
 
 Version mayor de **Agente IA** (antes Nexus-Office), con el nombre nuevo en todo lo que ve el usuario (interfaz, instaladores, manuales, web de

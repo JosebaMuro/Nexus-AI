@@ -12,8 +12,16 @@
 // bundled/runtimes/<motor>/<variante>/ y se carga al ejecutar. Cada motor corre en un proceso aparte
 // («nexus-office motor ...», el mismo ejecutable) con una API compatible con OpenAI, como llama-server: si el driver
 // de la NPU o de la GPU falla, cae ese proceso y no Nexus-Office, y se reintenta en la siguiente (NPU -> GPU -> CPU).
+//
+// Desde la 3.2 (dossier de arquitectura) el motor se carga DENTRO del proceso por defecto: los tokens llegan por una
+// llamada directa (sin HTTP ni JSON por cada trozo) y el modelo queda cargado entre turnos. Para no perder la
+// proteccion del proceso aparte se deja una marca en disco mientras se carga o genera; si Agente IA se cae con la marca
+// puesta (driver de la NPU/GPU), al volver a arrancar ese motor y acelerador van al proceso aparte (hasta que se
+// borren las caidas en Sistema). motores.en_proceso=false lo desactiva del todo.
 #pragma once
+#include <atomic>
 #include <functional>
+#include <mutex>
 #include <memory>
 #include <optional>
 #include <string>
@@ -103,9 +111,18 @@ class MotorBackend : public OpenAICompatBackend {
   void stop();
   json effective();
   int port = 0;
+  // motores dentro del proceso (por defecto); lo fija Services con motores.en_proceso
+  static inline std::atomic<bool> en_proceso{true};
+  // motores y aceleradores que se cayeron dentro del proceso (van al proceso aparte); olvidar = volver a probar
+  static json caidas();
+  static void olvidar_caidas();
 
  private:
   void ensure(const std::string& model, const json& opts);
+  bool abrir_local(const std::string& acel, const fs::path& lib, const std::string& modelo, int n_ctx, int hilos,
+                   std::string& error);
+  std::unique_ptr<motores::Motor> local_;
+  std::mutex gen_mu_;   // un turno a la vez: la API de los motores no admite llamadas solapadas
   std::string motor_;
   Resolver resolve_;
   std::function<json()> profile_;

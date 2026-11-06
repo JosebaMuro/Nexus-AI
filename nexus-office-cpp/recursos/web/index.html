@@ -202,6 +202,39 @@
           <input class="input" id="ana-q" placeholder="Pregunta sobre la imagen (opcional)">
           <div id="ana-result"></div>
         </div>
+        <div class="panel col">
+          <h3>Pantalla de difusión <span class="sub">pipeline asíncrono · paso a paso</span></h3>
+          <canvas id="pipe-canvas" class="pipe-canvas" width="512" height="512" aria-label="Búfer de pantalla del motor de difusión"></canvas>
+          <div class="row"><button class="btn primary" id="pipe-go" title="Encarga el prompt de «Generar imagen» a la cola de difusión sin esperar">ENCARGAR</button><span class="sub" id="pipe-estado"></span></div>
+          <div class="sub" id="pipe-info"></div>
+        </div>
+        <div class="panel col">
+          <h3>Percepción <span class="sub">cámara → visión → base vectorial</span></h3>
+          <video id="pipe-video" class="pipe-video" muted playsinline hidden></video>
+          <div class="row"><button class="btn" id="pipe-cam">📷 CÁMARA</button><label class="field" style="flex-direction:row;align-items:center;gap:8px">CADA <input class="input" id="pipe-cada" type="number" value="3" min="1" max="60" style="width:70px"> s</label></div>
+          <input class="input" id="pipe-q" placeholder="Buscar en lo percibido (Enter)">
+          <ul class="pipe-lista" id="pipe-lista"></ul>
+        </div>
+        <div class="panel col">
+          <h3>Vídeo con imágenes <span class="sub">codificador HTML · WebCodecs · sin conexión</span></h3>
+          <div class="drop" id="venc-drop">Suelta imágenes o haz clic para elegirlas (en orden)</div>
+          <input type="file" id="venc-file" accept="image/*" multiple hidden>
+          <div class="row"><button class="btn sm" id="venc-galeria">＋ DE LA GALERÍA</button><button class="btn sm" id="venc-vaciar">VACIAR</button></div>
+          <ul class="venc-lista" id="venc-lista"></ul>
+          <div class="row">
+            <label class="field" style="flex-direction:row;align-items:center;gap:6px">S/IMAGEN <input class="input" id="venc-seg" type="number" value="2" min="0.2" max="30" step="0.1" style="width:70px"></label>
+            <label class="field" style="flex-direction:row;align-items:center;gap:6px">FPS <input class="input" id="venc-fps" type="number" value="30" min="1" max="60" style="width:64px"></label>
+          </div>
+          <div class="row">
+            <select class="input" id="venc-efecto" style="flex:1 1 120px;min-width:0"><option value="fundido">Fundido</option><option value="kenburns">Ken Burns (zoom)</option><option value="corte">Corte</option></select>
+            <select class="input" id="venc-formato" style="flex:1 1 120px;min-width:0"><option value="horizontal">16:9</option><option value="vertical">9:16</option><option value="cuadrado">Cuadrado</option></select>
+            <select class="input" id="venc-alto" style="flex:1 1 90px;min-width:0"><option value="480">480p</option><option value="720" selected>720p</option><option value="1080">1080p</option></select>
+          </div>
+          <div class="row"><button class="btn primary" id="venc-go">CREAR VÍDEO</button><progress id="venc-prog" max="1" value="0" hidden></progress></div>
+          <div class="sub" id="venc-estado"></div>
+          <video id="venc-video" class="pipe-video" controls playsinline hidden></video>
+          <div class="row"><a class="btn sm" id="venc-bajar" hidden>⬇ DESCARGAR WEBM</a><button class="btn sm" id="venc-guardar" hidden>GUARDAR EN AGENTE IA</button></div>
+        </div>
         <div class="panel"><h3>Galería</h3><div class="gallery" id="gallery"></div></div>
       </div>
     </section>
@@ -340,6 +373,14 @@
           <div class="row" style="margin-bottom:8px"><input class="input" id="est-user" placeholder="Tu nombre (vacío = titular de este equipo)" style="flex:1"><button class="btn sm" id="est-user-save">USAR</button></div>
           <div id="est-box"></div>
           <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn danger sm" id="est-reset">OLVIDAR MI ESTILO</button></div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px"><h3>MCP <span class="sub">herramientas de Agente IA para otros programas y de otros servidores para los agentes</span></h3>
+        <div id="mcp-box" class="muted">Cargando…</div>
+        <div class="admin-only" style="margin-top:8px">
+          <div class="muted">Servidores MCP externos (JSON): <span class="mono">[{"nombre": "ficheros", "orden": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "C:/Docs"], "riesgo": "medium"}]</span> o con <span class="mono">"url"</span> para HTTP.</div>
+          <textarea class="input mono" id="mcp-servidores" rows="5" style="margin-top:6px">[]</textarea>
+          <div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn sm ghost" id="mcp-reconectar">RECONECTAR</button><button class="btn sm" id="mcp-guardar">GUARDAR Y CONECTAR</button></div>
         </div>
       </div>
       <div class="panel" style="margin-top:16px"><h3>Repositorio de herramientas</h3><div id="tools-table"></div></div>
@@ -490,6 +531,13 @@
       <div class="view-title">AJUSTES</div>
       <div class="grid g2">
         <div class="panel"><h3>Personalización</h3><div id="user-settings"></div></div>
+        <div class="panel col" style="grid-column:1/-1" id="voces-panel"><h3>Voces <span class="sub">la voz general y la de cada agente, para reconocer quién habla</span></h3>
+          <div id="voces-general" class="muted">Cargando…</div>
+          <div class="row" style="margin-top:8px"><label class="row"><span class="switch"><input type="checkbox" id="voz-distinta" checked><span></span></span>Voz distinta para cada agente sin voz propia (tono y hablante según el agente)</label>
+            <span style="flex:1"></span><button class="btn primary" id="voces-guardar">GUARDAR VOZ GENERAL</button></div>
+          <h4 style="margin:14px 0 6px">Voz de cada agente</h4>
+          <div class="list" id="voces-agentes"></div>
+        </div>
         <div class="panel col" style="grid-column:1/-1"><h3>Editor de temas <span class="sub">cambia por completo la estética; vista previa en vivo</span></h3>
           <div class="theme-presets" id="theme-presets"></div>
           <div class="theme-grid" id="theme-colors"></div>
@@ -619,6 +667,8 @@
 <script src="/static/js/lounge.js"></script>
 <script src="/static/js/offices.js"></script>
 <script src="/static/js/beta.js"></script>
+<script src="/static/js/pipeline.js"></script>
+<script src="/static/js/video-encoder.js"></script>
 <script src="/static/js/app.js"></script>
 <script src="/static/js/asistente-agentes.js"></script>
 <script src="/static/js/kgadmin.js"></script>

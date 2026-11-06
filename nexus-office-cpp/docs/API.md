@@ -84,3 +84,33 @@ Puerto remoto: `https://IP:8443` (TLS 1.3). Ahí todas las rutas, salvo `/`, `/a
 | `POST /api/remote/certificate` *(admin)* | Certificado nuevo (cambia la huella anclada). |
 | `GET /api/remote/router` *(admin)* | Asistente del router: puerta de enlace, IP y MAC de este equipo, URLs de configuración, marca y ruta del menú, UPnP‑IGD y la regla exacta. |
 | `POST /api/remote/check` *(admin)* | IP pública, CGNAT y si el puerto responde en la IP pública. |
+
+## Capa de hardware y pipelines (3.1)
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/hal` | SDK compilados, artefacto, acelerador del perfil y estado del asignador zero-copy. |
+| `GET /api/hal/latencia?vueltas=` | Mide la ida y vuelta entre dos hilos por los rings lock-free (ns). |
+| `GET /api/pipeline` | Estado de percepción, cola de difusión, buffer de pantalla y capa de hardware. |
+| `POST /api/pipeline/frame?fuente=&esperar=` | Frame para la percepción (cuerpo `image/*` o multipart `frame`); 429 si la cola está llena. |
+| `GET /api/pipeline/percepcion?q=&k=` | Lo percibido: recientes o búsqueda semántica. |
+| `POST /api/pipeline/difusion` | `{prompt, negative?, size?, steps?, seed?}` → `{id}`; se genera en segundo plano. |
+| `GET /api/pipeline/difusion[/{id}]` | Trabajos de difusión y su estado (`en cola`, `generando`, `hecho`, `error`). |
+| `GET /api/pipeline/pantalla` | Último frame del buffer de pantalla (PNG; cabeceras `X-Pantalla-*`); 204 si aún no hay. |
+
+Eventos WebSocket nuevos: `percepcion`, `difusion` y `pantalla` (`{trabajo, paso, final, version, url}`).
+
+## Motores, MCP y video (3.2)
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/hal` | Además: memorias del acelerador, núcleos, matriz por chip, ONNX Runtime y motores dentro del proceso. |
+| `POST /api/hal/caidas/olvidar` | (Admin) Borra las marcas de motores que se cayeron dentro del proceso. |
+| `POST /mcp` | Servidor MCP (JSON-RPC 2.0, protocolo 2025-06-18; una petición o un lote). Las notificaciones devuelven 202. Desde otro equipo: clave de red o `Authorization: Bearer <mcp.token>`. |
+| `GET /api/mcp` | Clientes MCP conectados, servidores configurados y si hay token. |
+| `PUT /api/mcp/servidores` | (Admin) `{servidores: [{nombre, orden[] \| url, env?, cabeceras?, riesgo?, activo?}]}` y reconecta. |
+| `POST /api/mcp/reconectar` | (Admin) Vuelve a conectar con los servidores MCP. |
+| `POST /api/media/video/subir?nombre=` | Cuerpo `video/webm`: guarda el video del codificador del Estudio en `outputs/videos`. |
+| `GET /api/voice` | Además: `general` (voz general), `distinta` y `agentes` (la voz ya resuelta de cada agente). |
+| `GET /api/voice/voces` | Voces del equipo: modelos Piper con sus hablantes, voces del sistema, variantes de espeak y motores. |
+| `POST /api/voice/tts` | `{text, rate?, agente?, voz?}`: con `agente`, su voz; con `voz` (`{motor, modelo, hablante, nombre, variante, navegador, velocidad, tono, volumen}`), esa voz sobre la general. |

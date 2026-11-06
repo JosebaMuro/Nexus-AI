@@ -107,6 +107,8 @@ class ToolRegistry {
   std::vector<std::shared_ptr<ToolSpec>> for_agent(const std::vector<std::string>& allowed);
   std::vector<std::shared_ptr<ToolSpec>> all();
   json list();
+  // herramientas que vienen de fuera (servidores MCP): se conservan al recargar y nunca sustituyen a una integrada
+  void set_externas(const std::string& origen, std::vector<std::shared_ptr<ToolSpec>> specs);
   std::vector<std::string> missing;   // manifiestos de la version Python sin funcion portada
 
  private:
@@ -115,6 +117,8 @@ class ToolRegistry {
   std::vector<std::shared_ptr<ToolSpec>> order_;
   std::map<std::string, std::shared_ptr<ToolSpec>> tools_;
   std::set<std::string> disabled_;
+  std::map<std::string, std::vector<std::shared_ptr<ToolSpec>>> externas_;
+  void mezclar_externas();
   fs::path disabled_file() const;
   std::shared_ptr<ToolSpec> spec(const json& m, const std::string& source, const std::string& path, ToolFn func);
 };
