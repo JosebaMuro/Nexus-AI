@@ -724,3 +724,4 @@ body.flat .panel::before, body.flat .panel::after { display: none; }
 .venc-lista li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .venc-lista canvas { border-radius: 4px; flex: none; }
 #venc-prog { flex: 1; min-width: 0; }
+.voz-ed{margin-top:8px;padding-top:8px;border-top:1px solid var(--line,#1b2a3a)}.voz-agente .row{gap:8px;flex-wrap:wrap}

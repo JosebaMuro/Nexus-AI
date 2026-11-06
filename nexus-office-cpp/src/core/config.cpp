@@ -14,7 +14,8 @@ const json& config_defaults() {
   "user": {
     "assistant_name": "Agente IA", "sexo": "", "language": "es", "response_style": "equilibrado", "voice_enabled": true,
     "voice_name": "", "speech_rate": 1.0, "auto_speak": false, "default_agent": "auto", "memory_enabled": true,
-    "accent_color": "#00f0ff", "avatar_enabled": true, "avatar_style": "geisha", "avatar_model": "", "theme": {}
+    "accent_color": "#00f0ff", "avatar_enabled": true, "avatar_style": "geisha", "avatar_model": "", "theme": {},
+    "voz": {}, "voz_distinta": true
   },
   "llm": {
     "backend_order": ["llamaserver", "llamacpp", "ollama", "openai", "transformers", "builtin"],

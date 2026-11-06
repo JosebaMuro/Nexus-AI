@@ -111,3 +111,6 @@ Eventos WebSocket nuevos: `percepcion`, `difusion` y `pantalla` (`{trabajo, paso
 | `PUT /api/mcp/servidores` | (Admin) `{servidores: [{nombre, orden[] \| url, env?, cabeceras?, riesgo?, activo?}]}` y reconecta. |
 | `POST /api/mcp/reconectar` | (Admin) Vuelve a conectar con los servidores MCP. |
 | `POST /api/media/video/subir?nombre=` | Cuerpo `video/webm`: guarda el video del codificador del Estudio en `outputs/videos`. |
+| `GET /api/voice` | Además: `general` (voz general), `distinta` y `agentes` (la voz ya resuelta de cada agente). |
+| `GET /api/voice/voces` | Voces del equipo: modelos Piper con sus hablantes, voces del sistema, variantes de espeak y motores. |
+| `POST /api/voice/tts` | `{text, rate?, agente?, voz?}`: con `agente`, su voz; con `voz` (`{motor, modelo, hablante, nombre, variante, navegador, velocidad, tono, volumen}`), esa voz sobre la general. |

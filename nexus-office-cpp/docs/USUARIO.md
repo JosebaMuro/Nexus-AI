@@ -329,6 +329,12 @@ diminuto que acelera mucho el final de cada imagen. Para generar imágenes de m�
 misma carpeta que sus piezas; *Imagen* te dice cuál falta. Los modelos `.litertlm` (LiteRT-LM, ideales en Pixel y
 Snapdragon) y las carpetas ONNX con `genai_config.json` también se pueden usar: Agente IA elige el motor solo.
 
+### Voces: reconocer qué agente habla
+En **Ajustes > Voces** eliges la voz general (motor, voz, velocidad, tono y volumen; *Probar* la reproduce). Con
+*Voz distinta para cada agente* activado, cada agente habla con su propio tono (y con otro hablante si tu voz Piper
+tiene varios), así sabes quién te responde sin mirar la pantalla. En modo administrador, *Editar* junto a cada agente
+(o la sección *Voz* al editar el agente) le da una voz propia, independiente de las demás.
+
 ### Herramientas y MCP
 En **Herramientas > MCP** ves la dirección del **servidor MCP** de Agente IA: otros programas compatibles con MCP
 (asistentes de escritorio, editores de código) pueden usar las herramientas de Agente IA, con los mismos permisos y

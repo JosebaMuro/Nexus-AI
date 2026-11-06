@@ -38,6 +38,14 @@ no se publico aparte). Tambien MCP y un codificador de video en el navegador.
 - **Cliente**: los agentes usan herramientas de servidores MCP externos (`mcp.servidores`, por stdio o HTTP), que
   aparecen como `mcp_<servidor>_<nombre>` con su riesgo. Panel **MCP** en Herramientas.
 
+### Voces de los agentes
+- **Editor de voces** en Ajustes (la voz general) y en la configuracion de cada agente (su voz propia): motor (Piper,
+  voz del sistema o del navegador), modelo Piper y hablante, voz del sistema (y variante en espeak), voz del navegador,
+  velocidad, tono y volumen, con boton para probarla.
+- Para **reconocer quien habla**, cada agente sin voz propia usa la general con un tono distinto (y otro hablante si el
+  modelo Piper tiene varios); se puede desactivar. Funciona igual con Piper, la voz del sistema, el navegador y la app
+  de Android. `POST /api/voice/tts` acepta `agente` o `voz`; `GET /api/voice/voces` lista las voces del equipo.
+
 ### Video con imagenes
 - En el Estudio, **Video con imagenes**: una serie de imagenes (o de la galeria) a un video WebM con fundidos, Ken
   Burns o cortes, codificado en el navegador con WebCodecs (VP9/VP8 con aceleracion por hardware) y sin conexion.

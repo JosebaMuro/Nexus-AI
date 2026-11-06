@@ -531,6 +531,13 @@
       <div class="view-title">AJUSTES</div>
       <div class="grid g2">
         <div class="panel"><h3>Personalización</h3><div id="user-settings"></div></div>
+        <div class="panel col" style="grid-column:1/-1" id="voces-panel"><h3>Voces <span class="sub">la voz general y la de cada agente, para reconocer quién habla</span></h3>
+          <div id="voces-general" class="muted">Cargando…</div>
+          <div class="row" style="margin-top:8px"><label class="row"><span class="switch"><input type="checkbox" id="voz-distinta" checked><span></span></span>Voz distinta para cada agente sin voz propia (tono y hablante según el agente)</label>
+            <span style="flex:1"></span><button class="btn primary" id="voces-guardar">GUARDAR VOZ GENERAL</button></div>
+          <h4 style="margin:14px 0 6px">Voz de cada agente</h4>
+          <div class="list" id="voces-agentes"></div>
+        </div>
         <div class="panel col" style="grid-column:1/-1"><h3>Editor de temas <span class="sub">cambia por completo la estética; vista previa en vivo</span></h3>
           <div class="theme-presets" id="theme-presets"></div>
           <div class="theme-grid" id="theme-colors"></div>

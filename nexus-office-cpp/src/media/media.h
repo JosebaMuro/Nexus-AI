@@ -161,6 +161,9 @@ class MusicEngine {
 };
 
 // ---------------------------------------------------------------- voz
+// tono (cambia la frecuencia de muestreo de la cabecera) y volumen de un WAV de 16 bits
+void tono_volumen(std::string& wav, double tono, double volumen);
+
 class VoiceEngine {
  public:
   VoiceEngine(Config& config, models::Catalog& catalog, ProfileGetter profile, runtimes::RuntimeManager* rt = nullptr);
@@ -168,7 +171,13 @@ class VoiceEngine {
   std::vector<std::string> stt_engines();
   json info();
   // (wav, motor) o nullopt (la interfaz usa la voz del navegador)
-  std::optional<std::pair<std::string, std::string>> tts(const std::string& text, double rate = 1.0);
+  // voz: {motor, modelo, hablante, nombre, velocidad, tono, volumen}; vacia = la general (user.voz)
+  std::optional<std::pair<std::string, std::string>> tts(const std::string& text, double rate = 1.0, const json& voz = json::object());
+  // voz con la que habla un agente: la general con lo que cambie la suya; si no tiene voz propia y user.voz_distinta
+  // esta activo (por defecto), un tono y un hablante (o variante) derivados de su id para reconocer quien habla
+  // indice: su puesto entre los agentes (asi dos agentes nunca comparten tono); -1 = segun su id
+  json voz_de(const std::string& agente, const json& voz_agente, int indice = -1);
+  json voces();   // voces que hay en este equipo por motor (modelos Piper con sus hablantes y voces del sistema)
   json stt(const std::string& audio, const std::string& suffix = ".webm");
 
  private:
@@ -181,8 +190,9 @@ class VoiceEngine {
   std::optional<fs::path> piper_exe();
   std::optional<fs::path> whisper_exe();
   std::vector<std::string> system_tts_cmd();
-  std::string tts_piper(const std::string& text, double rate);
-  std::string tts_system(const std::string& text, double rate);
+  std::string tts_piper(const std::string& text, double rate, const json& voz);
+  std::string tts_system(const std::string& text, double rate, const json& voz);
+  json piper_hablantes(const json& modelo);
 };
 
 }  // namespace nx::media
