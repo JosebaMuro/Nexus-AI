@@ -55,7 +55,8 @@ jobs:
           # libnexus_core.so / nexus_core.dll junto al ejecutable: tiene que compilar, enlazar y arrancar
           cmake -S nexus-office-cpp -B build-so -DCMAKE_BUILD_TYPE=Release -DNEXUS_CORE_SHARED=ON -DNEXUS_LTO=OFF \
                 -DNEXUS_BUILD_TESTS=OFF -DNEXUS_BUILD_TOOLS=OFF
-          cmake --build build-so --config Release --parallel 4 --target nexus-office
+          # todos los objetivos (sin pruebas ni herramientas): en Windows tambien nexus-office-w, que instala el install
+          cmake --build build-so --config Release --parallel 4
           cmake --install build-so --config Release --prefix out-so
           ls -la out-so
           EXE=out-so/nexus-office; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
