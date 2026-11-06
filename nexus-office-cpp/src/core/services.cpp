@@ -283,7 +283,7 @@ std::shared_ptr<difusion::CodificadorVision> Services::codificador_vision() {
   vision_clave_ = ruta;
   for (auto& prov : hal::matriz(profile)["vision"]) {
     auto lib = difusion::biblioteca_ort(difusion::variante_de(prov.get<std::string>()));
-    if (!lib) continue;
+    if (!lib || !difusion::proveedor_disponible(*lib, prov.get<std::string>())) continue;
     try {
       vision_ = difusion::CodificadorVision::abrir(*lib, P(ruta), prov.get<std::string>());
       log::get("percepcion").info("codificador de vision ", mid, " en ", prov.get<std::string>());

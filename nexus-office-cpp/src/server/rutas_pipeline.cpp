@@ -1,6 +1,7 @@
 // Rutas de la arquitectura en tres capas: capa de hardware (asignador zero-copy y rings lock-free), motor de
 // percepcion (frames -> base vectorial), difusion asincrona y buffer de pantalla. Ver docs/ARQUITECTURA.md.
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <memory>
 
@@ -8,6 +9,7 @@
 #include "hal/hal.h"
 #include "pipeline/pipeline.h"
 #include "server/app.h"
+#include "util/crypto.h"
 #include "llm/motores.h"
 #include "media/difusion_onnx.h"
 #include "httplib.h"
@@ -80,6 +82,22 @@ void register_pipeline_routes(App& app) {
     }
     if (c.qb("esperar")) p.esperar_percepcion(c.qi("timeout", 60));
     return json{{"aceptado", true}};
+  });
+
+  // codificador de video HTML (Estudio): el WebM que hace el navegador con WebCodecs se guarda en outputs/videos
+  app.post("/api/media/video/subir", [](Ctx& c) -> Out {
+    const std::string& b = c.req.body;
+    if (b.size() < 4 || (unsigned char)b[0] != 0x1A || (unsigned char)b[1] != 0x45 || (unsigned char)b[2] != 0xDF ||
+        (unsigned char)b[3] != 0xA3)
+      throw HttpErr(422, "No es un video WebM");
+    std::string nombre = c.q("nombre", "video");
+    std::string limpio;
+    for (unsigned char ch : nombre)
+      if (std::isalnum(ch) || ch == '-' || ch == '_') limpio += (char)ch;
+    if (limpio.empty()) limpio = "video";
+    fs::path f = paths::sub({"outputs", "videos"}) / P(std::to_string((long long)(now() * 1000)) + "_" + limpio.substr(0, 40) + ".webm");
+    if (!write_file(f, b)) throw HttpErr(500, "No se pudo guardar el video");
+    return json{{"url", "/outputs/videos/" + S(f.filename())}, {"bytes", b.size()}};
   });
 
   app.get("/api/pipeline/percepcion", [](Ctx& c) -> Out {

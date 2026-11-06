@@ -35,6 +35,8 @@ std::optional<fs::path> biblioteca_ort(const std::string& variante = "");
 
 // proveedores que se prueban, en orden, para este perfil de hardware (el ultimo siempre es «cpu»)
 std::vector<std::string> proveedores_para(const json& perfil);
+// esa biblioteca de ONNX Runtime trae compilado el proveedor (cpu siempre; nnapi y dml se miran por su funcion)
+bool proveedor_disponible(const fs::path& lib, const std::string& proveedor);
 // carpeta de ONNX Runtime que trae ese proveedor (cuda, dml, qnn, openvino...; "" = cualquiera)
 std::string variante_de(const std::string& proveedor);
 

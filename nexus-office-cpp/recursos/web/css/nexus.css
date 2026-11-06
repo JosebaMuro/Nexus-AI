@@ -719,3 +719,8 @@ body.flat .panel::before, body.flat .panel::after { display: none; }
 .pipe-video { width: 100%; max-width: 512px; border-radius: 10px; border: 1px solid var(--line); }
 .pipe-lista { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; font-size: 13px; }
 .pipe-lista li { padding: 4px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.venc-lista { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; font-size: 13px; }
+.venc-lista li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.venc-lista li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.venc-lista canvas { border-radius: 4px; flex: none; }
+#venc-prog { flex: 1; min-width: 0; }

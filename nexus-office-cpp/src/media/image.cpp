@@ -468,7 +468,7 @@ json ImageEngine::onnx(const json& model, const std::string& prompt, const std::
     try {
       if (!onnx_ || onnx_key_ != key) {
         auto lib = difusion::biblioteca_ort(difusion::variante_de(prov));
-        if (!lib) throw std::runtime_error("no hay ONNX Runtime con " + prov);
+        if (!lib || !difusion::proveedor_disponible(*lib, prov)) throw std::runtime_error("no hay ONNX Runtime con " + prov);
         onnx_.reset();
         difusion::Opciones o;
         o.lib = *lib;

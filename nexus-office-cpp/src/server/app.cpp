@@ -340,7 +340,7 @@ void App::dispatch(const Handler& h, bool admin_required, const std::vector<std:
     std::string ctype = req.get_header_value("Content-Type");
     if (!req.body.empty() && !starts_with(ctype, "multipart/form-data") &&
         !starts_with(ctype, "application/x-www-form-urlencoded") && !starts_with(ctype, "image/") &&
-        !starts_with(ctype, "application/octet-stream")) {   // binarios (frames de la camara): el cuerpo tal cual
+        !starts_with(ctype, "application/octet-stream") && !starts_with(ctype, "video/")) {   // binarios (frames de la camara): el cuerpo tal cual
       c.body = jparse(req.body);
       if (c.body.is_discarded()) throw HttpErr(422, unprocessable("body", "", "JSON decode error"));
     }

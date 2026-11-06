@@ -1120,6 +1120,22 @@ class VisionOrt : public CodificadorVision, public BaseOrt {
 
 }  // namespace
 
+bool proveedor_disponible(const fs::path& lib, const std::string& p) {
+  if (p == "cpu") return true;
+  static const std::map<std::string, std::string> EP = {
+      {"xnnpack", "XnnpackExecutionProvider"}, {"cuda", "CUDAExecutionProvider"},   {"tensorrt", "TensorrtExecutionProvider"},
+      {"rocm", "ROCMExecutionProvider"},       {"dml", "DmlExecutionProvider"},     {"qnn", "QNNExecutionProvider"},
+      {"nnapi", "NnapiExecutionProvider"},     {"coreml", "CoreMLExecutionProvider"}, {"webgpu", "WebGpuExecutionProvider"},
+      {"openvino", "OpenVINOExecutionProvider"}, {"openvino-npu", "OpenVINOExecutionProvider"},
+      {"openvino-gpu", "OpenVINOExecutionProvider"}};
+  json info = info_ort(lib);
+  auto it = EP.find(p);
+  if (it == EP.end() || !info.contains("proveedores")) return false;
+  for (auto& x : info["proveedores"])
+    if (x.is_string() && x.get<std::string>() == it->second) return true;
+  return false;
+}
+
 bool es_modelo_vision(const fs::path& d) {
   return is_file(d / "onnx" / "vision_model.onnx") || is_file(d / "onnx" / "vision_model_quantized.onnx") ||
          is_file(d / "vision_model.onnx");
