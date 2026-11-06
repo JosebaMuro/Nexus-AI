@@ -196,7 +196,7 @@ if(NEXUS_CORE_SHARED)
   add_library(nexus_core SHARED ${NEXUS_SRC})
   # Windows: todas las funciones exportadas en la DLL sin anotar el codigo
   set_target_properties(nexus_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
-  target_compile_definitions(nexus_core PUBLIC NEXUS_CORE_SHARED)
+  target_compile_definitions(nexus_core PUBLIC NEXUS_CORE_SHARED PRIVATE NEXUS_CORE_BUILD)
   # el ejecutable busca la biblioteca a su lado (Linux, Android)
   set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
   set(CMAKE_INSTALL_RPATH "$ORIGIN")
