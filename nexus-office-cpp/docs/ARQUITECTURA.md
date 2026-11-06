@@ -48,6 +48,63 @@ sd-cli, Piper y Whisper. El código está en `nexus-office-cpp/`:
 | `recursos/web/` | Interfaz (HTML/CSS/JS sin dependencias de compilación), avatar 3D y salón en canvas, PWA. `js/device.js` detecta el cliente (app Android, PWA o navegador) y el dispositivo antes del primer pintado y marca `<html>` con `data-layout` (phone/tablet/desktop), `data-orient`, `data-input` y `data-lowpower`; el CSS adapta el diseño con esos atributos. |
 | `tools/construir/` | `nexus-construir`: instaladores, APK, manuales en PDF, prueba de humo y datos (ver [CPP.md](CPP.md#nexus-construir)). |
 
+## Tres capas (dossier de arquitectura, 3.1)
+
+```mermaid
+flowchart TB
+  subgraph O[Orquestacion multiagente]
+    AG[agents · tools · office]
+  end
+  subgraph C[Motor core multiplataforma]
+    LLM[llm: LLM con cuantizacion mixta] --- MEMV[(memory · base vectorial)]
+    PER[pipeline: percepcion] --> MEMV
+    DIF[pipeline: difusion asincrona] --> PAN[[buffer de pantalla]]
+  end
+  subgraph H[Abstraccion de hardware]
+    HAL[hal: asignador zero-copy · rings lock-free · SDK] --- HW[hardware: deteccion · perfil · CPU/GPU/NPU]
+  end
+  CAM[frames: camara / API] -- MpmcRing --> PER
+  AG --> LLM
+  AG -- DescriptorTrabajo · MpmcRing --> DIF
+  PAN -- TripleBuffer + WebSocket --> UI[interfaz: OffscreenCanvas en un Worker]
+  C --> H
+```
+
+| Capa | Carpetas | Qué hace |
+|---|---|---|
+| Orquestación multiagente | `agents/`, `tools/`, `office/` | Decide: elige agente, razona con el LLM, llama herramientas. Ante una instrucción multimodal (`generate_image`) envía un `DescriptorTrabajo` a la difusión. |
+| Motor core multiplataforma | `llm/`, `memory/`, `rag/`, `media/`, `pipeline/`, `server/` | Ejecuta: motores de LLM (llama.cpp, LiteRT-LM, ONNX GenAI, Genie), embeddings y base vectorial, percepción y difusión. |
+| Abstracción de hardware | `hal/`, `hardware/` | Memoria zero-copy, colas lock-free, SDK compilados (`NEXUS_SDK_*`), detección y elección de CPU/GPU/NPU. |
+
+### Memoria zero-copy y colas lock-free (`src/hal/`)
+- `zerocopy.h`: `Buffer` (referencia contada a un bloque alineado a 4096 bytes), `Pool` (reciclado con lista libre
+  lock-free) y memoria `Compartida` (memfd en Linux/Android, `CreateFileMapping` en Windows) con `descriptor()` para
+  que un proceso hijo la mapee. Un dato grande se escribe una vez y después solo viajan referencias: ring → percepción,
+  difusión → buffer de pantalla → respuesta HTTP (`Raw::vista`, sin copiar).
+- `ring.h`: `SpscRing` (índices en líneas de caché separadas), `MpmcRing` (cola acotada de Vyukov), `TripleBuffer`
+  (último frame, el escritor nunca espera) y `Senal` (`std::atomic::wait`/`notify`, un futex). `nexus-tests hal` y
+  `GET /api/hal/latencia` miden la ida entre hilos: unos 300 ns en un equipo de 4 hilos.
+- Hoy llama-server y sd.cpp son procesos aparte que reciben las peticiones por HTTP; los bloques compartidos ya llevan
+  su descriptor para que un motor en proceso (o un hijo que lo mapee) use la misma memoria sin copiarla.
+
+### Pipelines (`src/pipeline/`)
+- **Percepción**: `POST /api/pipeline/frame` (cuerpo `image/*` o multipart `frame`) o la cámara del Estudio. Un hilo
+  propio decodifica, calcula la huella visual (rejilla 8×8 de color), descarta repetidos, describe con la red de visión
+  en el acelerador (llama-server con mmproj, como mucho cada `pipeline.vision_cada_s` segundos) y guarda descripción,
+  embedding y huella en la tabla `percepcion`. Búsqueda: `GET /api/pipeline/percepcion?q=` y la herramienta
+  `percepcion_buscar`. Si la cola está llena el frame se descarta (429): la cámara nunca espera.
+- **Difusión**: `POST /api/pipeline/difusion` o `generate_image`. Un hilo propio ejecuta sd.cpp (sd-server con el
+  modelo cargado o sd-cli con `--preview` paso a paso) y publica cada paso en el buffer de pantalla. El presentador
+  avisa por WebSocket (`pantalla`, `difusion`, `percepcion`) y `GET /api/pipeline/pantalla` sirve el último frame.
+- Configuración: `pipeline.vision_cada_s` (10) y `pipeline.guardar_frames` (true, en `outputs/percepcion/`).
+
+### Compilación cruzada (CMake 3.28)
+`CMakePresets.json`: `linux` (ELF autocontenido), `windows`, `windows-dll` (`nexus-office.exe` + `nexus_core.dll`),
+`android` (lo que usa la entrega) y `android-so` (`libnexus_core.so` con `c++_shared`), más variantes con SDK
+(`linux-vulkan`, `linux-cuda`, `windows-directml`, `android-npu`). Opciones: `NEXUS_CORE_SHARED` y
+`NEXUS_SDK_CUDA|VULKAN|OPENCL|QNN|NNAPI|DIRECTML|OPENVINO` (definen `NEXUS_SDK_<X>` y enlazan el SDK). Por defecto no
+se compila ningún SDK dentro: los motores se cargan en tiempo de ejecución y el mismo binario sirve en cualquier equipo.
+
 ## Flujo de un mensaje
 
 1. La UI envía `{"type":"chat"}` por WebSocket.

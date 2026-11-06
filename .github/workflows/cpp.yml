@@ -48,6 +48,18 @@ jobs:
         env:
           NEXUS_ONLINE_TESTS: "1"   # cotizaciones reales de la bolsa con la pila TLS de cada sistema
         run: ctest --test-dir build -C Release --output-on-failure --timeout 900
+      - name: Nucleo como biblioteca compartida (dossier de arquitectura)
+        if: matrix.target == 'linux-x86_64' || matrix.target == 'windows-x64'
+        shell: bash
+        run: |
+          # libnexus_core.so / nexus_core.dll junto al ejecutable: tiene que compilar, enlazar y arrancar
+          cmake -S nexus-office-cpp -B build-so -DCMAKE_BUILD_TYPE=Release -DNEXUS_CORE_SHARED=ON -DNEXUS_LTO=OFF \
+                -DNEXUS_BUILD_TESTS=OFF -DNEXUS_BUILD_TOOLS=OFF
+          cmake --build build-so --config Release --parallel 4 --target nexus-office
+          cmake --install build-so --config Release --prefix out-so
+          ls -la out-so
+          EXE=out-so/nexus-office; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
+          "$EXE" --version
       - name: Instalar en una carpeta
         shell: bash
         run: |

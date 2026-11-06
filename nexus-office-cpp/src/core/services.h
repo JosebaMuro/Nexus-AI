@@ -1,5 +1,6 @@
 // Ensamblado de todos los servicios de Nexus-Office (core.py).
 #pragma once
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -42,6 +43,9 @@ class VoiceEngine;
 
 namespace nx::coop {
 class CoopNode;
+}
+namespace nx::pipeline {
+class Pipeline;
 }
 namespace nx::android_tune {
 class LiveTuner;
@@ -98,6 +102,9 @@ class Services {
   std::unique_ptr<remote::RemoteAccess> remote;
   std::unique_ptr<remote::VPN> vpn;
   std::unique_ptr<android_tune::LiveTuner> android_tuner;   // solo en la app Android autonoma
+  // pipelines del dossier de arquitectura: percepcion -> base vectorial, difusion asincrona -> buffer de pantalla
+  std::unique_ptr<pipeline::Pipeline> pipeline;
+  std::function<void(const json&)> emitir_pipeline;   // lo pone el servidor (WebSocket a las interfaces)
 
  private:
   std::mutex emb_mu_;

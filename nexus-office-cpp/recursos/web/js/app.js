@@ -311,6 +311,7 @@
       case "lounge": onLounge(e.message); break;
       case "agent_activity": if (offices) offices.onActivity(e.activity); break;
       case "coop": onCoop(e.event); break;
+      case "pantalla": case "difusion": case "percepcion": if (window.NexusPipeline) NexusPipeline.onEvent(e); break;
       case "remote": if (e.event === "paired") { toast(`Dispositivo emparejado: ${e.device.name}`); if (S.view === "net") remoteBox(); } break;
     }
   }
@@ -998,6 +999,7 @@
 
   /* ================================================================ vista: ESTUDIO */
   loaders.studio = async () => {
+    if (window.NexusPipeline) NexusPipeline.cargar();
     const st = S.status || (await api("/api/status"));
     $("#img-engine").textContent = `${st.image.engine}${st.image.model ? " · " + st.image.model : ""}${st.image.runtime ? " · " + st.image.runtime : ""}`;
     $("#vision-engine").textContent = st.llm.backend === "builtin" ? "análisis básico (sin LLM)" : "visión con " + st.llm.model;

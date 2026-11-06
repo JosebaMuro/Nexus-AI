@@ -84,3 +84,18 @@ Puerto remoto: `https://IP:8443` (TLS 1.3). Ahí todas las rutas, salvo `/`, `/a
 | `POST /api/remote/certificate` *(admin)* | Certificado nuevo (cambia la huella anclada). |
 | `GET /api/remote/router` *(admin)* | Asistente del router: puerta de enlace, IP y MAC de este equipo, URLs de configuración, marca y ruta del menú, UPnP‑IGD y la regla exacta. |
 | `POST /api/remote/check` *(admin)* | IP pública, CGNAT y si el puerto responde en la IP pública. |
+
+## Capa de hardware y pipelines (3.1)
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/hal` | SDK compilados, artefacto, acelerador del perfil y estado del asignador zero-copy. |
+| `GET /api/hal/latencia?vueltas=` | Mide la ida y vuelta entre dos hilos por los rings lock-free (ns). |
+| `GET /api/pipeline` | Estado de percepción, cola de difusión, buffer de pantalla y capa de hardware. |
+| `POST /api/pipeline/frame?fuente=&esperar=` | Frame para la percepción (cuerpo `image/*` o multipart `frame`); 429 si la cola está llena. |
+| `GET /api/pipeline/percepcion?q=&k=` | Lo percibido: recientes o búsqueda semántica. |
+| `POST /api/pipeline/difusion` | `{prompt, negative?, size?, steps?, seed?}` → `{id}`; se genera en segundo plano. |
+| `GET /api/pipeline/difusion[/{id}]` | Trabajos de difusión y su estado (`en cola`, `generando`, `hecho`, `error`). |
+| `GET /api/pipeline/pantalla` | Último frame del buffer de pantalla (PNG; cabeceras `X-Pantalla-*`); 204 si aún no hay. |
+
+Eventos WebSocket nuevos: `percepcion`, `difusion` y `pantalla` (`{trabajo, paso, final, version, url}`).

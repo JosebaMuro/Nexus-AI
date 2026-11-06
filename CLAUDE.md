@@ -36,7 +36,7 @@ tarea. Detalle de cada módulo en `nexus-office-cpp/docs/ARQUITECTURA.md` y `doc
 
 ```bash
 cd nexus-office-cpp
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release     # C++20, CMake 3.20+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release     # C++20, CMake 3.28+ (presets: cmake --preset linux|windows|android...)
 cmake --build build --parallel
 build/nexus-tests                                  # o: ctest --test-dir build --output-on-failure
 build/nexus-office run                             # interfaz en http://127.0.0.1:8775
@@ -61,6 +61,7 @@ build/nexus-construir datos                        # tras tocar recursos/datos/*
 | Configuración, base de datos, servicio, autorreparación | `src/core/` (`config`, `db`, `service`, `salud`) |
 | Utilidades (rutas UTF-8 `P()`/`S()`, ficheros, procesos, HTTP, texto, JSON) | `src/util/` (`fs.h`, `proc.h`, `text.h`, `sysinfo.h`) |
 | Agentes, memoria/grafos, RAG, media, oficina y bolsa, red COOP, acceso remoto, dispositivos | `src/agents/`, `src/memory/`, `src/rag/`, `src/media/`, `src/office/`, `src/coop/`, `src/remote/`, `src/devices/` |
+| Capa de hardware (zero-copy, rings lock-free) y pipelines percepcion/difusion/pantalla (dossier de arquitectura) | `src/hal/`, `src/pipeline/`, `src/server/rutas_pipeline.cpp`, `recursos/web/js/pipeline.js`; resumen en `docs/ARQUITECTURA.md` (Tres capas) |
 | Instaladores, APK, PDF, prueba de humo | `tools/construir/` (`nexus-construir paquetes|apk|pdf|humo|datos`), `packaging/`, `android/` |
 | Documentación | `docs/` (`USUARIO.md` manual, `ACELERADOR.md` motores y aceleradores, `API.md`, `PLATAFORMAS.md`...) |
 

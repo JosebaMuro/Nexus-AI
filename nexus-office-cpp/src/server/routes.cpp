@@ -1908,6 +1908,7 @@ void register_routes(App& app) {
 
   // ------------------------------------------------------------------ metricas, estilo y aprobaciones diferidas
   register_agent_routes(app);
+  register_pipeline_routes(app);
 
   // ------------------------------------------------------------------ herramientas
   app.get("/api/tools", [](Ctx& c) -> Out {

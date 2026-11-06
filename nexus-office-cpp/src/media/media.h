@@ -82,9 +82,12 @@ class ImageEngine {
   ~ImageEngine();
   json model();
   json status();
+  // preview: vista previa de cada paso (fichero, paso) cuando sd-cli la admite (--preview-path); llega desde un hilo
+  // que vigila a sd-cli y que termina antes de que generate vuelva
+  using Preview = std::function<void(const fs::path&, int)>;
   json generate(const std::string& prompt, const std::string& negative = "", std::optional<int> size = std::nullopt,
                 std::optional<int> steps = std::nullopt, std::optional<long long> seed = std::nullopt,
-                const std::string& idea = "");
+                const std::string& idea = "", const Preview& preview = nullptr);
   std::string english(const std::string& prompt);
   static Canvas procedural(const std::string& prompt, long long seed, int size = 512);
   json analyze(const std::string& data, const std::string& question = "");

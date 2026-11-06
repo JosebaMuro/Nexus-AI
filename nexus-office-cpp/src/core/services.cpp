@@ -14,6 +14,7 @@
 #include "models/models.h"
 #include "models/runtimes.h"
 #include "office/office.h"
+#include "pipeline/pipeline.h"
 #include "rag/rag.h"
 #include "tools/tools.h"
 #include "util/log.h"
@@ -96,6 +97,32 @@ Services::Services(bool detect_hardware) : config(get_config()) {
     return llm->complete(p, "default", o);
   };
   images = std::make_unique<media::ImageEngine>(cfg, models->catalog, *runtimes, profile_getter, llm.get());
+  {
+    pipeline::Dependencias d;
+    d.db = db.get();
+    d.embedder = [this] { return embedder(); };
+    d.vision_disponible = [this] {
+      try {
+        auto [backend, model] = llm->select();
+        auto b = std::dynamic_pointer_cast<llm::LlamaServerBackend>(llm->backend(backend));
+        return b && b->supports_vision(model);
+      } catch (...) {
+        return false;
+      }
+    };
+    d.analizar = [this](const std::string& bytes) { return images->analyze(bytes); };
+    d.generar = [this](const pipeline::DescriptorTrabajo& t, const pipeline::VistaPrevia& vp) {
+      return images->generate(t.prompt, t.negativo, t.tam ? std::optional<int>(t.tam) : std::nullopt,
+                              t.pasos ? std::optional<int>(t.pasos) : std::nullopt, t.semilla, t.idea, vp);
+    };
+    d.emitir = [this](const json& e) {
+      if (emitir_pipeline) emitir_pipeline(e);
+    };
+    pipeline::Opciones o;
+    o.vision_cada_s = cfg.num("pipeline.vision_cada_s", 10.0);
+    o.guardar_frames = cfg.flag("pipeline.guardar_frames", true);
+    pipeline = std::make_unique<pipeline::Pipeline>(std::move(d), o);
+  }
   music = std::make_unique<media::MusicEngine>(cfg, profile_getter);
   voice = std::make_unique<media::VoiceEngine>(cfg, models->catalog, profile_getter, runtimes.get());
   tools = std::make_unique<tools::ToolRegistry>(truthy(cfg.get("tools.sandbox_community_tools", true)));
@@ -181,6 +208,7 @@ mem::EmbedderPtr Services::set_embedder(mem::EmbedderPtr e) {
 
 void Services::start() {
   monitor->start();
+  if (pipeline) pipeline->start();
   embed_worker->start();
   std::vector<mem::ToolView> views;
   for (auto& t : tools->for_agent({"*"})) views.push_back(t->view());
@@ -210,6 +238,7 @@ void Services::shutdown() {
   shut_ = true;
   L.info("Apagando Agente IA...");
   hilo.reset();   // espera al plegado en curso antes de parar el LLM
+  if (pipeline) pipeline->stop();   // termina la difusion en curso antes de parar los motores
   if (coop) coop->stop();
   if (llm) {
     auto ls = std::dynamic_pointer_cast<llm::LlamaServerBackend>(llm->backend("llamaserver"));

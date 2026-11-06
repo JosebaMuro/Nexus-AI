@@ -202,6 +202,19 @@
           <input class="input" id="ana-q" placeholder="Pregunta sobre la imagen (opcional)">
           <div id="ana-result"></div>
         </div>
+        <div class="panel col">
+          <h3>Pantalla de difusión <span class="sub">pipeline asíncrono · paso a paso</span></h3>
+          <canvas id="pipe-canvas" class="pipe-canvas" width="512" height="512" aria-label="Búfer de pantalla del motor de difusión"></canvas>
+          <div class="row"><button class="btn primary" id="pipe-go" title="Encarga el prompt de «Generar imagen» a la cola de difusión sin esperar">ENCARGAR</button><span class="sub" id="pipe-estado"></span></div>
+          <div class="sub" id="pipe-info"></div>
+        </div>
+        <div class="panel col">
+          <h3>Percepción <span class="sub">cámara → visión → base vectorial</span></h3>
+          <video id="pipe-video" class="pipe-video" muted playsinline hidden></video>
+          <div class="row"><button class="btn" id="pipe-cam">📷 CÁMARA</button><label class="field" style="flex-direction:row;align-items:center;gap:8px">CADA <input class="input" id="pipe-cada" type="number" value="3" min="1" max="60" style="width:70px"> s</label></div>
+          <input class="input" id="pipe-q" placeholder="Buscar en lo percibido (Enter)">
+          <ul class="pipe-lista" id="pipe-lista"></ul>
+        </div>
         <div class="panel"><h3>Galería</h3><div class="gallery" id="gallery"></div></div>
       </div>
     </section>
@@ -619,6 +632,7 @@
 <script src="/static/js/lounge.js"></script>
 <script src="/static/js/offices.js"></script>
 <script src="/static/js/beta.js"></script>
+<script src="/static/js/pipeline.js"></script>
 <script src="/static/js/app.js"></script>
 <script src="/static/js/asistente-agentes.js"></script>
 <script src="/static/js/kgadmin.js"></script>

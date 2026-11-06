@@ -1,5 +1,47 @@
 # Cambios
 
+## Agente IA 3.1.0-cpp
+
+Adapta el runtime al **dossier de arquitectura** (agente de IA unificado para dispositivos moviles): tres capas,
+compilacion cruzada con CMake 3.28, memoria zero-copy con colas lock-free y pipelines desacoplados de percepcion,
+razonamiento y difusion.
+
+### Tres capas
+- **Orquestacion multiagente** (`agents/`, `tools/`, `office/`), **motor core multiplataforma** (`llm/`, `memory/`,
+  `rag/`, `media/`, `pipeline/`, `server/`) y **abstraccion de hardware** (`hal/` nueva y `hardware/`). Las capas de
+  arriba piden memoria y colas a `hal/` y el dispositivo al perfil; ningun modulo de arriba conoce un SDK de acelerador.
+
+### Capa de abstraccion de hardware (`src/hal/`)
+- **Asignador zero-copy**: bloques alineados a pagina (lo que piden Vulkan, OpenCL, CUDA y el DMA de las NPU para usar
+  memoria de la CPU sin copiarla), respaldados por memoria compartida (memfd en Linux y Android, CreateFileMapping en
+  Windows) con su descriptor para pasarlos a un proceso hijo, referencias contadas y pools que reciclan bloques con una
+  lista libre lock-free. El ultimo frame de la pantalla sale por HTTP directamente del bloque, sin copiarlo.
+- **Buffers circulares lock-free** con atomicos: SPSC (un productor, un consumidor), MPMC (cola de Vyukov) y triple
+  buffer para el ultimo frame. Paso entre hilos medido: **~0,3 µs** de ida (`GET /api/hal/latencia`).
+
+### Pipelines desacoplados (`src/pipeline/`)
+- **Percepcion**: los frames (camara del Estudio o `POST /api/pipeline/frame`) entran por un ring y un hilo propio los
+  describe con la red de vision en la GPU/NPU (llama-server con mmproj) o, sin ella, con estadisticas y una huella
+  visual; descarta los repetidos y guarda descripcion, embedding y huella en la **base vectorial local** (`percepcion`).
+  El orquestador la consulta con la herramienta nueva `percepcion_buscar`.
+- **Orquestador -> difusion**: `generate_image` ya no genera dentro del agente: envia un **descriptor de trabajo** a la
+  cola del motor de difusion (con `asincrona: true` ni siquiera espera). El LLM sigue con su cuantizacion mixta (pesos
+  GGUF Q4_K y cache KV en q8_0).
+- **Difusion asincrona al buffer de pantalla**: un hilo propio ejecuta sd.cpp en la NPU/GPU; con sd-cli reciente publica
+  la vista previa de cada paso, y al final la imagen, en el buffer de pantalla (triple buffer). Un presentador avisa por
+  WebSocket y la interfaz lo pinta en un `OffscreenCanvas` dentro de un Web Worker, fuera del hilo principal.
+- En el Estudio: paneles **Pantalla de difusion** (encargar sin esperar, ver cada paso) y **Percepcion** (camara,
+  busqueda en lo percibido).
+
+### Compilacion cruzada
+- CMake 3.28 y `CMakePresets.json` con presets por plataforma: `linux` (ELF autocontenido), `windows` y `windows-dll`
+  (exe + `nexus_core.dll`, con el runtime de MSVC al lado), `android` y `android-so` (`libnexus_core.so` para la APK,
+  con `c++_shared`), y variantes con SDK.
+- Opciones `NEXUS_CORE_SHARED` y `NEXUS_SDK_CUDA|VULKAN|OPENCL|QNN|NNAPI|DIRECTML|OPENVINO`, que activan cada SDK de
+  hardware solo si se pide (por defecto ninguno: los motores se cargan en tiempo de ejecucion y el binario vale para
+  cualquier equipo). `GET /api/hal` dice que SDK lleva la compilacion y que artefacto es.
+- La entrega no cambia de forma: los paquetes siguen siendo el ejecutable autocontenido de siempre.
+
 ## Agente IA 3.0.0-cpp
 
 Version mayor de **Agente IA** (antes Nexus-Office), con el nombre nuevo en todo lo que ve el usuario (interfaz, instaladores, manuales, web de

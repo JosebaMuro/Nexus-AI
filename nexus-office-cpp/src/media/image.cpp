@@ -305,8 +305,18 @@ const std::set<std::string>& ImageEngine::flags_of(const fs::path& exe) {
   return flags_[k];
 }
 
+namespace {
+// vista previa de la generacion en curso en este hilo (generate -> sdcpp, sin cambiar todas las llamadas)
+thread_local const ImageEngine::Preview* t_preview = nullptr;
+}  // namespace
+
 json ImageEngine::generate(const std::string& prompt, const std::string& negative, std::optional<int> size,
-                           std::optional<int> steps, std::optional<long long> seed_opt, const std::string& idea) {
+                           std::optional<int> steps, std::optional<long long> seed_opt, const std::string& idea,
+                           const Preview& preview) {
+  struct PreviewGuard {
+    PreviewGuard(const Preview* p) { t_preview = p && *p ? p : nullptr; }
+    ~PreviewGuard() { t_preview = nullptr; }
+  } preview_guard(&preview);
   long long seed = seed_opt ? *seed_opt : (long long)now() % 100000;
   fs::path out = paths::sub({"outputs", "images"}) /
                  P(std::to_string((long long)now()) + "_" + slug_name(idea.empty() ? prompt : idea, 40, "imagen") + ".png");
@@ -551,7 +561,46 @@ json ImageEngine::sdcpp(const fs::path& exe, const std::string& variant, const j
     po.cwd = exe.parent_path();
     po.capture = true;
     po.env = runtimes::lib_env(exe);
-    auto r = proc::run(cmd, 1800, po);
+    // vista previa paso a paso (sd.cpp reciente: --preview proj escribe la imagen latente proyectada en cada paso)
+    std::atomic<bool> fin_preview{false};
+    std::thread vigia;
+    const Preview* pv = t_preview;
+    fs::path prev_png = out.parent_path() / P(S(out.stem()) + ".preview.png");
+    if (pv && flags_of(exe).count("--preview-path")) {
+      cmd.insert(cmd.end(), {"--preview", "proj", "--preview-path", S(prev_png), "--preview-interval", "1"});
+      vigia = std::thread([&] {
+        std::error_code ec;
+        fs::file_time_type visto{};
+        int paso = 0;
+        while (!fin_preview.load()) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(150));
+          auto t = fs::last_write_time(prev_png, ec);
+          if (ec || t == visto) continue;
+          visto = t;
+          try {
+            (*pv)(prev_png, ++paso);
+          } catch (...) {
+          }
+        }
+      });
+    }
+    struct Vigia {
+      std::atomic<bool>& fin;
+      std::thread& t;
+      fs::path png;
+      ~Vigia() {
+        if (!t.joinable()) return;
+        fin = true;
+        t.join();
+        std::error_code ec;
+        fs::remove(png, ec);
+      }
+    };
+    proc::Result r;
+    {
+      Vigia guarda{fin_preview, vigia, prev_png};
+      r = proc::run(cmd, 1800, po);
+    }
     if (!r.ok() || !path_exists(out)) {
       std::string msg = !r.err.empty() ? r.err : r.out;
       if (!r.started) msg = "no se pudo iniciar sd-cli";
