@@ -4,6 +4,8 @@
 #include <chrono>
 #include <thread>
 
+#include "hal/cpu.h"
+#include "hal/matriz.h"
 #include "hal/ring.h"
 #include "hal/zerocopy.h"
 
@@ -100,7 +102,10 @@ json estado(const json& perfil) {
           {"sdk_compilados", sdk_compilados()},
           {"artefacto", artefacto()},
           {"acelerador", acc},
-          {"asignador", estado_asignador()}};
+          {"asignador", estado_asignador()},
+          {"memorias", memorias_disponibles()},
+          {"nucleos", estado_nucleos()},
+          {"matriz", matriz(perfil)}};
 }
 
 }  // namespace nx::hal

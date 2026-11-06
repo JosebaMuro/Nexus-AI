@@ -66,6 +66,11 @@ struct Dependencias {
   std::function<mem::EmbedderPtr()> embedder;
   std::function<bool()> vision_disponible;              // hay un modelo con vision (mmproj) en el acelerador
   std::function<json(const std::string&)> analizar;     // descripcion de la imagen con la red de vision
+  // codificador de vision (CLIP/SigLIP en ONNX Runtime, en la NPU/GPU): frame RGB -> (id del modelo, vector) y texto
+  // de la busqueda -> (id, vector) en el mismo espacio. Sin modelo devuelven el vector vacio
+  using Vector = std::pair<std::string, std::vector<float>>;
+  std::function<Vector(const uint8_t* rgb, int w, int h)> vision_vector;
+  std::function<Vector(const std::string&)> vision_texto;
   std::function<json(const DescriptorTrabajo&, const VistaPrevia&)> generar;   // devuelve {"path", "url"...}
   std::function<void(const json&)> emitir;              // aviso a las interfaces (WebSocket)
 };

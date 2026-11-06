@@ -44,7 +44,8 @@ static const std::map<std::string, std::string> EXT_FORMAT = {
     {".litertlm", "litertlm"}};
 
 const std::map<std::string, std::string> ACTIVE_KEYS = {
-    {"llm", "llm.default_model"}, {"image", "media.image_model"}, {"tts", "media.tts_model"}, {"embed", "memory.embed_model"}};
+    {"llm", "llm.default_model"}, {"image", "media.image_model"}, {"tts", "media.tts_model"}, {"embed", "memory.embed_model"},
+    {"vision-embed", "percepcion.modelo_vision"}};
 
 json best_mmproj(const json& listing) {
   json best;
@@ -144,6 +145,7 @@ json classify(const fs::path& p, const std::string& hint) {
     else if (is_file(p / "genie_config.json")) info = {{"format", "genie"}, {"kind", "llm"}};
     else if (is_file(p / "config.json")) info = {{"format", "transformers"}, {"kind", "llm"}};
     // carpeta ONNX de difusion (motor propio sobre ONNX Runtime) antes que diffusers en PyTorch
+    else if (difusion::es_modelo_vision(p)) info = {{"format", "onnx-vision"}, {"kind", "vision-embed"}};
     else if (is_file(p / "model_index.json") && is_file(p / "unet" / "model.onnx")) info = {{"format", "onnx-sd"}, {"kind", "image"}};
     else if (is_file(p / "model_index.json")) info = {{"format", "diffusers"}, {"kind", "image"}};
     else if (!glob(p, "*.xml").empty()) info = {{"format", "openvino"}, {"kind", "llm"}};
@@ -508,6 +510,11 @@ json resolve_por_hardware(const json& rec, const json& profile, const json& list
       out["file"] = general;
       out["acelera"] = "GPU / CPU";
     }
+  } else if (fmt == "onnx-vision") {
+    out["carpeta"] = "";
+    out["recursivo"] = true;
+    out["file"] = "preprocessor_config.json";
+    out["acelera"] = "Percepción (" + difusion::proveedores_para(profile).front() + ")";
   } else if (fmt == "onnx-sd") {
     // difusion ONNX: el repositorio entero (text_encoder, unet, vae_decoder, tokenizer, scheduler); la misma carpeta
     // va en todos los proveedores y se elige el del chip al cargarla
@@ -643,6 +650,12 @@ std::string ModelManager::download_recommended(const std::string& rec_id) {
         std::string p = jstr(f, "path");
         if (!pre.empty() && !starts_with(p, pre + "/")) continue;
         if (pre.empty() && contains(p, "/") && !recursivo) continue;
+        // lista cerrada de ficheros (codificadores de vision: solo los .onnx que se usan, no las 8 variantes)
+        if (rec.contains("ficheros") && rec["ficheros"].is_array()) {
+          bool esta = false;
+          for (auto& x : rec["ficheros"]) esta = esta || (x.is_string() && x.get<std::string>() == p);
+          if (!esta) continue;
+        }
         // difusion: el codificador del VAE y el filtro de seguridad no hacen falta para generar
         if (recursivo && (starts_with(p, "vae_encoder/") || starts_with(p, "safety_checker/") || starts_with(p, ".")))
           continue;
@@ -872,7 +885,8 @@ void ModelManager::notify(const json& entry) {
 
 json ModelManager::active() {
   return {{"llm", config_.get("llm.default_model")}, {"image", config_.get("media.image_model")},
-          {"tts", config_.get("media.tts_model", "")}, {"embed", config_.get("memory.embed_model", "")}};
+          {"tts", config_.get("media.tts_model", "")}, {"embed", config_.get("memory.embed_model", "")},
+          {"vision-embed", config_.get("percepcion.modelo_vision", "")}};
 }
 
 }  // namespace nx::models

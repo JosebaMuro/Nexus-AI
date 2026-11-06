@@ -104,6 +104,27 @@ class Motor {
   virtual json estado() const = 0;
 };
 
+// ---------------------------------------------------------------- codificador de vision (percepcion)
+// CLIP o SigLIP exportados a ONNX (carpeta con onnx/vision_model*.onnx y, en CLIP, onnx/text_model*.onnx con
+// vocab.json y merges.txt): la imagen a un vector de la base vectorial local y, con CLIP, tambien el texto de la
+// busqueda al mismo espacio (buscar «una persona con casco» entre los frames sin pasar por una descripcion).
+bool es_modelo_vision(const fs::path& carpeta);
+
+class CodificadorVision {
+ public:
+  virtual ~CodificadorVision() = default;
+  // std::runtime_error si no se puede cargar
+  static std::unique_ptr<CodificadorVision> abrir(const fs::path& lib, const fs::path& carpeta, const std::string& proveedor,
+                                                  int hilos = 0);
+  // RGB (w x h) -> vector normalizado (norma 1)
+  virtual std::vector<float> imagen(const uint8_t* rgb, int w, int h) = 0;
+  // texto -> vector en el mismo espacio; vacio si el modelo no tiene codificador de texto que se pueda usar aqui
+  virtual std::vector<float> texto(const std::string& t) = 0;
+  virtual bool tiene_texto() const = 0;
+  virtual std::string id() const = 0;   // para no mezclar vectores de modelos distintos
+  virtual std::string proveedor() const = 0;
+};
+
 // version de ONNX Runtime de una biblioteca ("" si no carga) y proveedores que trae compilados
 json info_ort(const fs::path& lib);
 

@@ -56,6 +56,9 @@ class VPN;
 }  // namespace nx::remote
 
 namespace nx {
+namespace difusion {
+class CodificadorVision;
+}
 
 class Services {
  public:
@@ -105,12 +108,19 @@ class Services {
   // pipelines del dossier de arquitectura: percepcion -> base vectorial, difusion asincrona -> buffer de pantalla
   std::unique_ptr<pipeline::Pipeline> pipeline;
   std::function<void(const json&)> emitir_pipeline;   // lo pone el servidor (WebSocket a las interfaces)
+  // codificador de vision de la percepcion (CLIP/SigLIP en ONNX Runtime); nullptr si no hay modelo activo
+  std::shared_ptr<difusion::CodificadorVision> codificador_vision();
 
  private:
   std::mutex emb_mu_;
   mem::EmbedderPtr embedder_;
   bool shut_ = false;
   mem::EmbedderPtr make_embedder();
+ private:
+  std::mutex vision_mu_;
+  std::shared_ptr<difusion::CodificadorVision> vision_;
+  std::string vision_clave_;
+  double vision_fallo_ = 0;
 };
 
 }  // namespace nx

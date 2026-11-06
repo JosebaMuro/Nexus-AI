@@ -44,15 +44,23 @@ Nucleos leer() {
     std::vector<char> buf(len);
     auto* p = (SYSTEM_CPU_SET_INFORMATION*)buf.data();
     if (GetSystemCpuSetInformation(p, len, &len, GetCurrentProcess(), 0)) {
-      std::vector<std::pair<int, int>> c;
+      struct C {
+        unsigned long id;
+        int indice, clase;
+      };
+      std::vector<C> c;
       for (char* q = buf.data(); q < buf.data() + len;) {
         auto* s = (SYSTEM_CPU_SET_INFORMATION*)q;
-        if (s->Type == CpuSetInformation) c.push_back({(int)s->CpuSet.Id, (int)s->CpuSet.EfficiencyClass});
+        if (s->Type == CpuSetInformation)
+          c.push_back({(unsigned long)s->CpuSet.Id, (int)s->CpuSet.LogicalProcessorIndex, (int)s->CpuSet.EfficiencyClass});
         q += s->Size;
       }
       int mx = 0;
-      for (auto& [id, e] : c) mx = std::max(mx, e);
-      for (auto& [id, e] : c) (e == mx ? n.grandes : n.pequenos).push_back(id);   // en Windows son Ids de cpu-set
+      for (auto& x : c) mx = std::max(mx, x.clase);
+      for (auto& x : c) {
+        (x.clase == mx ? n.grandes : n.pequenos).push_back(x.indice);
+        if (x.clase == mx) n.ids_grandes.push_back(x.id);
+      }
       if (!c.empty()) n.fuente = "cpu-sets";
     }
   }
@@ -89,7 +97,7 @@ bool fijar_hilo_grandes() {
   for (int i : n.grandes) CPU_SET(i, &set);
   return sched_setaffinity(0, sizeof(set), &set) == 0;
 #elif defined(_WIN32)
-  std::vector<ULONG> ids(n.grandes.begin(), n.grandes.end());
+  std::vector<ULONG> ids(n.ids_grandes.begin(), n.ids_grandes.end());
   return SetThreadSelectedCpuSets(GetCurrentThread(), ids.data(), (ULONG)ids.size()) != 0;
 #elif defined(__APPLE__)
   // macOS no deja fijar nucleos: la clase de servicio alta lleva el hilo a los nucleos de rendimiento
@@ -99,10 +107,21 @@ bool fijar_hilo_grandes() {
 #endif
 }
 
+std::string mascara_grandes() {
+  const Nucleos& n = nucleos();
+  if (n.pequenos.empty() || n.grandes.empty()) return "";
+  int mx = *std::max_element(n.grandes.begin(), n.grandes.end());
+  std::vector<int> nib((mx / 4) + 1, 0);
+  for (int i : n.grandes) nib[i / 4] |= 1 << (i % 4);
+  std::string s = "0x";
+  for (int k = (int)nib.size() - 1; k >= 0; --k) s += "0123456789abcdef"[nib[k]];
+  return s;
+}
+
 json estado_nucleos() {
   const Nucleos& n = nucleos();
   return {{"logicos", n.logicos}, {"grandes", n.grandes}, {"pequenos", n.pequenos}, {"fuente", n.fuente},
-          {"hilos_calculo", hilos_calculo()}};
+          {"hilos_calculo", hilos_calculo()}, {"mascara", mascara_grandes()}};
 }
 
 }  // namespace nx::hal

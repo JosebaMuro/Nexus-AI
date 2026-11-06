@@ -2,6 +2,7 @@
 #include <map>
 #include <set>
 
+#include "hal/matriz.h"
 #include "media/difusion_onnx.h"
 #include "gen/data.h"
 #include "hardware/hardware.h"
@@ -49,7 +50,7 @@ json recommend(const json& profile, const json& sector) {
     // en el movil: LLM, embeddings y los modelos de imagen ligeros (sd.cpp va dentro de la APK desde la 2.10)
     std::string motor = jstr(r, "motor");
     const bool sd_onnx = motor == "difusion-onnx";
-    if (hw::android() && kind != "llm" && kind != "embed" &&
+    if (hw::android() && kind != "llm" && kind != "embed" && !(kind == "vision-embed" && difusion::biblioteca_ort()) &&
         !(kind == "image" && truthy(r.value("movil", json(false))) &&
           (sd_onnx ? difusion::biblioteca_ort().has_value() : !runtimes::android_sd_variants().empty())))
       continue;
@@ -59,7 +60,8 @@ json recommend(const json& profile, const json& sector) {
     json item = r;
     item["fit"] = fit(r, profile);
     if (sd_onnx) {
-      item["motor_nombre"] = "Difusión propia sobre ONNX Runtime (NPU, GPU o CPU)";
+      item["motor_nombre"] = kind == "image" ? "Difusión propia sobre ONNX Runtime (NPU, GPU o CPU)"
+                                             : "ONNX Runtime dentro de Agente IA (NPU, GPU o CPU)";
       item["motor_ok"] = difusion::biblioteca_ort().has_value();
     } else if (!motor.empty()) {
       // modelo en el formato de otro motor: se dice cual y si va incluido en este paquete
@@ -68,6 +70,15 @@ json recommend(const json& profile, const json& sector) {
       item["motor_ok"] = motores::lib_path(motor).has_value();
     }
     if (sector.contains(id)) item["sector"] = sector[id];
+    // el motor que la matriz del dossier pone primero para este chip
+    {
+      static const std::map<std::string, std::string> M = {{"", "llamaserver"}, {"litert", "litert"}, {"onnx", "onnx"},
+                                                           {"genie", "genie"}};
+      json mz = hal::matriz(profile);
+      if (kind == "llm" && M.count(motor) && !mz["llm"].empty() && mz["llm"][0] == M.at(motor)) item["para_tu_chip"] = true;
+      if (kind == "image" && sd_onnx && !mz["difusion"].empty() && mz["difusion"][0] != "cpu" && mz["difusion"][0] != "xnnpack")
+        item["para_tu_chip"] = true;
+    }
     out.push_back(item);
   }
   std::set<std::string> kinds;

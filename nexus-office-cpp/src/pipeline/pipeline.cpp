@@ -1,5 +1,6 @@
 // Pipelines desacoplados: percepcion, difusion asincrona y buffer de pantalla (ver pipeline.h).
 #include "pipeline/pipeline.h"
+#include "hal/cpu.h"
 
 #include <algorithm>
 #include <chrono>
@@ -101,7 +102,15 @@ mem::Vec huella(const uint8_t* rgb, int w, int h) {
 
 Pipeline::Pipeline(Dependencias d, Opciones o)
     : dep_(std::move(d)), opt_(o), frames_(o.cola_frames), cola_(o.cola_trabajos) {
-  if (dep_.db) dep_.db->script(ESQUEMA);
+  if (dep_.db) {
+    dep_.db->script(ESQUEMA);
+    // 3.2: vector del codificador de vision (bases creadas con la 3.1 no tienen las columnas)
+    for (const char* c : {"ALTER TABLE percepcion ADD COLUMN vision_id TEXT", "ALTER TABLE percepcion ADD COLUMN emb_vision BLOB"})
+      try {
+        dep_.db->execute(c);
+      } catch (...) {
+      }
+  }
 }
 
 Pipeline::~Pipeline() { stop(); }
@@ -164,6 +173,7 @@ bool Pipeline::enviar_frame(hal::Buffer datos, const std::string& fuente) {
 }
 
 void Pipeline::bucle_percepcion() {
+  hal::fijar_hilo_grandes();   // decodificar y describir frames: en los nucleos rapidos
   while (!quit_) {
     const uint32_t g = senal_frames_.generacion();
     if (auto f = frames_.pop()) {
@@ -197,6 +207,7 @@ void Pipeline::percibir(Frame& f) {
   if (!raw) throw std::runtime_error(std::string("imagen no valida: ") + stbi_failure_reason());
   mem::Vec hv = huella(raw, w, h);
   json stats;
+  Dependencias::Vector vvec;
   {
     std::vector<uint8_t> rgb(raw, raw + (size_t)w * h * 3);
     stbi_image_free(raw);
@@ -206,6 +217,14 @@ void Pipeline::percibir(Frame& f) {
       return;
     }
     stats = media::ImageEngine::describe_stats(rgb, w, h);
+    // vector de la imagen con el codificador de vision (CLIP/SigLIP) para buscar por lo que se ve
+    if (dep_.vision_vector) {
+      try {
+        vvec = dep_.vision_vector(rgb.data(), w, h);
+      } catch (const std::exception& e) {
+        L.warning("percepcion: codificador de vision no disponible (", e.what(), ")");
+      }
+    }
   }
   ultima_huella_ = hv;
   ultimo_guardado_ = f.ts;
@@ -250,9 +269,10 @@ void Pipeline::percibir(Frame& f) {
   long long id = 0;
   if (dep_.db) {
     dep_.db->execute(
-        "INSERT INTO percepcion(ts, fuente, descripcion, motor, ancho, alto, url, emb_id, embedding, huella) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
-        {f.ts, f.fuente, descripcion, motor, w, h, url, emb_id, emb_blob, blob(hv)});
+        "INSERT INTO percepcion(ts, fuente, descripcion, motor, ancho, alto, url, emb_id, embedding, huella, vision_id, "
+        "emb_vision) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        {f.ts, f.fuente, descripcion, vvec.second.empty() ? motor : motor + "+" + vvec.first, w, h, url, emb_id, emb_blob,
+         blob(hv), vvec.second.empty() ? json() : json(vvec.first), vvec.second.empty() ? json() : blob(vvec.second)});
     id = dep_.db->last_insert_id();
   }
   guardados_.fetch_add(1, std::memory_order_relaxed);
@@ -282,6 +302,28 @@ json Pipeline::buscar(const std::string& q, int k) {
   json out = json::array();
   if (!dep_.db) return out;
   k = std::clamp(k, 1, 50);
+  // primero por lo que se ve: el texto al espacio del codificador de vision (CLIP) contra el vector de cada frame
+  if (dep_.vision_texto) {
+    try {
+      auto [vid, qv] = dep_.vision_texto(q);
+      if (!qv.empty()) {
+        std::vector<std::pair<float, json>> todos;
+        for (auto& r : dep_.db->query("SELECT * FROM percepcion WHERE vision_id = ? ORDER BY id DESC LIMIT 5000", {vid})) {
+          mem::Vec v = floats(r["emb_vision"]);
+          if (v.size() == qv.size()) todos.emplace_back(mem::dot(v, qv), r);
+        }
+        std::stable_sort(todos.begin(), todos.end(), [](auto& a, auto& b) { return a.first > b.first; });
+        for (size_t i = 0; i < todos.size() && (int)i < k; ++i) {
+          json o = fila(todos[i].second, todos[i].first);
+          o["por"] = "vision";
+          out.push_back(o);
+        }
+        if (!out.empty()) return out;
+      }
+    } catch (const std::exception& ex) {
+      L.warning("percepcion: busqueda por vision no disponible (", ex.what(), ")");
+    }
+  }
   mem::EmbedderPtr e = dep_.embedder ? dep_.embedder() : nullptr;
   if (e) {
     try {
@@ -374,6 +416,7 @@ json Pipeline::trabajos(int n) {
 }
 
 void Pipeline::bucle_difusion() {
+  hal::fijar_hilo_grandes();   // el bucle de la UNet en CPU (o la preparacion para la NPU/GPU) en los nucleos rapidos
   while (!quit_) {
     const uint32_t g = senal_cola_.generacion();
     auto id = cola_.pop();

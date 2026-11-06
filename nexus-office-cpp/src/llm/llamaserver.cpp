@@ -7,6 +7,7 @@
 #include "hardware/gpu_devices.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
+#include "hal/cpu.h"
 #include "models/runtimes.h"
 #include "util/crypto.h"
 #include "util/http.h"
@@ -15,6 +16,26 @@
 #include "util/text.h"
 
 namespace nx::llm {
+
+namespace {
+// opciones que admite un llama-server (de su --help, una vez por binario): los antiguos no conocen --cpu-mask
+bool admite(const fs::path& exe, const std::string& flag) {
+  static std::mutex mu;
+  static std::map<std::string, std::string> ayudas;
+  std::lock_guard<std::mutex> lk(mu);
+  auto& h = ayudas[S(exe)];
+  if (h.empty()) {
+    proc::Options o;
+    o.cwd = exe.parent_path();
+    o.capture = true;
+    o.env = runtimes::lib_env(exe);
+    auto r = proc::run({S(exe), "--help"}, 30, o);
+    h = r.out + "\n" + r.err + " ";
+  }
+  return h.find(flag) != std::string::npos;
+}
+}  // namespace
+
 
 static const auto L = log::get("llamaserver");
 
@@ -216,6 +237,11 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
     cmd.push_back("--device");
     cmd.push_back(device);
   }
+  // big.LITTLE e Intel hibridos: la generacion fijada a los nucleos grandes (un hilo en un nucleo pequeno frena a
+  // todos en cada token); el prompt (-tb) sigue con todos
+  if (std::string mask = hal::mascara_grandes(); !mask.empty() && admite(exe, "--cpu-mask") &&
+      (int)jnum(opts.value("n_threads", json(0)), 0) <= (int)hal::nucleos().grandes.size())
+    cmd.insert(cmd.end(), {"--cpu-mask", mask, "--cpu-strict", "1"});
   if (kv_ram && ngl) cmd.push_back("--no-kv-offload");   // perfil de hardware: la cache KV en la RAM (mas capas en la VRAM)
   if (mlock) cmd.push_back("--mlock");                    // perfil de hardware: el modelo fijo en la RAM
   // prompt con todos los hilos logicos; la generacion con los fisicos (-t)

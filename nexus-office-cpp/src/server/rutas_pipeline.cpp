@@ -8,6 +8,8 @@
 #include "hal/hal.h"
 #include "pipeline/pipeline.h"
 #include "server/app.h"
+#include "llm/motores.h"
+#include "media/difusion_onnx.h"
 #include "httplib.h"
 #include "util/text.h"
 
@@ -28,7 +30,19 @@ void register_pipeline_routes(App& app) {
   if (app.ready() && !app.remote()) app.S().emitir_pipeline = [&app](const json& e) { app.broadcast(e); };
 
   // ------------------------------------------------------------------ capa de abstraccion de hardware
-  app.get("/api/hal", [](Ctx& c) -> Out { return hal::estado(c.app.S().profile); });
+  app.get("/api/hal", [](Ctx& c) -> Out {
+    json e = hal::estado(c.app.S().profile);
+    // ONNX Runtime que usa la difusion propia (version y proveedores compilados) y motores dentro del proceso
+    auto ort = difusion::biblioteca_ort();
+    e["onnxruntime"] = ort ? difusion::info_ort(*ort) : json();
+    e["motores_en_proceso"] = {{"activo", llm::MotorBackend::en_proceso.load()}, {"caidas", llm::MotorBackend::caidas()}};
+    return e;
+  });
+  // vuelve a probar dentro del proceso los motores que se cayeron (solo Admin)
+  app.post("/api/hal/caidas/olvidar", [](Ctx&) -> Out {
+    llm::MotorBackend::olvidar_caidas();
+    return json{{"ok", true}};
+  }, true);
 
   // paso de mensajes entre hilos por los rings lock-free (ida y vuelta medida en este equipo)
   app.get("/api/hal/latencia", [](Ctx& c) -> Out {

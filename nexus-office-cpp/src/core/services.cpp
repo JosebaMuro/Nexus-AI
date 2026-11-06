@@ -1,5 +1,10 @@
 // Ensamblado de todos los servicios de Nexus-Office (core.py).
 #include "core/services.h"
+#include "util/crypto.h"
+#include "hal/matriz.h"
+#include "media/difusion_onnx.h"
+#include "llm/motores.h"
+#include "hal/zerocopy.h"
 
 #include <thread>
 
@@ -96,6 +101,10 @@ Services::Services(bool detect_hardware) : config(get_config()) {
     o.o = {{"max_tokens", 300}, {"temperature", 0.1}};
     return llm->complete(p, "default", o);
   };
+  // memoria de los tensores de los motores segun el acelerador (CUDA pinned, HIP, dma-buf...) y motores LiteRT-LM,
+  // ONNX GenAI y Genie dentro del proceso (motores.en_proceso, por defecto si)
+  hal::fijar_memoria_preferida(hal::memoria_para(profile_getter()));
+  llm::MotorBackend::en_proceso = cfg.get("motores.en_proceso").is_null() || truthy(cfg.get("motores.en_proceso"));
   images = std::make_unique<media::ImageEngine>(cfg, models->catalog, *runtimes, profile_getter, llm.get());
   {
     pipeline::Dependencias d;
@@ -111,6 +120,16 @@ Services::Services(bool detect_hardware) : config(get_config()) {
       }
     };
     d.analizar = [this](const std::string& bytes) { return images->analyze(bytes); };
+    d.vision_vector = [this](const uint8_t* rgb, int w, int h) -> pipeline::Dependencias::Vector {
+      auto c = codificador_vision();
+      if (!c) return {};
+      return {c->id(), c->imagen(rgb, w, h)};
+    };
+    d.vision_texto = [this](const std::string& q) -> pipeline::Dependencias::Vector {
+      auto c = codificador_vision();
+      if (!c || !c->tiene_texto()) return {};
+      return {c->id(), c->texto(q)};
+    };
     d.generar = [this](const pipeline::DescriptorTrabajo& t, const pipeline::VistaPrevia& vp) {
       return images->generate(t.prompt, t.negativo, t.tam ? std::optional<int>(t.tam) : std::nullopt,
                               t.pasos ? std::optional<int>(t.pasos) : std::nullopt, t.semilla, t.idea, vp);
@@ -248,6 +267,33 @@ void Services::shutdown() {
   if (auto e = embedder()) e->close();
   if (android_tuner) android_tuner->stop();
   if (monitor) monitor->stop();
+}
+
+// codificador de vision activo (percepcion.modelo_vision), cargado al primer uso en el proveedor de la matriz del chip
+std::shared_ptr<difusion::CodificadorVision> Services::codificador_vision() {
+  std::lock_guard<std::mutex> lk(vision_mu_);
+  std::string mid = config.str("percepcion.modelo_vision", "");
+  if (mid.empty()) return nullptr;
+  json m = models->catalog.get(mid);
+  if (m.is_null()) return nullptr;
+  std::string ruta = jstr(m, "path");
+  if (vision_ && vision_clave_ == ruta) return vision_;
+  if (vision_clave_ == ruta && now() - vision_fallo_ < 300) return nullptr;   // fallo hace poco: no reintentar en cada frame
+  vision_.reset();
+  vision_clave_ = ruta;
+  for (auto& prov : hal::matriz(profile)["vision"]) {
+    auto lib = difusion::biblioteca_ort(difusion::variante_de(prov.get<std::string>()));
+    if (!lib) continue;
+    try {
+      vision_ = difusion::CodificadorVision::abrir(*lib, P(ruta), prov.get<std::string>());
+      log::get("percepcion").info("codificador de vision ", mid, " en ", prov.get<std::string>());
+      return vision_;
+    } catch (const std::exception& e) {
+      log::get("percepcion").warning("codificador de vision en ", prov.get<std::string>(), ": ", e.what());
+    }
+  }
+  vision_fallo_ = now();
+  return nullptr;
 }
 
 }  // namespace nx

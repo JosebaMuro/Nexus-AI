@@ -530,47 +530,17 @@ json info_ort(const fs::path& lib) {
 
 namespace {
 
-class MotorOrt : public Motor {
+// sesiones, proveedores y tensores de ONNX Runtime comunes a la difusion y a la vision
+class BaseOrt {
  public:
-  explicit MotorOrt(const Opciones& o) : op_(o), ort_(cargar_ort(o.lib)), ck_{ort_.api} {
-    const OrtApi* a = ort_.api;
-    if (!tok_.cargar(o.modelo / "tokenizer")) throw std::runtime_error("el modelo no trae tokenizer/vocab.json y merges.txt");
-    plan_ = Planificador::leer(o.modelo / "scheduler" / "scheduler_config.json");
-    json vae = jparse(read_text(o.modelo / "vae_decoder" / "config.json"));
-    if (vae.is_object()) escala_vae_ = vae.value("scaling_factor", escala_vae_);
-    ck_(a->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &mem_), "memoria de la CPU");
-    auto t0 = Reloj::now();
-    texto_ = abrir(o.modelo / "text_encoder" / "model.onnx", "texto");
-    unet_ = abrir(o.modelo / "unet" / "model.onnx", "unet");
-    vae_ = abrir(o.modelo / "vae_decoder" / "model.onnx", "vae");
-    carga_ms_ = ms_desde(t0);
-    for (const char* n : {"sample", "timestep", "encoder_hidden_states"})
-      if (!unet_.entrada(n))
-        throw std::runtime_error(std::string("la UNet no tiene la entrada «") + n + "» (SDXL y otros aun no se admiten)");
-    if (unet_.entradas.size() > 3)
-      throw std::runtime_error("la UNet pide entradas de SDXL (text_embeds, time_ids): modelo aun no admitido");
-    L.info("difusion ONNX: ", S(o.modelo.filename()), " en ", o.proveedor, " (ORT ", ort_.version, ", ", (int)carga_ms_,
-           " ms)");
+  explicit BaseOrt(const Opciones& o) : op_(o), ort_(cargar_ort(o.lib)), ck_{ort_.api} {
+    ck_(ort_.api->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &mem_), "memoria de la CPU");
+  }
+  virtual ~BaseOrt() {
+    if (mem_) ort_.api->ReleaseMemoryInfo(mem_);
   }
 
-  ~MotorOrt() override {
-    const OrtApi* a = ort_.api;
-    for (Sesion* s : {&texto_, &unet_, &vae_})
-      if (s->s) a->ReleaseSession(s->s);
-    if (mem_) a->ReleaseMemoryInfo(mem_);
-  }
-
-  std::string proveedor() const override { return op_.proveedor; }
-
-  json estado() const override {
-    return {{"motor", "onnxruntime"},  {"version", ort_.version},          {"proveedor", op_.proveedor},
-            {"modelo", S(op_.modelo)}, {"carga_ms", (long long)carga_ms_}, {"memoria", hal::nombre(op_.memoria)},
-            {"hilos", hilos()},        {"prediccion", plan_.prediccion},   {"espaciado", plan_.espaciado}};
-  }
-
-  Resultado generar(const Peticion& p) override;
-
- private:
+ protected:
   int hilos() const { return op_.hilos > 0 ? op_.hilos : hal::hilos_calculo(); }
 
   void proveedor_en(OrtSessionOptions* so, const std::string& etiqueta) {
@@ -655,7 +625,7 @@ class MotorOrt : public Motor {
     }
   }
 
-  Sesion abrir(const fs::path& f, const std::string& etiqueta) {
+  Sesion sesion(const fs::path& f, const std::string& etiqueta) {
     const OrtApi* a = ort_.api;
     OrtSessionOptions* so = nullptr;
     ck_(a->CreateSessionOptions(&so), "opciones de sesion");
@@ -730,6 +700,51 @@ class MotorOrt : public Motor {
     t.v = nullptr;
   }
 
+
+  Opciones op_;
+  Ort& ort_;
+  Comprobar ck_;
+  OrtMemoryInfo* mem_ = nullptr;
+};
+
+class MotorOrt : public Motor, public BaseOrt {
+ public:
+  explicit MotorOrt(const Opciones& o) : BaseOrt(o) {
+    if (!tok_.cargar(o.modelo / "tokenizer")) throw std::runtime_error("el modelo no trae tokenizer/vocab.json y merges.txt");
+    plan_ = Planificador::leer(o.modelo / "scheduler" / "scheduler_config.json");
+    json vae = jparse(read_text(o.modelo / "vae_decoder" / "config.json"));
+    if (vae.is_object()) escala_vae_ = vae.value("scaling_factor", escala_vae_);
+    auto t0 = Reloj::now();
+    texto_ = sesion(o.modelo / "text_encoder" / "model.onnx", "texto");
+    unet_ = sesion(o.modelo / "unet" / "model.onnx", "unet");
+    vae_ = sesion(o.modelo / "vae_decoder" / "model.onnx", "vae");
+    carga_ms_ = ms_desde(t0);
+    for (const char* n : {"sample", "timestep", "encoder_hidden_states"})
+      if (!unet_.entrada(n))
+        throw std::runtime_error(std::string("la UNet no tiene la entrada «") + n + "» (SDXL y otros aun no se admiten)");
+    if (unet_.entradas.size() > 3)
+      throw std::runtime_error("la UNet pide entradas de SDXL (text_embeds, time_ids): modelo aun no admitido");
+    L.info("difusion ONNX: ", S(o.modelo.filename()), " en ", o.proveedor, " (ORT ", ort_.version, ", ", (int)carga_ms_,
+           " ms)");
+  }
+
+  ~MotorOrt() override {
+    const OrtApi* a = ort_.api;
+    for (Sesion* s : {&texto_, &unet_, &vae_})
+      if (s->s) a->ReleaseSession(s->s);
+  }
+
+  std::string proveedor() const override { return op_.proveedor; }
+
+  json estado() const override {
+    return {{"motor", "onnxruntime"},  {"version", ort_.version},          {"proveedor", op_.proveedor},
+            {"modelo", S(op_.modelo)}, {"carga_ms", (long long)carga_ms_}, {"memoria", hal::nombre(op_.memoria)},
+            {"hilos", hilos()},        {"prediccion", plan_.prediccion},   {"espaciado", plan_.espaciado}};
+  }
+
+  Resultado generar(const Peticion& p) override;
+
+ private:
   // codificador de texto: [1, 77, D] en float
   std::vector<float> codificar(const std::string& texto, int64_t& d) {
     const OrtApi* a = ort_.api;
@@ -770,10 +785,6 @@ class MotorOrt : public Motor {
     return r;
   }
 
-  Opciones op_;
-  Ort& ort_;
-  Comprobar ck_;
-  OrtMemoryInfo* mem_ = nullptr;
   TokenizadorClip tok_;
   Planificador plan_;
   double escala_vae_ = 0.18215, carga_ms_ = 0;
@@ -942,7 +953,190 @@ Resultado MotorOrt::generar(const Peticion& p) {
   return res;
 }
 
+// ---------------------------------------------------------------- codificador de vision
+fs::path primero_que_exista(const fs::path& d, std::initializer_list<const char*> nombres) {
+  for (const char* n : nombres)
+    if (is_file(d / n)) return d / n;
+  return {};
+}
+
+class VisionOrt : public CodificadorVision, public BaseOrt {
+ public:
+  VisionOrt(const Opciones& o) : BaseOrt(o) {
+    const fs::path& d = o.modelo;
+    // las versiones cuantizadas (int8) van mejor en la CPU y en el movil; en GPU/NPU la de 32 bits o la fp16
+    const bool cpu = o.proveedor == "cpu" || o.proveedor == "xnnpack" || o.proveedor == "nnapi";
+    fs::path fv = cpu ? primero_que_exista(d, {"onnx/vision_model_quantized.onnx", "onnx/vision_model.onnx", "vision_model.onnx"})
+                      : primero_que_exista(d, {"onnx/vision_model.onnx", "onnx/vision_model_fp16.onnx", "vision_model.onnx",
+                                               "onnx/vision_model_quantized.onnx"});
+    if (fv.empty()) throw std::runtime_error("el modelo de vision no trae onnx/vision_model.onnx");
+    vision_ = sesion(fv, "vision");
+    const Entrada& e = vision_.entradas.at(0);
+    if (e.forma.size() == 4 && e.forma[2] > 0) lado_ = (int)e.forma[2];
+    json pre = jparse(read_text(d / "preprocessor_config.json"));
+    if (pre.is_object()) {
+      auto leer3 = [&](const char* k, float* v) {
+        if (pre.contains(k) && pre[k].is_array() && pre[k].size() == 3)
+          for (int i = 0; i < 3; ++i) v[i] = pre[k][i].get<float>();
+      };
+      leer3("image_mean", media_);
+      leer3("image_std", desv_);
+      if (pre.contains("crop_size")) {
+        const json& c = pre["crop_size"];
+        if (c.is_number()) lado_ = c.get<int>();
+        else if (c.is_object() && c.contains("height")) lado_ = c["height"].get<int>();
+      }
+    }
+    // texto solo con el tokenizador BPE de CLIP (SigLIP usa SentencePiece: sin texto, solo imagen con imagen)
+    fs::path ft = cpu ? primero_que_exista(d, {"onnx/text_model_quantized.onnx", "onnx/text_model.onnx", "text_model.onnx"})
+                      : primero_que_exista(d, {"onnx/text_model.onnx", "onnx/text_model_fp16.onnx", "text_model.onnx"});
+    if (!ft.empty() && tok_.cargar(d)) {
+      texto_ = sesion(ft, "texto_vision");
+      con_texto_ = true;
+    }
+    id_ = "vision:" + S(d.filename());
+  }
+  ~VisionOrt() override {
+    if (vision_.s) ort_.api->ReleaseSession(vision_.s);
+    if (texto_.s) ort_.api->ReleaseSession(texto_.s);
+  }
+
+  std::vector<float> imagen(const uint8_t* rgb, int w, int h) override {
+    std::lock_guard<std::mutex> lk(mu_);
+    const Entrada& e = vision_.entradas.at(0);
+    const int S2 = lado_;
+    // redimensionado bilineal al lado del modelo (sin recortar: el frame entero) y normalizacion por canal
+    std::vector<float> px((size_t)3 * S2 * S2);
+    for (int y = 0; y < S2; ++y)
+      for (int x = 0; x < S2; ++x) {
+        double fx = (x + 0.5) * w / S2 - 0.5, fy = (y + 0.5) * h / S2 - 0.5;
+        int x0 = std::clamp((int)std::floor(fx), 0, w - 1), y0 = std::clamp((int)std::floor(fy), 0, h - 1);
+        int x1 = std::min(w - 1, x0 + 1), y1 = std::min(h - 1, y0 + 1);
+        double ax = std::clamp(fx - x0, 0.0, 1.0), ay = std::clamp(fy - y0, 0.0, 1.0);
+        for (int c = 0; c < 3; ++c) {
+          auto P_ = [&](int xx, int yy) { return (double)rgb[((size_t)yy * w + xx) * 3 + c]; };
+          double v = (P_(x0, y0) * (1 - ax) + P_(x1, y0) * ax) * (1 - ay) + (P_(x0, y1) * (1 - ax) + P_(x1, y1) * ax) * ay;
+          px[(size_t)c * S2 * S2 + (size_t)y * S2 + x] = (float)((v / 255.0 - media_[c]) / desv_[c]);
+        }
+      }
+    Tensor t = tensor(e.tipo, {1, 3, S2, S2});
+    t.poner(px.data());
+    auto v = correr(vision_, {{e.nombre, &t}}, {"image_embeds", "pooler_output"});
+    soltar(t);
+    return v;
+  }
+
+  std::vector<float> texto(const std::string& q) override {
+    if (!con_texto_) return {};
+    std::lock_guard<std::mutex> lk(mu_);
+    auto ids = tok_.codificar(q, 77);
+    std::vector<float> f(ids.begin(), ids.end()), mask(77, 0.f);
+    for (size_t i = 0; i < ids.size(); ++i) {
+      mask[i] = 1.f;
+      if (ids[i] == tok_.fin) break;
+    }
+    std::vector<std::pair<std::string, Tensor*>> in;
+    Tensor ti, tm;
+    for (auto& e : texto_.entradas) {
+      ONNXTensorElementDataType tipo = e.tipo == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32 ? e.tipo : ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64;
+      if (e.nombre == "input_ids") {
+        ti = tensor(tipo, {1, 77});
+        ti.poner(f.data());
+        in.push_back({e.nombre, &ti});
+      } else if (e.nombre == "attention_mask") {
+        tm = tensor(tipo, {1, 77});
+        tm.poner(mask.data());
+        in.push_back({e.nombre, &tm});
+      }
+    }
+    std::vector<float> v;
+    try {
+      v = correr(texto_, in, {"text_embeds", "pooler_output"});
+    } catch (...) {
+      soltar(ti);
+      soltar(tm);
+      throw;
+    }
+    soltar(ti);
+    soltar(tm);
+    return v;
+  }
+
+  bool tiene_texto() const override { return con_texto_; }
+  std::string id() const override { return id_; }
+  std::string proveedor() const override { return op_.proveedor; }
+
+ private:
+  // ejecuta y devuelve la primera salida preferida (2D [1, D]); si es 3D, el token 0; normalizado
+  std::vector<float> correr(Sesion& s, const std::vector<std::pair<std::string, Tensor*>>& in,
+                            std::initializer_list<const char*> preferidas) {
+    const OrtApi* a = ort_.api;
+    std::string salida = s.salidas.at(0).nombre;
+    for (const char* p : preferidas)
+      for (auto& o : s.salidas)
+        if (o.nombre == p) {
+          salida = p;
+          goto elegida;
+        }
+  elegida:
+    std::vector<const char*> nombres;
+    std::vector<const OrtValue*> valores;
+    for (auto& [n, t] : in) nombres.push_back(n.c_str()), valores.push_back(t->v);
+    const char* out_n[] = {salida.c_str()};
+    OrtValue* out = nullptr;
+    ck_(a->Run(s.s, nullptr, nombres.data(), valores.data(), nombres.size(), out_n, 1, &out), "codificador de vision");
+    OrtTensorTypeAndShapeInfo* ti = nullptr;
+    ck_(a->GetTensorTypeAndShape(out, &ti), "forma");
+    size_t nd = 0;
+    a->GetDimensionsCount(ti, &nd);
+    std::vector<int64_t> forma(nd);
+    a->GetDimensions(ti, forma.data(), nd);
+    ONNXTensorElementDataType tipo;
+    a->GetTensorElementType(ti, &tipo);
+    a->ReleaseTensorTypeAndShapeInfo(ti);
+    void* p = nullptr;
+    a->GetTensorMutableData(out, &p);
+    size_t D = nd ? (size_t)forma.back() : 0;
+    std::vector<float> v(D);
+    for (size_t i = 0; i < D; ++i)   // 2D: la fila 0; 3D: el token 0 de la fila 0
+      v[i] = tipo == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16 ? de_fp16(((uint16_t*)p)[i]) : ((float*)p)[i];
+    a->ReleaseValue(out);
+    double n = 0;
+    for (float x : v) n += (double)x * x;
+    n = std::sqrt(n);
+    if (n > 1e-12)
+      for (auto& x : v) x = (float)(x / n);
+    return v;
+  }
+
+  Sesion vision_, texto_;
+  TokenizadorClip tok_;
+  bool con_texto_ = false;
+  int lado_ = 224;
+  float media_[3] = {0.48145466f, 0.4578275f, 0.40821073f}, desv_[3] = {0.26862954f, 0.26130258f, 0.27577711f};
+  std::string id_;
+  std::mutex mu_;
+};
+
 }  // namespace
+
+bool es_modelo_vision(const fs::path& d) {
+  return is_file(d / "onnx" / "vision_model.onnx") || is_file(d / "onnx" / "vision_model_quantized.onnx") ||
+         is_file(d / "vision_model.onnx");
+}
+
+std::unique_ptr<CodificadorVision> CodificadorVision::abrir(const fs::path& lib, const fs::path& carpeta,
+                                                            const std::string& proveedor, int hilos) {
+  if (!es_modelo_vision(carpeta)) throw std::runtime_error("no es un modelo de vision ONNX: " + S(carpeta));
+  Opciones o;
+  o.lib = lib;
+  o.modelo = carpeta;
+  o.proveedor = proveedor;
+  o.hilos = hilos;
+  o.cache = paths::sub({"cache", "vision"});
+  o.memoria = hal::memoria_preferida();
+  return std::make_unique<VisionOrt>(o);
+}
 
 std::unique_ptr<Motor> Motor::abrir(const Opciones& o) {
   if (!es_modelo(o.modelo)) throw std::runtime_error("no es un modelo ONNX de difusion: " + S(o.modelo));

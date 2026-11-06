@@ -176,3 +176,46 @@ TEST("difusion: imagen entera con ONNX Runtime (redes diminutas, vista previa po
   CHECK_EQ(r3.ancho, 64);
   CHECK(r3.tiempos.contains("por_paso"));
 }
+
+TEST("vision: codificador CLIP en ONNX Runtime (imagen y texto al mismo espacio)") {
+  auto lib = difusion::biblioteca_ort();
+  if (!lib) return;
+  fs::path d = carpeta_prueba("vision");
+  // tokenizador CLIP en la raiz (como los repos ONNX de CLIP) y redes diminutas: la imagen -> media de cada canal,
+  // el texto -> los 3 primeros ids
+  escribir(d / "vocab.json", R"({"!":0,"c":1,"a":2,"t":3,"t</w>":4,"ca":5,"cat</w>":6,"<|startoftext|>":7,"<|endoftext|>":8})");
+  escribir(d / "merges.txt", "#version: 0.2\nc a\nca t</w>\n");
+  escribir(d / "preprocessor_config.json", R"({"crop_size":8,"image_mean":[0,0,0],"image_std":[1,1,1]})");
+  {
+    om::Grafo g;
+    g.entradas.push_back(om::valor_info("pixel_values", om::FLOAT, {{1}, {3}, {8}, {8}}));
+    g.salidas.push_back(om::valor_info("image_embeds", om::FLOAT, {{1}, {3}}));
+    g.iniciales.push_back(om::inicial_i64("ejes", {2}, {2, 3}));
+    g.nodos.push_back(om::nodo("ReduceMean", {"pixel_values", "ejes"}, {"image_embeds"}, {{"keepdims", 0}}));
+    escribir(d / "onnx" / "vision_model.onnx", g.modelo(18));
+  }
+  {
+    om::Grafo g;
+    g.entradas.push_back(om::valor_info("input_ids", om::INT64, {{1}, {77}}));
+    g.salidas.push_back(om::valor_info("text_embeds", om::FLOAT, {{1}, {3}}));
+    g.iniciales.push_back(om::inicial_i64("ini", {1}, {0}));
+    g.iniciales.push_back(om::inicial_i64("fin", {1}, {3}));
+    g.iniciales.push_back(om::inicial_i64("eje", {1}, {1}));
+    g.nodos.push_back(om::nodo("Slice", {"input_ids", "ini", "fin", "eje"}, {"s"}));
+    g.nodos.push_back(om::nodo("Cast", {"s"}, {"text_embeds"}, {{"to", om::FLOAT}}));
+    escribir(d / "onnx" / "text_model.onnx", g.modelo(18));
+  }
+  CHECK(difusion::es_modelo_vision(d));
+  auto c = difusion::CodificadorVision::abrir(*lib, d, "cpu");
+  CHECK(c->tiene_texto());
+  std::vector<uint8_t> rojo(16 * 16 * 3, 0);
+  for (size_t i = 0; i < rojo.size(); i += 3) rojo[i] = 255;
+  auto v = c->imagen(rojo.data(), 16, 16);
+  CHECK_EQ(v.size(), (size_t)3);
+  CHECK(std::fabs(v[0] - 1.f) < 1e-4f && std::fabs(v[1]) < 1e-4f);   // normalizado
+  auto t = c->texto("Cat");
+  CHECK_EQ(t.size(), (size_t)3);
+  float n = std::sqrt(7.f * 7 + 6 * 6 + 8 * 8);
+  CHECK(std::fabs(t[0] - 7 / n) < 1e-4f && std::fabs(t[1] - 6 / n) < 1e-4f);
+  CHECK(!c->id().empty());
+}

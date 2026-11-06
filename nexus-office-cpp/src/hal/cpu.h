@@ -14,6 +14,7 @@ namespace nx::hal {
 struct Nucleos {
   std::vector<int> grandes;    // indices de CPU logica de los nucleos rapidos
   std::vector<int> pequenos;   // el resto
+  std::vector<unsigned long> ids_grandes;   // Windows: Ids de cpu-set de los grandes (SetThreadSelectedCpuSets)
   int logicos = 0;
   std::string fuente;          // cpufreq | cpu-sets | perflevel | ninguna
 };
@@ -25,5 +26,7 @@ int hilos_calculo();
 // fija el hilo actual a los nucleos grandes; false si el sistema no lo permite o no hay distincion
 bool fijar_hilo_grandes();
 json estado_nucleos();
+// mascara hexadecimal de los nucleos grandes para llama.cpp (--cpu-mask); "" si no hay distincion
+std::string mascara_grandes();
 
 }  // namespace nx::hal
