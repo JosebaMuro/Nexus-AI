@@ -1,5 +1,51 @@
 # Cambios
 
+## Agente IA 3.2.0-cpp
+
+Motores del dossier de arquitectura y todo lo que mejora el rendimiento, en una sola version (incluye la 3.1.0, que
+no se publico aparte). Tambien MCP y un codificador de video en el navegador.
+
+### Motor de difusion propio sobre ONNX Runtime
+- Si el modelo de imagen es una carpeta ONNX (diffusers/optimum, como SD-Turbo), Agente IA ya no usa
+  stable-diffusion.cpp: genera **dentro del proceso** con ONNX Runtime (tokenizador CLIP, codificador de texto, bucle
+  UNet con el planificador Euler y VAE). Cada paso publica su vista previa directamente en el buffer de pantalla.
+- Cada red va en el proveedor del chip: **QNN** (NPU Hexagon de Snapdragon, con cache del contexto compilado),
+  **TensorRT/CUDA** (NVIDIA), **ROCm** o **DirectML** (AMD), **OpenVINO** (Intel NPU/GPU), **DirectML** (cualquier GPU
+  en Windows), **CoreML** (Apple), **NNAPI** o **XNNPACK** (Android sin QNN) y CPU. Si uno falla se prueba el siguiente.
+- Modelo nuevo en el catalogo: **SD-Turbo ONNX** (una imagen en 1 a 4 pasos).
+
+### Memoria del acelerador y nucleos grandes
+- El asignador zero-copy pide la memoria que mejor ve el acelerador: **dma-buf** (rpcmem de Qualcomm o
+  `/dev/dma_heap`), **CUDA pinned** o **memoria registrada de HIP**; si no hay, memoria compartida y, al final, normal.
+- Los hilos de calculo (difusion, percepcion, llama-server con `--cpu-mask`) se fijan a los **nucleos grandes** de
+  CPUs big.LITTLE, Intel con nucleos P/E y Apple (cpufreq, CPU sets de Windows y QoS de macOS).
+
+### Motores LLM dentro del proceso
+- LiteRT-LM, ONNX Runtime GenAI y Qualcomm Genie corren **dentro de Agente IA** (sin HTTP ni copias entre procesos).
+  Si uno se cae, queda marcado y la siguiente vez se usa en su proceso aparte, como antes (`motores.en_proceso`;
+  `POST /api/hal/caidas/olvidar` lo reintenta).
+- **Matriz de motores por chip** (Snapdragon, Tensor, Exynos, Dimensity, Apple, NVIDIA, AMD, Intel...): que motor y
+  proveedor va primero para el LLM, la difusion y la vision. En Modelos, la etiqueta «para tu chip».
+
+### Percepcion con CLIP y SigLIP
+- Codificador de vision en ONNX Runtime (**CLIP** o **SigLIP**, modelos nuevos en el catalogo): cada frame se guarda
+  tambien como vector de imagen y, con CLIP, la busqueda en lo percibido compara el texto directamente con las imagenes.
+
+### MCP (Model Context Protocol)
+- **Servidor**: las herramientas de Agente IA para otros programas (asistentes de escritorio, editores, otros agentes)
+  por `POST /mcp` o por stdio con `nexus-office mcp`. Cada llamada pasa por el supervisor: misma politica por riesgo,
+  aprobaciones y auditoria. Fuera del equipo, clave de red o token `mcp.token`.
+- **Cliente**: los agentes usan herramientas de servidores MCP externos (`mcp.servidores`, por stdio o HTTP), que
+  aparecen como `mcp_<servidor>_<nombre>` con su riesgo. Panel **MCP** en Herramientas.
+
+### Video con imagenes
+- En el Estudio, **Video con imagenes**: una serie de imagenes (o de la galeria) a un video WebM con fundidos, Ken
+  Burns o cortes, codificado en el navegador con WebCodecs (VP9/VP8 con aceleracion por hardware) y sin conexion.
+  Se descarga o se guarda en Agente IA (`POST /api/media/video/subir`).
+
+### Notas
+- La APK va firmada con la clave de siempre (Nexus): si tienes instalada la 3.0.0, desinstalala antes de instalar esta.
+
 ## Agente IA 3.1.0-cpp
 
 Adapta el runtime al **dossier de arquitectura** (agente de IA unificado para dispositivos moviles): tres capas,

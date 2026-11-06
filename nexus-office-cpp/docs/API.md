@@ -99,3 +99,15 @@ Puerto remoto: `https://IP:8443` (TLS 1.3). Ahí todas las rutas, salvo `/`, `/a
 | `GET /api/pipeline/pantalla` | Último frame del buffer de pantalla (PNG; cabeceras `X-Pantalla-*`); 204 si aún no hay. |
 
 Eventos WebSocket nuevos: `percepcion`, `difusion` y `pantalla` (`{trabajo, paso, final, version, url}`).
+
+## Motores, MCP y video (3.2)
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/hal` | Además: memorias del acelerador, núcleos, matriz por chip, ONNX Runtime y motores dentro del proceso. |
+| `POST /api/hal/caidas/olvidar` | (Admin) Borra las marcas de motores que se cayeron dentro del proceso. |
+| `POST /mcp` | Servidor MCP (JSON-RPC 2.0, protocolo 2025-06-18; una petición o un lote). Las notificaciones devuelven 202. Desde otro equipo: clave de red o `Authorization: Bearer <mcp.token>`. |
+| `GET /api/mcp` | Clientes MCP conectados, servidores configurados y si hay token. |
+| `PUT /api/mcp/servidores` | (Admin) `{servidores: [{nombre, orden[] \| url, env?, cabeceras?, riesgo?, activo?}]}` y reconecta. |
+| `POST /api/mcp/reconectar` | (Admin) Vuelve a conectar con los servidores MCP. |
+| `POST /api/media/video/subir?nombre=` | Cuerpo `video/webm`: guarda el video del codificador del Estudio en `outputs/videos`. |

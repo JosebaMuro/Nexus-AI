@@ -105,6 +105,17 @@ flowchart TB
 `NEXUS_SDK_CUDA|VULKAN|OPENCL|QNN|NNAPI|DIRECTML|OPENVINO` (definen `NEXUS_SDK_<X>` y enlazan el SDK). Por defecto no
 se compila ningún SDK dentro: los motores se cargan en tiempo de ejecución y el mismo binario sirve en cualquier equipo.
 
+## Motores del dossier (3.2)
+
+| Pieza | Dónde | Qué hace |
+|---|---|---|
+| Difusión ONNX | `src/media/difusion_onnx.*` | ONNX Runtime cargado con `dlopen` (API C): tokenizador CLIP, codificador de texto, UNet con Euler y VAE dentro del proceso; tensores en bloques del asignador y salida de la UNet preasignada. También el codificador de visión CLIP/SigLIP de la percepción. |
+| Memoria del acelerador | `src/hal/zerocopy.*` | `Memoria::DmaBuf` (rpcmem o `/dev/dma_heap`), `CudaPinned`, `HipRegistrada`, `Compartida` y `Host`, elegida por el perfil (`memoria_para`). |
+| Núcleos grandes | `src/hal/cpu.*` | Detecta núcleos de rendimiento y fija a ellos los hilos de cálculo. |
+| Matriz por chip | `src/hal/matriz.*` | Orden de motores y proveedores para LLM, difusión y visión según el chip. |
+| Motores en proceso | `src/llm/motores.*` | LiteRT-LM, ONNX GenAI y Genie dentro del proceso; marca de caída y vuelta al proceso aparte. |
+| MCP | `src/mcp/` | Servidor (`POST /mcp`, `nexus-office mcp`) y cliente (`mcp.servidores` → herramientas `mcp_*` en el registro). |
+
 ## Flujo de un mensaje
 
 1. La UI envía `{"type":"chat"}` por WebSocket.

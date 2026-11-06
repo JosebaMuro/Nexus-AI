@@ -57,6 +57,13 @@ No se ha podido probar con dos GPU físicas; la elección se ha probado con la s
 | **LiteRT-LM** (2.5) | Motor de Google para modelos `.litertlm` | ✓ | OpenCL/Vulkan/Metal/WebGPU | Google Tensor, Snapdragon, Dimensity, Intel (con el *dispatch* del fabricante) | — |
 | **ONNX Runtime GenAI** (2.5) | Motor de Microsoft para carpetas ONNX con `genai_config.json` | ✓ | DirectML (cualquier GPU en Windows), CUDA | QNN (Snapdragon X en Windows ARM), OpenVINO, VitisAI | — |
 
+| **Difusión ONNX** (3.2) | Motor de imagen propio sobre ONNX Runtime para carpetas diffusers/optimum | ✓ | TensorRT, CUDA, ROCm, DirectML, CoreML, WebGPU | QNN (Hexagon), OpenVINO, NNAPI | CLIP/SigLIP |
+
+Desde la 3.2, LiteRT-LM, ONNX Runtime GenAI y Genie se cargan **dentro del proceso** de Agente IA; si uno se cae, se
+marca y la siguiente vez va en su proceso aparte (`motores.en_proceso: false` lo fuerza siempre). La **matriz por chip**
+(`GET /api/hal`, campo `matriz`) dice qué motor y proveedor se prueba primero en cada equipo. La difusión ONNX toma el
+proveedor de `media.difusion_proveedor` (`auto` = la matriz).
+
 llama-server va **incluido en los instaladores offline** con todas sus variantes: no se descarga nada al elegirlo.
 La opción **llama.cpp integrado** de la edición Python (llama-cpp-python dentro del programa) no existe en la edición
 C++: el selector la muestra como no disponible y llama-server, que es el mismo llama.cpp, hace su trabajo.
