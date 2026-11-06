@@ -19,6 +19,7 @@
 #include "models/models.h"
 #include "models/runtimes.h"
 #include "office/office.h"
+#include "mcp/mcp.h"
 #include "pipeline/pipeline.h"
 #include "rag/rag.h"
 #include "tools/tools.h"
@@ -243,6 +244,8 @@ void Services::start() {
       }
     }).detach();
   }
+  mcp = std::make_unique<mcp::Gestor>(*this);
+  if (config.get("mcp.servidores", json::array()).size()) mcp->conectar();
   if (config.flag("coop.enabled", false)) {
     try {
       coop->start();
@@ -259,6 +262,7 @@ void Services::shutdown() {
   hilo.reset();   // espera al plegado en curso antes de parar el LLM
   if (pipeline) pipeline->stop();   // termina la difusion en curso antes de parar los motores
   if (coop) coop->stop();
+  mcp.reset();   // espera a la conexion en curso y cierra los servidores MCP hijos
   if (llm) {
     auto ls = std::dynamic_pointer_cast<llm::LlamaServerBackend>(llm->backend("llamaserver"));
     if (ls) ls->stop();

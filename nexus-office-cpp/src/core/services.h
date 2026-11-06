@@ -47,6 +47,9 @@ class CoopNode;
 namespace nx::pipeline {
 class Pipeline;
 }
+namespace nx::mcp {
+class Gestor;
+}
 namespace nx::android_tune {
 class LiveTuner;
 }
@@ -107,7 +110,9 @@ class Services {
   std::unique_ptr<android_tune::LiveTuner> android_tuner;   // solo en la app Android autonoma
   // pipelines del dossier de arquitectura: percepcion -> base vectorial, difusion asincrona -> buffer de pantalla
   std::unique_ptr<pipeline::Pipeline> pipeline;
-  std::function<void(const json&)> emitir_pipeline;   // lo pone el servidor (WebSocket a las interfaces)
+  std::function<void(const json&)> emitir_pipeline;
+  // clientes MCP (mcp.servidores): sus herramientas entran en el registro como mcp_<servidor>_<nombre>
+  std::unique_ptr<mcp::Gestor> mcp;   // lo pone el servidor (WebSocket a las interfaces)
   // codificador de vision de la percepcion (CLIP/SigLIP en ONNX Runtime); nullptr si no hay modelo activo
   std::shared_ptr<difusion::CodificadorVision> codificador_vision();
 

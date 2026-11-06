@@ -416,6 +416,12 @@ void App::setup() {
     std::string host = req.remote_addr.empty() ? "127.0.0.1" : req.remote_addr;
     bool open = false;
     for (auto& p : OPEN_PATHS) open |= starts_with(req.path, p);
+    // MCP desde otro equipo: vale el token mcp.token (Authorization: Bearer) en lugar de la clave de red
+    if (!open && services_ && req.path == "/mcp") {
+      std::string tok = services_->config.str("mcp.token", "");
+      std::string auth = req.get_header_value("Authorization");
+      open = !tok.empty() && starts_with(auth, "Bearer ") && consteq(auth.substr(7), tok);
+    }
     if (!services_ || open || lan_ok(req, host)) {
       if (req.has_param("key") && !LOCAL.count(host))
         res.set_header("Set-Cookie", "nexus_key=" + req.get_param_value("key") +

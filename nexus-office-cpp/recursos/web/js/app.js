@@ -1545,8 +1545,26 @@
   $("#met-dias") && ($("#met-dias").onchange = guard(loadMetricas));
   $("#est-user-save") && ($("#est-user-save").onclick = guard(async () => { try { localStorage.setItem("nexus_usuario", $("#est-user").value.trim()); } catch {} toast("Perfil de usuario cambiado"); loadEstilo(); }));
   $("#est-reset") && ($("#est-reset").onclick = guard(async () => { if (!confirm("¿Olvidar todo lo aprendido de tu estilo?")) return; await api("/api/estilo", { method: "DELETE" }); loadEstilo(); }));
+  const loadMcp = async () => {
+    const m = await api("/api/mcp");
+    const base = location.origin + m.url;
+    const clientes = Object.values(m.clientes || {});
+    $("#mcp-box").innerHTML = `<div class="setting"><div class="lbl"><b>Servidor MCP de Agente IA</b><span>Otros programas (asistentes de escritorio, editores) usan las herramientas de aquí, con la misma política de aprobaciones.
+      HTTP: <span class="mono">${esc(base)}</span> · stdio: <span class="mono">nexus-office mcp</span>${m.token ? " · fuera de este equipo con el token mcp.token" : ""}</span></div><button class="btn sm ghost" id="mcp-copiar">⧉ COPIAR URL</button></div>
+      ${clientes.length ? clientes.map((c) => `<div class="item"><b>${esc(c.nombre)}</b> ${c.ok ? `<span class="tag ok">conectado</span> <span class="muted">${c.herramientas} herramientas · ${esc((c.servidor || {}).name || "")}</span>` : `<span class="tag bad">sin conexión</span> <span class="muted">${esc(c.error || "")}</span>`}</div>`).join("") : `<div class="muted">Sin servidores MCP externos.</div>`}`;
+    $("#mcp-copiar").onclick = () => copyText(base);
+    if ($("#mcp-servidores") !== document.activeElement) $("#mcp-servidores").value = JSON.stringify(m.servidores || [], null, 2);
+  };
+  $("#mcp-guardar").onclick = guard(async () => {
+    let servidores;
+    try { servidores = JSON.parse($("#mcp-servidores").value || "[]"); } catch (e) { return toast("JSON no válido: " + e.message, true); }
+    await api("/api/mcp/servidores", { method: "PUT", body: { servidores } });
+    toast("Conectando con los servidores MCP…"); setTimeout(() => loaders.tools(), 2500);
+  });
+  $("#mcp-reconectar").onclick = guard(async () => { await api("/api/mcp/reconectar", { method: "POST" }); toast("Reconectando…"); setTimeout(() => loaders.tools(), 2500); });
+
   loaders.tools = async () => {
-    loadMetricas().catch(() => {}); loadEstilo().catch(() => {});
+    loadMetricas().catch(() => {}); loadEstilo().catch(() => {}); loadMcp().catch(() => {});
     const d = await api("/api/tools");
     $("#pending-list").innerHTML = d.pending.map((p) => `<div class="item"><b>${esc(p.agent)}</b> → ${esc(p.tool)} <span class="tag ${p.risk}">${p.risk}</span><span class="muted"> · requiere ${p.level}</span></div>`).join("") || `<span class="muted">Nada pendiente.</span>`;
     d.pending.forEach(showApproval);
@@ -1554,7 +1572,7 @@
     $("#policy-box").innerHTML = ["low", "medium", "high"].map((r) => `<div class="setting"><div class="lbl"><b>Riesgo <span class="tag ${r}">${r}</span></b></div>
       <select class="input" data-pol="${r}" style="width:auto" ${S.token ? "" : "disabled"}>${opts.map((o) => `<option value="${o}" ${pol[r] === o ? "selected" : ""}>${names[o]}</option>`).join("")}</select></div>`).join("") + `<div class="muted">Las peticiones de nodos remotos se elevan un nivel.</div>`;
     $$("[data-pol]").forEach((s) => (s.onchange = guard(async () => { await api("/api/config", { method: "PUT", body: { "tools.policy": { ...pol, [s.dataset.pol]: s.value } } }); toast("Política actualizada"); })));
-    $("#tools-table").innerHTML = `<table class="tbl"><tr><th>HERRAMIENTA</th><th>DESCRIPCIÓN</th><th>RIESGO</th><th>PERMISOS</th><th>ORIGEN</th><th class="admin-only">ACTIVA</th></tr>${d.tools.map((t) => `<tr><td class="mono">${esc(t.name)}</td><td>${esc(t.description)}</td><td><span class="tag ${t.risk}">${t.risk}</span></td><td class="mono muted">${esc(t.permissions.join(", "))}</td><td>${t.source === "community" ? '<span class="tag accent">comunidad</span>' : "integrada"}</td>
+    $("#tools-table").innerHTML = `<table class="tbl"><tr><th>HERRAMIENTA</th><th>DESCRIPCIÓN</th><th>RIESGO</th><th>PERMISOS</th><th>ORIGEN</th><th class="admin-only">ACTIVA</th></tr>${d.tools.map((t) => `<tr><td class="mono">${esc(t.name)}</td><td>${esc(t.description)}</td><td><span class="tag ${t.risk}">${t.risk}</span></td><td class="mono muted">${esc(t.permissions.join(", "))}</td><td>${t.source === "community" ? '<span class="tag accent">comunidad</span>' : t.source === "mcp" ? '<span class="tag accent">MCP</span>' : "integrada"}</td>
       <td class="admin-only"><label class="switch"><input type="checkbox" data-ten="${t.name}" ${t.enabled ? "checked" : ""}><span></span></label>${t.source === "community" ? ` <button class="btn danger sm" data-unin="${t.name}">✕</button>` : ""}</td></tr>`).join("")}</table>`;
     $$("[data-ten]").forEach((c) => (c.onchange = guard(() => api(`/api/tools/${c.dataset.ten}/enabled`, { body: { enabled: c.checked } }))));
     $$("[data-unin]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/tools/community/${b.dataset.unin}`, { method: "DELETE" }); loaders.tools(); })));

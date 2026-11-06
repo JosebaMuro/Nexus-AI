@@ -12,6 +12,7 @@
 #include "util/crypto.h"
 #include "llm/motores.h"
 #include "media/difusion_onnx.h"
+#include "mcp/mcp.h"
 #include "httplib.h"
 #include "util/text.h"
 
@@ -41,6 +42,58 @@ void register_pipeline_routes(App& app) {
     return e;
   });
   // vuelve a probar dentro del proceso los motores que se cayeron (solo Admin)
+  // ---------------------------------------------------------------- MCP
+  // servidor MCP (Streamable HTTP, solo respuestas JSON): desde este equipo, con la clave de red o con mcp.token
+  app.post("/mcp", [](Ctx& c) -> Out {
+    std::string origen = c.header("Origin");
+    // una pagina web de otro sitio no puede usar el servidor MCP (DNS rebinding): el Origin debe ser este mismo servidor
+    if (!origen.empty() && origen.substr(origen.find("://") == std::string::npos ? 0 : origen.find("://") + 3) != c.header("Host"))
+      throw HttpErr(403, "Origen no permitido");
+    std::string cliente = c.header("Mcp-Client");
+    if (cliente.empty()) cliente = c.local() ? "local" : c.host;
+    json r = mcp::atender(c.app.S(), c.body, cliente, c.remote || !c.local());
+    Raw out;
+    out.headers.push_back({"Mcp-Session-Id", c.header("Mcp-Session-Id").empty() ? "agente-ia" : c.header("Mcp-Session-Id")});
+    if (r.is_null()) {   // solo notificaciones
+      out.status = 202;
+      return out;
+    }
+    out.body = jdump(r);
+    out.mime = "application/json";
+    return out;
+  });
+  app.get("/mcp", [](Ctx&) -> Out { return Raw{405, "", "text/plain"}; });   // sin flujo SSE de servidor
+  app.del("/mcp", [](Ctx&) -> Out { return Raw{405, "", "text/plain"}; });
+  app.get("/api/mcp", [](Ctx& c) -> Out {
+    auto& s = c.app.S();
+    json e = s.mcp ? s.mcp->estado() : json::object();
+    e["servidores"] = s.config.get("mcp.servidores", json::array());
+    e["token"] = !s.config.str("mcp.token", "").empty();
+    e["url"] = "/mcp";
+    return e;
+  });
+  // lista de servidores MCP externos que usan los agentes: [{nombre, orden[] | url, env, cabeceras, riesgo, activo}]
+  app.put("/api/mcp/servidores", [](Ctx& c) -> Out {
+    auto& s = c.app.S();
+    json lista = c.b("servidores");
+    if (!lista.is_array()) throw HttpErr(422, "servidores debe ser una lista");
+    for (auto& sv : lista) {
+      if (!sv.is_object() || jstr(sv, "nombre").empty()) throw HttpErr(422, "cada servidor necesita nombre");
+      if (jstr(sv, "url").empty() && (!sv.contains("orden") || !sv["orden"].is_array() || sv["orden"].empty()))
+        throw HttpErr(422, "el servidor " + jstr(sv, "nombre") + " necesita orden (lista) o url");
+      std::string r = jstr(sv, "riesgo", "medium");
+      if (r != "low" && r != "medium" && r != "high") throw HttpErr(422, "riesgo: low, medium o high");
+    }
+    s.config.set("mcp.servidores", lista);
+    if (s.mcp) s.mcp->conectar();
+    return json{{"ok", true}};
+  }, true);
+  app.post("/api/mcp/reconectar", [](Ctx& c) -> Out {
+    auto& s = c.app.S();
+    if (s.mcp) s.mcp->conectar();
+    return json{{"ok", true}};
+  }, true);
+
   app.post("/api/hal/caidas/olvidar", [](Ctx&) -> Out {
     llm::MotorBackend::olvidar_caidas();
     return json{{"ok", true}};

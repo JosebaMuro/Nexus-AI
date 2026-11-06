@@ -101,6 +101,12 @@ jobs:
           for f in "$(dirname "$OG")"/libonnxruntime.*.dylib; do [ -e "$f" ] && cp "$f" "$(dirname "$OG")/libonnxruntime.dylib"; done
           export ORT_LIB_PATH=$(ls "$(dirname "$OG")"/libonnxruntime.so.1 "$(dirname "$OG")"/libonnxruntime.dylib 2>/dev/null | head -1)
           probar onnx "$OG" mot/m
+          # motor de difusion propio y codificador de vision con el ONNX Runtime real (redes pequenas de prueba)
+          ORT=$(find mot/ox -path '*capi*' -type f \( -name 'libonnxruntime.so*' -o -name 'onnxruntime.dll' -o -name 'libonnxruntime*.dylib' \) | grep -v providers | head -1)
+          T=build/nexus-tests; [ -f build/Release/nexus-tests.exe ] && T=build/Release/nexus-tests.exe; [ -f "$T.exe" ] && T="$T.exe"
+          ORT="$PWD/$ORT"; command -v cygpath >/dev/null && ORT=$(cygpath -m "$ORT")
+          { NEXUS_ORT_LIB="$ORT" "$T" "difusion" && NEXUS_ORT_LIB="$ORT" "$T" "vision:"; } 2>&1 | tee mot/difusion.txt
+          if grep -q "sin ONNX Runtime" mot/difusion.txt; then echo "::error::el motor de difusion no cargo ONNX Runtime"; exit 1; fi
       - name: Herramienta de construccion
         shell: bash
         run: |
