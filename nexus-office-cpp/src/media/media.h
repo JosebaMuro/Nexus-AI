@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "core/config.h"
+#include "hal/zerocopy.h"
 #include "util/proc.h"
 #include "util/fs.h"
 #include "util/json.h"
@@ -29,6 +30,9 @@ class RuntimeManager;
 }
 namespace nx::llm {
 class LLMManager;
+}
+namespace nx::difusion {
+class Motor;
 }
 
 namespace nx::prompt {
@@ -82,9 +86,10 @@ class ImageEngine {
   ~ImageEngine();
   json model();
   json status();
-  // preview: vista previa de cada paso (fichero, paso) cuando sd-cli la admite (--preview-path); llega desde un hilo
-  // que vigila a sd-cli y que termina antes de que generate vuelva
-  using Preview = std::function<void(const fs::path&, int)>;
+  // preview: vista previa de cada paso (PNG en un bloque del asignador, paso). Con el motor ONNX llega desde el bucle
+  // de la UNet; con sd-cli (--preview-path), desde un hilo que lo vigila. En los dos casos termina antes de que
+  // generate vuelva
+  using Preview = std::function<void(const hal::Buffer& png, int paso)>;
   json generate(const std::string& prompt, const std::string& negative = "", std::optional<int> size = std::nullopt,
                 std::optional<int> steps = std::nullopt, std::optional<long long> seed = std::nullopt,
                 const std::string& idea = "", const Preview& preview = nullptr);
@@ -103,6 +108,15 @@ class ImageEngine {
              const std::string& negative, std::optional<int> size, std::optional<int> steps, long long seed,
              const fs::path& out);
   // sd-server con el modelo cargado: las imagenes siguientes no esperan a cargarlo (Flux o Z-Image tardan minutos)
+  // motor de difusion propio sobre ONNX Runtime para las carpetas ONNX (formato onnx-sd)
+  json onnx(const json& model, const std::string& prompt, const std::string& negative, std::optional<int> size,
+            std::optional<int> steps, long long seed, const fs::path& out);
+  std::unique_ptr<difusion::Motor> onnx_;
+  std::string onnx_key_;
+  std::set<std::string> onnx_fallidos_;   // proveedores que no cargaron este modelo
+  std::mutex onnx_mu_;
+  double onnx_used_ = 0;
+  json onnx_estado();
   bool via_server(const fs::path& exe, const SdPlan& plan, const json& req, const fs::path& out, std::string& why);
   void stop_server();
   const std::set<std::string>& flags_of(const fs::path& exe);

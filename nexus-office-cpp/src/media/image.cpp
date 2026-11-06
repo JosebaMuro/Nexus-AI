@@ -7,6 +7,8 @@
 
 #include "llm/llm.h"
 #include "media/media.h"
+#include "media/difusion_onnx.h"
+#include "hal/cpu.h"
 #include "media/scene.h"
 #include "models/models.h"
 #include "models/runtimes.h"
@@ -234,6 +236,12 @@ ImageEngine::ImageEngine(Config& config, models::Catalog& catalog, runtimes::Run
         L.info("El LLM vuelve a la GPU: se para el sd-server para dejarle la VRAM");
         stop_server();
       }
+      std::unique_lock<std::mutex> lo(onnx_mu_, std::try_to_lock);
+      if (lo.owns_lock() && onnx_ && onnx_->proveedor() != "cpu") {
+        L.info("El LLM vuelve a la GPU: se descarga el motor de difusion ONNX");
+        onnx_.reset();
+        onnx_key_.clear();
+      }
     };
   idle_ = std::thread([this] {
     while (!quit_) {
@@ -243,6 +251,12 @@ ImageEngine::ImageEngine(Config& config, models::Catalog& catalog, runtimes::Run
       if (server_ && server_used_ > 0 && now() - server_used_ > mins * 60) {
         L.info("sd-server sin uso desde hace ", fnum(mins, 0), " min: se para para liberar memoria");
         stop_server();
+      }
+      std::unique_lock<std::mutex> lo(onnx_mu_, std::try_to_lock);
+      if (lo.owns_lock() && onnx_ && onnx_used_ > 0 && now() - onnx_used_ > mins * 60) {
+        L.info("motor de difusion ONNX sin uso desde hace ", fnum(mins, 0), " min: se descarga");
+        onnx_.reset();
+        onnx_key_.clear();
       }
     }
   });
@@ -279,7 +293,14 @@ json ImageEngine::status() {
   auto sd = rt_.exe("sd", profile_());
   json st = {{"model", m.is_null() ? json() : m["id"]},
              {"runtime", sd ? json(sd->variant) : json()},
-             {"engine", !m.is_null() && sd ? "sd.cpp" : "escena"}};
+             {"engine", !m.is_null() && jstr(m, "format") == "onnx-sd" ? "onnx"
+                        : !m.is_null() && sd                           ? "sd.cpp"
+                                                                       : "escena"}};
+  if (!m.is_null() && jstr(m, "format") == "onnx-sd") {
+    st["onnx"] = onnx_estado();
+    st["proveedores"] = difusion::proveedores_para(profile_());
+    return st;
+  }
   if (!m.is_null() && sd) {
     SdPlan plan = sd_plan(m, profile_(), sd->variant, flags_of(sd->exe));
     st["arch"] = plan.arch;
@@ -326,6 +347,15 @@ json ImageEngine::generate(const std::string& prompt, const std::string& negativ
                     : !sd       ? "No hay motor stable-diffusion.cpp para este equipo"
                                 : "El modelo " + jstr(m, "id") + " no es compatible con sd.cpp (" + jstr(m, "format") + ")";
   std::string fmt = jstr(m, "format");
+  // carpeta ONNX: motor de difusion propio dentro del proceso (NPU, GPU o CPU segun el chip)
+  if (!m.is_null() && fmt == "onnx-sd") {
+    try {
+      return onnx(m, english(prompt), negative, size, steps, seed, out);
+    } catch (const std::exception& e) {
+      why = "El motor de difusion ONNX fallo: " + uright(trim(e.what()), 300);
+      L.warning(why);
+    }
+  }
   if (!m.is_null() && sd && (fmt == "gguf" || fmt == "safetensors" || fmt == "ckpt")) {
     // el prompt en ingles se prepara con el LLM ANTES de que el modelo de imagen ocupe la GPU
     const std::string en = english(prompt);
@@ -414,6 +444,83 @@ json ImageEngine::generate(const std::string& prompt, const std::string& negativ
     note = "No he reconocido ningun elemento del prompt (lugar, objeto, animal, hora o clima). " + note;
   return {{"engine", engine}, {"url", "/outputs/images/" + S(out.filename())}, {"path", S(out)},
           {"seed", seed},     {"note", note}};
+}
+
+json ImageEngine::onnx(const json& model, const std::string& prompt, const std::string& negative,
+                       std::optional<int> size, std::optional<int> steps, long long seed, const fs::path& out) {
+  std::lock_guard<std::mutex> lk(onnx_mu_);
+  const fs::path dir = P(jstr(model, "path"));
+  if (!difusion::es_modelo(dir)) throw std::runtime_error("la carpeta del modelo no tiene text_encoder, unet y vae_decoder ONNX");
+  const json gen = model.value("gen", json::object()).is_object() ? model.value("gen", json::object()) : json::object();
+  const json perfil = profile_();
+  // proveedor fijado en la configuracion (media.difusion_proveedor) o los de la matriz por chip, en orden
+  std::vector<std::string> provs;
+  std::string fijo = config_.str("media.difusion_proveedor", "auto");
+  if (!fijo.empty() && fijo != "auto") provs = {fijo, "cpu"};
+  else provs = difusion::proveedores_para(perfil);
+  const std::string clave_modelo = S(dir);
+  if (onnx_key_.rfind(clave_modelo + "|", 0) != 0) onnx_fallidos_.clear();
+  auto t0 = now();
+  std::string errores;
+  for (const auto& prov : provs) {
+    if (onnx_fallidos_.count(prov)) continue;
+    std::string key = clave_modelo + "|" + prov;
+    try {
+      if (!onnx_ || onnx_key_ != key) {
+        auto lib = difusion::biblioteca_ort(difusion::variante_de(prov));
+        if (!lib) throw std::runtime_error("no hay ONNX Runtime con " + prov);
+        onnx_.reset();
+        difusion::Opciones o;
+        o.lib = *lib;
+        o.modelo = dir;
+        o.cache = paths::sub({"cache", "difusion"});
+        o.proveedor = prov;
+        o.hilos = (int)config_.num("media.difusion_hilos", 0);
+        o.memoria = hal::memoria_preferida();
+        onnx_ = difusion::Motor::abrir(o);
+        onnx_key_ = key;
+      }
+      difusion::Peticion p;
+      p.prompt = prompt;
+      p.negativo = negative;
+      p.ancho = p.alto = size.value_or((int)jnum(gen.value("size", json(512)), 512));
+      p.pasos = steps.value_or((int)jnum(gen.value("steps", json(4)), 4));
+      p.guia = jnum(gen.value("cfg", json(1.0)), 1.0);
+      p.semilla = (uint64_t)seed;
+      if (const Preview* pv = t_preview)
+        p.vista = [pv](const hal::Buffer& png, int paso, int) {
+          try {
+            (*pv)(png, paso);
+          } catch (...) {
+          }
+        };
+      auto r = onnx_->generar(p);
+      onnx_used_ = now();
+      if (!write_file(out, std::string((const char*)r.png.data(), r.png.size())))
+        throw std::runtime_error("no se pudo guardar la imagen");
+      json res = {{"engine", "onnx-" + prov}, {"model", model["id"]},  {"url", "/outputs/images/" + S(out.filename())},
+                  {"path", S(out)},           {"seed", seed},          {"steps", r.pasos},
+                  {"size", r.ancho},          {"seconds", round_to(now() - t0, 1)}, {"prompt", prompt},
+                  {"proveedor", prov},        {"tiempos", r.tiempos}};
+      if (!errores.empty()) res["note"] = "Antes fallo: " + uright(errores, 300);
+      return res;
+    } catch (const std::exception& e) {
+      // proveedor que no carga o no ejecuta este modelo: se recuerda y se prueba el siguiente de la matriz
+      L.warning("difusion ONNX en ", prov, ": ", uright(e.what(), 300));
+      errores += (errores.empty() ? "" : "; ") + prov + ": " + uright(e.what(), 120);
+      onnx_fallidos_.insert(prov);
+      onnx_.reset();
+      onnx_key_.clear();
+    }
+  }
+  throw std::runtime_error(errores.empty() ? "ningun proveedor de ONNX Runtime disponible" : errores);
+}
+
+json ImageEngine::onnx_estado() {
+  std::lock_guard<std::mutex> lk(onnx_mu_);
+  json j = {{"cargado", onnx_ != nullptr}, {"fallidos", onnx_fallidos_}};
+  if (onnx_) j["motor"] = onnx_->estado();
+  return j;
 }
 
 bool ImageEngine::must_lend(const std::string& variant, const SdPlan& plan, int size, double llm_gb) {
@@ -578,7 +685,8 @@ json ImageEngine::sdcpp(const fs::path& exe, const std::string& variant, const j
           if (ec || t == visto) continue;
           visto = t;
           try {
-            (*pv)(prev_png, ++paso);
+            hal::Buffer b = hal::leer_fichero(S(prev_png));
+            if (b) (*pv)(b, ++paso);
           } catch (...) {
           }
         }

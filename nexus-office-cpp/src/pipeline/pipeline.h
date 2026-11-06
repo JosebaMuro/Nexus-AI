@@ -59,7 +59,7 @@ struct FramePantalla {
 };
 
 // vista previa de un paso de la difusion: fichero con la imagen y numero de paso
-using VistaPrevia = std::function<void(const fs::path&, int)>;
+using VistaPrevia = std::function<void(const hal::Buffer& png, int paso)>;   // PNG en un bloque del asignador
 
 struct Dependencias {
   DB* db = nullptr;
@@ -126,7 +126,7 @@ class Pipeline {
   void bucle_difusion();
   void bucle_presentador();
   void percibir(Frame& f);
-  void publicar(uint64_t trabajo, int paso, bool final, const fs::path& fichero);
+  void publicar(uint64_t trabajo, int paso, bool final, const hal::Buffer& png);
   void emitir(const json& e);
   json fila(const json& r, double score = -1);
 

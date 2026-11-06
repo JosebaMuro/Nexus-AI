@@ -396,17 +396,17 @@ void Pipeline::bucle_difusion() {
       if (!dep_.generar) throw std::runtime_error("no hay motor de difusion");
       // vista previa de cada paso: llega desde el hilo que vigila a sd.cpp, que termina antes de que generar vuelva;
       // asi el buffer de pantalla solo tiene un escritor a la vez
-      VistaPrevia vp = [this, t](const fs::path& p, int paso) {
+      VistaPrevia vp = [this, t](const hal::Buffer& png, int paso) {
         {
           std::lock_guard<std::mutex> lk(mu_trabajos_);
           t->paso = paso;
         }
-        publicar(t->d.id, paso, false, p);
+        publicar(t->d.id, paso, false, png);
       };
       json res = dep_.generar(t->d, vp);
       fs::path out = P(jstr(res, "path"));
       int paso_final = (int)jnum(res.value("steps", json(0)), 0);
-      if (!out.empty()) publicar(t->d.id, paso_final, true, out);
+      if (!out.empty()) publicar(t->d.id, paso_final, true, leer_en_bloque(out));
       {
         std::lock_guard<std::mutex> lk(mu_trabajos_);
         t->estado = "hecho";
@@ -434,11 +434,10 @@ void Pipeline::bucle_difusion() {
 }
 
 // ================================================================== buffer de pantalla
-void Pipeline::publicar(uint64_t trabajo, int paso, bool final, const fs::path& fichero) {
-  hal::Buffer b = leer_en_bloque(fichero);
+void Pipeline::publicar(uint64_t trabajo, int paso, bool final, const hal::Buffer& b) {
   if (!b) return;
   FramePantalla f;
-  f.imagen = std::move(b);
+  f.imagen = b;   // otra referencia al mismo bloque, sin copiar
   f.trabajo = trabajo;
   f.paso = paso;
   f.final = final;

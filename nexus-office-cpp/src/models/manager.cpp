@@ -3,6 +3,7 @@
 #include <set>
 #include <thread>
 
+#include "media/difusion_onnx.h"
 #include "models/models.h"
 #include "office/office.h"
 #include "util/crypto.h"
@@ -142,6 +143,8 @@ json classify(const fs::path& p, const std::string& hint) {
     // Qualcomm AI Hub / Genie: genie_config.json y los binarios de contexto QNN (.bin) para la NPU Hexagon
     else if (is_file(p / "genie_config.json")) info = {{"format", "genie"}, {"kind", "llm"}};
     else if (is_file(p / "config.json")) info = {{"format", "transformers"}, {"kind", "llm"}};
+    // carpeta ONNX de difusion (motor propio sobre ONNX Runtime) antes que diffusers en PyTorch
+    else if (is_file(p / "model_index.json") && is_file(p / "unet" / "model.onnx")) info = {{"format", "onnx-sd"}, {"kind", "image"}};
     else if (is_file(p / "model_index.json")) info = {{"format", "diffusers"}, {"kind", "image"}};
     else if (!glob(p, "*.xml").empty()) info = {{"format", "openvino"}, {"kind", "llm"}};
     return info;
@@ -505,6 +508,18 @@ json resolve_por_hardware(const json& rec, const json& profile, const json& list
       out["file"] = general;
       out["acelera"] = "GPU / CPU";
     }
+  } else if (fmt == "onnx-sd") {
+    // difusion ONNX: el repositorio entero (text_encoder, unet, vae_decoder, tokenizer, scheduler); la misma carpeta
+    // va en todos los proveedores y se elige el del chip al cargarla
+    out["carpeta"] = "";
+    out["recursivo"] = true;
+    out["file"] = "model_index.json";
+    auto prov = difusion::proveedores_para(profile);
+    static const std::map<std::string, std::string> N = {
+        {"qnn", "NPU (QNN)"},          {"nnapi", "NPU (NNAPI)"},          {"tensorrt", "GPU (TensorRT)"},
+        {"cuda", "GPU (CUDA)"},        {"rocm", "GPU (ROCm)"},           {"dml", "GPU (DirectML)"},
+        {"openvino-npu", "NPU (OpenVINO)"}, {"openvino-gpu", "GPU (OpenVINO)"}, {"coreml", "Neural Engine (CoreML)"}};
+    out["acelera"] = !prov.empty() && N.count(prov[0]) ? N.at(prov[0]) : "CPU";
   } else if (fmt == "onnx-genai") {
     std::vector<std::string> dirs;
     for (auto& n : names)
@@ -623,16 +638,21 @@ std::string ModelManager::download_recommended(const std::string& rec_id) {
       std::string pre = jstr(rec, "carpeta");
       fs::path root = paths::models_dir() / "huggingface" / P(replace_all(repo, "/", "__"));
       files.clear();
+      const bool recursivo = truthy(rec.value("recursivo", json(false)));
       for (auto& f : rec.value("listing", json::array())) {
         std::string p = jstr(f, "path");
         if (!pre.empty() && !starts_with(p, pre + "/")) continue;
-        if (pre.empty() && contains(p, "/")) continue;
+        if (pre.empty() && contains(p, "/") && !recursivo) continue;
+        // difusion: el codificador del VAE y el filtro de seguridad no hacen falta para generar
+        if (recursivo && (starts_with(p, "vae_encoder/") || starts_with(p, "safety_checker/") || starts_with(p, ".")))
+          continue;
         files.push_back({hf->download_url(repo, p), root / P(p), {}, (uint64_t)jnum(f.value("size", json(0)))});
       }
       fs::path dir = pre.empty() ? root : root / P(pre);
       run(jid, files, [=, this] {
-        json entry = register_model(dir, "huggingface", repo, "llm", "", jstr(rec, "id"), jstr(rec, "name"),
-                                    {{"acelera", rec.value("acelera", json(""))}});
+        json entry = register_model(dir, "huggingface", repo, jstr(rec, "kind").empty() ? "llm" : jstr(rec, "kind"), "",
+                                    jstr(rec, "id"), jstr(rec, "name"),
+                                    {{"acelera", rec.value("acelera", json(""))}, {"gen", rec.value("gen", json())}});
         activate(jstr(entry, "id"));   // elegido a mano: queda listo para usar con su motor
         return entry;
       });

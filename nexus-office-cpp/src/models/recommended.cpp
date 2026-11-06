@@ -2,6 +2,7 @@
 #include <map>
 #include <set>
 
+#include "media/difusion_onnx.h"
 #include "gen/data.h"
 #include "hardware/hardware.h"
 #include "llm/motores.h"
@@ -46,16 +47,21 @@ json recommend(const json& profile, const json& sector) {
   for (auto& r : recommended_list()) {
     std::string kind = jstr(r, "kind");
     // en el movil: LLM, embeddings y los modelos de imagen ligeros (sd.cpp va dentro de la APK desde la 2.10)
-    if (hw::android() && kind != "llm" && kind != "embed" &&
-        !(kind == "image" && truthy(r.value("movil", json(false))) && !runtimes::android_sd_variants().empty()))
-      continue;
     std::string motor = jstr(r, "motor");
+    const bool sd_onnx = motor == "difusion-onnx";
+    if (hw::android() && kind != "llm" && kind != "embed" &&
+        !(kind == "image" && truthy(r.value("movil", json(false))) &&
+          (sd_onnx ? difusion::biblioteca_ort().has_value() : !runtimes::android_sd_variants().empty())))
+      continue;
     if (hw::android() && (motor == "onnx")) continue;   // ONNX Runtime GenAI no va en la APK
     std::string id = jstr(r, "id");
     if (truthy(r.value("sector_only", json(false))) && !sector.contains(id)) continue;
     json item = r;
     item["fit"] = fit(r, profile);
-    if (!motor.empty()) {
+    if (sd_onnx) {
+      item["motor_nombre"] = "Difusión propia sobre ONNX Runtime (NPU, GPU o CPU)";
+      item["motor_ok"] = difusion::biblioteca_ort().has_value();
+    } else if (!motor.empty()) {
       // modelo en el formato de otro motor: se dice cual y si va incluido en este paquete
       const motores::Info* mi = motores::info(motor);
       item["motor_nombre"] = mi ? mi->nombre : motor;

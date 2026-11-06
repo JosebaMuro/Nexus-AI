@@ -10,6 +10,10 @@
 // - Memoria::Compartida respalda el bloque con memoria compartida del sistema (memfd en Linux y Android,
 //   CreateFileMapping en Windows). El descriptor se puede pasar a un proceso hijo (llama-server, sd.cpp, motores en
 //   proceso aparte) para que lo mapee en vez de recibir los datos copiados por una tuberia.
+// - Memoria del acelerador (3.2): DmaBuf (rpcmem de Qualcomm o /dev/dma_heap en Linux y Android: la NPU Hexagon y
+//   las GPU Adreno/Mali la leen sin copia), CudaPinned (cudaHostAlloc: copias a la GPU NVIDIA por DMA, asincronas) y
+//   HipRegistrada (hipHostRegister, igual para AMD). Si el driver o la biblioteca no estan, el bloque cae a memoria
+//   compartida o normal; Buffer::memoria() dice la que se consiguio.
 // - Pool recicla bloques del mismo tamano con una lista libre lock-free (MpmcRing): pedir y devolver un bloque no
 //   toca el asignador del sistema ni ningun mutex.
 #pragma once
@@ -24,8 +28,15 @@
 
 namespace nx::hal {
 
-enum class Memoria { Host, Compartida };
+enum class Memoria { Host, Compartida, DmaBuf, CudaPinned, HipRegistrada };
 const char* nombre(Memoria m);
+// memoria que se pide para los tensores y bloques de los motores segun el hardware (perfil de hardware/profile)
+Memoria memoria_para(const json& perfil);
+// memoria por defecto de los tensores de los motores (la fija Services al arrancar con memoria_para)
+Memoria memoria_preferida();
+void fijar_memoria_preferida(Memoria m);
+// que tipos de memoria del acelerador hay en este equipo (se prueba a reservar una pagina de cada uno)
+json memorias_disponibles();
 
 inline constexpr size_t kPagina = 4096;
 
@@ -51,7 +62,7 @@ class Buffer {
   std::string_view vista() const { return {(const char*)data(), size()}; }
   Memoria memoria() const;
   bool compartida() const { return b_ && memoria() == Memoria::Compartida; }
-  // descriptor para otro proceso: "fd:<n>" (Linux/Android, mapeable en /proc/<pid>/fd/<n>), "win:<handle>" o ""
+  // descriptor para otro proceso: "fd:<n>" (memfd o dma-buf) (Linux/Android, mapeable en /proc/<pid>/fd/<n>), "win:<handle>" o ""
   std::string descriptor() const;
   long referencias() const;
   uintptr_t direccion() const { return (uintptr_t)data(); }
@@ -82,6 +93,9 @@ class Pool {
  private:
   PoolImpl* impl_;
 };
+
+// lee un fichero entero en un bloque del pool de imagenes (sin pasar por un std::string); vacio si no se puede
+Buffer leer_fichero(const std::string& ruta_utf8);
 
 // pools globales del programa: frames (hasta 4 MB: 1080p RGBA o un JPEG grande) e imagenes (hasta 16 MB)
 Pool& pool_frames();

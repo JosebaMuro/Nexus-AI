@@ -219,11 +219,7 @@ TEST("pipeline: percepcion a la base vectorial y difusion asincrona al buffer de
   d.generar = [&](const pipeline::DescriptorTrabajo& t, const pipeline::VistaPrevia& vp) {
     if (std::this_thread::get_id() != hilo_prueba) ++generando_en_otro_hilo;
     if (t.prompt == "falla") throw std::runtime_error("sin modelo");
-    fs::path prev = dir / "prev.png";
-    for (int paso = 1; paso <= 3; ++paso) {
-      write_file(prev, png(32, 32, (uint8_t)(paso * 60), 0, 0));
-      vp(prev, paso);
-    }
+    for (int paso = 1; paso <= 3; ++paso) vp(hal::copiar(png(32, 32, (uint8_t)(paso * 60), 0, 0)), paso);
     fs::path out = dir / ("img" + std::to_string(t.id) + ".png");
     write_file(out, png(64, 64, 0, 200, 0));
     return json{{"path", S(out)}, {"url", "/outputs/images/x.png"}, {"steps", 3}, {"engine", "falso"}};
