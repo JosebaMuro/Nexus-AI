@@ -136,3 +136,29 @@ nexus-office evaluar --tareas mis-tareas.json                  # tus propias tar
 La prueba `evaluacion: el banco rápido...` de `nexus-tests` exige al menos un 80 % de enrutado y un 90 % de
 herramientas en el modo rápido, para que un cambio no los empeore sin que se note. El modo completo sirve para comparar
 modelos antes de cambiar el recomendado.
+
+## Asistente de configuración
+
+`src/agents/asistente.{h,cpp}` (servidor) y `recursos/web/js/asistente-agentes.js` (interfaz) crean o ajustan un agente
+en cuatro pasos: puesto, forma de ser, qué sabe y qué hace, y revisar. La interfaz solo recoge las respuestas; la
+ficha y el prompt se redactan en C++.
+
+- **Plantillas** (`plantillas()`): los agentes de serie de `recursos/agents/defaults` (salvo el coordinador `nexus`) y
+  el catálogo de oficina `recursos/office/agentes` (grupos *General*, *Oficina* y *Oficios y profesiones*). Cada una
+  lleva ya sus respuestas (`perfil_de()`): paquetes deducidos de sus herramientas y creatividad de su temperatura.
+- **Respuestas** (`perfil`): `plantilla, nombre, puesto, descripcion, icono, color, sexo, trato (cercano|usted|desenfadado),
+  longitud (breves|normales|detalladas), creatividad (precisa|equilibrada|creativa), proactivo, idioma (es|auto),
+  reglas, especialidad, palabras, paquetes, modelo, memoria, delegar, prompt_manual`. Lo que falte se toma de la
+  plantilla. Se guardan en la clave `perfil` del YAML del agente (solo si existe; los YAML de siempre no cambian).
+- **Prompt** (`redactar_prompt()`): la base es el prompt de la plantilla (con «Te llamas X.» si se cambia el nombre) o,
+  desde cero, «Eres X, puesto de {assistant_name}…» con su especialidad; después, *Forma de trabajar:* con una línea
+  por respuesta y las reglas propias. `prompt_manual` no vacío sustituye todo lo redactado.
+- **Herramientas**: ocho paquetes sin solapes (`paquetes()`); se filtran a las instaladas, y las de la plantilla que
+  no son de ningún paquete se conservan. `todas` = `["*"]`. Creatividad → temperatura 0,2 / 0,5 / 0,9.
+- **Comprobaciones** (`construir()`): nombre obligatorio; id a partir del nombre sin acentos y con sufijo `-2`, `-3`…
+  si está ocupado (al editar se conserva); solo delega en agentes que existen y nunca en sí mismo, y solo con el
+  paquete de equipo; sin palabras clave usa su nombre y puesto para el enrutado; avisos en lenguaje sencillo.
+- **Conocimiento**: al guardar, `sembrar()` pasa al grafo del agente las relaciones `grafo` de su plantilla (como al
+  aplicar un perfil de oficina).
+- **API**: `GET /api/agents/asistente` y `POST /api/agents/asistente` `{respuestas, editar, guardar}` (admin).
+  Pruebas en `tests/test_asistente.cpp` y `tests/test_server.cpp`.

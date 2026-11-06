@@ -600,8 +600,6 @@ linux/    sh Nexus-Office-{version}-linux-x86_64.run [carpeta] [--oficina=herrer
           luego: nexus-office-c   |   servicio: sudo nexus-office-c servicio instalar [--red]
           Nexus-Office-{version}-linux-x86_64.AppImage / -aarch64.AppImage   sin instalar: chmod +x y abrir
           flatpak install --user Nexus-Office-{version}-linux-x86_64.flatpak  (o -aarch64; pide el runtime de Flathub)
-macos/    Nexus-Office-{version}-macos-arm64.tar.gz (Apple Silicon) / macos-x86_64 (Intel): descomprimir y abrir
-          "Nexus-Office.command" (o ./install.sh --oficina=herreria --servicio && ./start.sh)
 android/  Nexus-Office-{version}-android-autonomo.apk  Agente IA C++ completo dentro del movil (ARM64, Android 9+)
           Nexus-Office-{version}-android-vpn.apk       app ligera que conecta con el Agente IA de la oficina
 Nexus-Office-{version}-codigo-fuente.zip               codigo C++ limpio, pruebas, empaquetado, recursos y firmware

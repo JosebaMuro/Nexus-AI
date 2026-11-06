@@ -185,6 +185,15 @@ SdPlan sd_plan(const json& model, const json& profile, const std::string& varian
     json comps = model.value("componentes", json::object());
     if (comps.is_object() && !jstr(comps, "vae").empty() && is_file(P(jstr(comps, "vae"))))
       p.model_args.insert(p.model_args.end(), {"--vae", jstr(comps, "vae")});
+    // TAESD: decodificador diminuto (5-10 MB) en lugar de la VAE completa. La VAE es la parte mas lenta en la CPU y
+    // en el movil (y la que mas memoria pide); con TAESD la imagen sale en una fraccion del tiempo, algo mas suave
+    std::string taesd = comps.is_object() ? jstr(comps, "taesd") : "";
+    bool slow = starts_with(variant, "cpu") || variant == "system" || sys::is_android() ||
+                jnum(profile.value("vram_gb", json(0))) < 6;
+    json g = model.value("gen", json());
+    bool want = !g.is_object() || truthy(g.value("taesd", json(true)));
+    if (!taesd.empty() && is_file(P(taesd)) && has("--taesd") && slow && want)
+      p.model_args.insert(p.model_args.end(), {"--taesd", taesd});
   }
   // ajustes por hardware
   bool gpu = !starts_with(variant, "cpu") && variant != "system";
@@ -364,7 +373,10 @@ json ImageEngine::generate(const std::string& prompt, const std::string& negativ
           why = "stable-diffusion.cpp fallo: " + uright(msg, 300);
         }
       }
-      // una GPU que no arranca (Metal virtual, driver roto...): antes del compositor se prueba en la CPU
+      // una GPU que no arranca (Metal virtual, driver roto...): antes del compositor se prueba en la CPU. En el
+      // movil se recuerda: la proxima imagen va directa a la CPU sin esperar a que falle otra vez el driver
+      if (sys::is_android() && !starts_with(sd->variant, "cpu") && !OOM.test(msg))
+        runtimes::mark_sd_broken(sd->variant, msg);
       auto cpu = starts_with(sd->variant, "cpu") ? std::nullopt : rt_.exe("sd", profile_(), "cpu");
       if (cpu && starts_with(cpu->variant, "cpu")) {
         L.warning("sd.cpp fallo en ", sd->variant, " (", uright(msg, 200), "); se reintenta en la CPU");
@@ -441,7 +453,7 @@ std::string ImageEngine::english(const std::string& prompt) {
 
 bool ImageEngine::via_server(const fs::path& cli, const SdPlan& plan, const json& req, const fs::path& out,
                              std::string& why) {
-  fs::path exe = cli.parent_path() / P(std::string("sd-server") + (sys::is_windows() ? ".exe" : ""));
+  fs::path exe = runtimes::sd_server_for(cli);
   std::string mode = config_.str("media.sd_servidor", "auto");
   if (mode == "no" || mode == "off" || !is_file(exe)) return false;
   std::lock_guard<std::mutex> lk(mu_);

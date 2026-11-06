@@ -4,9 +4,11 @@
 
 #include <algorithm>
 #include <csignal>
+#include <set>
 #include <thread>
 
 #include "agents/agents.h"
+#include "agents/asistente.h"
 #include "coop/coop.h"
 #include "remote/remote.h"
 #include "core/service.h"
@@ -1331,19 +1333,46 @@ void register_routes(App& app) {
   app.get("/api/outputs", [](Ctx& c) -> Out {
     long long limit = c.qi("limit", 60);
     json out = json::object();
-    for (auto* kind : {"images", "music", "docs"}) {
+    for (auto* kind : {"images", "music", "docs", "videos"}) {
       auto files = glob(paths::sub({"outputs", kind}), "*.*");
       std::stable_sort(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) { return mtime(a) > mtime(b); });
       json list = json::array();
       for (auto& f : files) {
         std::string ext = f.extension().string();
-        if (ext != ".png" && ext != ".jpg" && ext != ".wav" && ext != ".mid" && ext != ".pdf") continue;
+        if (ext != ".png" && ext != ".jpg" && ext != ".wav" && ext != ".mid" && ext != ".pdf" && ext != ".webm" &&
+            ext != ".mp4" && ext != ".avi")
+          continue;
         if ((long long)list.size() >= limit) break;
         list.push_back(std::string("/outputs/") + kind + "/" + S(f.filename()));
       }
       out[kind] = list;
     }
     return out;
+  });
+
+  // editor de video (video.html): el WebM/MP4 que monta el navegador se guarda en outputs/videos
+  app.post("/api/video/guardar", [](Ctx& c) -> Out {
+    auto f = c.file("video");
+    if (!f) throw missing_field("body", "video");
+    std::string ext = lower(P(f->filename).extension().string());
+    if (ext != ".webm" && ext != ".mp4") ext = contains(f->content_type, "mp4") ? ".mp4" : ".webm";
+    if (f->content.size() > (size_t)2 << 30) throw HttpErr(413, "Video demasiado grande");
+    std::string name = std::to_string((long long)now()) + "_" + media::slug_name(c.form("titulo", "video"), 40, "video") + ext;
+    fs::path out = paths::sub({"outputs", "videos"}) / P(name);
+    if (!write_file(out, f->content)) throw HttpErr(500, "No se pudo guardar el video");
+    return json{{"url", "/outputs/videos/" + name}, {"bytes", f->content.size()}};
+  });
+
+  // video rapido desde el Estudio: la misma herramienta que usan los agentes (crear_video)
+  app.post("/api/video/rapido", [](Ctx& c) -> Out {
+    tools::ToolContext tc;
+    tc.services = &c.app.S();
+    tc.agent = "estudio";
+    try {
+      return tools::crear_video(c.body.is_object() ? c.body : json::object(), tc);
+    } catch (const std::exception& e) {
+      throw HttpErr(400, e.what());
+    }
   });
 
   app.post("/api/prompt/enhance", [](Ctx& c) -> Out {
@@ -1445,6 +1474,74 @@ void register_routes(App& app) {
       throw HttpErr(400, e.what());
     }
     return json{{"ok", true}};
+  }, true);
+
+  // ------------------------------------------------------------------ asistente de configuracion de agentes
+  // plantillas de puesto, paquetes de herramientas (solo los instalados), agentes para el equipo y modelos
+  app.get("/api/agents/asistente", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    std::map<std::string, std::string> riesgo;   // herramienta instalada -> riesgo
+    for (auto& t : s.tools->list()) riesgo[jstr(t, "name")] = jstr(t, "risk", "low");
+    // permiso que pedira cada paquete segun tools.policy (lo mas estricto de sus herramientas)
+    json pol = s.config.get("tools.policy", json::object());
+    static const std::vector<std::string> ORDEN = {"auto", "ask", "admin", "deny"};
+    json paq = json::array();
+    for (auto p : agents::asistente::paquetes()) {
+      json tl = json::array();
+      size_t nivel = 0;
+      for (auto& t : p["tools"]) {
+        auto it = riesgo.find(t.get<std::string>());
+        if (it == riesgo.end()) continue;
+        tl.push_back(t);
+        std::string d = pol.is_object() && pol.contains(it->second) ? jstr(pol, it->second) : "admin";
+        size_t i = std::find(ORDEN.begin(), ORDEN.end(), d) - ORDEN.begin();
+        nivel = std::max(nivel, std::min(i, ORDEN.size() - 1));
+      }
+      if (tl.empty()) continue;
+      p["tools"] = tl;
+      p["permiso"] = ORDEN[nivel];
+      paq.push_back(p);
+    }
+    json equipo = json::array();
+    for (auto& a : s.agents->all())
+      equipo.push_back({{"id", a.id}, {"name", a.name}, {"icon", a.icon}, {"color", a.color},
+                        {"description", a.description}, {"enabled", a.enabled}});
+    json modelos = json::array({{{"id", "default"}, {"nombre", "Automático: el modelo general del equipo"}},
+                                {{"id", "especialidad:finanzas"}, {"nombre", "IA de finanzas (si está instalada)"}},
+                                {{"id", "nube:"}, {"nombre", "IA online con tu clave (si no hay, la local)"}}});
+    return json{{"plantillas", agents::asistente::plantillas()}, {"paquetes", paq}, {"agentes", equipo},
+                {"modelos", modelos}, {"vacio", agents::asistente::perfil_de(nullptr)}};
+  });
+
+  // respuestas -> ficha y prompt (vista previa); con "guardar": true la guarda y siembra el conocimiento del puesto
+  app.post("/api/agents/asistente", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    std::vector<std::string> herramientas, ids;
+    for (auto& t : s.tools->list()) herramientas.push_back(jstr(t, "name"));
+    std::map<std::string, std::vector<std::string>> palabras;
+    for (auto& a : s.agents->all()) {
+      ids.push_back(a.id);
+      if (a.enabled) palabras[a.id] = a.keywords;
+    }
+    std::string editando = c.bs("editar", "");
+    if (!editando.empty() && std::find(ids.begin(), ids.end(), editando) == ids.end())
+      throw HttpErr(404, "no existe el agente " + editando);
+    json out;
+    try {
+      out = agents::asistente::construir(c.b("respuestas"), herramientas, ids, editando, palabras);
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
+    out["guardado"] = false;
+    if (truthy(c.b("guardar", false))) {
+      auto spec = s.agents->save(out["agente"]);
+      out["agente"] = spec.to_json();
+      out["guardado"] = true;
+      out["sembradas"] = s.graph ? agents::asistente::sembrar(*s.graph, spec.id,
+                                                              agents::asistente::plantilla(jstr(spec.perfil, "plantilla")))
+                                 : 0;
+    }
+    return out;
   }, true);
 
   // ------------------------------------------------------------------ oficina (perfiles de pyme)

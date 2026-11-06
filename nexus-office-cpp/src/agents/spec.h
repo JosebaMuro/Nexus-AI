@@ -25,6 +25,8 @@ struct AgentSpec {
   std::string icon = "◆";
   bool enabled = true;
   std::string sexo;   // aspecto en el salon y los despachos: mujer | hombre | "" (al azar segun su id)
+  // respuestas del asistente de configuracion (agents/asistente.h): para volver a abrirlo igual
+  json perfil = json::object();
 
   static AgentSpec from_json(const json& d);   // ignora claves desconocidas; lanza si falta id o name
   json to_json() const;                         // dataclasses.asdict (mismo orden de claves)

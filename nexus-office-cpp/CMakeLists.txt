@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
-# Agente IA (antes Nexus-Office) 2.10.0-beta.1-cpp: la oficina para pymes reescrita en C++ (misma interfaz web, mismos datos).
-project(NexusOfficeCpp VERSION 2.10.0 LANGUAGES C CXX)
+# Agente IA (antes Nexus-Office) 3.0.0-cpp: la oficina para pymes reescrita en C++ (misma interfaz web, mismos datos).
+project(NexusOfficeCpp VERSION 3.0.0 LANGUAGES C CXX)
 
-set(NEXUS_VERSION "2.10.0-beta.1-cpp")
+set(NEXUS_VERSION "3.0.0-cpp")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)

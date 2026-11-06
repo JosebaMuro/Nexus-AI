@@ -90,6 +90,8 @@ struct Register {
 
 // ruta dentro de data/sandbox (ToolError si se sale)
 fs::path sandbox_safe(const std::string& rel);
+// video a partir de imagenes (herramienta crear_video; tambien la usa el Estudio)
+json crear_video(const json& args, ToolContext& ctx);
 
 // Python del sistema para las herramientas de la comunidad y python_exec ("" si no hay)
 std::vector<std::string> python_cmd();

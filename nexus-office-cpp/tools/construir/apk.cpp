@@ -2,12 +2,15 @@
 //
 //   nexus-construir apk --exe <nexus-office para Android> --libs <carpeta con libllama-server*.so>
 //                       --recursos <carpeta instalada con nexus/> [--gpu-libs <carpeta lib/>]
+//                       [--sd-libs <carpeta con libsd-cli*.so y libsd-server*.so>]
 //
 // La APK lleva:
 //   lib/arm64-v8a/libnexusoffice.so          el ejecutable de Nexus-Office (Android solo deja ejecutar lo que va aqui)
 //   lib/arm64-v8a/libllama-server*.so        llama-server estatico en 3 variantes de CPU
 //   lib/arm64-v8a/libllama-server-gpu.so     llama.cpp con la libc de Android y los backends Vulkan, OpenCL y Hexagon
 //   lib/arm64-v8a/libggml-*.so ...           (NPU de los Snapdragon 8 Gen 2+); de la rama android-npu-libs (--gpu-libs)
+//   lib/arm64-v8a/libsd-cli[-vulkan].so      stable-diffusion.cpp con el NDK (CPU y GPU Vulkan), estatico: imagenes
+//   lib/arm64-v8a/libsd-server[-vulkan].so   en el movil (Android no deja ejecutar binarios descargados)
 //   assets/runtime.zip + runtime.json        la carpeta nexus/ (interfaz web, perfiles, agentes, certificados)
 // La app Java esta en android/ (identificador ai.agente.ia). Herramientas: aapt2, d8, zipalign y apksigner del
 // SDK de Android (.cache/android/build-tools o el PATH), javac y android.jar (NEXUS_ANDROID_JAR o
@@ -35,7 +38,9 @@ const char* LLAMA[] = {"libllama-server.so", "libllama-server-dotprod.so", "libl
 int version_code() {
   int a = 0, b = 0, c = 0;
   std::sscanf(version().c_str(), "%d.%d.%d", &a, &b, &c);
-  return std::max(a * 10000 + b * 100 + c, 20051);
+  // la version final va por encima de sus betas (2.10.0-beta.1 -> 21000, 2.10.0 -> 21001)
+  bool pre = version().find("-beta") != std::string::npos || version().find("-rc") != std::string::npos;
+  return std::max(a * 10000 + b * 100 + c + (pre ? 0 : 1), 20051);
 }
 
 fs::path sdk() { return raiz() / ".cache" / "android"; }
@@ -87,7 +92,7 @@ std::pair<fs::path, std::string> keystore() {
 int apk(const std::vector<std::string>& argv) {
   Args a = leer_args(argv, {}, {});
   if (!a.tiene("exe") || !a.tiene("libs") || !a.tiene("recursos"))
-    throw Fallo("uso: nexus-construir apk --exe E --libs D --recursos R [--gpu-libs G]");
+    throw Fallo("uso: nexus-construir apk --exe E --libs D --recursos R [--gpu-libs G] [--sd-libs S]");
   fs::path exe = P(a.val("exe")), libs = P(a.val("libs")), resources = P(a.val("recursos"));
   std::vector<std::string> missing;
   std::vector<fs::path> need = {exe, resources / "nexus" / "web" / "index.html"};
@@ -154,10 +159,24 @@ int apk(const std::vector<std::string>& argv) {
       if (!gpu) throw Fallo("falta libllama-server-gpu.so en " + S(g));
       log("apk", cat("GPU/NPU: ", so.size(), " bibliotecas (", fnum((double)bytes / 1e6, 0), " MB)"));
     }
+    if (a.tiene("sd-libs")) {   // stable-diffusion.cpp: imagenes con IA en el movil
+      fs::path g = P(a.val("sd-libs"));
+      auto so = glob(g, "libsd-*.so");
+      std::sort(so.begin(), so.end());
+      bool cli = false;
+      uint64_t bytes = 0;
+      for (auto& f : so) {
+        cli = cli || f.filename() == "libsd-cli.so";
+        bytes += fsize(f);
+        z.add_file("lib/arm64-v8a/" + S(f.filename()), f);
+      }
+      if (!cli) throw Fallo("falta libsd-cli.so en " + S(g));
+      log("apk", cat("sd.cpp: ", so.size(), " binarios (", fnum((double)bytes / 1e6, 0), " MB)"));
+    }
     z.add_file("assets/runtime.zip", runtime, 0);
     z.add_bytes("assets/runtime.json", jdump(meta));
     z.add_bytes("assets/LICENSES/LEEME.txt",
-                "Agente IA; llama.cpp y ggml (MIT), cpp-httplib (MIT), nlohmann/json (MIT), SQLite (dominio "
+                "Agente IA; llama.cpp, stable-diffusion.cpp y ggml (MIT), cpp-httplib (MIT), nlohmann/json (MIT), SQLite (dominio "
                 "publico), miniz (MIT), PCRE2 (BSD), rapidyaml (MIT), stb (dominio publico/MIT), mbedTLS (Apache 2.0), "
                 "LLVM libc++ (Apache 2.0 con excepcion LLVM), musl (MIT).\n");
     if (!z.close()) throw Fallo("no puedo anadir los ficheros a la APK");

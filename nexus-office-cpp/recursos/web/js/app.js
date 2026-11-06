@@ -1346,7 +1346,9 @@
       <p class="muted">${esc(a.description)}</p>
       <div class="row">${(a.tools[0] === "*" ? ["todas"] : a.tools).slice(0, 7).map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>
       <div class="row" style="margin-top:8px">${a.keywords.slice(0, 6).map((k) => `<span class="tag accent">${esc(k)}</span>`).join("")}</div>
-      <div class="row admin-only" style="margin-top:12px"><button class="btn sm" data-edit="${a.id}">EDITAR</button></div></div>`).join("");
+      <div class="row admin-only" style="margin-top:12px"><button class="btn sm primary" data-wiz="${a.id}" title="Asistente paso a paso">✨ CONFIGURAR</button><button class="btn sm" data-edit="${a.id}" title="Editor avanzado: todos los campos a mano">EDITAR</button></div></div>`).join("");
+    $$("[data-wiz]").forEach((b) => (b.onclick = () => window.AgentWizard ? AgentWizard.open(S.agents.find((a) => a.id === b.dataset.wiz)) : toast("El asistente no se ha cargado", true)));
+    $("#agent-wizard").onclick = () => window.AgentWizard ? AgentWizard.open(null) : toast("El asistente no se ha cargado", true);
     $$("[data-edit]").forEach((b) => (b.onclick = () => editAgent(S.agents.find((a) => a.id === b.dataset.edit), tools)));
     $("#agent-new").onclick = () => editAgent({ id: "", name: "", description: "", system_prompt: "Eres un agente especialista de {assistant_name}.", model: "default", temperature: 0.7, max_tokens: null, tools: [], memory: true, can_delegate_to: [], keywords: [], specialty: "", color: "#00f0ff", icon: "◆", enabled: true, sexo: "" }, tools);
   };
@@ -2073,7 +2075,10 @@
   loaders.beta = async () => { if (window.NexusBeta) await NexusBeta.load(); };   // laboratorio BETA (js/beta.js)
 
   window.NexusUI = { api, toast, esc, guard, ago, fmtB, saveFile, agents: () => S.agents, admin: () => !!S.token, cfg: () => S.cfg,
-                     agentName: (id) => agentName(id), refreshGraph: () => { loadGraph().catch(() => {}); } };
+                     agentName: (id) => agentName(id), go: (v) => go(v),
+                     reloadAgents: () => { loaders.agents().catch(() => {}); },
+                     probarAgente: async (id) => { await loadAgents(); $("#agent-select").value = id; go("chat"); toast("Escríbele para probarlo"); },
+                     refreshGraph: () => { loadGraph().catch(() => {}); } };
 
   /* ================================================================ selector de inicio: motor llama y CPU/GPU/NPU */
   const Accel = {

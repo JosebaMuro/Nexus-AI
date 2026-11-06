@@ -11,6 +11,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.Uri;
@@ -18,6 +19,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.OpenableColumns;
 import android.speech.RecognizerIntent;
 import android.speech.tts.UtteranceProgressListener;
 import android.speech.SpeechRecognizer;
@@ -45,6 +47,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -76,6 +79,7 @@ public class MainActivity extends Activity {
     private String pendingSaveName = "";
     private long bootStarted;
     private boolean modelOffered;
+    private String sharedJs;   // «Compartir con Agente IA» pendiente de entregar a la interfaz
 
     @Override
     protected void onCreate(Bundle state) {
@@ -95,6 +99,7 @@ public class MainActivity extends Activity {
         s.setUserAgentString(s.getUserAgentString() + " NexusAndroid/" + version() + " (" + form() + "; sw"
                 + getResources().getConfiguration().smallestScreenWidthDp + "; autonomo)");
         web.addJavascriptInterface(new Bridge(), "NexusApp");
+        handleShare(getIntent());
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -103,6 +108,11 @@ public class MainActivity extends Activity {
                 if ("127.0.0.1".equals(u.getHost()) || "file".equals(u.getScheme())) return false;
                 openExternal(u.toString());   // enlaces externos (fuentes, webs) en el navegador
                 return true;
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                if (url != null && url.startsWith(HOME)) deliverShare();
             }
 
             @Override
@@ -424,6 +434,124 @@ public class MainActivity extends Activity {
                 }
             }
         });
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleShare(intent);
+    }
+
+    // «Compartir» desde otra app (galeria, navegador, correo...): el texto va al chat y los ficheros a la carpeta de
+    // trabajo de los agentes (sandbox/compartido), donde pueden leerlos, retocarlos o montar un video con ellos
+    private void handleShare(Intent in) {
+        if (in == null) return;
+        String act = in.getAction();
+        if (!Intent.ACTION_SEND.equals(act) && !Intent.ACTION_SEND_MULTIPLE.equals(act)) return;
+        in.setAction(Intent.ACTION_MAIN);   // no repetirlo al girar la pantalla
+        try {
+            JSONObject o = new JSONObject();
+            CharSequence text = in.getCharSequenceExtra(Intent.EXTRA_TEXT);
+            String subject = in.getStringExtra(Intent.EXTRA_SUBJECT);
+            String t = text == null ? "" : text.toString();
+            if (subject != null && !subject.isEmpty() && !t.contains(subject)) t = subject + (t.isEmpty() ? "" : "\n" + t);
+            o.put("text", t);
+            ArrayList<Uri> uris = new ArrayList<Uri>();
+            if (Intent.ACTION_SEND.equals(act)) {
+                Uri u = in.getParcelableExtra(Intent.EXTRA_STREAM);
+                if (u != null) uris.add(u);
+            } else {
+                ArrayList<Uri> l = in.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+                if (l != null) uris.addAll(l);
+            }
+            File dir = new File(getFilesDir(), "nexus/sandbox/compartido");
+            dir.mkdirs();
+            JSONArray files = new JSONArray();
+            for (Uri u : uris) {
+                if (files.length() >= 30) break;
+                File f = uniqueFile(dir, safeName(displayName(u)));
+                if (copyUri(u, f)) files.put("compartido/" + f.getName());
+            }
+            o.put("files", files);
+            sharedJs = "window.__nexusShared && window.__nexusShared(" + o.toString() + ")";
+            String cur = web == null ? null : web.getUrl();
+            if (cur != null && cur.startsWith(HOME)) deliverShare();
+        } catch (Exception e) {
+            Toast.makeText(this, "No se pudo recibir lo compartido: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void deliverShare() {
+        if (sharedJs == null || web == null) return;
+        final String js = sharedJs;
+        sharedJs = null;
+        ui.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                web.evaluateJavascript(js, null);
+            }
+        }, 600);
+    }
+
+    private String displayName(Uri u) {
+        String name = null;
+        try {
+            Cursor c = getContentResolver().query(u, new String[] {OpenableColumns.DISPLAY_NAME}, null, null, null);
+            if (c != null) {
+                if (c.moveToFirst() && !c.isNull(0)) name = c.getString(0);
+                c.close();
+            }
+        } catch (Exception e) {
+            name = null;
+        }
+        if (name == null || name.isEmpty()) name = u.getLastPathSegment();
+        if (name == null || name.isEmpty()) name = "compartido";
+        if (name.indexOf('.') < 0) {
+            String mime = getContentResolver().getType(u);
+            String ext = mime == null ? null : android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime);
+            if (ext != null) name = name + "." + ext;
+        }
+        return name;
+    }
+
+    private static String safeName(String n) {
+        String s = n.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_").trim();
+        if (s.startsWith(".")) s = "_" + s;
+        return s.length() > 90 ? s.substring(s.length() - 90) : s;
+    }
+
+    private static File uniqueFile(File dir, String name) {
+        File f = new File(dir, name);
+        int dot = name.lastIndexOf('.');
+        String stem = dot > 0 ? name.substring(0, dot) : name, ext = dot > 0 ? name.substring(dot) : "";
+        for (int i = 2; f.exists() && i < 1000; i++) f = new File(dir, stem + "-" + i + ext);
+        return f;
+    }
+
+    private boolean copyUri(Uri u, File dest) {
+        InputStream in = null;
+        OutputStream out = null;
+        try {
+            in = getContentResolver().openInputStream(u);
+            if (in == null) return false;
+            out = new FileOutputStream(dest);
+            byte[] buf = new byte[1 << 16];
+            long total = 0;
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n);
+                total += n;
+                if (total > (512L << 20)) throw new Exception("fichero demasiado grande (más de 512 MB)");
+            }
+            return true;
+        } catch (Exception e) {
+            dest.delete();
+            return false;
+        } finally {
+            try { if (in != null) in.close(); } catch (Exception ignored) { }
+            try { if (out != null) out.close(); } catch (Exception ignored) { }
+        }
     }
 
     @Override

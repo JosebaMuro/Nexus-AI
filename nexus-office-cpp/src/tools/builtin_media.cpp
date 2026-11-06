@@ -1,9 +1,13 @@
 // Biblioteca RAG y creacion multimedia para los agentes (tools/builtin/rag_tools.py y media_tools.py).
+#include <algorithm>
+
 #include "core/services.h"
 #include "llm/llm.h"
 #include "media/media.h"
+#include "media/video.h"
 #include "rag/rag.h"
 #include "tools/tools.h"
+#include "util/crypto.h"
 #include "util/rx.h"
 #include "util/text.h"
 
@@ -88,8 +92,70 @@ json enhance_prompt(const json& args, ToolContext& ctx) {
   return prompt::enhance(ctx.services->llm.get(), jstr(args, "text"), jstr(args, "target", "image"), jstr(args, "style"));
 }
 
+}  // namespace
+
+// imagen para el video: una URL de /outputs/... (lo que devuelve generate_image) o un fichero del sandbox
+fs::path video_image_path(const std::string& ref) {
+  std::string r = trim(ref);
+  if (starts_with(r, "/outputs/")) {
+    fs::path root = resolve(paths::outputs_dir());
+    fs::path p = resolve(root / P(r.substr(9)));
+    if (!is_relative_to(p, root)) throw ToolError("ValueError", "ruta fuera de las salidas: " + r);
+    return p;
+  }
+  return sandbox_safe(r);
+}
+
+json crear_video(const json& args, ToolContext& ctx) {
+  std::vector<fs::path> imgs;
+  json refs = args.value("imagenes", json::array());
+  if (refs.is_string()) refs = json::array({refs});
+  if (refs.is_array())
+    for (auto& r : refs)
+      if (r.is_string()) imgs.push_back(video_image_path(r.get<std::string>()));
+  if (imgs.empty()) {
+    // sin lista: las ultimas imagenes generadas, en el orden en que se crearon
+    int n = std::clamp((int)jnum(args.value("ultimas", json(6)), 6), 1, 60);
+    auto files = glob(paths::sub({"outputs", "images"}), "*.png");
+    std::sort(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) { return mtime(a) < mtime(b); });
+    if ((int)files.size() > n) files.erase(files.begin(), files.end() - n);
+    imgs = files;
+  }
+  if (imgs.empty()) throw ToolError("ValueError", "no hay imagenes: genera alguna o indica sus rutas en 'imagenes'");
+  video::Opts o;
+  video::formato(o, jstr(args, "formato"));
+  o.segundos = jnum(args.value("segundos_por_imagen", json(3)), 3);
+  o.transicion = jnum(args.value("transicion", json(0.8)), 0.8);
+  o.fps = (int)jnum(args.value("fps", json(24)), 24);
+  o.kenburns = truthy(args.value("movimiento", json(true)));
+  std::string name = std::to_string((long long)now()) + "_" + media::slug_name(jstr(args, "titulo", "video"), 40, "video");
+  fs::path out = paths::sub({"outputs", "videos"}) / P(name + ".avi");
+  if (ctx.emit) ctx.emit({{"type", "progress"}, {"text", cat("Montando el video con ", imgs.size(), " imagenes")}});
+  json r = video::render_avi(imgs, o, out);
+  // proyecto para el editor web (WebM/MP4, titulos, musica): las imagenes se copian a una carpeta servida
+  fs::path dir = paths::sub({"outputs", "videos", name});
+  json urls = json::array();
+  for (size_t i = 0; i < imgs.size(); ++i) {
+    fs::path d = dir / P(cat(i, "_", S(imgs[i].filename())));
+    std::error_code ec;
+    fs::copy_file(imgs[i], d, fs::copy_options::overwrite_existing, ec);
+    if (!ec) urls.push_back("/outputs/videos/" + name + "/" + S(d.filename()));
+  }
+  json proj = {{"titulo", jstr(args, "titulo")}, {"imagenes", urls},   {"segundos", o.segundos},
+               {"transicion", o.transicion},     {"formato", jstr(args, "formato", "16:9")}, {"fps", o.fps}};
+  write_file(dir / "proyecto.json", jdump(proj, 1));
+  r["url"] = "/outputs/videos/" + S(out.filename());
+  r["editor"] = "/static/video.html?proyecto=/outputs/videos/" + name + "/proyecto.json";
+  r["note"] = "AVI (Motion JPEG): se abre con VLC, el reproductor de Windows o Android. En el editor se exporta a "
+              "WebM/MP4 con titulos y musica.";
+  if (ctx.emit) ctx.emit({{"type", "media"}, {"kind", "video"}, {"url", r["url"]}, {"editor", r["editor"]}, {"engine", "nexus-video"}});
+  return r;
+}
+
+namespace {
+
 Register r1("rag_search", rag_search), r2("rag_list", rag_list), r3("generate_image", generate_image),
-    r4("compose_music", compose_music), r5("enhance_prompt", enhance_prompt);
+    r4("compose_music", compose_music), r5("enhance_prompt", enhance_prompt), r6("crear_video", crear_video);
 
 }  // namespace
 

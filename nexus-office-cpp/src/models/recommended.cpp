@@ -6,6 +6,7 @@
 #include "hardware/hardware.h"
 #include "llm/motores.h"
 #include "models/models.h"
+#include "models/runtimes.h"
 
 namespace nx::models {
 
@@ -44,7 +45,10 @@ json recommend(const json& profile, const json& sector) {
   json out = json::array();
   for (auto& r : recommended_list()) {
     std::string kind = jstr(r, "kind");
-    if (hw::android() && kind != "llm" && kind != "embed") continue;
+    // en el movil: LLM, embeddings y los modelos de imagen ligeros (sd.cpp va dentro de la APK desde la 2.10)
+    if (hw::android() && kind != "llm" && kind != "embed" &&
+        !(kind == "image" && truthy(r.value("movil", json(false))) && !runtimes::android_sd_variants().empty()))
+      continue;
     std::string motor = jstr(r, "motor");
     if (hw::android() && (motor == "onnx")) continue;   // ONNX Runtime GenAI no va en la APK
     std::string id = jstr(r, "id");

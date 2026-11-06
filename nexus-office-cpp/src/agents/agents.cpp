@@ -507,7 +507,8 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
     json result = s.supervisor->execute(name, call->args, ctx);
     bool is_err = result.is_object() && truthy(result.value("error", json()));
     if (result.is_object() && truthy(result.value("url", json())) &&
-        (name == "generate_image" || name == "compose_music" || name == "imagen_editar" || name == "gimp_script"))
+        (name == "generate_image" || name == "compose_music" || name == "imagen_editar" || name == "gimp_script" ||
+         name == "crear_video"))
       media.emplace_back(name, jstr(result, "url"));
     tool_log.push_back({{"tool", name}, {"ok", !is_err}});
     emit({{"type", "tool_result"}, {"name", name}, {"result", uleft(pydump(result), 1500)}});
@@ -558,7 +559,12 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
   }));
   if (answer.empty()) answer = "(sin respuesta)";
   for (auto& [name, url] : media)
-    if (!contains(answer, url)) answer += name != "compose_music" ? "\n\n![imagen](" + url + ")" : "\n\n[audio](" + url + ")";
+    if (!contains(answer, url))
+      answer += name == "compose_music" ? "\n\n[audio](" + url + ")"
+                : name == "crear_video"
+                    ? "\n\n[🎬 Vídeo (AVI)](" + url + ") · [Abrir en el editor de vídeo](/static/video.html?proyecto=" +
+                          url.substr(0, url.size() - 4) + "/proyecto.json)"
+                    : "\n\n![imagen](" + url + ")";
   json mid = nullptr;
   if (save) {
     json mem_ids = json::array();
