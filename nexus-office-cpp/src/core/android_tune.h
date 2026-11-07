@@ -22,6 +22,7 @@ std::vector<int> thread_candidates(const json& layout);
 json device_state(const fs::path& path, double now_s = 0);
 std::pair<int, std::string> throttle(int threads, const json& st);
 double gen_tps(const json& call);
+double total_tps(const json& call);   // tokens / segundos de la respuesta entera (con el prompt)
 std::pair<int, bool> choose(const std::vector<int>& cands, const json& trials);
 json model_advice(const std::string& model, double best_tps, double ram_gb, const json& catalog);
 std::pair<bool, std::string> warmup_ok(const json& st, double avail_gb, double model_gb);

@@ -260,7 +260,10 @@ jobs:
             pypi onnxruntime-genai-cuda "" "cp31[0-9]-.*$pl" "$d" "$re"
             pypi onnxruntime-gpu "" "cp31[0-9]-.*$pl" "$d" "$re"
             for n in nvidia-cuda-runtime-cu12 nvidia-cublas-cu12 nvidia-cudnn-cu12 nvidia-cufft-cu12 nvidia-curand-cu12 nvidia-cuda-nvrtc-cu12; do
-              pypi "$n" "" "$pl" "$d" "$re"
+              # la ultima nvidia-cublas-cu12 (12.9.3) ya no trae wheel de Windows: sin cublas64_12.dll el proveedor CUDA
+              # de ONNX Runtime no cargaba y los modelos ONNX iban en la CPU
+              v=""; case "$n:$pl" in nvidia-cublas-cu12:win*) v=12.9.2.10 ;; esac
+              pypi "$n" "$v" "$pl" "$d" "$re"
             done
           }
           # ONNX Runtime con OpenVINO (NPU, GPU y CPU de Intel) + las bibliotecas de OpenVINO
@@ -273,6 +276,11 @@ jobs:
           G=ggml-org/llama.cpp; S=leejet/stable-diffusion.cpp
           case $T in
             windows-x64)
+              # CUDA 12 incluido: el oficial de la misma build que el resto (el de la BASE era llama.cpp b9923 de
+              # conda-forge, miles de builds por detras). Si no se puede bajar, se queda el de la BASE
+              poner "$RT" llama cuda $G $LT 'llama-*-bin-win-cuda-12*-x64.zip' 'cudart-llama-bin-win-cuda-12*-x64.zip'
+              # Vulkan (AMD, Intel Arc y NVIDIA sin CUDA): tambien el de esta build, mucho mas rapido que el de la BASE
+              poner "$RT" llama vulkan $G $LT 'llama-*-bin-win-vulkan-x64.zip'
               poner "$PK" llama cuda13 $G $LT 'llama-*-bin-win-cuda-13*-x64.zip' 'cudart-llama-bin-win-cuda-13*-x64.zip'
               poner "$PK" llama sycl $G $LT 'llama-*-bin-win-sycl-x64.zip'
               poner "$PK" llama rocm $G $LT 'llama-*-bin-win-rocm-*-x64.zip'
@@ -302,6 +310,8 @@ jobs:
               poner "$RT" llama hexagon $G $LT 'llama-*-bin-win-*hexagon*-arm64.zip'
               npu_art qairt-windows-arm64 "$RT/genie/qnn" ;;
             linux-x86_64)
+              # AMD en Linux sin el paquete ROCm, Intel Arc: Vulkan de la misma build que el resto
+              poner "$RT" llama vulkan $G $LT 'llama-*-bin-ubuntu-vulkan-x64.tar.gz'
               poner "$PK" llama cuda13 $G $LT 'llama-*-bin-ubuntu-cuda-13*-x64.tar.gz' 'cudart-llama-*-bin-ubuntu-cuda-13*-x64.tar.gz'
               poner "$PK" llama rocm $G $LT 'llama-*-bin-ubuntu-rocm-*-x64.tar.gz'
               poner "$PK" llama sycl $G $LT 'llama-*-bin-ubuntu-sycl-fp16-x64.tar.gz'

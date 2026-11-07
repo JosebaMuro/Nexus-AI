@@ -246,7 +246,40 @@ TEST("android: nucleos, candidatos, temperatura, bateria y consejo de modelo") {
 }
 
 #ifndef _WIN32
-TEST("android: el autoajuste compara GPU y CPU y despues mide los hilos") {
+TEST("android: GPU o NPU rapida: se queda sin probar la CPU ni tocar los hilos") {
+  fs::path d = tmpdir("tuner-gpu");
+  set_env("NEXUS_DATA_DIR", S(d / "nexus"));
+  mkdirs(d / "nexus");
+  set_env("NEXUS_DEVICE_STATE", S(d / "device_state.json"));
+  set_env("NEXUS_RUNTIME_LLAMA_CPU", "/libs/libllama-server-i8mm.so");
+  set_env("NEXUS_RUNTIME_LLAMA_GPU", std::string("/libs/") + aa::GPU_EXE);
+  reset_config();
+  auto s = std::make_unique<Services>(false);
+  s->llm->update_llm_profile({{"n_threads", 4}, {"n_ctx", 4096}, {"gpu_layers", -1}, {"device", "HTP0"}});
+  // 100 tokens en 100/tps s de generacion + 1 s de prompt
+  auto answer = [&](double tps) {
+    for (int i = 0; i < 3; ++i) s->monitor->record_llm("llamaserver", "m", 100, 100 / tps + 1, 1.0);
+  };
+  at::LiveTuner t(*s, 15, {{"fast", 4}, {"total", 8}});
+  json r = t.step();
+  CHECK(r["gpu"] == "HTP0" && r["accel"]["mode"] == "gpu");
+  answer(12.0);   // 10.7 tokens/s contando el prompt
+  r = t.step();
+  CHECK_EQ(jstr(r["accel"], "choice"), std::string("gpu"));
+  CHECK(r["accel"]["cpu"].empty());
+  CHECK_EQ(jstr(s->llm->llm_profile(), "device"), std::string("HTP0"));
+  // con el modelo en la NPU los hilos no se exploran (cada cambio recargaba el modelo)
+  for (int i = 0; i < 3; ++i) {
+    answer(12.0);
+    t.step();
+    CHECK(s->llm->llm_profile()["n_threads"] == 4);
+  }
+  t.stop();
+  s->shutdown();
+  for (auto* k : {"NEXUS_DEVICE_STATE", "NEXUS_RUNTIME_LLAMA_CPU", "NEXUS_RUNTIME_LLAMA_GPU"}) set_env(k, "");
+}
+
+TEST("android: el autoajuste compara GPU y CPU (con el prompt) y en la CPU mide los hilos") {
   fs::path d = tmpdir("tuner");
   set_env("NEXUS_DATA_DIR", S(d / "nexus"));
   mkdirs(d / "nexus");
@@ -256,38 +289,69 @@ TEST("android: el autoajuste compara GPU y CPU y despues mide los hilos") {
   reset_config();
   auto s = std::make_unique<Services>(false);
   s->llm->update_llm_profile({{"n_threads", 4}, {"n_ctx", 4096}, {"gpu_layers", -1}, {"device", "Vulkan0"}});
-  auto answer = [&](double tps) {
-    for (int i = 0; i < 3; ++i) s->monitor->record_llm("llamaserver", "m", 100, 100 / tps + 1, 1.0);
+  // tokens/s de generacion y segundos de prompt
+  auto answer = [&](double tps, double prompt) {
+    for (int i = 0; i < 3; ++i) s->monitor->record_llm("llamaserver", "m", 100, 100 / tps + prompt, prompt);
   };
   at::LiveTuner t(*s, 15, {{"fast", 4}, {"total", 8}});
   json r = t.step();
   CHECK(r["gpu"] == "Vulkan0" && r["accel"]["mode"] == "gpu");
-  CHECK_EQ((int)jnum(s->llm->llm_profile()["gpu_layers"]), -1);
-  answer(12.0);
+  answer(6.0, 2.0);   // GPU lenta (5.3 tokens/s con el prompt): se prueba la CPU
   t.step();
-  CHECK(s->llm->llm_profile()["gpu_layers"] == 0 && s->llm->llm_profile()["device"] == "");   // ahora mide la CPU
-  answer(7.0);
+  CHECK(s->llm->llm_profile()["gpu_layers"] == 0 && s->llm->llm_profile()["device"] == "");
+  // la CPU genera algo mas rapido pero tarda mucho mas en el prompt: gana la GPU
+  answer(7.0, 8.0);
   r = t.step();
   CHECK_EQ(jstr(r["accel"], "choice"), std::string("gpu"));
   CHECK_EQ(jstr(s->llm->llm_profile(), "device"), std::string("Vulkan0"));
   CHECK_EQ(jstr(r, "llama_variant"), std::string("gpu:Vulkan0"));
+  t.stop();
+  s->shutdown();
+  for (auto* k : {"NEXUS_DEVICE_STATE", "NEXUS_RUNTIME_LLAMA_CPU", "NEXUS_RUNTIME_LLAMA_GPU"}) set_env(k, "");
+}
+
+TEST("android: con la CPU claramente mas rapida se queda en la CPU y alli mide los hilos") {
+  fs::path d2 = tmpdir("tuner-cpu");
+  set_env("NEXUS_DATA_DIR", S(d2 / "nexus"));
+  mkdirs(d2 / "nexus");
+  set_env("NEXUS_DEVICE_STATE", S(d2 / "device_state.json"));
+  set_env("NEXUS_RUNTIME_LLAMA_CPU", "/libs/libllama-server-i8mm.so");
+  set_env("NEXUS_RUNTIME_LLAMA_GPU", std::string("/libs/") + aa::GPU_EXE);
+  reset_config();
+  auto s = std::make_unique<Services>(false);
+  s->llm->update_llm_profile({{"n_threads", 4}, {"n_ctx", 4096}, {"gpu_layers", -1}, {"device", "Vulkan0"}});
+  auto answer = [&](double tps, double prompt) {
+    for (int i = 0; i < 3; ++i) s->monitor->record_llm("llamaserver", "m", 100, 100 / tps + prompt, prompt);
+  };
+  json r;
+  at::LiveTuner t2(*s, 15, {{"fast", 4}, {"total", 8}});
+  t2.step();
+  answer(3.0, 1.0);
+  t2.step();
+  answer(9.0, 1.0);
+  r = t2.step();
+  CHECK_EQ(jstr(r["accel"], "choice"), std::string("cpu"));
+  CHECK(s->llm->llm_profile()["gpu_layers"] == 0);
   CHECK(truthy(r["exploring"]) && s->llm->llm_profile()["n_threads"] == 3);
   // los hilos: 3 -> 4 -> 6 y se queda con el mas rapido
-  answer(6.0);
-  t.step();
+  auto cpu = [&](double tps) {
+    for (int i = 0; i < 3; ++i) s->monitor->record_llm("llamaserver", "m", 100, 100 / tps + 1, 1.0);
+  };
+  cpu(6.0);
+  t2.step();
   CHECK(s->llm->llm_profile()["n_threads"] == 4);
-  answer(9.0);
-  t.step();
+  cpu(9.0);
+  t2.step();
   CHECK(s->llm->llm_profile()["n_threads"] == 6);
-  answer(7.0);
-  r = t.step();
+  cpu(7.0);
+  r = t2.step();
   CHECK(s->llm->llm_profile()["n_threads"] == 4 && r["best"] == 4 && !truthy(r["exploring"]));
   CHECK(r["tps"] == json({{"3", 6.0}, {"4", 9.0}, {"6", 7.0}}));
   // calor: menos hilos sin medir
-  write_file(d / "device_state.json", cat(R"({"t": )", (long long)now(), R"(, "thermal": 3})"));
-  r = t.step();
+  write_file(d2 / "device_state.json", cat(R"({"t": )", (long long)now(), R"(, "thermal": 3})"));
+  r = t2.step();
   CHECK(s->llm->llm_profile()["n_threads"] == 2 && contains(jstr(r, "throttled"), "caliente"));
-  t.stop();
+  t2.stop();
   s->shutdown();
   for (auto* k : {"NEXUS_DEVICE_STATE", "NEXUS_RUNTIME_LLAMA_CPU", "NEXUS_RUNTIME_LLAMA_GPU"}) set_env(k, "");
 }

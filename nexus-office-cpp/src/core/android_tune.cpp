@@ -22,6 +22,7 @@
 
 #include "core/db.h"
 #include "core/services.h"
+#include "hardware/android_accel.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
 #include "models/models.h"
@@ -44,6 +45,10 @@ constexpr size_t MIN_SAMPLES = 3;    // respuestas por numero de hilos antes de 
 constexpr int MIN_TOKENS = 16;       // respuestas mas cortas no dan una velocidad fiable
 constexpr int REEXPLORE_AFTER = 80;  // respuestas con el mejor numero de hilos antes de volver a medir los demas
 constexpr double SLOW_TPS = 4.0, FAST_TPS = 14.0;
+// GPU o NPU que ya va bien (tokens/s contando el prompt): no se prueba la CPU (cada prueba recargaba el modelo dos
+// veces y daba tres respuestas lentas a proposito)
+constexpr double ACCEL_OK_TPS = 8.0;
+constexpr double CPU_MARGIN = 1.15;   // la CPU solo gana si es al menos un 15 % mas rapida
 const std::vector<std::string> ANDROID_MODELS = {"qwen3.5-0.8b", "qwen3.5-2b", "qwen3.5-4b"};   // de menor a mayor
 // escalera de la version anterior (Qwen3-VL Thinking): quien ya lo tiene descargado sube o baja dentro de ella
 const std::vector<std::string> PREVIOUS_MODELS = {"qwen3-vl-2b-thinking", "qwen3-vl-4b-thinking"};
@@ -147,6 +152,13 @@ std::pair<int, std::string> throttle(int threads, const json& st) {
 double gen_tps(const json& call) {
   double gen = jnum(call.value("seconds", json(0))) - jnum(call.value("ttft", json(0)));
   return gen > 0.05 ? jnum(call["tokens"]) / gen : jnum(call.value("tps", json(0.0)));
+}
+
+double total_tps(const json& call) {
+  // la respuesta entera, con el procesado del prompt: es donde la NPU y la GPU sacan mas ventaja (los prompts de los
+  // agentes llevan sistema, memoria y herramientas). Midiendo solo la generacion, la CPU podia salir ganadora
+  double secs = jnum(call.value("seconds", json(0)));
+  return secs > 0.05 ? jnum(call["tokens"]) / secs : jnum(call.value("tps", json(0.0)));
 }
 
 std::pair<int, bool> choose(const std::vector<int>& cands, const json& trials) {
@@ -275,15 +287,20 @@ bool LiveTuner::accel_step(const std::vector<json>& fresh) {
   std::string mode = jstr(acc, "mode");
   if (acc["choice"].is_null()) {
     if (!mode.empty() && !fresh.empty() && !truthy(state_.value("throttled", json(""))))
-      for (auto& c : fresh) acc[mode].push_back(round_to(gen_tps(c), 2));
+      for (auto& c : fresh) acc[mode].push_back(round_to(total_tps(c), 2));
     if (acc["gpu"].size() < MIN_SAMPLES) {
       mode = "gpu";
+    } else if (acc["cpu"].empty() && median(acc["gpu"]) >= ACCEL_OK_TPS) {
+      acc["choice"] = "gpu";   // va bien: ni respuestas en la CPU ni recargas para comparar
+      note((hw::android_accel::is_npu_dev(gpu_device_) ? std::string("NPU") : std::string("GPU")) + " (" + gpu_device_ + ") a " +
+           f1(median(acc["gpu"])) + " tokens/s: se queda ahi sin probar la CPU");
     } else if (acc["cpu"].size() < MIN_SAMPLES) {
       mode = "cpu";
     } else {
       double g = median(acc["gpu"]), c = median(acc["cpu"]);
-      acc["choice"] = g >= c ? "gpu" : "cpu";
-      note(std::string(g >= c ? "GPU" : "CPU") + " mas rapida: " + f1(std::max(g, c)) + " tokens/s (GPU " + f1(g) +
+      bool gpu = c < g * CPU_MARGIN;
+      acc["choice"] = gpu ? "gpu" : "cpu";
+      note(std::string(gpu ? "GPU" : "CPU") + " mas rapida: " + f1(gpu ? g : c) + " tokens/s (GPU " + f1(g) +
            ", CPU " + f1(c) + ")");
     }
   }
@@ -311,6 +328,31 @@ json LiveTuner::step() {
     applied_ = 0;
     save();
     return report();
+  }
+
+  // modelo en la GPU o la NPU: los hilos de la CPU apenas cuentan y cada cambio de -t reiniciaba llama-server (el
+  // modelo se volvia a cargar y se perdia la cache del prompt): no se exploran ni se tocan
+  {
+    json l = s_.llm->llm_profile();
+    if (truthy(l.value("gpu_layers", json(0))) && !jstr(l, "device").empty()) {
+      applied_ = 0;
+      double avail = sys::memory().available / 1073741824.0;
+      int n_ctx = (int)jnum(l.value("n_ctx", json(4096)));
+      if (avail > 0 && avail < 0.6 && n_ctx > 2048) {
+        n_ctx = std::max(2048, n_ctx / 2);
+        s_.llm->update_llm_profile({{"n_ctx", n_ctx}});
+        note("Poca RAM libre (" + f1(avail) + " GB): contexto reducido a " + std::to_string(n_ctx));
+      }
+      std::string pending = jstr(state_, "pending_switch");
+      if (!pending.empty() && !s_.models->catalog.get(pending).is_null() && s_.llm->inflight == 0) activate(pending);
+      json acc = state_.value("accel", json());
+      state_["advice"] = acc.is_object() && acc["gpu"].is_array() && !acc["gpu"].empty()
+                             ? model_advice(jstr(s_.models->active(), "llm"), median(acc["gpu"]),
+                                            jnum(s_.profile.value("ram_gb", json(0))), s_.models->recommended())
+                             : json();
+      save();
+      return report();
+    }
   }
 
   std::string k = key();

@@ -1,5 +1,39 @@
 # Cambios
 
+## Agente IA 3.2.1-cpp
+
+Arreglos de velocidad con NPU y con graficas dedicadas (NVIDIA, AMD, Intel Arc). Se revisaron la eleccion del motor,
+las capas en la GPU, el autoajuste, las tareas de fondo y los runtimes que van en los instaladores.
+
+### Movil (NPU Hexagon y GPU)
+- El autoajuste ya no da **tres respuestas en la CPU a proposito** para comparar: si la NPU o la GPU van a 8 tokens/s
+  o mas (contando el prompt), se quedan sin probar la CPU. Antes cada comparacion recargaba el modelo dos veces.
+- La comparacion GPU/CPU mide la **respuesta entera** (prompt incluido) y la CPU solo gana si es un 15 % mas rapida.
+  Midiendo solo la generacion, la CPU podia ganar y el modelo se quedaba en la CPU para siempre, aunque la NPU
+  procese el prompt (lo que mas pesa con los agentes) muchas veces mas rapido.
+- Con el modelo en la NPU o la GPU **no se exploran los hilos**: cada cambio de hilos reiniciaba llama-server
+  (recarga del modelo y cache del prompt perdida) para una diferencia que con el modelo en el acelerador no existe.
+
+### Escritorio (NVIDIA, AMD, Intel)
+- Si la GPU falla al arrancar o llama-server se cae, se usa la CPU **solo 10 minutos** y despues se vuelve a probar
+  la GPU. Antes un fallo pasajero (VRAM ocupada por la imagen, un modelo grande que tardaba en cargar) dejaba todo
+  en la CPU hasta reiniciar Agente IA, y una caida con dos GPU marcaba la grafica como rota con la logica del movil.
+- Con una sola GPU, un fallo al arrancar en la GPU tambien pasa a la CPU (antes la peticion acababa en error).
+- La carga del modelo espera hasta 15 minutos mientras llama-server siga avanzando (antes cortaba a los 5 y pasaba a
+  la CPU con modelos grandes en discos lentos o al compilar por primera vez los kernels de la GPU).
+
+### Tareas de fondo
+- La **reunion automatica** de agentes (cada 8 tareas) espera a que el modelo este libre y cede el turno si llega una
+  peticion del usuario. Antes sus frases ocupaban la GPU o la NPU mientras el usuario esperaba.
+- El aprendizaje en segundo plano no razona (hasta 768 tokens menos por llamada).
+
+### Runtimes de la entrega
+- Windows x64: llama.cpp **CUDA 12** y **Vulkan** de la misma build oficial que el resto (los de la entrega anterior
+  eran una build de llama.cpp miles de versiones por detras, con un Vulkan mucho mas lento en AMD e Intel).
+- Linux x86_64: llama.cpp **Vulkan** oficial reciente (AMD sin el paquete ROCm, Intel Arc).
+- Paquete ONNX CUDA de Windows: faltaba `cublas64_12.dll` (la ultima nvidia-cublas-cu12 ya no publica wheel de
+  Windows) y el proveedor CUDA no cargaba: los modelos ONNX iban en la CPU. Se fija la 12.9.2.10.
+
 ## Agente IA 3.2.0-cpp
 
 Motores del dossier de arquitectura y todo lo que mejora el rendimiento, en una sola version (incluye la 3.1.0, que

@@ -122,6 +122,14 @@ void Lounge::record_task(const std::string& agent, const std::string& text, cons
       truthy(s_.config.get("lounge.auto_meet", true)))
     std::thread([this] {
       try {
+        // solo con el modelo libre: espera hasta 2 minutos a que acaben las respuestas en curso
+        for (double t0 = now(); s_.llm && s_.llm->inflight > 0; std::this_thread::sleep_for(std::chrono::milliseconds(500)))
+          if (now() - t0 > 120) return;
+        background_ = true;
+        struct Off {
+          std::atomic<bool>& f;
+          ~Off() { f = false; }
+        } off{background_};
         meet(true);
       } catch (const std::exception& e) {
         LL.warning("Reunion automatica fallida: ", e.what());
@@ -325,6 +333,8 @@ json Lounge::resolve_proposal(long long pid, bool approve, const std::string& no
 
 std::string Lounge::say(const AgentSpec& agent, const std::string& prompt_ctx, const std::string& fallback) {
   if (!s_.llm->has_real_llm()) return fallback;
+  // reunion automatica: si el usuario esta esperando una respuesta, la frase de relleno y el modelo para el
+  if (background_ && s_.llm->inflight > 0) return fallback;
   try {
     llm::Opts o;
     o.o = {{"max_tokens", 120}, {"temperature", 0.8}, {"reasoning", "off"}};   // charla breve: sin razonar

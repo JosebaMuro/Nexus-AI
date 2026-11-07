@@ -101,21 +101,30 @@ double LlamaServerBackend::gpu_gb() {
 void LlamaServerBackend::ensure(const std::string& model, const json& opts_in) {
   // Android: si la NPU o la GPU no arrancan con este driver, se apunta y se pasa a la siguiente (NPU -> GPU -> CPU)
   json opts = opts_in;
+  bool desktop = nx::env("NEXUS_RUNTIME_LLAMA_CPU").empty();
+  if (desktop && truthy(opts.value("gpu_layers", json(0)))) {
+    std::lock_guard<std::recursive_mutex> lk(mu_);
+    if (gpu_retry_at_ > now()) {   // la GPU fallo hace poco: CPU hasta que toque volver a probarla
+      opts["gpu_layers"] = 0;
+      opts["device"] = "";
+    }
+  }
   for (int i = 0; i < 3; ++i) {
     try {
       ensure_once(model, opts);
       return;
     } catch (const GpuFailed& e) {
-      if (nx::env("NEXUS_RUNTIME_LLAMA_CPU").empty()) {   // escritorio: la GPU elegida no arranca -> CPU
-        L.warning(e.what(), ": se sigue en la CPU");
+      if (desktop) {   // escritorio: la GPU elegida no arranca -> CPU un rato y despues se vuelve a probar
+        L.warning(e.what(), ": se sigue en la CPU y se vuelve a probar la GPU en ", (int)(GPU_RETRY_S / 60), " min");
         {
           std::lock_guard<std::recursive_mutex> lk(mu_);
           gpu_error_ = uleft(e.what(), 300);
+          // no se toca el perfil: antes se quedaba en la CPU toda la sesion. Con la espera tampoco se recarga el
+          // modelo dos veces en cada respuesta
+          gpu_retry_at_ = now() + GPU_RETRY_S;
         }
         opts["gpu_layers"] = 0;
         opts["device"] = "";
-        // se queda apuntado en el perfil: si no, cada respuesta volvia a probar la GPU y recargaba el modelo dos veces
-        if (set_llm_opts) set_llm_opts({{"gpu_layers", 0}, {"device", ""}});
         continue;
       }
       json nxt = gpu_failed(e.what(), jstr(opts, "device"));
@@ -285,8 +294,15 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
   key_ = key;
   device_ = device;
   variant = var;
-  double t0 = now();
-  while (now() - t0 < 300) {
+  double t0 = now(), last_growth = t0;
+  uint64_t last_size = log_from;
+  // 5 minutos, o hasta 15 mientras llama-server siga escribiendo en su log (un modelo grande en un disco lento o la
+  // primera compilacion de los kernels de la GPU): antes se cortaba a los 5 y se pasaba a la CPU
+  while (now() - t0 < 300 || (now() - t0 < 900 && now() - last_growth < 60)) {
+    if (uint64_t sz = is_file(log_path) ? fsize(log_path) : 0; sz != last_size) {
+      last_size = sz;
+      last_growth = now();
+    }
     if (!proc_->running()) {
       std::string tail = read_text(log_path);
       tail = valid_utf8(tail.size() > 1500 ? tail.substr(tail.size() - 1500) : tail);
@@ -320,9 +336,10 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
       }
       proc_.reset();
       key_.clear();
-      if (!device.empty())
-        throw GpuFailed(cat("llama-server con ", starts_with(device, "HTP") ? "NPU" : "GPU", " (", device,
-                            ") termino al arrancar: ", uright(tail, 300)));
+      // escritorio con una sola GPU (sin --device): tambien se sigue en la CPU en vez de dejar sin respuesta
+      if (!device.empty() || (on_gpu && nx::env("NEXUS_RUNTIME_LLAMA_CPU").empty()))
+        throw GpuFailed(cat("llama-server con ", starts_with(device, "HTP") ? "NPU" : "GPU", " (",
+                            device.empty() ? var : device, ") termino al arrancar: ", uright(tail, 300)));
       throw std::runtime_error("llama-server termino al arrancar: " + uright(tail, 600));
     }
     if (http::get(cat("http://127.0.0.1:", port, "/health"), {}, 1).status == 200) {
@@ -347,9 +364,9 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
-  if (!device.empty()) {
+  if (!device.empty() || (on_gpu && nx::env("NEXUS_RUNTIME_LLAMA_CPU").empty())) {
     stop();
-    throw GpuFailed("llama-server con GPU (" + device + ") no respondio a tiempo");
+    throw GpuFailed("llama-server con GPU (" + (device.empty() ? var : device) + ") no respondio a tiempo");
   }
   throw std::runtime_error("llama-server no respondio a tiempo");
 }
@@ -383,8 +400,13 @@ void LlamaServerBackend::stream_chat(const json& messages, const std::string& mo
       key_.clear();
       dev = device_;
     }
-    if (!dev.empty()) {   // se cayo usando la GPU o la NPU: driver inestable, se sigue en la siguiente
-      o.update(gpu_failed("llama-server con GPU (" + dev + ") se detuvo durante una respuesta", dev));
+    if (!nx::env("NEXUS_RUNTIME_LLAMA_CPU").empty()) {
+      if (!dev.empty())   // movil: se cayo usando la GPU o la NPU (driver inestable), se sigue en la siguiente
+        o.update(gpu_failed("llama-server con GPU (" + dev + ") se detuvo durante una respuesta", dev));
+    } else if (truthy(o.value("gpu_layers", json(0)))) {
+      // escritorio: se reintenta igual (una caida suelta no es el driver); si vuelve a fallar al arrancar,
+      // ensure() pasa a la CPU un rato. Antes se marcaba la GPU como rota con la logica del movil
+      L.warning("llama-server se detuvo con la GPU", dev.empty() ? std::string() : " (" + dev + ")");
     }
     ensure(model, o);
     Opts o2{o, opts.on_reasoning};
