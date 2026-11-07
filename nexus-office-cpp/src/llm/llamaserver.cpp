@@ -18,8 +18,8 @@
 namespace nx::llm {
 
 namespace {
-// opciones que admite un llama-server (de su --help, una vez por binario): los antiguos no conocen --cpu-mask
-bool admite(const fs::path& exe, const std::string& flag) {
+// ayuda de un llama-server (--help, una vez por binario): los antiguos no conocen --cpu-mask, --cache-ram...
+std::string ayuda(const fs::path& exe) {
   static std::mutex mu;
   static std::map<std::string, std::string> ayudas;
   std::lock_guard<std::mutex> lk(mu);
@@ -32,10 +32,30 @@ bool admite(const fs::path& exe, const std::string& flag) {
     auto r = proc::run({S(exe), "--help"}, 30, o);
     h = r.out + "\n" + r.err + " ";
   }
-  return h.find(flag) != std::string::npos;
+  return h;
 }
+bool admite(const fs::path& exe, const std::string& flag) { return ayuda(exe).find(flag) != std::string::npos; }
 }  // namespace
 
+std::vector<std::string> flags_rendimiento_para(const std::string& ayuda, int ubatch, int cache_ram_mb, bool flash) {
+  std::vector<std::string> out;
+  auto tiene = [&](const char* f) { return ayuda.find(f) != std::string::npos; };
+  // lote fisico: trozos mas grandes del prompt en una grafica dedicada grande
+  if (ubatch > 0 && tiene("--ubatch-size")) out.insert(out.end(), {"-ub", std::to_string(ubatch)});
+  // cache de prompts en la RAM: llama.cpp reserva hasta 8 GB por defecto; se limita a lo que el equipo aguanta
+  if (cache_ram_mb >= 0 && tiene("--cache-ram")) out.insert(out.end(), {"--cache-ram", std::to_string(cache_ram_mb)});
+  // atencion rapida: los llama-server recientes la ponen en «auto» solos; los antiguos (opcion sin valor) la
+  // necesitan para la cache V en 8 bits y en CUDA/Metal van mas rapido con ella
+  bool fa_valor = tiene("--flash-attn [on|off|auto]") || tiene("'on', 'off', or 'auto'");
+  if (flash && tiene("--flash-attn") && !fa_valor) out.push_back("-fa");
+  return out;
+}
+
+std::vector<std::string> LlamaServerBackend::flags_rendimiento(const fs::path& exe, int ubatch, int cache_ram_mb,
+                                                                bool flash) {
+  if (ubatch <= 0 && cache_ram_mb < 0 && !flash) return {};
+  return flags_rendimiento_para(ayuda(exe), ubatch, cache_ram_mb, flash);
+}
 
 static const auto L = log::get("llamaserver");
 
@@ -207,10 +227,17 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
   bool kv_ram = truthy(opts.value("kv_ram", json(false))), mlock = truthy(opts.value("mlock", json(false)));
   std::string kv_quant = jstr(opts, "kv_quant");
   int threads_batch = (int)jnum(opts.value("n_threads_batch", json(0)), 0);
+  int n_batch = (int)jnum(opts.value("n_batch", json(256)), 256);
+  int ubatch = (int)jnum(opts.value("n_ubatch", json(0)), 0);
+  if (ngl == 0 && ubatch > 512) ubatch = 0;   // en la CPU el lote grande no acelera y gasta RAM
+  if (ubatch > 0) n_batch = std::max(n_batch, ubatch);
+  int cache_ram = (int)jnum(opts.value("cache_ram_mb", json(-1)), -1);
+  bool flash = truthy(opts.value("flash_attn", json(false)));
   std::string mmproj = entry.value("mmproj", json()).is_string() ? entry["mmproj"].get<std::string>() : "";
   std::string key = cat(S(exe), "|", path, "|", mmproj, "|", jdump(opts.value("n_ctx", json())), "|",
                         jdump(opts.value("n_threads", json())), "|", jdump(opts.value("n_batch", json())), "|", ngl, "|",
-                        device, "|", jdump(extra_env), "|", kv_ram, "|", mlock, "|", kv_quant, "|", threads_batch);
+                        device, "|", jdump(extra_env), "|", kv_ram, "|", mlock, "|", kv_quant, "|", threads_batch, "|",
+                        ubatch, "|", cache_ram);
   std::lock_guard<std::recursive_mutex> lk(mu_);
   if (proc_ && proc_->running() && key_ == key) return;
   stop();
@@ -233,7 +260,7 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
                                   "-c",
                                   std::to_string((int)jnum(opts.value("n_ctx", json(4096)), 4096)),
                                   "-b",
-                                  std::to_string((int)jnum(opts.value("n_batch", json(256)), 256)),
+                                  std::to_string(n_batch),
                                   "-ngl",
                                   ngl_arg(ngl, var),
                                   "--jinja",
@@ -259,6 +286,8 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
   // cache KV en 8 bits con la memoria justa: cabe el doble de contexto (necesita atencion rapida; si este binario o
   // esta GPU no la tienen, se arranca sin ella)
   if (!kv_quant.empty() && !kv_quant_failed_) cmd.insert(cmd.end(), {"-ctk", kv_quant, "-ctv", kv_quant});
+  for (auto& a : flags_rendimiento(exe, ubatch, cache_ram, flash || (!kv_quant.empty() && !kv_quant_failed_)))
+    cmd.push_back(a);
   cmd.push_back("-np");
   // un solo slot tambien con la variante de GPU forzada a CPU (-ngl 0): si no, cada slot se queda con medio contexto.
   // En el movil, uno siempre: un solo usuario, y con dos slots la GPU o la NPU trabajaban con la mitad del contexto

@@ -267,7 +267,7 @@ bool LiveTuner::set_gpu(bool on) {
   std::string want_d = on ? gpu_device_ : "";
   if ((int)jnum(llm.value("gpu_layers", json(0))) == want_l && jstr(llm, "device") == want_d) return false;
   s_.llm->update_llm_profile({{"gpu_layers", want_l}, {"device", want_d}});
-  if (s_.monitor && s_.monitor->settings.is_object()) s_.monitor->settings["gpu_layers"] = want_l;
+  if (s_.monitor) s_.monitor->set_setting("gpu_layers", want_l);
   return true;
 }
 
@@ -421,7 +421,7 @@ json LiveTuner::step() {
     if (exploring && why.empty()) note("Midiendo la velocidad con " + std::to_string(limited) + " hilos");
     s_.llm->update_llm_profile({{"n_threads", limited}});
     threads = limited;
-    if (s_.monitor && s_.monitor->settings.is_object()) s_.monitor->settings["n_threads"] = limited;
+    if (s_.monitor) s_.monitor->set_setting("n_threads", limited);
   }
   if (threads == limited) applied_ = target;
 

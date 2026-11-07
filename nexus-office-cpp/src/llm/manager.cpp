@@ -312,6 +312,8 @@ json LLMManager::options(const json& agent_opts) {
             {"mlock", llm.value("mlock", json(false))},
             {"n_threads_batch", llm.value("n_threads_batch", json(0))},
             {"kv_quant", llm.value("kv_quant", json(""))},
+            {"n_ubatch", llm.value("n_ubatch", json(0))},
+            {"cache_ram_mb", llm.value("cache_ram_mb", json(-1))},
             {"temperature", config_.get("llm.temperature", 0.7)},
             {"max_tokens", config_.get("llm.max_tokens", 1024)}};
   if (agent_opts.is_object())
@@ -476,6 +478,11 @@ void LLMManager::stream(json messages, const std::string& spec, Opts opts, const
   }
   if (monitor_ && b->last_stats.tokens)
     monitor_->record_llm(bname, model, (int)b->last_stats.tokens, b->last_stats.seconds, b->last_stats.ttft);
+  if (monitor_ && bname == "llamaserver")   // para el autoajuste: si el modelo entero cupo en la GPU/NPU
+    if (auto ls = std::dynamic_pointer_cast<LlamaServerBackend>(b)) {
+      json eff = ls->effective();
+      if (eff.is_object() && !jstr(eff, "offloaded").empty()) monitor_->set_setting("offloaded", eff["offloaded"]);
+    }
   std::lock_guard<std::recursive_mutex> lk(mu_);
   last_used = {bname, model};
 }

@@ -1894,7 +1894,8 @@
       .map(([k, v, s]) => `<div class="panel hw-card"><h3>${k}</h3><div class="big">${v}</div><div class="muted mono" style="margin-top:6px">${esc(s)}</div></div>`).join("");
     const L = p.llm;
     $("#profile-kv").innerHTML = [["Perfil", `${p.id} (${p.tier})`], ["Dispositivo", p.device_name], ["LLM recomendado", `≤ ${L.recommended_model_b}B (máx ${L.max_model_b}B) ${L.quant}`],
-      ["Contexto", `${L.n_ctx} (máx ${L.max_ctx})`], ["Hilos / lote", `${L.n_threads} / ${L.n_batch}`], ["Capas GPU", L.gpu_layers === -1 ? "todas" : L.gpu_layers], ["Runtime llama.cpp", L.llamacpp_wheel],
+      ["Contexto", `${L.n_ctx} (máx ${L.max_ctx})`], ["Hilos / lote", `${L.n_threads} / ${L.n_batch}`], ["Capas GPU", L.gpu_layers === -1 ? "todas" : L.gpu_layers],
+      ["Lote físico / caché KV", `${L.n_ubatch || "auto"} / ${L.kv_quant || "16 bits"}`], ["Caché de prompts", L.cache_ram_mb >= 0 && L.cache_ram_mb !== undefined ? `${L.cache_ram_mb} MB de RAM` : "la de llama.cpp"], ["Runtime llama.cpp", L.llamacpp_wheel],
       ["Imagen", `${p.image.device} · ${p.image.resolution}px · ${p.image.neural ? "neural GPU" : "CPU"}`], ["Voz (STT)", `whisper ${p.stt.model} · ${p.stt.compute_type} · ${p.stt.device}`],
       ["Embeddings", p.embeddings.device], ["NPU", p.npu.present ? `${p.npu.name} · ${p.npu.ready ? "en uso" : "sin runtime"}` : "—"]].map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
     const log = (d.tuning_state.log || []).slice().reverse();

@@ -174,6 +174,7 @@ json accel_apply(Services& s, const std::string& engine_in, const std::string& a
   json capas_ok = capas.is_null() ? json() : hw::profiles::norm_capas(capas);   // invalid_argument -> 400
   auto [profile, p] = hw::build_for(s.hw, accel, accel == "auto" ? s.config.str("hardware.profile_override", "") : "");
   if (!capas_ok.is_null()) s.config.set("hardware.capas", capas_ok);
+  if (s.config.flag("hardware.adaptive_tuning", true)) hw::apply_overrides(profile);
   hw::profiles::aplicar_capas(profile, s.config);
   s.profile = profile;
   s.config.set("llm.engine", engine);

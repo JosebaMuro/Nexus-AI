@@ -36,28 +36,26 @@ Services::Services(bool detect_hardware) : config(get_config()) {
   if (monitor->previous_unclean)
     L.warning("La sesion anterior no se cerro correctamente; se aplicara un perfil mas conservador");
   hw::profiles::al_arrancar(cfg);   // GPU elegida antes de calcular el perfil
-  if (detect_hardware) {
+  std::string accel = cfg.str("hardware.accel", "auto");
+  if (detect_hardware) {   // con CPU/GPU/NPU elegido a mano, el autoajuste se hace sobre ese perfil
     auto st = hw::startup(cfg.str("hardware.profile_override", ""), truthy(cfg.get("hardware.adaptive_tuning", true)),
                           cfg.str("llm.ollama_url", "http://127.0.0.1:11434"), monitor->previous_unclean,
-                          monitor->previous_info);
+                          monitor->previous_info, accel);
     hw = st.hw;
     profile = st.profile;
     tuning_reasons = st.reasons;
+    if (accel != "auto" && truthy(st.plan.value("note", json())))
+      L.warning("Acelerador ", accel, ": ", jstr(st.plan, "note"));
   } else {   // modo rapido para pruebas
     if (!hw::load_cached(hw)) hw = hw::detect("", false);
     profile = hw::build_profile(hw);
   }
-  std::string accel = cfg.str("hardware.accel", "auto");
-  if (detect_hardware && accel != "auto") {   // CPU/GPU/NPU elegido a mano al arrancar
-    auto [prof, plan] = hw::build_for(hw, accel);
-    profile = prof;
-    if (truthy(plan.value("note", json())))
-      L.warning("Acelerador ", accel, ": ", jstr(plan, "note"));
-  }
   hw::profiles::aplicar_al_perfil(*this);
   json st = json::object();
-  for (const char* k : {"n_ctx", "n_threads", "n_batch", "gpu_layers"}) st[k] = profile["llm"][k];
+  for (const char* k : {"n_ctx", "n_threads", "n_batch", "gpu_layers", "n_ubatch", "kv_quant", "cache_ram_mb"})
+    st[k] = profile["llm"].value(k, json());
   monitor->settings = st;
+  monitor->busy = [this] { return llm && llm->inflight.load() > 0; };
   auto profile_getter = [this] { return profile; };
   runtimes = std::make_unique<runtimes::RuntimeManager>();
   runtimes->import_found();   // paquetes de runtimes sin conexion (CUDA 13, ROCm, SYCL...) junto al programa

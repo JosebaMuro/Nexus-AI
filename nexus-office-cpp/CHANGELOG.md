@@ -2,6 +2,31 @@
 
 ## Agente IA 3.2.2-cpp
 
+Revision del rendimiento de punta a punta (llama-server, embeddings, monitor y autoajuste) y la lista de URLs del
+rastreador web. Incluye todo lo de la 3.2.1.
+
+### Rendimiento
+- **Lote fisico de la GPU** (`-ub`): con una grafica dedicada de 12 GB o mas, el prompt se procesa en trozos de 1024
+  tokens en vez de 512 (el prompt de los agentes es lo que mas tarda en la GPU).
+- **Cache de prompts en la RAM** (`--cache-ram`): llama-server reservaba hasta 8 GB por defecto; ahora el 10 % de la
+  RAM (5 % en el movil), entre 256 MB y 8 GB. En moviles y PC de 8-16 GB llenaba la memoria.
+- **Atencion rapida** en los llama-server antiguos cuando la cache KV va en 8 bits o en CUDA/Metal (los recientes ya
+  la ponen en «auto»).
+- **Embeddings** con 4 secuencias a la vez (2 en el movil): indexar la Biblioteca RAG y la memoria ya no calcula los
+  fragmentos de uno en uno.
+- **Monitor**: VRAM de AMD en Linux desde sysfs (el autoajuste no la veia); nvidia-smi solo en cada muestra mientras
+  el modelo trabaja y cada 10 s en reposo (antes cada 2 s siempre, lanzando un proceso y despertando la grafica).
+
+### Autoajuste adaptativo
+- VRAM llena: primero la cache KV en 8 bits, luego el lote fisico a la mitad y solo entonces menos capas.
+- RAM llena con el modelo en la CPU: cache KV en 8 bits antes de recortar el contexto; la cache de prompts se reduce
+  con la RAM justa y se recupera con holgura.
+- Primera palabra lenta con VRAM libre: lote fisico al doble (hasta 2048).
+- Con el modelo entero en la GPU o la NPU (`offloaded N/N`) no se prueban hilos de la CPU.
+- Con CPU/GPU/NPU elegido a mano (`hardware.accel`) el autoajuste por fin se aplica (antes se descartaba), y al
+  cambiar el acelerador o la GPU sin reiniciar se conserva lo aprendido.
+- *Sistema* muestra el lote fisico, la cache KV y la cache de prompts del perfil.
+
 ### Rastreador web: lista de URLs
 - **LISTA…** junto a **RASTREAR** en la *Biblioteca RAG*: pega varias URLs (una por línea, o separadas por comas) o
   sube un `.txt`/CSV, y **RASTREAR LISTA** crea un rastreo por URL con el máximo de páginas, el ámbito y el destino de
