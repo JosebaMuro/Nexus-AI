@@ -19,6 +19,10 @@ on:
   push:
     paths:
       - .github/workflows/cpp-entrega.yml
+    # las ramas de trabajo lanzan la entrega a mano (workflow_dispatch): al crear una rama nueva GitHub da por
+    # cambiado este fichero y arrancaba una segunda entrega igual, que habia que cancelar y dejaba el PR en rojo
+    branches-ignore:
+      - "claude/**"
 
 permissions:
   contents: write
