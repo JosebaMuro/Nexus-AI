@@ -147,6 +147,13 @@ Un dominio grande no cabe de una vez, así que se procesa en **lotes correlativo
 - Volver a rastrear la misma URL sustituye todos los lotes antiguos al terminar el primer lote nuevo.
 - API: `GET /api/rag/crawls`, `POST /api/rag/crawls/{id}/pause`, `POST /api/rag/crawls/{id}/resume` y `DELETE /api/rag/crawls/{id}?docs=true`.
 
+### Lista de URLs: varios rastreos en cola
+Para rastrear muchas webs de una vez, pulsa **LISTA…** junto a **RASTREAR** en la *Biblioteca RAG*:
+- Pega las URLs, una por línea (también valen separadas por comas, espacios o punto y coma), o pulsa **SUBIR .txt** para leerlas de un fichero de texto o CSV. Las líneas que empiezan por `#` se ignoran, a un dominio sin `https://` se le pone y las repetidas se quitan.
+- **RASTREAR LISTA** crea un trabajo por URL con el máximo de páginas, el ámbito y el destino (*Importar en*) elegidos arriba, y los pone en la **cola de rastreos**: se rastrean en orden, de uno en uno, para no ahogar el equipo. `rag.crawl_parallel` (1 a 4) deja rastrear varios a la vez.
+- En el panel de rastreos los que esperan aparecen *en cola* con su posición en la lista (3/20), y tienen **SACAR DE LA COLA** (queda en pausa) y **EMPEZAR YA**. Si Agente IA se cierra, al volver a abrirlo la cola sigue por donde iba.
+- API: `POST /api/rag/crawl` con `urls` en lugar de `url`, por ejemplo `{"urls": ["https://docs.a.com/", "https://b.org/manual"], "max_pages": 40, "scope": "path"}` o `{"urls": "https://docs.a.com/\nhttps://b.org/manual"}`. Devuelve `{list, jobs, invalid, parallel}`; como mucho 1000 URLs por lista. Desde la terminal, con una lista en `lista.txt`: `jq -Rs "{urls: .}" lista.txt | curl -X POST -H "Content-Type: application/json" -d 17746 http://127.0.0.1:8775/api/rag/crawl`.
+
 Seguridad y límites: solo direcciones públicas (se comprueba en cada petición y tras cada redirección; `rag.allow_private_urls: true` permite la red local), 3 MB por página, 6 millones de caracteres por documento o lote y 15 minutos por tanda (un trabajo por lotes sigue en la siguiente tanda). Las páginas que solo muestran contenido con JavaScript se omiten por tener poco texto. La herramienta tiene **riesgo medio** (accede a internet): con la política por defecto el usuario la aprueba en una tarjeta.
 
 ## URL → PDF estructurado → conocimiento

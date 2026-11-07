@@ -1164,12 +1164,47 @@ void register_routes(App& app) {
     return res;
   });
 
-  // rastreo de un sitio de documentacion; background=true (o todo el dominio): por lotes reanudables
+  // rastreo de un sitio de documentacion; background=true (o todo el dominio): por lotes reanudables.
+  // urls (lista o texto con una URL por linea): cada URL es un trabajo y van todos a la cola, que los rastrea en orden
   app.post("/api/rag/crawl", [rag_target](Ctx& c) -> Out {
-    std::string url = c.bs("url"), scope = c.bs("scope", "path");
+    std::string scope = c.bs("scope", "path");
     int max_pages = (int)c.bn("max_pages", 40), max_depth = (int)c.bn("max_depth", 3), batch_pages = (int)c.bn("batch_pages", 0);
     bool background = c.bb("background", false);
     if (scope != "path" && scope != "domain") throw HttpErr(400, "scope debe ser 'path' o 'domain'");
+    json list = c.b("urls", nullptr);
+    if (!list.is_null()) {
+      std::string text;
+      if (list.is_array())
+        for (auto& u : list) text += Ctx::as_str(u) + "\n";
+      else if (list.is_string())
+        text = list.get<std::string>();
+      else
+        throw HttpErr(400, "urls debe ser una lista o un texto con una URL por linea");
+      std::vector<std::string> invalid;
+      std::vector<std::string> urls = rag::crawl_jobs::parse_url_list(text, &invalid);
+      if (urls.empty()) throw HttpErr(400, "la lista no tiene ninguna URL http(s)");
+      if (urls.size() > 1000) throw HttpErr(400, "como mucho 1000 URLs por lista");
+      std::string target = rag_target(c.bs("agent", ""));
+      auto [pages, chars] = rag::crawl_jobs::auto_batch(c.app.S().profile);
+      std::string lid = strftime_local("%Y%m%d%H%M%S-") + token_hex(3);
+      json jobs = json::array();
+      std::vector<std::string> ids;
+      for (size_t i = 0; i < urls.size(); ++i) {
+        json job = rag::crawl_jobs::create(urls[i], max_pages, max_depth, scope, target, true,
+                                           std::clamp(batch_pages ? batch_pages : pages, 1, 500), chars, true);
+        job["list"] = lid;
+        job["list_pos"] = i + 1;
+        job["list_total"] = urls.size();
+        rag::crawl_jobs::save(job);
+        ids.push_back(job["id"]);
+        jobs.push_back(rag::crawl_jobs::pub(job));
+      }
+      App* a = &c.app;
+      rag::crawl_jobs::enqueue(c.app.S(), ids, [a](const json& e) { a->broadcast(e); });
+      return json{{"list", lid}, {"jobs", jobs}, {"invalid", invalid},
+                  {"parallel", std::clamp((int)c.app.S().config.num("rag.crawl_parallel", 1), 1, 4)}};
+    }
+    std::string url = c.bs("url");
     if (!re_search(R"(^https?://)", url, Rx::I)) throw HttpErr(400, "la URL debe empezar por http:// o https://");
     std::string target = rag_target(c.bs("agent", ""));
     App* a = &c.app;
