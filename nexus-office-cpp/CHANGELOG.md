@@ -1,5 +1,16 @@
 # Cambios
 
+## Agente IA 3.2.2-cpp
+
+### Rastreador web: lista de URLs
+- **LISTA…** junto a **RASTREAR** en la *Biblioteca RAG*: pega varias URLs (una por línea, o separadas por comas) o
+  sube un `.txt`/CSV, y **RASTREAR LISTA** crea un rastreo por URL con el máximo de páginas, el ámbito y el destino de
+  arriba. Se quitan repetidas y comentarios (`#`), y a un dominio sin esquema se le pone `https://`.
+- **Cola de rastreos** (`src/rag/crawl_jobs.cpp`): los trabajos de la lista se rastrean en orden, de uno en uno
+  (`rag.crawl_parallel`, 1 a 4), en vez de arrancar todos a la vez. Estado nuevo *en cola*, con **SACAR DE LA COLA** y
+  **EMPEZAR YA** en el panel; la cola se recupera al reiniciar Agente IA.
+- API: `POST /api/rag/crawl` acepta `urls` (lista o texto) en lugar de `url` y devuelve `{list, jobs, invalid, parallel}`.
+
 ## Agente IA 3.2.1-cpp
 
 Arreglos de velocidad con NPU y con graficas dedicadas (NVIDIA, AMD, Intel Arc). Se revisaron la eleccion del motor,

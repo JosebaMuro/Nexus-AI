@@ -930,25 +930,50 @@
           : r.job.max_pages > r.job.batch_pages ? `Rastreo en marcha por lotes de ${r.job.batch_pages} páginas` : "Rastreo en marcha");
     loadCrawls();
   });
+  // lista de URLs: cada una es un rastreo y van a la cola del servidor (de una en una, rag.crawl_parallel)
+  const urlList = (t) => { const seen = new Set(); return t.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith("#") && !l.startsWith("//"))
+    .flatMap((l) => l.split(/[\s,;]+/)).map((u) => u.replace(/^[<>"'()\[\]{}]+|[<>"'()\[\]{}]+$/g, "")).filter((u) => /^https?:\/\/\S+\.\S+/i.test(u) || /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(:\d+)?([/?#]\S*)?$/i.test(u))
+    .filter((u) => { const k = u.toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, ""); return !seen.has(k) && seen.add(k); }); };
+  const countList = () => { const n = urlList($("#rag-crawl-list").value).length; $("#rag-crawl-list-count").textContent = `${n} URL${n === 1 ? "" : "s"}`; };
+  $("#rag-crawl-list-toggle").onclick = () => { const b = $("#rag-crawl-list-box"), open = b.style.display === "none"; b.style.display = open ? "" : "none"; if (open) $("#rag-crawl-list").focus(); };
+  $("#rag-crawl-list").oninput = countList;
+  $("#rag-crawl-list-file-go").onclick = () => $("#rag-crawl-list-file").click();
+  $("#rag-crawl-list-file").onchange = guard(async (e) => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    const t = await f.text(), cur = $("#rag-crawl-list").value.trim();
+    $("#rag-crawl-list").value = (cur ? cur + "\n" : "") + t.trim(); countList();
+    toast(`${urlList(t).length} URLs leídas de ${f.name}`);
+  });
+  $("#rag-crawl-list-go").onclick = guard(async () => {
+    const text = $("#rag-crawl-list").value; if (!urlList(text).length) return toast("Pega al menos una URL http(s)", true);
+    const max_pages = Math.max(1, Math.min(100000, +$("#rag-crawl-max").value || 40)), scope = $("#rag-crawl-scope").value;
+    const max_depth = max_pages > 500 ? 50 : 3;
+    const r = await api("/api/rag/crawl", { body: { urls: text, max_pages, max_depth, scope, agent: ragTarget() } });
+    $("#rag-crawl-list").value = ""; countList(); $("#rag-crawl-list-box").style.display = "none";
+    toast(`${r.jobs.length} rastreos en cola${r.parallel > 1 ? ` (${r.parallel} a la vez)` : ", de uno en uno"}${r.invalid.length ? ` · ${r.invalid.length} líneas no eran URLs` : ""}`, false);
+    loadCrawls();
+  });
   let crawlTimer = null, crawlStep = "";
-  const crawlLabel = { "en curso": "ok", "completado": "accent", "pausado": "warn", "interrumpido": "warn", "error": "bad" };
+  const crawlLabel = { "en curso": "ok", "completado": "accent", "pausado": "warn", "interrumpido": "warn", "error": "bad", "en cola": "" };
   async function loadCrawls() {
     const jobs = await api("/api/rag/crawls");
-    const live = jobs.some((j) => j.running);
-    $("#rag-jobs").innerHTML = jobs.slice(0, 12).map((j) => {
+    const live = jobs.some((j) => j.running || j.status === "en cola");
+    const queued = jobs.filter((j) => !j.running && j.status === "en cola").sort((a, b) => (a.list || "").localeCompare(b.list || "") || (a.list_pos || 0) - (b.list_pos || 0));
+    const shown = [...jobs.filter((j) => j.running), ...queued.slice(0, 8), ...jobs.filter((j) => !j.running && j.status !== "en cola").slice(0, 12)];
+    $("#rag-jobs").innerHTML = shown.map((j) => {
       const pct = Math.min(100, Math.round(100 * j.pages_done / Math.max(1, j.pending ? j.pages_done + Math.min(j.pending, j.max_pages - j.pages_done) : j.pages_done)));
       const last = j.batches[j.batches.length - 1];
-      return `<div class="item"><div class="row"><span class="tag ${crawlLabel[j.status] || ""}">${esc(j.status)}</span><div style="flex:1"><div class="t">${esc(j.title || j.url)}</div>
+      return `<div class="item"><div class="row"><span class="tag ${crawlLabel[j.status] || ""}">${esc(j.status)}</span><div style="flex:1"><div class="t">${esc(j.title || j.url)}${j.list_total > 1 ? ` <span class="tag" title="Posición en la lista de URLs">${j.list_pos}/${j.list_total}</span>` : ""}</div>
         <div class="d mono">${j.pages_done} págs. en ${j.batches.length} lote${j.batches.length === 1 ? "" : "s"} de ${j.batch_pages}${j.pending ? ` · ${j.pending} pendientes` : ""} · ${j.complete ? "sin límite" : `máx. ${j.max_pages}`} · ${esc(j.scope === "domain" ? "todo el dominio y subdominios" : "sección")}${j.reason ? ` · ${esc(j.reason)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
         ${j.knowledge ? `<div class="d">🧠 Grafo del dominio: ${j.knowledge.nodes} nodos · ${j.knowledge.concepts} conceptos · ${j.knowledge.facts} afirmaciones (${(j.knowledge.facts_by_status || {})["contrastada"] || 0} contrastadas) · ${j.knowledge.topics} temas${j.knowledge.reasoned_topics ? ` (${j.knowledge.reasoned_topics} razonados)` : ""}</div>` : j.knowledge_error ? `<div class="d bad">${esc(j.knowledge_error)}</div>` : ""}
         ${j.running && crawlStep ? `<div class="d"><span class="spin"></span> ${esc(crawlStep)}</div>` : last ? `<div class="d">Último: ${esc(last.title)}</div>` : ""}</div>
-        ${j.running ? `<button class="btn sm" data-cjpause="${j.id}">PAUSAR</button>` : j.status !== "completado" ? `<button class="btn sm primary" data-cjresume="${j.id}">REANUDAR</button>` : ""}
+        ${j.running ? `<button class="btn sm" data-cjpause="${j.id}">PAUSAR</button>` : j.status === "en cola" ? `<button class="btn sm" data-cjpause="${j.id}" title="Sacarlo de la cola (queda en pausa)">SACAR DE LA COLA</button><button class="btn sm primary" data-cjresume="${j.id}" title="Rastrearlo ya, sin esperar su turno">EMPEZAR YA</button>` : j.status !== "completado" ? `<button class="btn sm primary" data-cjresume="${j.id}">REANUDAR</button>` : ""}
         ${j.complete && j.pages_done && !j.running ? `<button class="btn sm" data-cjkg="${j.id}" title="Razonar ya el grafo multicapa con lo leído">${j.knowledge ? "REHACER GRAFO" : "CREAR GRAFO"}</button>` : ""}
         ${j.knowledge ? `<a class="btn sm" href="/api/rag/crawls/${j.id}/knowledge" title="Paquete importable: grafo + conocimiento + manifiesto">⬇ ZIP</a><select class="input sm" data-cjto="${j.id}" style="width:auto">${[["", "general"], ...S.agents.map((a) => [a.id, a.name])].map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join("")}</select><button class="btn sm primary" data-cjimp="${j.id}" title="Darle a ese agente el conocimiento del dominio">DAR A AGENTE</button>` : ""}
         <button class="btn danger sm" data-cjdel="${j.id}" title="Quitar el rastreo (los lotes ya indexados se pueden conservar)">✕</button></div>
         <div class="bar"><i style="width:${j.status === "completado" ? 100 : pct}%"></i></div></div>`;
-    }).join("");
-    $$("[data-cjpause]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/rag/crawls/${b.dataset.cjpause}/pause`, { body: {} }); toast("Se pausará al terminar la página en curso"); setTimeout(loadCrawls, 800); })));
+    }).join("") + (queued.length > 8 ? `<div class="muted">… y ${queued.length - 8} rastreos más en cola</div>` : "");
+    $$("[data-cjpause]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/rag/crawls/${b.dataset.cjpause}/pause`, { body: {} }); toast("Se pausará al terminar la página en curso (o sale de la cola si aún no había empezado)"); setTimeout(loadCrawls, 800); })));
     $$("[data-cjresume]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/rag/crawls/${b.dataset.cjresume}/resume`, { body: {} }); toast("Rastreo reanudado por el siguiente lote"); loadCrawls(); })));
     $$("[data-cjkg]").forEach((b) => (b.onclick = guard(async () => { b.disabled = true; toast("Razonando el grafo del dominio…"); try { const k = await api(`/api/rag/crawls/${b.dataset.cjkg}/knowledge`, { body: {} }); toast(`Grafo listo: ${k.nodes} nodos, ${k.facts} afirmaciones`); } finally { loadCrawls(); } })));
     $$("[data-cjimp]").forEach((b) => (b.onclick = guard(async () => { const agent = $(`[data-cjto="${b.dataset.cjimp}"]`).value; const r = await api(`/api/rag/crawls/${b.dataset.cjimp}/knowledge/import`, { body: { agent } }); toast(`Conocimiento dado a ${agent || "general"}: ${r.graph.nodes} nodos y ${r.rag_chunks} fragmentos`); loadRag(); })));
