@@ -298,6 +298,15 @@ deslizar, zoom, cortinilla o corte), el movimiento suave tipo Ken Burns, rótulo
 vertical con las 6 últimas imágenes»* (herramienta `crear_video`); te devuelve el vídeo y un enlace para retocarlo en el
 editor.
 
+Desde la 3.2.1 el generador también **mejora las imágenes** y **separa las hojas con varias diapositivas**:
+- *✨ Mejorar todas* (o ✨ en cada miniatura) ajusta niveles, color y nitidez, y amplía hasta el doble las imágenes más
+  pequeñas que el vídeo. Pulsa otra vez ✨ en una imagen para volver a la original. Con *Al añadir, mejorar las
+  imágenes* se hace solo.
+- Si una imagen trae varias diapositivas juntas (una captura en cuadrícula, una página con 4 o 6 por hoja), se recortan
+  y se ponen **en orden de lectura** (de arriba abajo y de izquierda a derecha) al añadirla; el aviso trae *Deshacer*.
+  *✂ Separar diapositivas* lo hace con todas, y ✂ en una miniatura con esa sola: si no ve las separaciones, te pide
+  cuántas filas y columnas tiene la hoja. Las recortadas llevan la marca ✂.
+
 **Vídeo con imágenes** (3.2): el panel del Estudio para hacer un vídeo WebM al momento con una serie de imágenes.
 Suéltalas (o tráelas de la galería), ordénalas, elige segundos por imagen, transición (fundido, Ken Burns o corte),
 tamaño y fotogramas por segundo, y pulsa *Crear vídeo*. Se codifica en tu navegador con la aceleración por hardware

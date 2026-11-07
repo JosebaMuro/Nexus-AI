@@ -99,7 +99,9 @@ Services::Services(bool detect_hardware) : config(get_config()) {
   hilo->llm_real = [this] { return llm->has_real_llm(); };
   learner->llm_complete = [this](const std::string& p) {
     llm::Opts o;
-    o.o = {{"max_tokens", 300}, {"temperature", 0.1}};
+    // aprendizaje en segundo plano: sin razonar (con un modelo que piensa eran hasta 768 tokens mas por llamada,
+    // ocupando la GPU o la NPU mientras el usuario espera)
+    o.o = {{"max_tokens", 300}, {"temperature", 0.1}, {"reasoning", "off"}};
     return llm->complete(p, "default", o);
   };
   // memoria de los tensores de los motores segun el acelerador (CUDA pinned, HIP, dma-buf...) y motores LiteRT-LM,
