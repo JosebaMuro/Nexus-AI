@@ -27,6 +27,13 @@ las capas en la GPU, el autoajuste, las tareas de fondo y los runtimes que van e
   peticion del usuario. Antes sus frases ocupaban la GPU o la NPU mientras el usuario esperaba.
 - El aprendizaje en segundo plano no razona (hasta 768 tokens menos por llamada).
 
+### Generador de video
+- **Mejorar imagenes**: niveles automaticos, color, nitidez y ampliacion hasta x2 de las imagenes mas pequenas que el
+  video (✨ en cada una, o todas a la vez; se puede deshacer y activar al anadir).
+- **Hojas con varias diapositivas**: al anadir una imagen con varias diapositivas en cuadricula se recortan y se ordenan
+  en orden de lectura (con Deshacer); ✂ en una imagen pide filas x columnas si no ve las separaciones.
+- El movimiento lento ya no deja una banda negra en el borde al empezar cada imagen.
+
 ### Runtimes de la entrega
 - Windows x64: llama.cpp **CUDA 12** y **Vulkan** de la misma build oficial que el resto (los de la entrega anterior
   eran una build de llama.cpp miles de versiones por detras, con un Vulkan mucho mas lento en AMD e Intel).

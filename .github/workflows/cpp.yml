@@ -154,6 +154,8 @@ jobs:
         run: |
           npm i --no-save playwright@1.48.2 >/dev/null && npx playwright install --with-deps chromium >/dev/null
           mkdir -p capturas && node nexus-office-cpp/tests/ui_smoke.js http://127.0.0.1:8790 capturas
+      - name: Generador de video (separar diapositivas y mejorar imagenes)
+        run: node nexus-office-cpp/tests/video_imagen.js
       - name: Registros
         if: always()
         run: tail -50 cpp.log
