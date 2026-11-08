@@ -1,6 +1,8 @@
 # Cambios
 
-## Sin publicar
+## Agente IA 3.2.3-cpp
+
+Ubicación en tiempo real para los agentes. Incluye todo lo de la 3.2.2.
 
 ### Ubicación en tiempo real
 - Herramienta **`ubicacion_actual`** para los agentes: coordenadas, precisión, altitud, velocidad y rumbo, lugar
