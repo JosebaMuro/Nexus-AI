@@ -102,14 +102,14 @@ TEST("ubicacion: fuentes de la app, del navegador y fija, con lugares y destino"
   set_env("NEXUS_UBICACION", S(dir / "ubicacion.json"));
   {
     // sin ninguna fuente: error con pista
-    Conf conf({{"fuente", "manual"}, {"manual", {{"lat", nullptr}, {"lon", nullptr}}}});
+    Conf conf(json::object({{"fuente", "manual"}, {"manual", {{"lat", nullptr}, {"lon", nullptr}}}}));
     json r = ubicacion::consultar();
     CHECK(r.contains("error"));
   }
   {
-    Conf conf({{"fuente", "manual"},
+    Conf conf(json::object({{"fuente", "manual"},
                {"manual", {{"lat", 43.2630}, {"lon", -2.9350}, {"nombre", "Oficina de Bilbao"}}},
-               {"lugares", json::array({{{"nombre", "Oficina"}, {"lat", 43.2631}, {"lon", -2.9351}, {"radio", 100}}})}});
+               {"lugares", json::array({{{"nombre", "Oficina"}, {"lat", 43.2631}, {"lon", -2.9351}, {"radio", 100}}})}}));
     json r = ubicacion::consultar({{"hasta", "Vitoria-Gasteiz"}});
     CHECK_EQ(r["fuente"].get<std::string>(), std::string("manual"));
     CHECK_EQ(r["en_tiempo_real"].get<bool>(), false);
@@ -124,7 +124,7 @@ TEST("ubicacion: fuentes de la app, del navegador y fija, con lugares y destino"
                json{{"lat", 40.4168}, {"lon", -3.7038}, {"precision", 6.5}, {"velocidad", 10.0}, {"rumbo", 45.0},
                     {"proveedor", "gps"}, {"t", (long long)(now() * 1000)}}
                    .dump());
-    Conf conf({{"fuente", "auto"}, {"gpsd", ""}, {"serie", ""}});
+    Conf conf(json::object({{"fuente", "auto"}, {"gpsd", ""}, {"serie", ""}}));
     json r = ubicacion::consultar({{"fuente", "app"}});
     CHECK_EQ(r["fuente"].get<std::string>(), std::string("app"));
     CHECK_EQ(r["en_tiempo_real"].get<bool>(), true);
@@ -138,7 +138,7 @@ TEST("ubicacion: fuentes de la app, del navegador y fija, con lugares y destino"
     CHECK(v.contains("aviso") && v["en_tiempo_real"].get<bool>() == false);
   }
   {
-    Conf conf({{"fuente", "navegador"}, {"navegador", true}});
+    Conf conf(json::object({{"fuente", "navegador"}, {"navegador", true}}));
     bool mal = false;
     try {
       ubicacion::recibir({{"lat", 200}, {"lon", 0}}, "navegador");
@@ -154,7 +154,7 @@ TEST("ubicacion: fuentes de la app, del navegador y fija, con lugares y destino"
     CHECK(e["fuentes"].is_array() && e.contains("ultima"));
   }
   {
-    Conf conf({{"activada", false}});
+    Conf conf(json::object({{"activada", false}}));
     CHECK(ubicacion::consultar().value("desactivada", false));
   }
   set_env("NEXUS_UBICACION", "");
@@ -189,7 +189,7 @@ TEST("ubicacion: gpsd de verdad por TCP (servidor de prueba)") {
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
     close(c);
   });
-  Conf conf({{"fuente", "gpsd"}, {"gpsd", "127.0.0.1:" + std::to_string(port)}});
+  Conf conf(json::object({{"fuente", "gpsd"}, {"gpsd", "127.0.0.1:" + std::to_string(port)}}));
   double t0 = now();
   json r = ubicacion::consultar();
   double dur = now() - t0;
@@ -205,7 +205,7 @@ TEST("ubicacion: herramienta ubicacion_actual y privacidad") {
   auto& fns = tools::builtin_functions();
   CHECK(fns.count("ubicacion_actual") == 1);
   if (!fns.count("ubicacion_actual")) return;
-  Conf conf({{"fuente", "manual"}, {"manual", {{"lat", 39.4699}, {"lon", -0.3763}}}});
+  Conf conf(json::object({{"fuente", "manual"}, {"manual", {{"lat", 39.4699}, {"lon", -0.3763}}}}));
   tools::ToolContext ctx;
   json r = fns["ubicacion_actual"](json::object(), ctx);
   CHECK_EQ(r["cerca_de"]["nombre"].get<std::string>(), std::string("Valencia"));
