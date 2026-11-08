@@ -1,5 +1,18 @@
 # Cambios
 
+## Sin publicar
+
+### Ubicación en tiempo real
+- Herramienta **`ubicacion_actual`** para los agentes: coordenadas, precisión, altitud, velocidad y rumbo, lugar
+  guardado o ciudad de referencia cercana (tabla propia, sin internet) y distancia en línea recta hasta un lugar.
+- Fuentes: GPS del móvil en la app Android (permiso de ubicación, solo GPS y proveedor pasivo), gpsd, receptor GPS
+  USB/serie NMEA, servicio de ubicación de Windows (`Windows.Devices.Geolocation`), GeoClue2 en Linux (libdbus cargada
+  al ejecutar), navegador y posición fija. La posición no sale del equipo; no se comparte con la red COOP ni con
+  usuarios que no son el titular salvo que se active.
+- *Ajustes > Ubicación*: fuentes del equipo, consultar ahora, posición fija, receptor GPS y lugares guardados.
+- API `GET /api/ubicacion`, `POST /api/ubicacion/consultar` y `POST /api/ubicacion`; paquete «Ubicación» en el
+  asistente de agentes; el coordinador de la oficina la tiene; tarea dorada en el banco de evaluación.
+
 ## Agente IA 3.2.2-cpp
 
 Revision del rendimiento de punta a punta (llama-server, embeddings, monitor y autoajuste) y la lista de URLs del

@@ -338,6 +338,7 @@ public class NexusServerService extends Service {
         env.put("NEXUS_ANDROID_LIBS", libs);
         env.put("NEXUS_DNS", dnsServers());
         env.put("NEXUS_DEVICE_STATE", new File(data, "device_state.json").getAbsolutePath());
+        env.put("NEXUS_UBICACION", new File(data, "ubicacion.json").getAbsolutePath());   // GPS del movil (MainActivity)
         File info = new File(data, "device_info.json");
         writeDeviceInfo(info);
         env.put("NEXUS_DEVICE_INFO", info.getAbsolutePath());

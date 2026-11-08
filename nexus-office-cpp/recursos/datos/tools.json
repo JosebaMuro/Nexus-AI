@@ -311,6 +311,38 @@
     "permissions": []
   },
   {
+    "name": "ubicacion_actual",
+    "description": "Ubicacion actual del dispositivo en tiempo real (GPS del movil, receptor GPS, servicio de ubicacion del sistema o la fija de Ajustes): coordenadas, precision, velocidad, lugar guardado o ciudad cercana y, si se pide, distancia en linea recta hasta un lugar. Todo sin internet: la posicion no sale del equipo",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "hasta": {
+          "type": "string",
+          "description": "lugar guardado, ciudad o 'lat, lon' para dar la distancia y el rumbo"
+        },
+        "fuente": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "app",
+            "gpsd",
+            "nmea",
+            "windows",
+            "geoclue",
+            "navegador",
+            "manual"
+          ],
+          "default": "auto"
+        }
+      }
+    },
+    "risk": "low",
+    "permissions": [
+      "location"
+    ],
+    "timeout": 40
+  },
+  {
     "name": "memory_search",
     "description": "Busca en la memoria a largo plazo lo que se sabe sobre algo o sobre el usuario",
     "parameters": {

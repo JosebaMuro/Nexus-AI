@@ -57,6 +57,13 @@ std::optional<std::pair<std::string, json>> detect_intent(const std::string& tex
   if (tools.count("calculator") && !expr.empty() && MATH.match(expr) && MATH.fullmatch(expr) && OPS.test(expr))
     return std::make_pair(std::string("calculator"), json{{"expression", expr}});
   if (tools.count("datetime_now") && TIME.test(low)) return std::make_pair(std::string("datetime_now"), json::object());
+  static const Rx DONDE(R"(\b(d[oó]nde estoy|d[oó]nde estamos|mi (ubicaci[oó]n|posici[oó]n|localizaci[oó]n)|ubicaci[oó]n actual|coordenadas|where am i|my location)\b)");
+  if (tools.count("ubicacion_actual") && DONDE.test(low)) {
+    json args = json::object();
+    static const Rx HASTA(R"(\b(?:lejos|distancia|cu[aá]nto hay|cu[aá]ntos? km)\b.*?\b(?:de|a|hasta)\s+([^?¿!.,]+))");
+    if (auto m = HASTA.search(low)) args["hasta"] = trim(m->str(1));
+    return std::make_pair(std::string("ubicacion_actual"), args);
+  }
   static const Rx VID(R"(\b(v[ií]deo|montaje|slideshow|presentaci[oó]n animada)\b.*\b(im[aá]gen|imagenes|fotos?|dibujos?)|\b(im[aá]gen\w*|fotos?)\b.*\bv[ií]deo\b)", Rx::I);
   if (tools.count("crear_video") && VID.test(low)) {
     json args = json::object();
@@ -188,6 +195,25 @@ std::string BuiltinBackend::after_tool(const std::string& name, const std::strin
   if (name == "calculator") return "El resultado es **" + S_(data, "result") + "**.";
   if (name == "datetime_now")
     return "Ahora son las **" + S_(data, "time") + "** del " + S_(data, "weekday") + " " + S_(data, "date") + ".";
+  if (name == "ubicacion_actual" && data.is_object()) {
+    std::string r = "Estás en **" + S_(data, "lat") + ", " + S_(data, "lon") + "**";
+    if (data.contains("precision_m")) r += " (±" + S_(data, "precision_m") + " m)";
+    if (data.contains("lugar")) r += ", en **" + S_(data, "lugar") + "**";
+    json c = data.value("cerca_de", json());
+    if (c.is_object()) {
+      double km = c.value("distancia_km", 0.0);
+      r += km < 1 ? ", en " + S_(c, "nombre") : ", a unos " + S_(c, "distancia_km") + " km" +
+                                                    (jstr(c, "direccion").empty() ? "" : " al " + jstr(c, "direccion")) +
+                                                    " de " + S_(c, "nombre");
+    }
+    r += ". Fuente: " + S_(data, "fuente") + ", " + S_(data, "hora") + ".";
+    if (data.contains("velocidad_kmh")) r += " Velocidad: " + S_(data, "velocidad_kmh") + " km/h.";
+    json h = data.value("hasta", json());
+    if (h.is_object() && h.contains("distancia_km"))
+      r += " Hasta " + S_(h, "nombre") + " hay " + S_(h, "distancia_km") + " km en línea recta hacia el " + S_(h, "direccion") + ".";
+    if (data.contains("aviso")) r += "\n\n_" + S_(data, "aviso") + "_";
+    return r;
+  }
   if (name == "generate_image") return "Aquí tienes la imagen (" + S_(data, "engine") + "):\n\n![imagen](" + S_(data, "url") + ")";
   if (name == "crear_video")
     return "He montado el vídeo (" + S_(data, "images") + " imágenes, " + S_(data, "seconds") + " s):\n\n[🎬 Vídeo (AVI)](" +

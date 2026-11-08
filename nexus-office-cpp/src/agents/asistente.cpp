@@ -29,6 +29,8 @@ const std::vector<Paquete>& PAQ() {
   static const std::vector<Paquete> v = {
       {"basico", "Memoria, cálculo y fecha", "🧠", "Recuerda lo que le cuentas, calcula sin errores y sabe qué día es.",
        {"memory_search", "memory_save", "calculator", "datetime_now"}},
+      {"ubicacion", "Ubicación", "📍", "Sabe dónde está el equipo o el móvil en tiempo real (sin internet).",
+       {"ubicacion_actual"}},
       {"documentos", "Documentos de la empresa", "📚",
        "Consulta la biblioteca, el grafo de conocimiento y los ficheros de la carpeta de trabajo.",
        {"rag_search", "rag_list", "knowledge_graph", "graph_import", "file_list", "file_read"}},

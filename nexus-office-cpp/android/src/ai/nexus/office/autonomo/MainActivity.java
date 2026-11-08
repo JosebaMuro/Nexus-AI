@@ -12,6 +12,9 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.database.Cursor;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.Uri;
@@ -74,7 +77,12 @@ public class MainActivity extends Activity {
     private SpeechRecognizer recognizer;
     private String liveLang = "";
     private long lastLevel;
-    private static final int REQ_MIC = 7;
+    private static final int REQ_MIC = 7, REQ_UBIC = 8;
+    // ubicacion en tiempo real: el GPS escribe la ultima posicion en ubicacion.json y la lee el nucleo (ubicacion.cpp)
+    private LocationManager locMgr;
+    private LocationListener locListener;
+    private boolean ubicActiva;
+    private Location ultimaUbic;
     private byte[] pendingSave;
     private String pendingSaveName = "";
     private long bootStarted;
@@ -643,6 +651,13 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
         super.onRequestPermissionsResult(req, perms, res);
+        if (req == REQ_UBIC) {
+            boolean ok = false;
+            for (int r : res) ok |= r == PackageManager.PERMISSION_GRANTED;
+            if (ok) iniciarUbicacion();
+            js("window.__nexusUbicacion && window.__nexusUbicacion(" + ok + ")");
+            return;
+        }
         if (req == REQ_MIC) {
             if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) startLive();
             else js("window.__nexusLiveError && window.__nexusLiveError('permiso de micrófono denegado')");
@@ -744,6 +759,107 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        if (ubicActiva) iniciarUbicacion();
+    }
+
+    @Override
+    protected void onStop() {
+        pararUbicacion();   // en segundo plano Android no da el GPS sin permiso de fondo: queda la ultima posicion
+        super.onStop();
+    }
+
+    private boolean permisoUbicacion() {
+        return Build.VERSION.SDK_INT < 23
+                || checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** GPS del movil (sin internet) y, sin pedir nada mas, las posiciones que ya piden otras apps (proveedor pasivo). */
+    private void iniciarUbicacion() {
+        if (locListener != null || !permisoUbicacion()) return;
+        locMgr = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        if (locMgr == null) return;
+        locListener = new LocationListener() {
+            @Override
+            public void onLocationChanged(Location l) {
+                guardarUbicacion(l);
+            }
+
+            @Override
+            public void onStatusChanged(String p, int s, Bundle b) {
+            }
+
+            @Override
+            public void onProviderEnabled(String p) {
+            }
+
+            @Override
+            public void onProviderDisabled(String p) {
+            }
+        };
+        try {
+            for (String p : new String[]{LocationManager.GPS_PROVIDER, LocationManager.PASSIVE_PROVIDER}) {
+                if (!locMgr.getAllProviders().contains(p)) continue;
+                locMgr.requestLocationUpdates(p, 3000L, 2f, locListener, Looper.getMainLooper());
+            }
+            for (String p : locMgr.getAllProviders()) {
+                Location l = locMgr.getLastKnownLocation(p);
+                if (l != null) guardarUbicacion(l);
+            }
+        } catch (SecurityException | IllegalArgumentException e) {
+            pararUbicacion();
+        }
+    }
+
+    private void pararUbicacion() {
+        if (locMgr != null && locListener != null) {
+            try {
+                locMgr.removeUpdates(locListener);
+            } catch (SecurityException ignored) {
+            }
+        }
+        locListener = null;
+    }
+
+    private void guardarUbicacion(Location l) {
+        // una posicion vieja o mucho peor que la que ya hay no sustituye a la buena
+        Location u = ultimaUbic;
+        if (u != null) {
+            long dt = l.getTime() - u.getTime();
+            if (dt < 0) return;
+            if (dt < 30000 && l.hasAccuracy() && u.hasAccuracy() && l.getAccuracy() > u.getAccuracy() * 3) return;
+        }
+        ultimaUbic = l;
+        final JSONObject o = new JSONObject();
+        try {
+            o.put("lat", l.getLatitude());
+            o.put("lon", l.getLongitude());
+            if (l.hasAccuracy()) o.put("precision", (double) l.getAccuracy());
+            if (l.hasAltitude()) o.put("altitud", l.getAltitude());
+            if (l.hasSpeed()) o.put("velocidad", (double) l.getSpeed());
+            if (l.hasBearing()) o.put("rumbo", (double) l.getBearing());
+            o.put("proveedor", l.getProvider() == null ? "" : l.getProvider());
+            o.put("t", l.getTime());
+        } catch (Exception e) {
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                File dst = new File(getFilesDir(), "ubicacion.json"), tmp = new File(getFilesDir(), "ubicacion.json.tmp");
+                try (FileOutputStream out = new FileOutputStream(tmp)) {
+                    out.write(o.toString().getBytes("UTF-8"));
+                } catch (Exception e) {
+                    return;
+                }
+                if (!tmp.renameTo(dst)) tmp.delete();
+            }
+        }).start();
+    }
+
+    @Override
     protected void onDestroy() {
         if (recognizer != null) recognizer.destroy();
         if (tts != null) tts.shutdown();
@@ -801,6 +917,33 @@ public class MainActivity extends Activity {
                     web.loadUrl(BOOT);
                     startServer(action);
                     waitForServer();
+                }
+            });
+        }
+
+        /** Ajustes > Ubicacion: arranca o para el GPS del movil (sin pedir permiso: eso lo hace pedirUbicacion). */
+        @JavascriptInterface
+        public void ubicacion(final boolean on) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    ubicActiva = on;
+                    if (on) iniciarUbicacion();
+                    else pararUbicacion();
+                }
+            });
+        }
+
+        /** «Usar el GPS del movil»: pide el permiso de ubicacion de Android si falta y arranca el GPS. */
+        @JavascriptInterface
+        public void pedirUbicacion() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    ubicActiva = true;
+                    if (permisoUbicacion()) iniciarUbicacion();
+                    else requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_UBIC);
                 }
             });
         }

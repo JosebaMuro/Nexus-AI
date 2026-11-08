@@ -33,6 +33,7 @@
 #include "core/salud.h"
 #include "devices/drivers.h"
 #include "devices/firmware.h"
+#include "devices/ubicacion.h"
 #include "agents/activity.h"
 #include "memory/kg.h"
 #include "memory/kg_jobs.h"
@@ -428,6 +429,33 @@ void register_routes(App& app) {
   });
 
   app.get("/api/monitor", [](Ctx& c) -> Out { return c.app.S().monitor->live(); });
+
+  // ------------------------------------------------------------------ ubicacion en tiempo real (devices/ubicacion.h)
+  // solo desde el propio equipo o con el PIN de administrador: la posicion es un dato personal
+  auto ubic_ok = [](Ctx& c) {
+    if (!c.admin && (c.remote || !c.local()))
+      throw HttpErr(403, "La ubicación solo se consulta desde el propio equipo o en modo administrador");
+  };
+  app.get("/api/ubicacion", [ubic_ok](Ctx& c) -> Out {
+    ubic_ok(c);
+    return ubicacion::estado();
+  });
+  app.post("/api/ubicacion/consultar", [ubic_ok](Ctx& c) -> Out {
+    ubic_ok(c);
+    return ubicacion::consultar(c.body.is_object() ? c.body : json::object());
+  });
+  // la interfaz manda la posicion del navegador (ubicacion.navegador activado)
+  app.post("/api/ubicacion", [ubic_ok](Ctx& c) -> Out {
+    ubic_ok(c);
+    if (!truthy(c.app.S().config.get("ubicacion.navegador", false)))
+      throw HttpErr(409, "La ubicación del navegador está desactivada en Ajustes > Ubicación");
+    try {
+      ubicacion::recibir(c.body, "navegador");
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(422, e.what());
+    }
+    return json{{"ok", true}};
+  });
 
   // app Android autonoma: nucleos, hilos medidos, limites por temperatura o bateria y consejo de modelo
   auto tuner = [](Ctx& c) -> android_tune::LiveTuner& {

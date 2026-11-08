@@ -1,7 +1,7 @@
 /* Service worker minimo: permite instalar Agente IA como app (PWA) y mostrar la interfaz sin red.
  * Estrategia: red primero para todo; si falla, la ultima copia en cache del armazon de la app. */
-const CACHE = "nexus-shell-v13";
-const SHELL = ["/", "/static/css/nexus.css", "/static/js/app.js", "/static/js/device.js", "/static/js/themes.js", "/static/js/avatar.js", "/static/js/avatar3d.js", "/static/js/lounge.js", "/static/js/offices.js", "/static/js/kgadmin.js", "/static/js/beta.js", "/static/js/asistente-agentes.js", "/static/js/pipeline.js", "/static/js/video-encoder.js",
+const CACHE = "nexus-shell-v14";
+const SHELL = ["/", "/static/css/nexus.css", "/static/js/app.js", "/static/js/device.js", "/static/js/themes.js", "/static/js/avatar.js", "/static/js/avatar3d.js", "/static/js/lounge.js", "/static/js/offices.js", "/static/js/kgadmin.js", "/static/js/ubicacion.js", "/static/js/beta.js", "/static/js/asistente-agentes.js", "/static/js/pipeline.js", "/static/js/video-encoder.js",
   "/static/vendor/three.module.min.js", "/static/vendor/addons/loaders/GLTFLoader.js", "/static/vendor/addons/utils/BufferGeometryUtils.js", "/static/icon.svg"];
 
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });

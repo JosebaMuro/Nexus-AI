@@ -2155,6 +2155,7 @@
       await loadConfig(); toast("Guardado");
     })));
     if (window.NexusKG) guard(NexusKG.load)();   // gestor de conocimiento (js/kgadmin.js)
+    if (window.NexusUbicacion) guard(NexusUbicacion.load)();   // ubicacion en tiempo real (js/ubicacion.js)
     if (!S.token) return;
     guard(profesorPanel)();
     const c = S.fullCfg; const sections = Object.keys(c).filter((k) => k !== "user");

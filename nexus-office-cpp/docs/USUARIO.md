@@ -361,6 +361,9 @@ En `ejemplos/resumen-proyecto/` está **Nexus-Office-resumen.md**, un resumen de
 
 Agente IA recuerda las pautas que le pidas («no uses emojis», «respóndeme siempre con ejemplos», «llámame Joseba») y todos los agentes las respetan.
 
+### Ubicación en tiempo real
+Pregunta «¿dónde estoy?» o «¿a cuánto estoy de Vitoria?» y el agente usa la herramienta **ubicacion_actual**: GPS del móvil en la app Android, un receptor GPS (gpsd o USB), el servicio de ubicación de Windows o de Linux, el navegador o una posición fija. En *Ajustes > Ubicación* ves las fuentes de tu equipo, pulsas **CONSULTAR AHORA**, guardas la posición fija y tus lugares (Oficina, Casa, Almacén…). En el móvil pulsa **USAR EL GPS DEL MÓVIL** y acepta el permiso. Funciona sin internet y la posición no sale de tu equipo. Ver [UBICACION.md](UBICACION.md).
+
 ### Profesor (IA online)
 El agente **Profesor** enseña y resuelve dudas. Si un administrador pone en *Ajustes → Profesor* la clave de una IA online (Google Gemini, ChatGPT, Perplexity, Claude, Mistral, DeepSeek, Groq, OpenRouter u otra compatible con OpenAI), el Profesor la usa; si no, responde con el modelo local. Los demás agentes le preguntan cuando no saben algo y guardan la lección en su memoria. Ninguna otra parte de Agente IA usa la IA online, y la clave nunca se muestra. Desde la terminal: `curl -X PUT -H "X-Admin-Token: ..." -H "Content-Type: application/json" -d '{"proveedor":"gemini","clave":"..."}' http://127.0.0.1:8775/api/nube`.
 
