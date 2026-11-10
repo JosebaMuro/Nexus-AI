@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "tools/tools.h"
+#include "agents/guardas.h"
 #include "util/crypto.h"
 #include "util/log.h"
 #include "util/rx.h"
@@ -14,21 +15,28 @@
 
 namespace nx::tools {
 
+using guard::sensitive_tool;
 static auto L = log::get("supervisor");
 static const std::map<std::string, std::string> STRICTER = {
     {"auto", "ask"}, {"ask", "admin"}, {"admin", "admin"}, {"deny", "deny"}};
 
 Supervisor::Supervisor(ToolRegistry& r, DB& db, Config& c) : registry(r), db_(db), config_(c) {}
 
-std::string Supervisor::decision_for(const std::string& risk, bool remote) {
+std::string Supervisor::decision_for(const std::string& risk, bool remote, bool tainted) {
   json pol = config_.get("tools.policy", json::object());
   std::string policy = pol.is_object() && pol.contains(risk) ? jstr(pol, risk) : "admin";
   if (remote && risk != "low") {   // peticiones de otros nodos: un escalon mas estricto
     auto it = STRICTER.find(policy);
     policy = it == STRICTER.end() ? "admin" : it->second;
   }
+  // el turno ya leyo contenido de terceros: lo que escribe, gasta o ejecuta pasa a pedir permiso (como mucho "ask"
+  // si era automatico; lo que ya pedia aprobacion de usuario sube a administrador solo si es de alto riesgo)
+  if (tainted && policy == "auto") policy = "ask";
+  else if (tainted && policy == "ask" && risk == "high") policy = "admin";
   return policy;
 }
+
+std::string Supervisor::call_key(const std::string& tool, const json& args) { return tool + "|" + pydump(args); }
 
 std::pair<bool, std::string> Supervisor::await_approval(const json& call, ToolContext& ctx, const std::string& level,
                                                         double timeout) {
@@ -36,10 +44,19 @@ std::pair<bool, std::string> Supervisor::await_approval(const json& call, ToolCo
   auto p = std::make_shared<Pending>();
   p->item = {{"id", pid},          {"tool", call["tool"]}, {"args", call["args"]},     {"risk", call["risk"]},
              {"agent", ctx.agent}, {"session_id", ctx.session_id}, {"level", level}, {"remote", ctx.remote},
-             {"created", now()},   {"approved", nullptr},  {"approver", ""}};
+             {"created", now()},   {"approved", nullptr},  {"approver", ""},
+             {"motivo", call.value("motivo", json(""))}};
   {
     std::lock_guard<std::mutex> lk(mu_);
     pending_[pid] = p;
+  }
+  try {   // queda guardada: si caduca o Nexus-Office se reinicia, se puede aprobar despues y la tarea se reanuda
+    db_.execute("INSERT INTO aprobaciones(id, ts, agent, session_id, user_id, tool, args, risk, level, status, motivo) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                {pid, now(), ctx.agent, ctx.session_id, ctx.user, call["tool"], pydump(call["args"]), call["risk"], level,
+                 "esperando", jstr(call, "motivo")});
+  } catch (const std::exception& e) {
+    L.warning("No se pudo guardar la aprobacion pendiente: ", e.what());
   }
   json event = {{"type", "approval_required"}, {"approval", p->item}};
   if (ctx.emit) ctx.emit(event);
@@ -52,28 +69,77 @@ std::pair<bool, std::string> Supervisor::await_approval(const json& call, ToolCo
   std::unique_lock<std::mutex> lk(mu_);
   p->cv.wait_for(lk, std::chrono::milliseconds((long)(timeout * 1000)), [&] { return p->approved.has_value(); });
   pending_.erase(pid);
-  if (!p->approved) return {false, "timeout"};
+  lk.unlock();
+  try {
+    if (!p->approved)
+      db_.execute("UPDATE aprobaciones SET status='pendiente' WHERE id=?", {pid});
+    else
+      db_.execute("UPDATE aprobaciones SET status=?, approver=?, resolved=? WHERE id=?",
+                  {*p->approved ? "aprobada" : "rechazada", p->approver, now(), pid});
+  } catch (const std::exception&) {
+  }
+  if (!p->approved) return {false, "timeout:" + pid};
   return {*p->approved, p->approver};
 }
 
 bool Supervisor::resolve(const std::string& pid, bool approve, bool is_admin) {
-  std::lock_guard<std::mutex> lk(mu_);
-  auto it = pending_.find(pid);
-  if (it == pending_.end()) return false;
-  if (jstr(it->second->item, "level") == "admin" && !is_admin)
+  {
+    std::lock_guard<std::mutex> lk(mu_);
+    auto it = pending_.find(pid);
+    if (it != pending_.end()) {
+      if (jstr(it->second->item, "level") == "admin" && !is_admin)
+        throw PermissionError("Esta accion requiere aprobacion de un administrador");
+      it->second->approved = approve;
+      it->second->approver = is_admin ? "admin" : "usuario";
+      it->second->item["approved"] = approve;
+      it->second->item["approver"] = it->second->approver;
+      it->second->cv.notify_all();
+      return true;
+    }
+  }
+  // aprobacion diferida: la tarea ya no espera (caduco o hubo un reinicio). Se reanuda en segundo plano.
+  auto row = db_.one("SELECT * FROM aprobaciones WHERE id=? AND status='pendiente'", {pid});
+  if (!row) return false;
+  if (jstr(*row, "level") == "admin" && !is_admin)
     throw PermissionError("Esta accion requiere aprobacion de un administrador");
-  it->second->approved = approve;
-  it->second->approver = is_admin ? "admin" : "usuario";
-  it->second->item["approved"] = approve;
-  it->second->item["approver"] = it->second->approver;
-  it->second->cv.notify_all();
+  std::string who = is_admin ? "admin" : "usuario";
+  db_.execute("UPDATE aprobaciones SET status=?, approver=?, resolved=? WHERE id=?",
+              {approve ? "aprobada" : "rechazada", who, now(), pid});
+  if (on_deferred) {
+    json r = *row;
+    auto cb = on_deferred;
+    std::thread([cb, r, approve, who] {
+      try {
+        cb(r, approve, who);
+      } catch (const std::exception& e) {
+        L.error("No se pudo reanudar la tarea aprobada: ", e.what());
+      }
+    }).detach();
+  }
   return true;
 }
 
-json Supervisor::list_pending() {
-  std::lock_guard<std::mutex> lk(mu_);
+json Supervisor::deferred(const std::string& status, int limit) {
   json out = json::array();
-  for (auto& [_, p] : pending_) out.push_back(p->item);
+  for (auto& r : db_.query("SELECT * FROM aprobaciones WHERE status=? ORDER BY ts DESC LIMIT ?", {status, limit})) {
+    json item = r;
+    item["args"] = jparse(jstr(r, "args"));
+    item["diferida"] = true;
+    out.push_back(item);
+  }
+  return out;
+}
+
+json Supervisor::list_pending() {
+  json out = json::array();
+  {
+    std::lock_guard<std::mutex> lk(mu_);
+    for (auto& [_, p] : pending_) out.push_back(p->item);
+  }
+  try {
+    for (auto& d : deferred("pendiente", 50)) out.push_back(d);
+  } catch (const std::exception&) {
+  }
   return out;
 }
 
@@ -101,25 +167,69 @@ json Supervisor::execute(std::string name, json args, ToolContext& ctx) {
       spec = registry.get(name);
     }
   }
-  if (!spec || !spec->enabled) return {{"error", "herramienta desconocida o desactivada: " + name}};
+  auto stat = [&](auto fn) {
+    if (!ctx.stats) return;
+    std::lock_guard<std::mutex> lk(ctx.stats->mu);
+    fn(*ctx.stats);
+  };
+  stat([](TurnStats& t) { ++t.calls; });
+  if (!fixed.empty()) stat([](TurnStats& t) { ++t.repaired; });
+  if (!spec || !spec->enabled) {
+    stat([](TurnStats& t) { ++t.unknown; ++t.errors; });
+    return {{"error", "herramienta desconocida o desactivada: " + name}};
+  }
   if (assist) {
     auto [a2, changes] = assist->repair_args(spec->parameters, args.is_object() ? args : json::object());
     args = a2;
+    if (!changes.empty() && fixed.empty()) stat([](TurnStats& t) { ++t.repaired; });
     fixed.insert(fixed.end(), changes.begin(), changes.end());
   }
   auto [clean, errors] = validate_args(spec->parameters, args);
-  if (!errors.empty()) return {{"error", join(errors, "; ")}};
-  std::string decision = decision_for(spec->risk, ctx.remote);
+  if (!errors.empty()) {
+    stat([](TurnStats& t) { ++t.invalid; ++t.errors; });
+    return {{"error", join(errors, "; ")}};
+  }
+  bool tainted = ctx.stats && ctx.stats->is_tainted() && sensitive_tool(name, spec->permissions) &&
+                 truthy(config_.get("seguridad.contaminacion", true));
+  std::string decision = decision_for(spec->risk, ctx.remote, tainted);
+  if (tainted && decision != decision_for(spec->risk, ctx.remote, false))
+    stat([](TurnStats& t) { ++t.escalated_by_taint; });
   std::string approver = "politica";
   json call = {{"tool", name}, {"args", clean}, {"risk", spec->risk}};
+  if (tainted) {
+    std::string src;
+    if (ctx.stats) {
+      std::lock_guard<std::mutex> lk(ctx.stats->mu);
+      src = join(ctx.stats->taint_sources, ", ");
+    }
+    call["motivo"] = "El agente ha leido contenido de terceros en este turno (" + src + ")";
+  }
+  bool pre = false;
+  if (ctx.stats) {
+    std::lock_guard<std::mutex> lk(ctx.stats->mu);
+    pre = ctx.stats->preapproved.count(call_key(name, clean)) > 0 || ctx.stats->preapproved.count(call_key(name, args)) > 0;
+  }
+  if (pre) {   // reanudacion de una aprobacion ya concedida
+    decision = "auto";
+    approver = "aprobada antes";
+  }
   if (decision == "deny") {
     audit(ctx, call, "deny", approver, "bloqueada", "", 0);
     return {{"error", "'" + name + "' esta bloqueada por la politica de seguridad"}};
   }
   if (decision == "ask" || decision == "admin") {
-    auto [ok, who] = await_approval(call, ctx, decision);
+    stat([](TurnStats& t) { ++t.approvals; });
+    double wait = jnum(config_.get("tools.approval_timeout_s", 600), 600);
+    auto [ok, who] = await_approval(call, ctx, decision, wait);
     approver = who;
     if (!ok) {
+      stat([](TurnStats& t) { ++t.approvals_denied; });
+      if (starts_with(who, "timeout:")) {
+        audit(ctx, call, decision, "sin respuesta", "pendiente", "", 0);
+        return {{"error", "El uso de '" + name + "' sigue pendiente de aprobacion. Dile al usuario que puede aprobarlo "
+                          "en Herramientas > Pendientes cuando quiera y la tarea se reanudara sola."},
+                {"pendiente", who.substr(8)}};
+      }
       audit(ctx, call, decision, approver, "rechazada", "", 0);
       return {{"error", "El uso de '" + name + "' no fue aprobado (" + (approver.empty() ? "rechazado" : approver) + ")"}};
     }
@@ -169,6 +279,7 @@ json Supervisor::execute(std::string name, json args, ToolContext& ctx) {
     }
   }
   if (result.is_object() && truthy(result.value("error", json())) && status == "ok") status = "error";
+  if (status != "ok") stat([](TurnStats& t) { ++t.errors; });
   audit(ctx, call, decision, approver, status, result, now() - t0);
   if (!result.is_object()) result = {{"result", result}};
   if (!fixed.empty()) result["_corregido"] = join(fixed, "; ");

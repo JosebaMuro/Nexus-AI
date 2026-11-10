@@ -353,7 +353,7 @@ bool udp_send(const std::string& host, int port, const std::string& data) {
 }
 
 std::optional<std::string> tcp_exchange(const std::string& host, int port, const std::string& data, double timeout,
-                                        size_t max_bytes) {
+                                        size_t max_bytes, const std::function<bool(const std::string&)>& listo) {
   wsa();
   sockaddr_in a;
   if (!v4addr(host, port, a)) return std::nullopt;
@@ -391,10 +391,18 @@ std::optional<std::string> tcp_exchange(const std::string& host, int port, const
   std::string out;
   send(s, data.data(), (int)data.size(), 0);
   char buf[8192];
-  while (out.size() < max_bytes && wait_readable(s, ms)) {
+  auto fin = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
+  while (out.size() < max_bytes) {
+    int espera = ms;
+    if (listo) {
+      espera = (int)std::chrono::duration_cast<std::chrono::milliseconds>(fin - std::chrono::steady_clock::now()).count();
+      if (espera <= 0) break;
+    }
+    if (!wait_readable(s, espera)) break;
     int n = (int)recv(s, buf, sizeof buf, 0);
     if (n <= 0) break;
     out.append(buf, (size_t)n);
+    if (listo && listo(out)) break;
   }
   close_sock(s);
   return out;

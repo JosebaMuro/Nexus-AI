@@ -11,6 +11,10 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.database.Cursor;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.Uri;
@@ -18,6 +22,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.OpenableColumns;
 import android.speech.RecognizerIntent;
 import android.speech.tts.UtteranceProgressListener;
 import android.speech.SpeechRecognizer;
@@ -45,6 +50,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -71,11 +77,17 @@ public class MainActivity extends Activity {
     private SpeechRecognizer recognizer;
     private String liveLang = "";
     private long lastLevel;
-    private static final int REQ_MIC = 7;
+    private static final int REQ_MIC = 7, REQ_UBIC = 8;
+    // ubicacion en tiempo real: el GPS escribe la ultima posicion en ubicacion.json y la lee el nucleo (ubicacion.cpp)
+    private LocationManager locMgr;
+    private LocationListener locListener;
+    private boolean ubicActiva;
+    private Location ultimaUbic;
     private byte[] pendingSave;
     private String pendingSaveName = "";
     private long bootStarted;
     private boolean modelOffered;
+    private String sharedJs;   // «Compartir con Agente IA» pendiente de entregar a la interfaz
 
     @Override
     protected void onCreate(Bundle state) {
@@ -95,6 +107,7 @@ public class MainActivity extends Activity {
         s.setUserAgentString(s.getUserAgentString() + " NexusAndroid/" + version() + " (" + form() + "; sw"
                 + getResources().getConfiguration().smallestScreenWidthDp + "; autonomo)");
         web.addJavascriptInterface(new Bridge(), "NexusApp");
+        handleShare(getIntent());
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -103,6 +116,11 @@ public class MainActivity extends Activity {
                 if ("127.0.0.1".equals(u.getHost()) || "file".equals(u.getScheme())) return false;
                 openExternal(u.toString());   // enlaces externos (fuentes, webs) en el navegador
                 return true;
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                if (url != null && url.startsWith(HOME)) deliverShare();
             }
 
             @Override
@@ -249,7 +267,7 @@ public class MainActivity extends Activity {
                 @Override
                 public void run() {
                     new AlertDialog.Builder(MainActivity.this)
-                            .setTitle("Descargar la IA de Nexus-Office")
+                            .setTitle("Descargar la IA de Agente IA")
                             .setMessage("El modelo adecuado para este movil es " + label + ". Estas usando datos moviles: "
                                     + "¿lo descargo ahora o esperas a tener Wi-Fi? (tambien puedes hacerlo en Modelos)")
                             .setPositiveButton("Descargar", new DialogInterface.OnClickListener() {
@@ -290,7 +308,7 @@ public class MainActivity extends Activity {
             @Override
             public void run() {
                 new AlertDialog.Builder(MainActivity.this)
-                        .setTitle("Nexus-Office se ha ajustado a tu movil")
+                        .setTitle("Agente IA se ha ajustado a tu movil")
                         .setMessage(msg)
                         .setPositiveButton("Cambiar", new DialogInterface.OnClickListener() {
                             @Override
@@ -427,6 +445,124 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleShare(intent);
+    }
+
+    // «Compartir» desde otra app (galeria, navegador, correo...): el texto va al chat y los ficheros a la carpeta de
+    // trabajo de los agentes (sandbox/compartido), donde pueden leerlos, retocarlos o montar un video con ellos
+    private void handleShare(Intent in) {
+        if (in == null) return;
+        String act = in.getAction();
+        if (!Intent.ACTION_SEND.equals(act) && !Intent.ACTION_SEND_MULTIPLE.equals(act)) return;
+        in.setAction(Intent.ACTION_MAIN);   // no repetirlo al girar la pantalla
+        try {
+            JSONObject o = new JSONObject();
+            CharSequence text = in.getCharSequenceExtra(Intent.EXTRA_TEXT);
+            String subject = in.getStringExtra(Intent.EXTRA_SUBJECT);
+            String t = text == null ? "" : text.toString();
+            if (subject != null && !subject.isEmpty() && !t.contains(subject)) t = subject + (t.isEmpty() ? "" : "\n" + t);
+            o.put("text", t);
+            ArrayList<Uri> uris = new ArrayList<Uri>();
+            if (Intent.ACTION_SEND.equals(act)) {
+                Uri u = in.getParcelableExtra(Intent.EXTRA_STREAM);
+                if (u != null) uris.add(u);
+            } else {
+                ArrayList<Uri> l = in.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+                if (l != null) uris.addAll(l);
+            }
+            File dir = new File(getFilesDir(), "nexus/sandbox/compartido");
+            dir.mkdirs();
+            JSONArray files = new JSONArray();
+            for (Uri u : uris) {
+                if (files.length() >= 30) break;
+                File f = uniqueFile(dir, safeName(displayName(u)));
+                if (copyUri(u, f)) files.put("compartido/" + f.getName());
+            }
+            o.put("files", files);
+            sharedJs = "window.__nexusShared && window.__nexusShared(" + o.toString() + ")";
+            String cur = web == null ? null : web.getUrl();
+            if (cur != null && cur.startsWith(HOME)) deliverShare();
+        } catch (Exception e) {
+            Toast.makeText(this, "No se pudo recibir lo compartido: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void deliverShare() {
+        if (sharedJs == null || web == null) return;
+        final String js = sharedJs;
+        sharedJs = null;
+        ui.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                web.evaluateJavascript(js, null);
+            }
+        }, 600);
+    }
+
+    private String displayName(Uri u) {
+        String name = null;
+        try {
+            Cursor c = getContentResolver().query(u, new String[] {OpenableColumns.DISPLAY_NAME}, null, null, null);
+            if (c != null) {
+                if (c.moveToFirst() && !c.isNull(0)) name = c.getString(0);
+                c.close();
+            }
+        } catch (Exception e) {
+            name = null;
+        }
+        if (name == null || name.isEmpty()) name = u.getLastPathSegment();
+        if (name == null || name.isEmpty()) name = "compartido";
+        if (name.indexOf('.') < 0) {
+            String mime = getContentResolver().getType(u);
+            String ext = mime == null ? null : android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime);
+            if (ext != null) name = name + "." + ext;
+        }
+        return name;
+    }
+
+    private static String safeName(String n) {
+        String s = n.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_").trim();
+        if (s.startsWith(".")) s = "_" + s;
+        return s.length() > 90 ? s.substring(s.length() - 90) : s;
+    }
+
+    private static File uniqueFile(File dir, String name) {
+        File f = new File(dir, name);
+        int dot = name.lastIndexOf('.');
+        String stem = dot > 0 ? name.substring(0, dot) : name, ext = dot > 0 ? name.substring(dot) : "";
+        for (int i = 2; f.exists() && i < 1000; i++) f = new File(dir, stem + "-" + i + ext);
+        return f;
+    }
+
+    private boolean copyUri(Uri u, File dest) {
+        InputStream in = null;
+        OutputStream out = null;
+        try {
+            in = getContentResolver().openInputStream(u);
+            if (in == null) return false;
+            out = new FileOutputStream(dest);
+            byte[] buf = new byte[1 << 16];
+            long total = 0;
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n);
+                total += n;
+                if (total > (512L << 20)) throw new Exception("fichero demasiado grande (más de 512 MB)");
+            }
+            return true;
+        } catch (Exception e) {
+            dest.delete();
+            return false;
+        } finally {
+            try { if (in != null) in.close(); } catch (Exception ignored) { }
+            try { if (out != null) out.close(); } catch (Exception ignored) { }
+        }
+    }
+
+    @Override
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
         if (req == REQ_FILE && fileCallback != null) {
@@ -515,6 +651,13 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
         super.onRequestPermissionsResult(req, perms, res);
+        if (req == REQ_UBIC) {
+            boolean ok = false;
+            for (int r : res) ok |= r == PackageManager.PERMISSION_GRANTED;
+            if (ok) iniciarUbicacion();
+            js("window.__nexusUbicacion && window.__nexusUbicacion(" + ok + ")");
+            return;
+        }
         if (req == REQ_MIC) {
             if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) startLive();
             else js("window.__nexusLiveError && window.__nexusLiveError('permiso de micrófono denegado')");
@@ -616,6 +759,107 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        if (ubicActiva) iniciarUbicacion();
+    }
+
+    @Override
+    protected void onStop() {
+        pararUbicacion();   // en segundo plano Android no da el GPS sin permiso de fondo: queda la ultima posicion
+        super.onStop();
+    }
+
+    private boolean permisoUbicacion() {
+        return Build.VERSION.SDK_INT < 23
+                || checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** GPS del movil (sin internet) y, sin pedir nada mas, las posiciones que ya piden otras apps (proveedor pasivo). */
+    private void iniciarUbicacion() {
+        if (locListener != null || !permisoUbicacion()) return;
+        locMgr = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        if (locMgr == null) return;
+        locListener = new LocationListener() {
+            @Override
+            public void onLocationChanged(Location l) {
+                guardarUbicacion(l);
+            }
+
+            @Override
+            public void onStatusChanged(String p, int s, Bundle b) {
+            }
+
+            @Override
+            public void onProviderEnabled(String p) {
+            }
+
+            @Override
+            public void onProviderDisabled(String p) {
+            }
+        };
+        try {
+            for (String p : new String[]{LocationManager.GPS_PROVIDER, LocationManager.PASSIVE_PROVIDER}) {
+                if (!locMgr.getAllProviders().contains(p)) continue;
+                locMgr.requestLocationUpdates(p, 3000L, 2f, locListener, Looper.getMainLooper());
+            }
+            for (String p : locMgr.getAllProviders()) {
+                Location l = locMgr.getLastKnownLocation(p);
+                if (l != null) guardarUbicacion(l);
+            }
+        } catch (SecurityException | IllegalArgumentException e) {
+            pararUbicacion();
+        }
+    }
+
+    private void pararUbicacion() {
+        if (locMgr != null && locListener != null) {
+            try {
+                locMgr.removeUpdates(locListener);
+            } catch (SecurityException ignored) {
+            }
+        }
+        locListener = null;
+    }
+
+    private void guardarUbicacion(Location l) {
+        // una posicion vieja o mucho peor que la que ya hay no sustituye a la buena
+        Location u = ultimaUbic;
+        if (u != null) {
+            long dt = l.getTime() - u.getTime();
+            if (dt < 0) return;
+            if (dt < 30000 && l.hasAccuracy() && u.hasAccuracy() && l.getAccuracy() > u.getAccuracy() * 3) return;
+        }
+        ultimaUbic = l;
+        final JSONObject o = new JSONObject();
+        try {
+            o.put("lat", l.getLatitude());
+            o.put("lon", l.getLongitude());
+            if (l.hasAccuracy()) o.put("precision", (double) l.getAccuracy());
+            if (l.hasAltitude()) o.put("altitud", l.getAltitude());
+            if (l.hasSpeed()) o.put("velocidad", (double) l.getSpeed());
+            if (l.hasBearing()) o.put("rumbo", (double) l.getBearing());
+            o.put("proveedor", l.getProvider() == null ? "" : l.getProvider());
+            o.put("t", l.getTime());
+        } catch (Exception e) {
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                File dst = new File(getFilesDir(), "ubicacion.json"), tmp = new File(getFilesDir(), "ubicacion.json.tmp");
+                try (FileOutputStream out = new FileOutputStream(tmp)) {
+                    out.write(o.toString().getBytes("UTF-8"));
+                } catch (Exception e) {
+                    return;
+                }
+                if (!tmp.renameTo(dst)) tmp.delete();
+            }
+        }).start();
+    }
+
+    @Override
     protected void onDestroy() {
         if (recognizer != null) recognizer.destroy();
         if (tts != null) tts.shutdown();
@@ -677,12 +921,39 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** Ajustes > Ubicacion: arranca o para el GPS del movil (sin pedir permiso: eso lo hace pedirUbicacion). */
+        @JavascriptInterface
+        public void ubicacion(final boolean on) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    ubicActiva = on;
+                    if (on) iniciarUbicacion();
+                    else pararUbicacion();
+                }
+            });
+        }
+
+        /** «Usar el GPS del movil»: pide el permiso de ubicacion de Android si falta y arranca el GPS. */
+        @JavascriptInterface
+        public void pedirUbicacion() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    ubicActiva = true;
+                    if (permisoUbicacion()) iniciarUbicacion();
+                    else requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_UBIC);
+                }
+            });
+        }
+
         @JavascriptInterface
         public void listen(String lang) {
             Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
             if (lang != null && !lang.isEmpty()) i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang);
-            i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Habla con Nexus-Office");
+            i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Habla con Agente IA");
             try {
                 startActivityForResult(i, REQ_VOICE);
             } catch (ActivityNotFoundException e) {
@@ -724,6 +995,23 @@ public class MainActivity extends Activity {
         public boolean speak(String text, float rate) {
             if (!ttsReady) return false;
             tts.setSpeechRate(rate > 0 ? rate : 1f);
+            tts.setPitch(1f);
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nexus");
+            return true;
+        }
+
+        // voz de un agente: velocidad, tono y, si se eligio, una voz concreta del motor del sistema
+        @JavascriptInterface
+        public boolean speakVoz(String text, float rate, float pitch, String voiceName) {
+            if (!ttsReady) return false;
+            tts.setSpeechRate(rate > 0 ? rate : 1f);
+            tts.setPitch(pitch > 0 ? pitch : 1f);
+            if (voiceName != null && !voiceName.isEmpty()) {
+                try {
+                    for (android.speech.tts.Voice v : tts.getVoices())
+                        if (v.getName().equals(voiceName)) { tts.setVoice(v); break; }
+                } catch (Exception e) { }
+            }
             tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nexus");
             return true;
         }
@@ -765,7 +1053,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void copy(String text) {
             ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            cm.setPrimaryClip(ClipData.newPlainText("Nexus-Office", text));
+            cm.setPrimaryClip(ClipData.newPlainText("Agente IA", text));
         }
 
         @JavascriptInterface

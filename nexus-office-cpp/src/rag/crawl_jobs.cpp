@@ -6,6 +6,8 @@
 // indexados. Cada lote es un documento propio de la biblioteca («Documentación: X · lote 003 (págs. 401-600)»), asi
 // una caida, un reinicio o una pausa no pierden nada. El tamano de lote se ajusta a la RAM del equipo
 // (rag.crawl_batch_pages en config.yaml, 0 = automatico).
+#include <algorithm>
+#include <deque>
 #include <map>
 #include <mutex>
 #include <thread>
@@ -24,7 +26,7 @@
 namespace nx::rag::crawl_jobs {
 
 const char *RUNNING = "en curso", *PAUSED = "pausado", *DONE = "completado", *INTERRUPTED = "interrumpido",
-           *FAILED = "error";
+           *FAILED = "error", *QUEUED = "en cola";
 
 namespace {
 
@@ -33,6 +35,9 @@ constexpr long long MAX_DOMAIN_PAGES = 100000;
 constexpr long long UNLIMITED = 1000000000000LL;   // dominio completo: hasta agotar todos los enlaces del dominio
 std::mutex g_mu;
 std::map<std::string, std::shared_ptr<std::atomic<bool>>> g_running;
+std::mutex g_qmu;                 // cola de rastreos (listas de URLs)
+std::deque<std::string> g_queue;
+int g_workers = 0;
 
 fs::path dir() { return paths::sub({"rag", "crawls"}); }
 
@@ -81,7 +86,8 @@ json get(const std::string& id) {
 }
 
 json create(const std::string& url, long long max_pages, long long max_depth, const std::string& scope,
-            const std::string& agent, bool learn, int batch_pages, long long batch_chars) {
+            const std::string& agent, bool learn, int batch_pages, long long batch_chars,
+            bool queued) {
   bool complete = scope == "domain";
   json job = {{"id", strftime_local("%Y%m%d%H%M%S-") + token_hex(3)},
               {"url", url},
@@ -95,7 +101,7 @@ json create(const std::string& url, long long max_pages, long long max_depth, co
               {"complete", complete},
               {"batch_pages", batch_pages},
               {"batch_chars", batch_chars},
-              {"status", RUNNING},
+              {"status", queued ? QUEUED : RUNNING},
               {"reason", ""},
               {"pages_done", 0},
               {"fetched", 0},
@@ -146,10 +152,23 @@ fs::path knowledge_path(const std::string& id) {
 }
 
 bool stop(const std::string& id) {
-  std::lock_guard<std::mutex> lk(g_mu);
-  auto it = g_running.find(id);
-  if (it == g_running.end()) return false;
-  it->second->store(true);
+  {
+    std::lock_guard<std::mutex> lk(g_mu);
+    auto it = g_running.find(id);
+    if (it != g_running.end()) {
+      it->second->store(true);
+      return true;
+    }
+  }
+  json job = get(id);   // aun en la cola: se saca de ella y queda en pausa (REANUDAR lo rastrea enseguida)
+  if (job.is_null() || jstr(job, "status") != QUEUED) return false;
+  {
+    std::lock_guard<std::mutex> lk(g_qmu);
+    g_queue.erase(std::remove(g_queue.begin(), g_queue.end(), id), g_queue.end());
+  }
+  job["status"] = PAUSED;
+  job["reason"] = "sacado de la cola";
+  save(job);
   return true;
 }
 
@@ -371,35 +390,118 @@ json run_batches(Services& s, json job, const Emit& emit, const std::function<bo
   return job;
 }
 
+namespace {
+
+// rastrea un trabajo ya reservado con claim() en el hilo que llama; libera la reserva al terminar
+void run_claimed(Services& s, const std::string& id, const Emit& emit, const std::shared_ptr<std::atomic<bool>>& ev) {
+  try {
+    json job = get(id);
+    if (job.is_null()) throw std::out_of_range(id);
+    if (jstr(job, "status") != DONE) {
+      job["status"] = RUNNING;
+      job["reason"] = "";
+      job["error"] = "";
+      save(job);
+      run_batches(s, job, emit, [ev] { return ev->load(); });
+    }
+  } catch (const std::exception& e) {
+    L.warning("Rastreo ", id, " fallido: ", e.what());
+    json job = get(id);
+    if (!job.is_null()) {
+      job["status"] = FAILED;
+      job["error"] = uleft(e.what(), 300);
+      save(job);
+    }
+  }
+  release(id);
+  if (emit) {
+    emit({{"type", "crawl_job"}, {"job", id}});
+    emit({{"type", "graph_update"}});
+  }
+}
+
+int max_workers() { return std::clamp((int)get_config().num("rag.crawl_parallel", 1), 1, 4); }
+
+// hilo de la cola: saca trabajos por orden hasta vaciarla
+void queue_worker(Services* sp, Emit emit) {
+  for (;;) {
+    std::string id;
+    {
+      std::lock_guard<std::mutex> lk(g_qmu);
+      if (g_queue.empty()) {
+        --g_workers;
+        return;
+      }
+      id = g_queue.front();
+      g_queue.pop_front();
+    }
+    json job = get(id);
+    if (job.is_null() || jstr(job, "status") != QUEUED) continue;   // borrado, sacado de la cola o reanudado a mano
+    std::shared_ptr<std::atomic<bool>> ev;
+    try {
+      ev = claim(id);
+    } catch (...) {
+      continue;   // ya en marcha por otro camino
+    }
+    job = get(id);
+    if (job.is_null() || jstr(job, "status") != QUEUED) {   // lo sacaron de la cola justo ahora
+      release(id);
+      continue;
+    }
+    run_claimed(*sp, id, emit, ev);
+  }
+}
+
+}  // namespace
+
 void run_background(Services& s, const std::string& id, const Emit& emit) {
   auto ev = claim(id);   // antes de arrancar el hilo: la lista ya lo muestra en curso
   Services* sp = &s;
-  std::thread([sp, id, emit, ev] {
-    try {
-      json job = get(id);
-      if (job.is_null()) throw std::out_of_range(id);
-      if (jstr(job, "status") != DONE) {
-        job["status"] = RUNNING;
-        job["reason"] = "";
-        job["error"] = "";
-        save(job);
-        run_batches(*sp, job, emit, [ev] { return ev->load(); });
+  std::thread([sp, id, emit, ev] { run_claimed(*sp, id, emit, ev); }).detach();
+}
+
+void enqueue(Services& s, const std::vector<std::string>& ids, const Emit& emit) {
+  std::lock_guard<std::mutex> lk(g_qmu);
+  for (auto& id : ids)
+    if (std::find(g_queue.begin(), g_queue.end(), id) == g_queue.end()) g_queue.push_back(id);
+  int limit = max_workers();
+  while (g_workers < limit && (size_t)g_workers < g_queue.size()) {
+    ++g_workers;
+    std::thread(queue_worker, &s, emit).detach();
+  }
+}
+
+size_t queued_count() {
+  std::lock_guard<std::mutex> lk(g_qmu);
+  return g_queue.size();
+}
+
+std::vector<std::string> parse_url_list(const std::string& text, std::vector<std::string>* invalid) {
+  static const Rx URL(R"(^https?://[^\s/?#]+\.[^\s/?#]*[^\s]*$)", Rx::I),
+      HOST(R"(^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}(?::\d+)?(?:[/?#]\S*)?$)", Rx::I),
+      LOCAL(R"(^https?://(?:localhost|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#]\S*)?$)", Rx::I);
+  std::vector<std::string> out;
+  std::set<std::string> seen;
+  for (auto& raw : splitlines(text)) {
+    std::string line = trim(raw);
+    if (line.empty() || line[0] == '#' || line.rfind("//", 0) == 0) continue;
+    for (char& ch : line)
+      if (ch == ',' || ch == ';' || ch == '\t') ch = ' ';
+    for (auto& tok0 : split_ws(line)) {
+      std::string tok = trim(tok0, "<>\"'()[]{}");
+      if (tok.empty()) continue;
+      std::string url = tok;
+      if (!re_search(R"(^[a-z][a-z0-9+.-]*://)", url, Rx::I) && HOST.fullmatch(url)) url = "https://" + url;
+      if (!URL.fullmatch(url) && !LOCAL.fullmatch(url)) {
+        if (invalid) invalid->push_back(tok);
+        continue;
       }
-    } catch (const std::exception& e) {
-      L.warning("Rastreo ", id, " fallido: ", e.what());
-      json job = get(id);
-      if (!job.is_null()) {
-        job["status"] = FAILED;
-        job["error"] = uleft(e.what(), 300);
-        save(job);
-      }
+      std::string key = crawler::normalize(url);   // «/guia» y «/guia/» son la misma entrada de la lista
+      if (key.find('?') == std::string::npos) key = rtrim(key, "/");
+      if (seen.insert(key).second) out.push_back(url);
     }
-    release(id);
-    if (emit) {
-      emit({{"type", "crawl_job"}, {"job", id}});
-      emit({{"type", "graph_update"}});
-    }
-  }).detach();
+  }
+  return out;
 }
 
 json build_knowledge(Services& s, json& job, const Emit& emit) {
@@ -437,11 +539,34 @@ std::vector<std::string> resume_interrupted(Services& s, const Emit& emit) {
   std::vector<std::string> out;
   try {
     if (!truthy(s.config.get("rag.auto_resume_crawls", true))) return out;
-    for (auto& j : list_jobs())
-      if (j.value("complete", false) && jstr(j, "status") == INTERRUPTED && !j.value("running", false)) {
+    std::vector<std::string> queue;   // listas de URLs: lo que quedo en la cola (y el que estaba a medias) vuelve a ella
+    json jobs = list_jobs();
+    for (auto it = jobs.rbegin(); it != jobs.rend(); ++it) {   // los mas antiguos primero: el orden de la lista
+      json& j = *it;
+      if (j.value("running", false)) continue;
+      std::string st = jstr(j, "status");
+      if (st == QUEUED || (st == INTERRUPTED && !jstr(j, "list").empty())) {
+        if (st == INTERRUPTED) {
+          json full = get(j["id"]);
+          full["status"] = QUEUED;
+          save(full);
+        }
+        queue.push_back(j["id"]);
+      } else if (j.value("complete", false) && st == INTERRUPTED) {
         run_background(s, j["id"], emit);
         out.push_back(j["id"]);
       }
+    }
+    if (!queue.empty()) {   // orden de la lista: (lista, posicion)
+      std::map<std::string, std::pair<std::string, long long>> key;
+      for (auto& id : queue) {
+        json j = get(id);
+        key[id] = {jstr(j, "list"), j.value("list_pos", 0LL)};
+      }
+      std::stable_sort(queue.begin(), queue.end(), [&](const std::string& a, const std::string& b) { return key[a] < key[b]; });
+      enqueue(s, queue, emit);
+    }
+    out.insert(out.end(), queue.begin(), queue.end());
   } catch (const std::exception& e) {
     L.warning("No se pudieron reanudar los rastreos: ", e.what());
   }

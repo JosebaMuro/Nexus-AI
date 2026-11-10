@@ -284,7 +284,7 @@ class Pdf {
     if (page_no() == 1) return;
     set_font(0, 8);
     text_color(MUTED);
-    cell(0, 6, "Nexus-Office · " + uleft(title, 90), 'L', true);
+    cell(0, 6, "Agente IA · " + uleft(title, 90), 'L', true);
     draw_color(ACCENT);
     line_width(0.4);
     line(l, y, W - r, y);
@@ -408,7 +408,7 @@ class Pdf {
     }
     objs[catalog - 1] = "<< /Type /Catalog /Pages " + std::to_string(pages_obj) + " 0 R" + outlines_ref + " >>";
     int info_id = reserve();
-    std::string inf = "<< /Producer " + pdf_str("Nexus-Office") + " /CreationDate " +
+    std::string inf = "<< /Producer " + pdf_str("Agente IA") + " /CreationDate " +
                       pdf_str(strftime_local("D:%Y%m%d%H%M%S")) + " ";
     for (auto& [kk, v] : info) inf += "/" + kk + " " + utf16_hex(v) + " ";
     objs[info_id - 1] = inf + ">>";
@@ -441,7 +441,7 @@ std::optional<Image> fetch_image(const std::string& url) {
   } catch (...) {
     return std::nullopt;
   }
-  auto r = http::get(url, {{"User-Agent", "Mozilla/5.0 (Nexus-Office)"}}, 10);
+  auto r = http::get(url, {{"User-Agent", "Mozilla/5.0 (Agente IA)"}}, 10);
   if (r.status != 200 || r.body.size() > 4000000 || !starts_with(r.header("content-type"), "image")) return std::nullopt;
   int w = 0, h = 0, n = 0;
   unsigned char* px = stbi_load_from_memory((const unsigned char*)r.body.data(), (int)r.body.size(), &w, &h, &n, 3);
@@ -476,7 +476,7 @@ json build_pdf(const json& doc, const std::string& summary, const std::vector<st
   pdf.title = title;
   pdf.source = url;
   pdf.info["Title"] = title;
-  pdf.info["Author"] = !jstr(doc, "author").empty() ? jstr(doc, "author") : !jstr(doc, "site").empty() ? jstr(doc, "site") : "Nexus-Office";
+  pdf.info["Author"] = !jstr(doc, "author").empty() ? jstr(doc, "author") : !jstr(doc, "site").empty() ? jstr(doc, "site") : "Agente IA";
   pdf.info["Subject"] = uleft(jstr(doc, "description"), 200);
   std::vector<std::string> heads;
   for (auto& hd : doc.value("headings", json::array())) {
@@ -484,7 +484,7 @@ json build_pdf(const json& doc, const std::string& summary, const std::vector<st
     heads.push_back(hd.get<std::string>());
   }
   pdf.info["Keywords"] = join(heads, ", ");
-  pdf.info["Creator"] = "Nexus-Office";
+  pdf.info["Creator"] = "Agente IA";
   auto W = [&] { return pdf.W - pdf.l - pdf.r; };
   const json& sections = doc.value("sections", json::array());
   const json& images = doc.value("images", json::array());
@@ -538,7 +538,7 @@ json build_pdf(const json& doc, const std::string& summary, const std::vector<st
   pdf.y = pdf.H - 22;
   pdf.set_font(0, 8);
   pdf.text_color(MUTED);
-  pdf.cell(0, 6, "Generado automáticamente por Nexus-Office · Copia archivada en su biblioteca RAG");
+  pdf.cell(0, 6, "Generado automáticamente por Agente IA · Copia archivada en su biblioteca RAG");
   pdf.auto_break = true;
 
   // ---------------- indice (se rellena al final, cuando se conocen las paginas)
@@ -729,7 +729,7 @@ json build_pdf(const json& doc, const std::string& summary, const std::vector<st
   }
   heading("Metadatos", 1);
   meta.push_back({"Palabras clave", jstr(doc, "keywords")});
-  meta.push_back({"Generador", "Nexus-Office " NEXUS_VERSION " (C++)"});
+  meta.push_back({"Generador", "Agente IA " NEXUS_VERSION " (C++)"});
   for (auto& [kk, v] : meta)
     if (!v.empty()) para(kk + ": " + v);
 

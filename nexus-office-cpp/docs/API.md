@@ -23,24 +23,26 @@ Eventos recibidos: `session`, `agent`, `state` (`thinking|tool|idle`), `token`, 
 | `GET /api/graph?scope=` (`*` = general con el subgrafo de cada agente, por defecto; vacío = solo el general; id de agente = solo su grafo individual), `GET /api/graph/scopes` (tamaño y documentos de cada grafo), `DELETE /api/graph/{id}` | Grafo de conocimiento. |
 | `POST /api/image/generate`, `POST /api/image/analyze` (multipart), `POST /api/music/generate`, `GET /api/outputs` | Multimedia. |
 | `GET /api/voice`, `POST /api/voice/tts` (WAV o 204 = usar navegador), `POST /api/voice/stt` (multipart) | Voz. |
-| `GET /api/rag`, `GET /api/rag/search?q=`, `GET /api/rag/formats` (formatos admitidos y herramientas de descompresión disponibles), `POST /api/rag/upload` (multipart; documentos y archivos ZIP/RAR/7z/TAR), `POST /api/rag/import` (multipart, varios `files`; devuelve `{results, ok, failed, seconds}`), `POST /api/rag/url` `{url}`, `POST /api/rag/crawl` `{url, max_pages, max_depth, scope}` (rastreo de documentación), `GET /api/rag/{id}/file`, `DELETE /api/rag/{id}`. Destino: campo `agent` en upload, import, url y crawl (vacío = grafo general; id = solo ese agente); `PATCH /api/rag/{id}` `{agent}` lo mueve; `GET /api/rag?agent=` y `/api/rag/search?agent=` filtran como lo vería ese agente | Biblioteca RAG y URL → PDF. |
+| `GET /api/rag`, `GET /api/rag/search?q=`, `GET /api/rag/formats` (formatos admitidos y herramientas de descompresión disponibles), `POST /api/rag/upload` (multipart; documentos y archivos ZIP/RAR/7z/TAR), `POST /api/rag/import` (multipart, varios `files`; devuelve `{results, ok, failed, seconds}`), `POST /api/rag/url` `{url}`, `POST /api/rag/crawl` `{url, max_pages, max_depth, scope}` (rastreo de documentación; con `urls` —lista o texto con una URL por línea— en vez de `url`, cada URL va a la cola de rastreos y devuelve `{list, jobs, invalid, parallel}`), `GET /api/rag/{id}/file`, `DELETE /api/rag/{id}`. Destino: campo `agent` en upload, import, url y crawl (vacío = grafo general; id = solo ese agente); `PATCH /api/rag/{id}` `{agent}` lo mueve; `GET /api/rag?agent=` y `/api/rag/search?agent=` filtran como lo vería ese agente | Biblioteca RAG y URL → PDF. |
 | `POST /api/avatar/upload` (GLB/GLTF/VRM) | Modelo 3D propio para el avatar. |
 | `GET/PUT /api/agents`, `DELETE /api/agents/{id}` | Agentes. |
+| `GET /api/agents/asistente` (plantillas de puesto con sus respuestas, paquetes de herramientas instaladas, agentes y modelos); `POST /api/agents/asistente` `{respuestas, editar?, guardar?}` *(admin)* | Asistente de configuración de agentes: devuelve `{agente, avisos, conocimiento}`; con `guardar: true` lo guarda y siembra su grafo con el de la plantilla (`sembradas`). Ver [AGENTES.md](AGENTES.md). |
 | `GET /api/lounge`, `POST /api/lounge/meet`, `POST /api/lounge/say`, `POST /api/lounge/proposals/{id}` | Salón. |
 | `GET /api/tools`, `POST /api/approvals/{id}`, `GET /api/tools/audit`, `GET/POST/PUT /api/proposals…` | Herramientas. |
 | `GET /api/models`, `/recommended`, `/search?source=&q=`, `/files?source=&repo=`; `POST /api/models/download`, `/recommended/{id}`, `/import`, `/activate/{id}`, `/activate-spec` | Modelos. |
+| `GET /api/fs/listar?ruta=&todos=`; `POST /api/fs/dialogo {carpeta}` (Admin) | Explorador para importar modelos: carpetas y ficheros de modelo con su formato, y el selector de archivos del sistema (solo desde el mismo equipo). |
 | `GET /api/coop`, `POST /api/coop/create|join|start|stop|chat|ping/{n}|agent`, `GET /api/coop/invite` | Red cooperativa. |
-| `GET /api/vpn`, `POST /api/vpn/enable` `{enabled, port}`, `POST /api/vpn/peers` `{name, lookup_public_ip}`, `DELETE /api/vpn/peers/{id}`, `GET /api/vpn/server.conf`, `POST /api/vpn/apply`, `POST /api/vpn/upnp` *(admin)* | VPN WireGuard para la app Nexus-Office VPN (ver [VPN.md](VPN.md)). |
+| `GET /api/vpn`, `POST /api/vpn/enable` `{enabled, port}`, `POST /api/vpn/peers` `{name, lookup_public_ip}`, `DELETE /api/vpn/peers/{id}`, `GET /api/vpn/server.conf`, `POST /api/vpn/apply`, `POST /api/vpn/upnp` *(admin)* | VPN WireGuard para la app Agente IA VPN (ver [VPN.md](VPN.md)). |
 | `GET /api/office/profiles`, `POST /api/office/profile` `{id, reset_agents}` *(admin; `id` vacío quita el perfil)* | Perfiles de oficina para pymes (ver [OFICINA.md](OFICINA.md)). |
 
 ## Servicio y descargas
 | Método y ruta | Descripción |
 |---|---|
-| `GET /api/service` | Arranque automático: `{kind, registered, supported, admin_os, port}`. `kind`: `systemd`, `cron`, `launchd`, `windows` o `termux`; `registered`: dónde está registrado (vacío si no lo está); `admin_os`: si Nexus-Office corre con permisos de administrador del sistema (con ellos arranca con el equipo, sin ellos al iniciar sesión). En la app Android autónoma devuelve `{kind: "android", supported: false}`: allí lo gestiona la propia app. |
+| `GET /api/service` | Arranque automático: `{kind, registered, supported, admin_os, port}`. `kind`: `systemd`, `cron`, `launchd`, `windows` o `termux`; `registered`: dónde está registrado (vacío si no lo está); `admin_os`: si Agente IA corre con permisos de administrador del sistema (con ellos arranca con el equipo, sin ellos al iniciar sesión). En la app Android autónoma devuelve `{kind: "android", supported: false}`: allí lo gestiona la propia app. |
 | `POST /api/service` `{action: "instalar"\|"quitar", red}` *(admin)* | Instala o quita el servicio con el puerto de `server.port`. `red: true` escucha en `0.0.0.0`; si no, usa `server.host`. Devuelve `{ok, detail}`; `400` con el motivo si falla. Ver [SERVICIO.md](SERVICIO.md). |
-| `GET /api/downloads` | Instaladores de `<datos>/descargas/`: `{folder, host, host_label, files: [{name, path, size, platform, label}]}`. `platform`: `windows-x64`, `windows-arm64`, `linux-x86_64`, `linux-aarch64`, `macos-arm64`, `macos-x86_64`, `android`, `codigo`, `docs` u `otros`; `host` es la del equipo donde corre Nexus-Office. |
+| `GET /api/downloads` | Instaladores de `<datos>/descargas/`: `{folder, host, host_label, files: [{name, path, size, platform, label}]}`. `platform`: `windows-x64`, `windows-arm64`, `linux-x86_64`, `linux-aarch64`, `macos-arm64`, `macos-x86_64`, `android`, `codigo`, `docs` u `otros`; `host` es la del equipo donde corre Agente IA. |
 | `GET /descargas/{path}` | Descarga un fichero de `<datos>/descargas/` (`path` como lo da `/api/downloads`; las APK con su tipo MIME de Android). `404` si no existe o sale de la carpeta. |
-| `GET /api/package/termux` | Solo desde la app Nexus-Office autónomo: `tar.gz` con su `nexus-office` para Android, sus bibliotecas, los recursos e `install-termux.sh`, para instalarlo en Termux. En un PC no hay binario de Android que dar. |
+| `GET /api/package/termux` | Solo desde la app Agente IA autónomo: `tar.gz` con su `nexus-office` para Android, sus bibliotecas, los recursos e `install-termux.sh`, para instalarlo en Termux. En un PC no hay binario de Android que dar. |
 
 Desde otro dispositivo de la red, estas rutas exigen la clave de red, como todas salvo `/api/ping`.
 
@@ -82,3 +84,43 @@ Puerto remoto: `https://IP:8443` (TLS 1.3). Ahí todas las rutas, salvo `/`, `/a
 | `POST /api/remote/certificate` *(admin)* | Certificado nuevo (cambia la huella anclada). |
 | `GET /api/remote/router` *(admin)* | Asistente del router: puerta de enlace, IP y MAC de este equipo, URLs de configuración, marca y ruta del menú, UPnP‑IGD y la regla exacta. |
 | `POST /api/remote/check` *(admin)* | IP pública, CGNAT y si el puerto responde en la IP pública. |
+
+## Capa de hardware y pipelines (3.1)
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/hal` | SDK compilados, artefacto, acelerador del perfil y estado del asignador zero-copy. |
+| `GET /api/hal/latencia?vueltas=` | Mide la ida y vuelta entre dos hilos por los rings lock-free (ns). |
+| `GET /api/pipeline` | Estado de percepción, cola de difusión, buffer de pantalla y capa de hardware. |
+| `POST /api/pipeline/frame?fuente=&esperar=` | Frame para la percepción (cuerpo `image/*` o multipart `frame`); 429 si la cola está llena. |
+| `GET /api/pipeline/percepcion?q=&k=` | Lo percibido: recientes o búsqueda semántica. |
+| `POST /api/pipeline/difusion` | `{prompt, negative?, size?, steps?, seed?}` → `{id}`; se genera en segundo plano. |
+| `GET /api/pipeline/difusion[/{id}]` | Trabajos de difusión y su estado (`en cola`, `generando`, `hecho`, `error`). |
+| `GET /api/pipeline/pantalla` | Último frame del buffer de pantalla (PNG; cabeceras `X-Pantalla-*`); 204 si aún no hay. |
+
+Eventos WebSocket nuevos: `percepcion`, `difusion` y `pantalla` (`{trabajo, paso, final, version, url}`).
+
+## Motores, MCP y video (3.2)
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/hal` | Además: memorias del acelerador, núcleos, matriz por chip, ONNX Runtime y motores dentro del proceso. |
+| `POST /api/hal/caidas/olvidar` | (Admin) Borra las marcas de motores que se cayeron dentro del proceso. |
+| `POST /mcp` | Servidor MCP (JSON-RPC 2.0, protocolo 2025-06-18; una petición o un lote). Las notificaciones devuelven 202. Desde otro equipo: clave de red o `Authorization: Bearer <mcp.token>`. |
+| `GET /api/mcp` | Clientes MCP conectados, servidores configurados y si hay token. |
+| `PUT /api/mcp/servidores` | (Admin) `{servidores: [{nombre, orden[] \| url, env?, cabeceras?, riesgo?, activo?}]}` y reconecta. |
+| `POST /api/mcp/reconectar` | (Admin) Vuelve a conectar con los servidores MCP. |
+| `POST /api/media/video/subir?nombre=` | Cuerpo `video/webm`: guarda el video del codificador del Estudio en `outputs/videos`. |
+| `GET /api/voice` | Además: `general` (voz general), `distinta` y `agentes` (la voz ya resuelta de cada agente). |
+| `GET /api/voice/voces` | Voces del equipo: modelos Piper con sus hablantes, voces del sistema, variantes de espeak y motores. |
+| `POST /api/voice/tts` | `{text, rate?, agente?, voz?}`: con `agente`, su voz; con `voz` (`{motor, modelo, hablante, nombre, variante, navegador, velocidad, tono, volumen}`), esa voz sobre la general. |
+
+## Ubicación en tiempo real
+
+Solo desde el propio equipo o en modo administrador. Ver [UBICACION.md](UBICACION.md).
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/ubicacion` | Fuentes de este equipo, configuración (`ubicacion.*`) y última posición. |
+| `POST /api/ubicacion/consultar` | `{fuente?, hasta?, timeout_s?}`: la posición ahora, con lugar guardado, ciudad cercana y distancia a `hasta`. |
+| `POST /api/ubicacion` | Posición del navegador `{lat, lon, precision?, altitud?, velocidad?, rumbo?, t?}` (requiere `ubicacion.navegador`). |

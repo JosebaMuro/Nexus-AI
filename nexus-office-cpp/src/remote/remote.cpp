@@ -184,7 +184,7 @@ std::tuple<fs::path, fs::path, std::string> ensure_cert(const fs::path& folder, 
     for (auto& n : std::vector<std::string>{"127.0.0.1"}) names.push_back(n);
     for (auto& n : extra)
       if (!n.empty() && std::find(names.begin() + 2, names.end(), n) == names.end()) names.push_back(n);
-    auto [cert, key] = selfsigned_cert("Nexus-Office", "Nexus-Office (certificado propio)", names, 3650);
+    auto [cert, key] = selfsigned_cert("Agente IA", "Agente IA (certificado propio)", names, 3650);
     write_file(key_p, key);
     try {
       fs::permissions(key_p, fs::perms::owner_read | fs::perms::owner_write, fs::perm_options::replace);
@@ -203,7 +203,7 @@ const std::vector<std::string> TARGETS = {"urn:schemas-upnp-org:device:InternetG
 const std::vector<std::string> SERVICES = {"urn:schemas-upnp-org:service:WANIPConnection:2",
                                            "urn:schemas-upnp-org:service:WANIPConnection:1",
                                            "urn:schemas-upnp-org:service:WANPPPConnection:1"};
-const char* DESC = "Nexus-Office acceso remoto";
+const char* DESC = "Agente IA acceso remoto";
 
 std::string msearch(const std::string& st) {
   return "M-SEARCH * HTTP/1.1\r\nHOST: " + std::string(SSDP.first) + ":" + std::to_string(SSDP.second) +
@@ -545,7 +545,7 @@ json detect(int port) {
           {"upnp_igd", igd},
           {"upnp_devices", devs},
           {"rule",
-           {{"name", "Nexus-Office"}, {"protocol", "TCP"}, {"external_port", port}, {"internal_ip", local_ip},
+           {{"name", "Agente IA"}, {"protocol", "TCP"}, {"external_port", port}, {"internal_ip", local_ip},
             {"internal_port", port}}}};
 }
 
@@ -631,7 +631,7 @@ json RemoteAccess::status() {
 std::string RemoteAccess::pair_page() {
   std::string html = read_text(paths::package() / "remote" / "pair.html");
   if (html.empty())
-    html = "<!doctype html><meta charset=utf-8><title>Nexus-Office</title><h2>Nexus-Office</h2><p>Empareja este "
+    html = "<!doctype html><meta charset=utf-8><title>Agente IA</title><h2>Agente IA</h2><p>Empareja este "
            "dispositivo desde la app. Huella: {{FP}}</p>";
   return replace_all(html, "{{FP}}", pretty(fingerprint()));
 }

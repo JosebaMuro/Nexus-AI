@@ -1,4 +1,4 @@
-// Imagen (media/image.py): generacion (stable-diffusion.cpp > arte procedural sin modelo) y analisis
+// Imagen (media/image.py): generacion (stable-diffusion.cpp > compositor de escenas sin modelo) y analisis
 // (LLM multimodal > estadisticas de la imagen).
 #include <algorithm>
 #include <chrono>
@@ -7,6 +7,9 @@
 
 #include "llm/llm.h"
 #include "media/media.h"
+#include "media/difusion_onnx.h"
+#include "hal/cpu.h"
+#include "media/scene.h"
 #include "models/models.h"
 #include "models/runtimes.h"
 #include "util/crypto.h"
@@ -184,6 +187,15 @@ SdPlan sd_plan(const json& model, const json& profile, const std::string& varian
     json comps = model.value("componentes", json::object());
     if (comps.is_object() && !jstr(comps, "vae").empty() && is_file(P(jstr(comps, "vae"))))
       p.model_args.insert(p.model_args.end(), {"--vae", jstr(comps, "vae")});
+    // TAESD: decodificador diminuto (5-10 MB) en lugar de la VAE completa. La VAE es la parte mas lenta en la CPU y
+    // en el movil (y la que mas memoria pide); con TAESD la imagen sale en una fraccion del tiempo, algo mas suave
+    std::string taesd = comps.is_object() ? jstr(comps, "taesd") : "";
+    bool slow = starts_with(variant, "cpu") || variant == "system" || sys::is_android() ||
+                jnum(profile.value("vram_gb", json(0))) < 6;
+    json g = model.value("gen", json());
+    bool want = !g.is_object() || truthy(g.value("taesd", json(true)));
+    if (!taesd.empty() && is_file(P(taesd)) && has("--taesd") && slow && want)
+      p.model_args.insert(p.model_args.end(), {"--taesd", taesd});
   }
   // ajustes por hardware
   bool gpu = !starts_with(variant, "cpu") && variant != "system";
@@ -224,6 +236,12 @@ ImageEngine::ImageEngine(Config& config, models::Catalog& catalog, runtimes::Run
         L.info("El LLM vuelve a la GPU: se para el sd-server para dejarle la VRAM");
         stop_server();
       }
+      std::unique_lock<std::mutex> lo(onnx_mu_, std::try_to_lock);
+      if (lo.owns_lock() && onnx_ && onnx_->proveedor() != "cpu") {
+        L.info("El LLM vuelve a la GPU: se descarga el motor de difusion ONNX");
+        onnx_.reset();
+        onnx_key_.clear();
+      }
     };
   idle_ = std::thread([this] {
     while (!quit_) {
@@ -233,6 +251,12 @@ ImageEngine::ImageEngine(Config& config, models::Catalog& catalog, runtimes::Run
       if (server_ && server_used_ > 0 && now() - server_used_ > mins * 60) {
         L.info("sd-server sin uso desde hace ", fnum(mins, 0), " min: se para para liberar memoria");
         stop_server();
+      }
+      std::unique_lock<std::mutex> lo(onnx_mu_, std::try_to_lock);
+      if (lo.owns_lock() && onnx_ && onnx_used_ > 0 && now() - onnx_used_ > mins * 60) {
+        L.info("motor de difusion ONNX sin uso desde hace ", fnum(mins, 0), " min: se descarga");
+        onnx_.reset();
+        onnx_key_.clear();
       }
     }
   });
@@ -269,7 +293,14 @@ json ImageEngine::status() {
   auto sd = rt_.exe("sd", profile_());
   json st = {{"model", m.is_null() ? json() : m["id"]},
              {"runtime", sd ? json(sd->variant) : json()},
-             {"engine", !m.is_null() && sd ? "sd.cpp" : "escena"}};
+             {"engine", !m.is_null() && jstr(m, "format") == "onnx-sd" ? "onnx"
+                        : !m.is_null() && sd                           ? "sd.cpp"
+                                                                       : "escena"}};
+  if (!m.is_null() && jstr(m, "format") == "onnx-sd") {
+    st["onnx"] = onnx_estado();
+    st["proveedores"] = difusion::proveedores_para(profile_());
+    return st;
+  }
   if (!m.is_null() && sd) {
     SdPlan plan = sd_plan(m, profile_(), sd->variant, flags_of(sd->exe));
     st["arch"] = plan.arch;
@@ -295,8 +326,18 @@ const std::set<std::string>& ImageEngine::flags_of(const fs::path& exe) {
   return flags_[k];
 }
 
+namespace {
+// vista previa de la generacion en curso en este hilo (generate -> sdcpp, sin cambiar todas las llamadas)
+thread_local const ImageEngine::Preview* t_preview = nullptr;
+}  // namespace
+
 json ImageEngine::generate(const std::string& prompt, const std::string& negative, std::optional<int> size,
-                           std::optional<int> steps, std::optional<long long> seed_opt, const std::string& idea) {
+                           std::optional<int> steps, std::optional<long long> seed_opt, const std::string& idea,
+                           const Preview& preview) {
+  struct PreviewGuard {
+    PreviewGuard(const Preview* p) { t_preview = p && *p ? p : nullptr; }
+    ~PreviewGuard() { t_preview = nullptr; }
+  } preview_guard(&preview);
   long long seed = seed_opt ? *seed_opt : (long long)now() % 100000;
   fs::path out = paths::sub({"outputs", "images"}) /
                  P(std::to_string((long long)now()) + "_" + slug_name(idea.empty() ? prompt : idea, 40, "imagen") + ".png");
@@ -306,6 +347,15 @@ json ImageEngine::generate(const std::string& prompt, const std::string& negativ
                     : !sd       ? "No hay motor stable-diffusion.cpp para este equipo"
                                 : "El modelo " + jstr(m, "id") + " no es compatible con sd.cpp (" + jstr(m, "format") + ")";
   std::string fmt = jstr(m, "format");
+  // carpeta ONNX: motor de difusion propio dentro del proceso (NPU, GPU o CPU segun el chip)
+  if (!m.is_null() && fmt == "onnx-sd") {
+    try {
+      return onnx(m, english(prompt), negative, size, steps, seed, out);
+    } catch (const std::exception& e) {
+      why = "El motor de difusion ONNX fallo: " + uright(trim(e.what()), 300);
+      L.warning(why);
+    }
+  }
   if (!m.is_null() && sd && (fmt == "gguf" || fmt == "safetensors" || fmt == "ckpt")) {
     // el prompt en ingles se prepara con el LLM ANTES de que el modelo de imagen ocupe la GPU
     const std::string en = english(prompt);
@@ -363,7 +413,10 @@ json ImageEngine::generate(const std::string& prompt, const std::string& negativ
           why = "stable-diffusion.cpp fallo: " + uright(msg, 300);
         }
       }
-      // una GPU que no arranca (Metal virtual, driver roto...): antes del compositor se prueba en la CPU
+      // una GPU que no arranca (Metal virtual, driver roto...): antes del compositor se prueba en la CPU. En el
+      // movil se recuerda: la proxima imagen va directa a la CPU sin esperar a que falle otra vez el driver
+      if (sys::is_android() && !starts_with(sd->variant, "cpu") && !OOM.test(msg))
+        runtimes::mark_sd_broken(sd->variant, msg);
       auto cpu = starts_with(sd->variant, "cpu") ? std::nullopt : rt_.exe("sd", profile_(), "cpu");
       if (cpu && starts_with(cpu->variant, "cpu")) {
         L.warning("sd.cpp fallo en ", sd->variant, " (", uright(msg, 200), "); se reintenta en la CPU");
@@ -375,16 +428,99 @@ json ImageEngine::generate(const std::string& prompt, const std::string& negativ
           why = "stable-diffusion.cpp fallo en " + sd->variant + " y en la CPU: " + uright(trim(e2.what()), 300);
         }
       }
-      L.warning("sd.cpp fallo (", uright(why, 300), "); usando el compositor procedural");
+      L.warning("sd.cpp fallo (", uright(why, 300), "); usando el compositor de escenas");
     }
   }
+  // sin modelo: el compositor dibuja la escena que describe el prompt (hora, clima, lugar y sujetos); el arte
+  // abstracto solo si se pide algo abstracto
   std::string text = idea.empty() ? prompt : idea;
-  Canvas img = procedural(text, seed, size.value_or(512));
+  bool abstract = scene::parse(text).abstract;
+  Canvas img = abstract ? procedural(text, seed, size.value_or(512)) : scene::compose(text, seed, size.value_or(512));
+  std::string engine = abstract ? "procedural" : "escena";
   img.save_png(out);
   std::string note = why + ": imagen compuesta sin IA a partir de las palabras del prompt. Para imagenes neuronales "
                            "descarga un modelo de imagen en Modelos (p. ej. SDXS-512 en CPU).";
-  return {{"engine", "procedural"}, {"url", "/outputs/images/" + S(out.filename())}, {"path", S(out)},
-          {"seed", seed},          {"note", note}};
+  if (engine == "escena" && !scene::understood(text))
+    note = "No he reconocido ningun elemento del prompt (lugar, objeto, animal, hora o clima). " + note;
+  return {{"engine", engine}, {"url", "/outputs/images/" + S(out.filename())}, {"path", S(out)},
+          {"seed", seed},     {"note", note}};
+}
+
+json ImageEngine::onnx(const json& model, const std::string& prompt, const std::string& negative,
+                       std::optional<int> size, std::optional<int> steps, long long seed, const fs::path& out) {
+  std::lock_guard<std::mutex> lk(onnx_mu_);
+  const fs::path dir = P(jstr(model, "path"));
+  if (!difusion::es_modelo(dir)) throw std::runtime_error("la carpeta del modelo no tiene text_encoder, unet y vae_decoder ONNX");
+  const json gen = model.value("gen", json::object()).is_object() ? model.value("gen", json::object()) : json::object();
+  const json perfil = profile_();
+  // proveedor fijado en la configuracion (media.difusion_proveedor) o los de la matriz por chip, en orden
+  std::vector<std::string> provs;
+  std::string fijo = config_.str("media.difusion_proveedor", "auto");
+  if (!fijo.empty() && fijo != "auto") provs = {fijo, "cpu"};
+  else provs = difusion::proveedores_para(perfil);
+  const std::string clave_modelo = S(dir);
+  if (onnx_key_.rfind(clave_modelo + "|", 0) != 0) onnx_fallidos_.clear();
+  auto t0 = now();
+  std::string errores;
+  for (const auto& prov : provs) {
+    if (onnx_fallidos_.count(prov)) continue;
+    std::string key = clave_modelo + "|" + prov;
+    try {
+      if (!onnx_ || onnx_key_ != key) {
+        auto lib = difusion::biblioteca_ort(difusion::variante_de(prov));
+        if (!lib || !difusion::proveedor_disponible(*lib, prov)) throw std::runtime_error("no hay ONNX Runtime con " + prov);
+        onnx_.reset();
+        difusion::Opciones o;
+        o.lib = *lib;
+        o.modelo = dir;
+        o.cache = paths::sub({"cache", "difusion"});
+        o.proveedor = prov;
+        o.hilos = (int)config_.num("media.difusion_hilos", 0);
+        o.memoria = hal::memoria_preferida();
+        onnx_ = difusion::Motor::abrir(o);
+        onnx_key_ = key;
+      }
+      difusion::Peticion p;
+      p.prompt = prompt;
+      p.negativo = negative;
+      p.ancho = p.alto = size.value_or((int)jnum(gen.value("size", json(512)), 512));
+      p.pasos = steps.value_or((int)jnum(gen.value("steps", json(4)), 4));
+      p.guia = jnum(gen.value("cfg", json(1.0)), 1.0);
+      p.semilla = (uint64_t)seed;
+      if (const Preview* pv = t_preview)
+        p.vista = [pv](const hal::Buffer& png, int paso, int) {
+          try {
+            (*pv)(png, paso);
+          } catch (...) {
+          }
+        };
+      auto r = onnx_->generar(p);
+      onnx_used_ = now();
+      if (!write_file(out, std::string((const char*)r.png.data(), r.png.size())))
+        throw std::runtime_error("no se pudo guardar la imagen");
+      json res = {{"engine", "onnx-" + prov}, {"model", model["id"]},  {"url", "/outputs/images/" + S(out.filename())},
+                  {"path", S(out)},           {"seed", seed},          {"steps", r.pasos},
+                  {"size", r.ancho},          {"seconds", round_to(now() - t0, 1)}, {"prompt", prompt},
+                  {"proveedor", prov},        {"tiempos", r.tiempos}};
+      if (!errores.empty()) res["note"] = "Antes fallo: " + uright(errores, 300);
+      return res;
+    } catch (const std::exception& e) {
+      // proveedor que no carga o no ejecuta este modelo: se recuerda y se prueba el siguiente de la matriz
+      L.warning("difusion ONNX en ", prov, ": ", uright(e.what(), 300));
+      errores += (errores.empty() ? "" : "; ") + prov + ": " + uright(e.what(), 120);
+      onnx_fallidos_.insert(prov);
+      onnx_.reset();
+      onnx_key_.clear();
+    }
+  }
+  throw std::runtime_error(errores.empty() ? "ningun proveedor de ONNX Runtime disponible" : errores);
+}
+
+json ImageEngine::onnx_estado() {
+  std::lock_guard<std::mutex> lk(onnx_mu_);
+  json j = {{"cargado", onnx_ != nullptr}, {"fallidos", onnx_fallidos_}};
+  if (onnx_) j["motor"] = onnx_->estado();
+  return j;
 }
 
 bool ImageEngine::must_lend(const std::string& variant, const SdPlan& plan, int size, double llm_gb) {
@@ -434,7 +570,7 @@ std::string ImageEngine::english(const std::string& prompt) {
 
 bool ImageEngine::via_server(const fs::path& cli, const SdPlan& plan, const json& req, const fs::path& out,
                              std::string& why) {
-  fs::path exe = cli.parent_path() / P(std::string("sd-server") + (sys::is_windows() ? ".exe" : ""));
+  fs::path exe = runtimes::sd_server_for(cli);
   std::string mode = config_.str("media.sd_servidor", "auto");
   if (mode == "no" || mode == "off" || !is_file(exe)) return false;
   std::lock_guard<std::mutex> lk(mu_);
@@ -532,7 +668,47 @@ json ImageEngine::sdcpp(const fs::path& exe, const std::string& variant, const j
     po.cwd = exe.parent_path();
     po.capture = true;
     po.env = runtimes::lib_env(exe);
-    auto r = proc::run(cmd, 1800, po);
+    // vista previa paso a paso (sd.cpp reciente: --preview proj escribe la imagen latente proyectada en cada paso)
+    std::atomic<bool> fin_preview{false};
+    std::thread vigia;
+    const Preview* pv = t_preview;
+    fs::path prev_png = out.parent_path() / P(S(out.stem()) + ".preview.png");
+    if (pv && flags_of(exe).count("--preview-path")) {
+      cmd.insert(cmd.end(), {"--preview", "proj", "--preview-path", S(prev_png), "--preview-interval", "1"});
+      vigia = std::thread([&] {
+        std::error_code ec;
+        fs::file_time_type visto{};
+        int paso = 0;
+        while (!fin_preview.load()) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(150));
+          auto t = fs::last_write_time(prev_png, ec);
+          if (ec || t == visto) continue;
+          visto = t;
+          try {
+            hal::Buffer b = hal::leer_fichero(S(prev_png));
+            if (b) (*pv)(b, ++paso);
+          } catch (...) {
+          }
+        }
+      });
+    }
+    struct Vigia {
+      std::atomic<bool>& fin;
+      std::thread& t;
+      fs::path png;
+      ~Vigia() {
+        if (!t.joinable()) return;
+        fin = true;
+        t.join();
+        std::error_code ec;
+        fs::remove(png, ec);
+      }
+    };
+    proc::Result r;
+    {
+      Vigia guarda{fin_preview, vigia, prev_png};
+      r = proc::run(cmd, 1800, po);
+    }
     if (!r.ok() || !path_exists(out)) {
       std::string msg = !r.err.empty() ? r.err : r.out;
       if (!r.started) msg = "no se pudo iniciar sd-cli";

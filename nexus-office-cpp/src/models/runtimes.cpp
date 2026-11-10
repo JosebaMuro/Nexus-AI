@@ -28,6 +28,61 @@ static std::string repo(const std::string& rt) {
   return rt == "llama" ? "ggml-org/llama.cpp" : rt == "sd" ? "leejet/stable-diffusion.cpp" : "";
 }
 
+// ------------------------------------------------------------------ Android: sd.cpp dentro de la APK
+// Android no deja ejecutar binarios descargados (W^X desde Android 10) y las Releases de sd.cpp no traen binarios con
+// la libc de Android: los sd-cli/sd-server compilados con el NDK van en la APK (lib/arm64-v8a/libsd-*.so).
+namespace {
+const std::vector<std::pair<std::string, std::string>> ANDROID_SD = {{"vulkan", "libsd-cli-vulkan.so"},
+                                                                     {"cpu", "libsd-cli.so"}};
+fs::path android_libs() { return P(env("NEXUS_ANDROID_LIBS")); }
+fs::path sd_state_file() { return paths::data_dir() / "sd_android.json"; }
+
+// el sd.cpp de CPU de la APK usa dotprod (ARMv8.2, todos los moviles desde 2018); sin el, no arranca
+bool cpu_dotprod() {
+  std::string info = read_text("/proc/cpuinfo");
+  return info.empty() || contains(info, "asimddp");
+}
+}  // namespace
+
+std::string sd_broken(const std::string& variant) {
+  json j = jparse(read_text(sd_state_file()));
+  return j.is_object() ? jstr(j, variant) : "";
+}
+
+void mark_sd_broken(const std::string& variant, const std::string& reason) {
+  json j = jparse(read_text(sd_state_file()));
+  if (!j.is_object()) j = json::object();
+  j[variant] = reason.empty() ? std::string("fallo al generar") : uleft(reason, 300);
+  try {
+    write_file(sd_state_file(), jdump(j));
+  } catch (...) {
+  }
+  L.warning("sd.cpp ", variant, " marcado como roto en este movil: ", jstr(j, variant));
+}
+
+std::vector<std::string> android_sd_variants() {
+  std::vector<std::string> out;
+  if (!sys::is_android() || env("NEXUS_ANDROID_LIBS").empty()) return out;
+  for (auto& [v, f] : ANDROID_SD)
+    if (is_file(android_libs() / f) && (v != "cpu" || cpu_dotprod())) out.push_back(v);
+  return out;
+}
+
+std::optional<fs::path> android_sd_exe(const std::string& variant) {
+  for (auto& [v, f] : ANDROID_SD)
+    if (v == variant) {
+      auto have = android_sd_variants();
+      if (std::find(have.begin(), have.end(), v) != have.end()) return android_libs() / f;
+    }
+  return std::nullopt;
+}
+
+fs::path sd_server_for(const fs::path& cli) {
+  std::string n = S(cli.filename());
+  if (contains(n, "sd-cli")) return cli.parent_path() / P(replace_all(n, "sd-cli", "sd-server"));
+  return cli.parent_path() / P(std::string("sd-server") + (sys::is_windows() ? ".exe" : ""));
+}
+
 static std::string os_tag() { return sys::is_windows() ? "win" : sys::is_macos() ? "mac" : "linux"; }
 static std::string arch_tag() {
   std::string a = lower(sys::arch());
@@ -56,6 +111,11 @@ std::string asset_pattern(const std::string& runtime, const std::string& variant
   }
   if (runtime == "sd") {
     // leejet/stable-diffusion.cpp: sd-master-<commit>-bin-win-<build>-x64.zip, ...-Linux-Ubuntu-24.04-x86_64[-vulkan]
+    if (o == "win" && a == "arm64") {
+      // Windows en ARM (Snapdragon X, 8cx): no hay sd.cpp para ARM64; el de x64 va con la emulacion de Windows 11
+      if (variant == "vulkan") return R"(^sd-.*-bin-win-vulkan-x64\.zip$)";
+      return R"(^sd-.*-bin-win-(arm64|noavx-x64)\.zip$)";
+    }
     if (o == "win") {
       std::string v = variant == "cuda" ? "cuda12" : variant == "rocm" ? R"(rocm-[\d.]+)" : variant == "cpu" ? "avx2"
                       : variant == "cpu-compat" ? "noavx" : variant;
@@ -83,6 +143,13 @@ static std::string cudart_pattern(const std::string& runtime, const std::string&
 std::vector<std::string> candidates(const json& profile, const std::string& runtime) {
   std::string acc = jstr(profile, "accelerator");
   std::string a = arch_tag();
+  if (runtime == "sd" && sys::is_android()) {
+    std::vector<std::string> out;
+    for (auto& v : android_sd_variants())
+      if (sd_broken(v).empty()) out.push_back(v);
+    if (out.empty()) out = android_sd_variants();
+    return out.empty() ? std::vector<std::string>{"cpu"} : out;
+  }
   if (os_tag() == "mac") return a == "arm64" ? std::vector<std::string>{"metal", "cpu"} : std::vector<std::string>{"cpu"};
   std::string id = jstr(profile, "id");
   auto parts = split(id, "-");
@@ -103,6 +170,8 @@ std::vector<std::string> candidates(const json& profile, const std::string& runt
   if (vendor == "intel" && igpu && llama) return {"cpu", "openvino", "vulkan"};
   if (vendor == "qualcomm") {
     // Snapdragon X (Windows ARM): GPU Adreno por OpenCL; Linux ARM: paquete Snapdragon (CPU, Adreno y NPU Hexagon)
+    // NPU Hexagon en Windows ARM: la build Hexagon de llama.cpp si va en el paquete
+    if (os_tag() == "win" && llama && acc == "hexagon") return {"hexagon", "opencl-adreno", "cpu"};
     if (os_tag() == "win" && llama) return acc == "opencl" ? std::vector<std::string>{"opencl-adreno", "cpu"} : std::vector<std::string>{"cpu", "opencl-adreno"};
     if (os_tag() == "linux" && llama) return acc == "hexagon" || acc == "opencl" ? std::vector<std::string>{"snapdragon", "cpu"} : std::vector<std::string>{"cpu", "snapdragon"};
   }
@@ -125,6 +194,7 @@ static bool has_avx2() {
 }
 
 std::vector<std::string> bundled_variants(const std::string& runtime) {
+  if (runtime == "sd" && sys::is_android()) return android_sd_variants();
   fs::path base = bundled_dir() / runtime;
   if (!is_dir(base)) return {};
   std::vector<std::string> have;
@@ -271,6 +341,16 @@ json RuntimeManager::installed() {
 std::optional<Found> RuntimeManager::exe(const std::string& runtime, const json& profile, const std::string& preferred) {
   std::string forced = env(("NEXUS_RUNTIME_" + upper(runtime)).c_str());
   if (!forced.empty() && is_file(P(forced))) return Found{P(forced), "embedded"};
+  if (runtime == "sd" && sys::is_android()) {
+    // la GPU (Vulkan) primero salvo que ya haya fallado en este movil; la CPU siempre queda de reserva
+    std::vector<std::string> order;
+    if (!preferred.empty()) order.push_back(preferred);
+    for (auto& v : candidates(profile, runtime)) order.push_back(v);
+    order.push_back("cpu");
+    for (auto& v : order)
+      if (auto p = android_sd_exe(v)) return Found{*p, v};
+    return std::nullopt;
+  }
   std::vector<std::string> order;
   if (!preferred.empty()) order.push_back(preferred);
   for (auto& c : candidates(profile, runtime)) order.push_back(c);
@@ -303,6 +383,18 @@ json RuntimeManager::progress() {
 
 fs::path RuntimeManager::install(const std::string& runtime, const std::string& variant) {
   std::string key = runtime + ":" + variant;
+  if (runtime == "sd" && sys::is_android()) {
+    // Android: no se descarga nada (no se podria ejecutar); se usa el sd.cpp que trae la APK
+    auto p = android_sd_exe(variant);
+    if (!p) p = android_sd_exe("cpu");
+    if (!p) {
+      std::string why = "Esta APK no trae stable-diffusion.cpp para este movil; instala la APK autonoma 2.10 o posterior";
+      set_progress(key, {{"status", "error"}, {"error", why}});
+      throw std::runtime_error(why);
+    }
+    set_progress(key, {{"status", "instalado"}, {"done", 1}, {"total", 1}, {"tag", "incluido en la APK"}});
+    return *p;
+  }
   set_progress(key, {{"status", "buscando"}, {"done", 0}, {"total", 0}});
   try {
     json releases = http::get_json("https://api.github.com/repos/" + repo(runtime) + "/releases", {}, {{"per_page", "10"}});

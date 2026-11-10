@@ -153,6 +153,13 @@ std::pair<std::string, const GPU*> choose_accelerator(const HardwareInfo& hw, co
   return {"cpu", gpu};
 }
 
+// MB de cache de prompts en la RAM segun la memoria del equipo (el 10 %, entre 256 MB y 8 GB; la mitad si va justa)
+int cache_ram_for(double ram_gb, bool tight) {
+  double mb = ram_gb * 1024 * (android() ? 0.05 : 0.10);
+  if (tight) mb /= 2;
+  return (int)std::clamp(mb, 256.0, 8192.0) / 128 * 128;
+}
+
 static double tier_at_most(double b) {
   double best = MODEL_TIERS[0];
   for (double t : MODEL_TIERS)
@@ -239,6 +246,14 @@ json build_profile(const HardwareInfo& hw, const std::string& ov) {
   // hilos del procesado del prompt: todos los logicos (la generacion va mejor solo con los fisicos)
   llm["n_threads_batch"] = android() ? n_threads : std::max(n_threads, hw.cores_logical);
   llm["kv_quant"] = tight ? "q8_0" : "";
+  // lote fisico (-ub): con una grafica dedicada grande el prompt se procesa en trozos de 1024 tokens (las GEMM de
+  // CUDA/ROCm/Vulkan rinden mas con matrices grandes; el prompt de los agentes es lo que mas tarda). 0 = el de llama.cpp
+  bool dgpu = gpu_offload && gpu && !gpu->integrated && !android();
+  llm["n_ubatch"] = dgpu && vram_gpu >= 12 ? 1024 : 0;
+  if (dgpu && vram_gpu >= 12) llm["n_batch"] = 1024;
+  // cache de prompts en la RAM (--cache-ram de llama-server): llama.cpp guarda hasta 8 GB por defecto, que en un movil
+  // o un PC de 8-16 GB empujaba al sistema a usar el disco de intercambio (o el sistema mataba la app en Android)
+  llm["cache_ram_mb"] = cache_ram_for(ram, tight);
   llm["llamacpp_wheel"] = wheel;
   llm["flash_attn"] = acc == "cuda" || acc == "metal";
   std::string hint;
@@ -297,7 +312,8 @@ std::string engine_label(const std::string& e) {
   if (e == "llamaserver") return "llama-server (llama.cpp, proceso aparte)";
   if (e == "llamacpp") return "llama.cpp integrado (llama-cpp-python)";
   if (e == "litert") return "LiteRT-LM (Google: Pixel/Tensor, NPU Snapdragon y MediaTek, modelos .litertlm)";
-  if (e == "onnx") return "ONNX Runtime GenAI (DirectML y NPU en Windows, modelos ONNX)";
+  if (e == "onnx") return "ONNX Runtime GenAI (DirectML, CUDA, QNN, OpenVINO; modelos ONNX)";
+  if (e == "genie") return "Qualcomm Genie (NPU Hexagon de Snapdragon, modelos de AI Hub)";
   return e;
 }
 
@@ -480,8 +496,8 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
   // una version anterior (28 o 24 capas tras un pico de VRAM) sacaba capas a la CPU para siempre y no se recuperaba
   if (jnum(base.value("gpu_layers", json(0))) == -1) overrides.erase("gpu_layers");
   for (auto it = overrides.begin(); it != overrides.end(); ++it) llm[it.key()] = it.value();
-  auto I = [&](const char* k) { return (int)jnum(llm[k]); };
-  auto B = [&](const char* k) { return (int)jnum(base[k]); };
+  auto I = [&](const char* k) { return (int)jnum(llm.value(k, json(0))); };
+  auto B = [&](const char* k) { return (int)jnum(base.value(k, json(0))); };
   llm["n_ctx"] = std::max(std::min(MIN_CTX, B("n_ctx")), I("n_ctx"));
   llm["n_batch"] = std::max(std::min(MIN_BATCH, B("n_batch")), I("n_batch"));
   std::vector<std::string> reasons;
@@ -493,6 +509,19 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
   if (previous_unclean && !memory_crash)
     reasons.push_back("La sesion anterior termino de forma abrupta sin presion de memoria: se mantiene la configuracion");
   bool live = truthy(base.value("live_threads", json(false)));
+  // modelo entero en la GPU o la NPU en la sesion anterior (llama-server: "offloaded N/N"): los hilos de la CPU no
+  // cambian la velocidad, medirlos solo mete ruido y cada prueba cambia la configuracion sin motivo
+  bool full_offload = false;
+  if (last.is_object() && last.value("settings", json::object()).is_object()) {
+    auto parts = split(jstr(last["settings"], "offloaded"), "/");
+    full_offload = parts.size() == 2 && !parts[0].empty() && parts[0] == parts[1] && parts[0] != "0" &&
+                   jnum(base.value("gpu_layers", json(0))) != 0;
+  }
+  if (full_offload && !live) {
+    reasons.push_back(cat("Modelo entero en la GPU/NPU (", jstr(last["settings"], "offloaded"),
+                          " capas): no se prueban hilos de la CPU"));
+    live = true;
+  }
   if (live) llm["n_threads"] = base["n_threads"];
   if (!live && last.is_object() && L(last, "llm_calls") >= 1 && L(last, "avg_tps") > 0) {
     std::string used =
@@ -507,10 +536,15 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
     llm["n_batch"] = std::max(std::min(MIN_BATCH, B("n_batch")), I("n_batch") / 2);
     int gl = I("gpu_layers");
     if (gl != 0 && gl != -1) llm["gpu_layers"] = (int)(gl * 0.75);   // con -1, llama.cpp ajusta las capas solo
+    if (I("cache_ram_mb") > 256) llm["cache_ram_mb"] = std::max(256, I("cache_ram_mb") / 2 / 128 * 128);
     reasons.push_back("Cierre inesperado o falta de memoria en la sesion anterior: contexto y lote reducidos");
   } else if (last.is_object()) {
     double ram = L(last, "peak_ram_pct"), vram = L(last, "peak_vram_pct");
-    if (ram > 92) {
+    if (ram > 92 && jstr(llm, "kv_quant").empty() && I("gpu_layers") == 0) {
+      // antes de recortar el contexto: la cache KV en 8 bits ocupa la mitad y la calidad casi no cambia
+      llm["kv_quant"] = "q8_0";
+      reasons.push_back(cat("RAM al ", fnum(ram, 0), "%: cache KV en 8 bits (la mitad de memoria) antes de recortar el contexto"));
+    } else if (ram > 92) {
       llm["n_ctx"] = std::max(std::min(MIN_CTX, B("n_ctx")), (int)(I("n_ctx") * 0.75));
       llm["n_batch"] = std::max(std::min(MIN_BATCH, B("n_batch")), I("n_batch") / 2);
       reasons.push_back(cat("RAM al ", fnum(ram, 0), "%: contexto reducido a ", I("n_ctx")));
@@ -526,8 +560,37 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
       llm["n_ctx"] = std::min(B("max_ctx"), (int)(I("n_ctx") * 1.5) / 256 * 256);
       reasons.push_back(cat("Holgura de RAM (", fnum(ram, 0), "%): contexto ampliado a ", I("n_ctx")));
     }
+    // cache de prompts en la RAM: se reduce si la RAM fue justa y se recupera con holgura
+    if (ram > 90 && I("cache_ram_mb") > 256) {
+      llm["cache_ram_mb"] = std::max(256, I("cache_ram_mb") / 2 / 128 * 128);
+      reasons.push_back(cat("RAM al ", fnum(ram, 0), "%: cache de prompts reducida a ", I("cache_ram_mb"), " MB"));
+    } else if (ram > 0 && ram < 75 && I("cache_ram_mb") < B("cache_ram_mb")) {
+      llm["cache_ram_mb"] = std::min(B("cache_ram_mb"), I("cache_ram_mb") * 2);
+      reasons.push_back(cat("RAM con holgura: cache de prompts de nuevo en ", I("cache_ram_mb"), " MB"));
+    }
     int gl = I("gpu_layers");
-    if (vram > 95 && gl > 0) {
+    bool vram_fix = false;   // con la VRAM llena, primero lo que no saca capas de la GPU
+    if (vram > 92 && gl != 0 && jstr(llm, "kv_quant").empty()) {
+      llm["kv_quant"] = "q8_0";
+      vram_fix = true;
+      reasons.push_back(cat("VRAM al ", fnum(vram, 0), "%: cache KV en 8 bits para que el modelo siga entero en la GPU"));
+    } else if (vram > 92 && gl != 0 && I("n_ubatch") > 512) {
+      llm["n_ubatch"] = I("n_ubatch") / 2;
+      llm["n_batch"] = std::max(I("n_ubatch"), std::min(I("n_batch"), B("n_batch")));
+      vram_fix = true;
+      reasons.push_back(cat("VRAM al ", fnum(vram, 0), "%: lote fisico de la GPU reducido a ", I("n_ubatch")));
+    }
+    double ttft = L(last, "avg_ttft");
+    if (!vram_fix && gl != 0 && vram > 0 && vram < 70 && ttft > 2.5 && L(last, "llm_calls") >= 3 &&
+        I("n_ubatch") < 2048 && truthy(profile.value("vram_gb", json(0))) && jnum(profile["vram_gb"]) >= 8) {
+      // la GPU tiene sitio y la primera palabra tarda: el prompt se procesa en trozos mas grandes
+      int ub = std::min(2048, std::max(512, I("n_ubatch")) * 2);
+      llm["n_ubatch"] = ub;
+      llm["n_batch"] = std::max(I("n_batch"), ub);
+      reasons.push_back(cat("Primera palabra lenta (", fnum(ttft, 1), " s) con VRAM libre: lote fisico de la GPU a ", ub));
+    }
+    if (vram_fix) {
+    } else if (vram > 95 && gl > 0) {
       llm["gpu_layers"] = std::max(0, (int)(gl * 0.8));
       reasons.push_back(cat("VRAM al ", fnum(vram, 0), "%: menos capas en GPU (", I("gpu_layers"), ")"));
     } else if (vram > 0 && vram < 70 && gl > 0) {
@@ -566,7 +629,8 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
   json tuned = profile;
   tuned["llm"] = llm;
   json ov = json::object();
-  for (const char* k : {"n_ctx", "n_batch", "gpu_layers", "n_threads", "suggest_smaller_model"})
+  for (const char* k : {"n_ctx", "n_batch", "gpu_layers", "n_threads", "suggest_smaller_model", "kv_quant", "n_ubatch",
+                        "cache_ram_mb"})
     if (llm.contains(k) && (!base.contains(k) || llm[k] != base[k])) ov[k] = llm[k];
   state["overrides"] = ov;
   if (!reasons.empty()) {
@@ -577,12 +641,34 @@ TuneResult tune(const json& profile, const json& history, bool previous_unclean,
   return {tuned, state, reasons};
 }
 
+void apply_overrides(json& profile) {
+  // al cambiar el acelerador o la GPU sin reiniciar: lo aprendido por el autoajuste (contexto, lotes, cache KV...)
+  // sigue valiendo; las capas solo si el nuevo perfil usa GPU o NPU
+  if (!profile.contains("llm") || !profile["llm"].is_object()) return;
+  json ov = load_state().value("overrides", json::object());
+  if (!ov.is_object()) return;
+  json& llm = profile["llm"];
+  bool gpu = jnum(llm.value("gpu_layers", json(0))) != 0;
+  for (auto it = ov.begin(); it != ov.end(); ++it) {
+    if (it.key() == "gpu_layers" && (!gpu || jnum(llm.value("gpu_layers", json(0))) == -1)) continue;
+    llm[it.key()] = it.value();
+  }
+}
+
 Startup startup(const std::string& ov, bool adaptive, const std::string& ollama_url, bool previous_unclean,
-                const json& previous_info) {
+                const json& previous_info, const std::string& accel) {
   Startup s;
   s.hw = detect(ollama_url);
   save(s.hw);
-  s.profile = build_profile(s.hw, ov);
+  // CPU/GPU/NPU elegido a mano: el autoajuste se aplica sobre ese perfil (antes se calculaba sobre el automatico y
+  // despues se tiraba, asi que con el acelerador elegido a mano nunca se ajustaba nada)
+  if (!accel.empty() && accel != "auto") {
+    auto [prof, p] = build_for(s.hw, accel);
+    s.profile = prof;
+    s.plan = p;
+  } else {
+    s.profile = build_profile(s.hw, ov);
+  }
   if (adaptive) {
     auto t = tune(s.profile, load_history(), previous_unclean, s.hw.cores_logical, nullptr, previous_info);
     s.profile = t.profile;

@@ -1,0 +1,196 @@
+name: Motores de NPU y GPU (LiteRT-LM con dispatch, QAIRT/Genie, llama.cpp CUDA ARM64)
+
+# Bibliotecas que no vienen hechas en ningun paquete publico y hay que compilar o sacar del SDK del fabricante.
+# Deja cada una como artefacto (90 dias); cpp-entrega.yml las toma de la ultima ejecucion correcta.
+#  * litert-android: LiteRT-LM (API C, liblitert-lm.so) compilado desde el codigo fuente con sus «dispatch» de NPU:
+#    Google Tensor (Pixel 6 a 10), Qualcomm Hexagon y MediaTek APU. El dispatch tiene que ser de la misma version que
+#    LiteRT-LM (el wheel de PyPI no lo trae y uno de otra version no casa), por eso se compilan juntos. Mas las
+#    bibliotecas de GPU de LiteRT-LM (prebuilt/android_arm64: OpenCL, WebGPU, muestreadores).
+#  * qairt-*: Qualcomm AI Runtime (QAIRT, SDK comunitario de descarga libre): QNN HTP (NPU Hexagon) y Genie para
+#    Android, Windows ARM64 y Linux ARM64. Qualcomm permite distribuir estas bibliotecas de ejecucion con las apps.
+#  * llama-cuda-arm64: llama-server con CUDA 13 para Linux ARM64 (DGX Spark, GH200, Jetson Thor y Orin con JetPack 7):
+#    ggml-org no publica esa build.
+#  * litert-windows-intel: LiteRT-LM con el dispatch de Intel OpenVINO (NPU de Lunar Lake y Panther Lake).
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/motores-npu.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: motores-npu-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LITERT: "0.19.0"                  # la misma version que cpp-entrega.yml usa de PyPI en el escritorio
+  # LiteRT-LM desde main fijado a un commit: la etiqueta v0.18.1 no compila con bazel (su TensorFlow pide
+  # compatibility_proxy_repo de un rules_cc que su WORKSPACE no trae); main lo arreglo el 2026-10-29
+  LITERT_LM_REF: "992287dfcf120f3a528eb23cdf11c66b7e97055f"
+  LITERT_NPU_REL: "v2.2.0"          # Release de LiteRT con el dispatch de Google Tensor ya compilado
+  QAIRT: "2.42.0.251225"
+  CUDA_ARCHS: "87;90;100;110;121"   # Orin, Hopper, Blackwell (B200), Thor, GB10 (DGX Spark)
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  litert-android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - name: Liberar espacio
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost && df -h /
+      - name: Codigo de LiteRT-LM (con LFS para prebuilt/)
+        run: |
+          set -e
+          T=main@${LITERT_LM_REF:0:9}; echo "LiteRT-LM $T"; echo "LT_TAG=$T" >> "$GITHUB_ENV"
+          git init -q lm && git -C lm remote add origin https://github.com/google-ai-edge/LiteRT-LM
+          GIT_LFS_SKIP_SMUDGE=1 git -C lm fetch -q --depth 1 origin "$LITERT_LM_REF" && GIT_LFS_SKIP_SMUDGE=1 git -C lm checkout -q FETCH_HEAD
+          cd lm && git lfs install --local && git lfs pull --include "prebuilt/android_arm64/*" && ls -la prebuilt/android_arm64
+      - name: Compilar LiteRT-LM y los dispatch de NPU (Android ARM64)
+        run: |
+          set -e
+          cd lm
+          # NDK r28 si el runner lo trae (el que usa LiteRT); si no, el mas reciente
+          N28=$(ls -d "$ANDROID_HOME"/ndk/28.* 2>/dev/null | sort -V | tail -1)
+          export ANDROID_NDK_HOME="${N28:-${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}}"; echo "NDK $ANDROID_NDK_HOME"
+          B="bazel build -c opt --config=android_arm64 --jobs=4"
+          $B //c:litert-lm
+          disp() {  # disp <fabricante> [opciones de bazel]
+            local v=$1; shift
+            if ! $B "$@" "@litert//litert/vendors/$v/dispatch:dispatch_api_so" > "../dispatch-$v.log" 2>&1; then
+              echo "::warning::dispatch $v no compila con LiteRT-LM $LT_TAG"
+              grep -E "ERROR|error:|not visible|no such" "../dispatch-$v.log" | head -15 | sed "s/^/::warning::$v: /"
+              return 1
+            fi
+          }
+          disp qualcomm || true
+          disp mediatek || true
+          $B @litert//litert/c:libLiteRt.so || echo "::warning::sin libLiteRt.so"
+          # Google Tensor: su dispatch no se puede compilar desde el codigo publico (depende de paquetes internos de
+          # Google: //third_party/odml, //platforms/darwinn/...). Google lo publica ya hecho en las Releases de LiteRT
+          # (litert_npu_runtime_libraries.zip, Apache 2.0): se toma de ahi
+          mkdir -p ../tensor
+          curl -fsSL --retry 3 -o ../npu.zip "https://github.com/google-ai-edge/LiteRT/releases/download/$LITERT_NPU_REL/litert_npu_runtime_libraries.zip"
+          unzip -q -j -o ../npu.zip 'google_tensor_runtime/src/main/jni/arm64-v8a/libLiteRtDispatch_GoogleTensor.so' -d ../tensor
+          ls -la ../tensor
+      - name: Recoger
+        run: |
+          set -e
+          mkdir -p out/lib
+          cp lm/prebuilt/android_arm64/*.so out/lib/
+          find -L lm/bazel-bin lm/bazel-out -type f \( -name 'liblitert-lm.so' -o -name 'libLiteRtDispatch_*.so' -o -name 'libLiteRt.so' \
+            -o -name 'libedgetpu_litert*.so' \) 2>/dev/null | sort -u | while read -r f; do cp -n "$f" out/lib/; done
+          cp -n tensor/*.so out/lib/
+          test -f out/lib/liblitert-lm.so
+          for f in out/lib/*.so; do echo "== $(basename "$f") $(stat -c %s "$f")"; readelf -d "$f" | grep NEEDED | sed 's/.*\[/  necesita [/'; done
+          echo "LiteRT-LM $LT_TAG (codigo fuente) · commit $GITHUB_SHA" > out/lib/VERSIONS-litert.txt
+          cp lm/LICENSE out/lib/LICENSE-litert-lm.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: litert-android
+          path: out/lib
+          retention-days: 90
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: litert-android-registros, path: "dispatch-*.log", retention-days: 7, if-no-files-found: ignore }
+
+  qairt:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Liberar espacio
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc && df -h /
+      - name: QAIRT (Qualcomm AI Runtime) y sus bibliotecas de ejecucion
+        run: |
+          set -e
+          U="https://softwarecenter.qualcomm.com/api/download/software/sdks/Qualcomm_AI_Runtime_Community/All/$QAIRT/v$QAIRT.zip"
+          curl -fsSL --retry 3 -o q.zip "$U" && unzip -q q.zip -d q && rm q.zip
+          R=$(find q -maxdepth 3 -type d -name "$QAIRT" | head -1); echo "QAIRT en $R"; ls "$R/lib"
+          # licencia: lo que dice de las bibliotecas redistribuibles
+          find "$R" -maxdepth 2 -iname '*licen*' | head -3
+          grep -i -m5 -A3 "redistribut" "$R"/LICENSE* 2>/dev/null | head -20 || true
+          pick() {  # pick <destino> <carpeta lib> <patrones...>
+            local d=$1 l=$2; shift 2; mkdir -p "$d"
+            for p in "$@"; do find "$R/lib/$l" -maxdepth 1 -name "$p" -exec cp {} "$d/" \; 2>/dev/null || true; done
+          }
+          skel() {  # pick de los «skel» de cada version de Hexagon (v68 a v81)
+            for h in "$R"/lib/hexagon-v*/unsigned; do cp "$h"/libQnnHtpV*Skel.so "$h"/libQnnHtpV*.cat "$1/" 2>/dev/null || true; done
+          }
+          pick out/android aarch64-android 'libQnnHtp.so' 'libQnnHtpV*Stub.so' 'libQnnSystem.so' 'libQnnHtpPrepare.so' 'libGenie.so' 'libQnnGpu.so' 'libQnnCpu.so'
+          skel out/android
+          pick out/windows-arm64 aarch64-windows-msvc 'Genie.dll' 'QnnHtp.dll' 'QnnHtpV*Stub.dll' 'QnnSystem.dll' 'QnnHtpPrepare.dll' 'QnnCpu.dll' 'QnnGpu.dll'
+          skel out/windows-arm64
+          L=$(ls -d "$R"/lib/aarch64-oe-linux-gcc* "$R"/lib/aarch64-ubuntu-gcc* 2>/dev/null | tail -1 | xargs -r basename)
+          [ -n "$L" ] && pick out/linux-aarch64 "$L" 'libQnnHtp.so' 'libQnnHtpV*Stub.so' 'libQnnSystem.so' 'libQnnHtpPrepare.so' 'libGenie.so' 'libQnnCpu.so' 'libQnnGpu.so' && skel out/linux-aarch64
+          for d in out/*; do cp "$R"/LICENSE* "$d/" 2>/dev/null || true; echo "QAIRT $QAIRT" > "$d/VERSIONS-qairt.txt"; echo "== $d"; ls -la "$d"; done
+          test -f out/android/libQnnHtp.so
+      - uses: actions/upload-artifact@v4
+        with: { name: qairt-android, path: out/android, retention-days: 90 }
+      - uses: actions/upload-artifact@v4
+        with: { name: qairt-windows-arm64, path: out/windows-arm64, retention-days: 90 }
+      - uses: actions/upload-artifact@v4
+        with: { name: qairt-linux-aarch64, path: out/linux-aarch64, retention-days: 90, if-no-files-found: warn }
+
+  llama-cuda-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 300
+    steps:
+      - name: CUDA 13 (sbsa) de NVIDIA
+        run: |
+          set -e
+          curl -fsSL -o k.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa/cuda-keyring_1.1-1_all.deb
+          sudo dpkg -i k.deb && sudo apt-get update -qq
+          sudo apt-get install -y -qq cuda-toolkit-13-0 >/dev/null
+          echo "/usr/local/cuda/bin" >> "$GITHUB_PATH"
+      - name: llama.cpp con CUDA
+        run: |
+          set -e
+          LT=$(gh release list -R ggml-org/llama.cpp --limit 30 --json tagName -q '.[].tagName' | grep -m1 -E '^b[0-9]+$')
+          echo "llama.cpp $LT"
+          git clone -q --depth 1 --branch "$LT" https://github.com/ggml-org/llama.cpp l
+          cmake -S l -B lb -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCHS" \
+            -DGGML_NATIVE=OFF -DGGML_CPU_ALL_VARIANTS=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+          cmake --build lb --parallel 4 --target llama-server
+          mkdir -p out/cuda
+          cp lb/bin/llama-server out/cuda/ && cp -a lb/bin/*.so* out/cuda/ 2>/dev/null || true
+          find lb -name '*.so*' -path '*ggml*' -exec cp -an {} out/cuda/ \;
+          find lb -name 'libllama*.so*' -exec cp -an {} out/cuda/ \; ; find lb -name 'libmtmd*.so*' -exec cp -an {} out/cuda/ \;
+          # runtime de CUDA (redistribuible segun la EULA de NVIDIA): cudart, cuBLAS y cuBLASLt
+          for f in /usr/local/cuda/targets/sbsa-linux/lib/libcudart.so* /usr/local/cuda/targets/sbsa-linux/lib/libcublas.so* \
+                   /usr/local/cuda/targets/sbsa-linux/lib/libcublasLt.so*; do cp -a "$f" out/cuda/; done
+          cp l/LICENSE out/cuda/LICENSE-llama.cpp.txt
+          echo "llama.cpp $LT · CUDA 13 · sm $CUDA_ARCHS" > out/cuda/VERSIONS.txt
+          ldd out/cuda/llama-server | head -20; du -sh out/cuda
+      - uses: actions/upload-artifact@v4
+        with: { name: llama-cuda-arm64, path: out/cuda, retention-days: 90 }
+
+  litert-windows-intel:
+    runs-on: windows-latest
+    timeout-minutes: 300
+    continue-on-error: true
+    env:
+      MSYS_NO_PATHCONV: "1"        # Git Bash convierte «//c:litert-lm» en una ruta de Windows
+      MSYS2_ARG_CONV_EXCL: "*"
+    steps:
+      - name: LiteRT-LM y el dispatch de Intel OpenVINO
+        shell: bash
+        run: |
+          set -e
+          git init -q lm && git -C lm remote add origin https://github.com/google-ai-edge/LiteRT-LM
+          GIT_LFS_SKIP_SMUDGE=1 git -C lm fetch -q --depth 1 origin "$LITERT_LM_REF" && GIT_LFS_SKIP_SMUDGE=1 git -C lm checkout -q FETCH_HEAD
+          cd lm
+          # bibliotecas precompiladas de LiteRT-LM (Git LFS): sin ellas el .lib es un puntero LFS y el enlazado falla
+          git lfs install --local && git lfs pull --include "prebuilt/windows_x86_64/*"
+          # sin NDK: con ANDROID_NDK_HOME el WORKSPACE configura Android y en Windows falla al enlazar el NDK
+          unset ANDROID_NDK_HOME ANDROID_NDK ANDROID_NDK_ROOT ANDROID_NDK_LATEST_HOME
+          bazel --output_base=C:/bzl build -c opt --config=windows --define=DISABLE_HUGGINGFACE_TOKENIZER=1 //c:litert-lm \
+            @litert//litert/vendors/intel_openvino/dispatch:LiteRtDispatch
+          mkdir -p ../out
+          find -L C:/bzl/execroot bazel-bin -type f \( -name 'litert-lm.dll' -o -name 'LiteRtDispatch*.dll' \) 2>/dev/null | while read -r f; do cp -n "$f" ../out/; done
+          # bibliotecas de OpenVINO que el dispatch necesita
+          find -L C:/bzl/external -path '*openvino*' -name '*.dll' 2>/dev/null | while read -r f; do cp -n "$f" ../out/; done
+          ls -la ../out; test -f ../out/litert-lm.dll
+      - uses: actions/upload-artifact@v4
+        with: { name: litert-windows-intel, path: out, retention-days: 90 }

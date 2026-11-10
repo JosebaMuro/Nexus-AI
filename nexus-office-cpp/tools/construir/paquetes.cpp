@@ -97,7 +97,7 @@ void mac_launchers(const fs::path& dest) {
   escribir(app / "Info.plist", cat(R"(<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleName</key><string>Nexus-Office</string><key>CFBundleIdentifier</key><string>ai.nexus.office.cpp</string>
+<key>CFBundleName</key><string>Agente IA</string><key>CFBundleIdentifier</key><string>ai.agente.ia</string>
 <key>CFBundleVersion</key><string>)", numver(), "</string><key>CFBundleShortVersionString</key><string>", version(),
                                    R"(</string>
 <key>CFBundleExecutable</key><string>nexus</string>
@@ -157,7 +157,7 @@ fs::path stage(const std::string& t) {
     }
   }
   if (target(t).os == "macos") mac_launchers(dest);
-  escribir(dest / "PLATAFORMA.txt", cat("Nexus-Office ", version(), " (edicion C++) - ", t, "\n", target(t).note, "\n"));
+  escribir(dest / "PLATAFORMA.txt", cat("Agente IA ", version(), " (edicion C++) - ", t, "\n", target(t).note, "\n"));
   return dest;
 }
 
@@ -200,7 +200,7 @@ fs::path tarball(const std::string& t, const fs::path& dest) {
 
 // ------------------------------------------------------------------ Linux: .run, .deb, AppImage, Flatpak
 const char* RUN_HEADER = R"SH(#!/bin/sh
-# Nexus-Office {version} (edicion C++) - instalador autoextraible para Linux ({arch}).
+# Agente IA {version} (edicion C++) - instalador autoextraible para Linux ({arch}).
 # Uso: sh {name} [carpeta_destino] [--oficina=<perfil>] [--servicio [--red]] [--modelos=auto|todos|no]
 # Todo va incluido (programa nativo y motores de IA): no necesita internet salvo para descargar los modelos.
 set -e
@@ -208,7 +208,7 @@ DEFAULT="$HOME/.local/share/nexus-office-c"
 [ "$(id -u)" = 0 ] && DEFAULT=/opt/nexus-office-c       # con sudo: para todo el equipo
 DEST="${1:-$DEFAULT}"
 case "$DEST" in --*) DEST="$DEFAULT";; *) [ $# -gt 0 ] && shift;; esac
-echo "[Nexus-Office] Instalando en $DEST"
+echo "[Agente IA] Instalando en $DEST"
 mkdir -p "$DEST"
 LINE=$(awk '/^__NEXUS_ARCHIVE__$/{print NR + 1; exit 0}' "$0")
 tail -n +"$LINE" "$0" | tar -xz -C "$DEST" --strip-components=1
@@ -262,8 +262,8 @@ fs::path run_installer(const std::string& t, const fs::path& tgz) {
 }
 
 const char* DEB_LAUNCHER = R"SH(#!/bin/sh
-# Nexus-Office (edicion C++): programa en /opt/nexus-office-c (portable, sin internet), datos por usuario.
-#   nexus-office-c                       arranca Nexus-Office y abre el navegador
+# Agente IA (edicion C++): programa en /opt/nexus-office-c (portable, sin internet), datos por usuario.
+#   nexus-office-c                       arranca Agente IA y abre el navegador
 #   nexus-office-c servicio instalar     arranque automatico (con sudo: con el equipo; --red: accesible desde moviles)
 #   nexus-office-c modelos [--descargar] modelos de IA para este equipo | nexus-office-c oficina <perfil>
 if [ "$(id -u)" = 0 ] && [ -n "$SUDO_USER" ]; then
@@ -317,7 +317,7 @@ fs::path deb(const std::string& t, const fs::path& dest) {
     tar.add_bytes("./usr/bin/nexus-office-c", DEB_LAUNCHER, 0755, mtime);
     tar.add_bytes("./usr/share/applications/nexus-office-c.desktop", R"([Desktop Entry]
 Type=Application
-Name=Nexus-Office (C++)
+Name=Agente IA (C++)
 Comment=Oficina de IA local para pymes (edicion C++)
 Exec=nexus-office-c
 Icon=/opt/nexus-office-c/nexus/web/icon.svg
@@ -335,9 +335,9 @@ Architecture: )", arch, R"(
 Depends: libc6 (>= 2.35)
 Recommends: libvulkan1, libgomp1, ca-certificates
 Installed-Size: )", size_kb, R"(
-Maintainer: Nexus-Office <nexus@localhost>
+Maintainer: Agente IA <nexus@localhost>
 Description: Oficina de IA local para pymes (edicion C++)
- Un unico programa nativo con la misma interfaz que Nexus-Office: agentes por gremio, memoria,
+ Un unico programa nativo con la misma interfaz que Agente IA: agentes por gremio, memoria,
  documentos y voz. Incluye los motores de IA: se instala sin internet. Detecta el hardware
  (CPU, GPU, NPU) y elige el modelo de IA adecuado. Puede funcionar como servicio.
 )");
@@ -358,8 +358,8 @@ Description: Oficina de IA local para pymes (edicion C++)
 }
 
 const char* BUNDLE_LAUNCHER = R"SH(#!/bin/sh
-# Nexus-Office ({kind}, edicion C++): el programa va dentro (solo lectura); los datos del usuario, fuera.
-#   sin argumentos: arranca Nexus-Office y abre el navegador
+# Agente IA ({kind}, edicion C++): el programa va dentro (solo lectura); los datos del usuario, fuera.
+#   sin argumentos: arranca Agente IA y abre el navegador
 #   servicio instalar [--red] | modelos [--descargar] | oficina <perfil> | chat ...: ordenes de nexus-office
 HERE="{here}"
 export NEXUS_DATA_DIR="${NEXUS_DATA_DIR:-{data}}"
@@ -380,7 +380,7 @@ std::string bundle_launcher(const std::string& kind, const std::string& here) {
 
 const char* DESKTOP = R"([Desktop Entry]
 Type=Application
-Name=Nexus-Office (C++)
+Name=Agente IA (C++)
 GenericName=Oficina de IA local
 Comment=Agentes de IA para tu pyme, funcionando en tu equipo
 Exec={exec}
@@ -398,7 +398,7 @@ std::string desktop(const std::string& exec, const std::string& icon) {
 const char* METAINFO = R"(<?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>{app_id}</id>
-  <name>Nexus-Office</name>
+  <name>Agente IA</name>
   <summary>Oficina de IA local para pymes</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>LicenseRef-proprietary</project_license>
@@ -579,14 +579,14 @@ fs::path source_zip() {
   return out;
 }
 
-const char* README = R"(Nexus-Office {version} - edicion C++ - instaladores 100 % portables (se instalan sin internet)
+const char* README = R"(Agente IA {version} - edicion C++ - instaladores 100 % portables (se instalan sin internet)
 =====================================================================================================
 
-La oficina de IA de Nexus-Office (la misma interfaz, los mismos agentes, perfiles y datos, y todas sus funciones),
+La oficina de IA de Agente IA (la misma interfaz, los mismos agentes, perfiles y datos, y todas sus funciones),
 hecha entera en C++: un unico programa nativo, sin Python, que arranca en menos de un segundo y ocupa mucho menos. Lleva
 dentro los motores de IA (llama-server y sd-cli: CPU, Vulkan y, segun la plataforma, CUDA o Metal; voz con piper y
 whisper). Al instalar evalua el hardware (memoria, grafica, procesador) y elige el modelo de IA adecuado; lo descarga si
-hay internet. Todos pueden dejar Nexus-Office como servicio que arranca solo con el equipo. Al arrancar se comprueba y
+hay internet. Todos pueden dejar Agente IA como servicio que arranca solo con el equipo. Al arrancar se comprueba y
 se repara solo (configuracion, base de datos, modelos y puerto). Se instala junto a la edicion Python sin pisarla.
 Detalles de la edicion en docs/CPP.md.
 
@@ -600,13 +600,11 @@ linux/    sh Nexus-Office-{version}-linux-x86_64.run [carpeta] [--oficina=herrer
           luego: nexus-office-c   |   servicio: sudo nexus-office-c servicio instalar [--red]
           Nexus-Office-{version}-linux-x86_64.AppImage / -aarch64.AppImage   sin instalar: chmod +x y abrir
           flatpak install --user Nexus-Office-{version}-linux-x86_64.flatpak  (o -aarch64; pide el runtime de Flathub)
-macos/    Nexus-Office-{version}-macos-arm64.tar.gz (Apple Silicon) / macos-x86_64 (Intel): descomprimir y abrir
-          "Nexus-Office.command" (o ./install.sh --oficina=herreria --servicio && ./start.sh)
-android/  Nexus-Office-{version}-android-autonomo.apk  Nexus-Office C++ completo dentro del movil (ARM64, Android 9+)
-          Nexus-Office-{version}-android-vpn.apk       app ligera que conecta con el Nexus-Office de la oficina
+android/  Nexus-Office-{version}-android-autonomo.apk  Agente IA C++ completo dentro del movil (ARM64, Android 9+)
+          Nexus-Office-{version}-android-vpn.apk       app ligera que conecta con el Agente IA de la oficina
 Nexus-Office-{version}-codigo-fuente.zip               codigo C++ limpio, pruebas, empaquetado, recursos y firmware
 Nexus-Office-{version}-grafo-wikipedia-es.zip          ejemplo para importar: grafo multicapa de la Wikipedia en espanol
-Nexus-Office-resumen.md                                resumen del proyecto para la biblioteca (RAG) de Nexus-Office
+Nexus-Office-resumen.md                                resumen del proyecto para la biblioteca (RAG) de Agente IA
 Manual-de-usuario.pdf / Documentacion-tecnica.pdf
 
 Raspberry Pi: hace falta el sistema de 64 bits (Raspberry Pi OS 64-bit, Ubuntu); Pi 4 o Pi 5 con 4 GB o mas.

@@ -19,7 +19,7 @@ system_prompt: |
   publicidad. Delegas los precios en presupuestos y la publicación o el texto comercial en comercial.
 model: default
 temperature: 0.4
-tools: [imagen_editar, imagen_info, gimp_estado, gimp_script, generate_image, enhance_prompt, calculator, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
+tools: [imagen_editar, imagen_info, gimp_estado, gimp_script, generate_image, crear_video, enhance_prompt, calculator, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
 memory: true
 can_delegate_to: [presupuestos, comercial, marketing, fotografo, impresor, administracion, agenda]
 keywords: [gimp, retoque, retocar, editar foto, editar imagen, edita la foto, recortar, recorte, encuadre, redimensionar, cambiar tamano, fondo blanco, quitar fondo, marca de agua, logo, logotipo, foto de producto, foto de carnet, foto dni, banner, cartel, flyer, folleto, portada, miniatura, publicacion para instagram, historia de instagram, diseno grafico, disenador, brillo, contraste, saturacion, nitidez, enfocar, blanco y negro, sepia, png, jpg, webp, tiff, xcf, ppp, dpi, sangrado]

@@ -199,7 +199,7 @@ int humo(const std::vector<std::string>& argv) {
     std::string calc = ws_chat("Cuanto es 12*7?");
     check(contains(calc, "84"), "chat con herramienta (calculadora): " + uleft(calc, 120));
 
-    json tts = {{"text", "Hola, soy Nexus-Office."}};
+    json tts = {{"text", "Hola, soy Agente IA."}};
     auto audio = call_raw("/api/voice/tts", &tts);
     std::string engine = audio.header("x-tts-engine");
     bool riff = audio.body.compare(0, 4, "RIFF") == 0;

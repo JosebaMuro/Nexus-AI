@@ -1,8 +1,8 @@
-cmake_minimum_required(VERSION 3.20)
-# Nexus-Office 2.7.0-cpp: la oficina para pymes reescrita en C++ (misma interfaz web, mismos datos).
-project(NexusOfficeCpp VERSION 2.7.0 LANGUAGES C CXX)
+cmake_minimum_required(VERSION 3.28)
+# Agente IA (antes Nexus-Office) 3.2.0-cpp: la oficina para pymes reescrita en C++ (misma interfaz web, mismos datos).
+project(NexusOfficeCpp VERSION 3.2.3 LANGUAGES C CXX)
 
-set(NEXUS_VERSION "2.7.0-cpp")
+set(NEXUS_VERSION "3.2.3-cpp")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -17,6 +17,14 @@ set(NEXUS_RESOURCES "${CMAKE_CURRENT_SOURCE_DIR}/recursos" CACHE PATH "Carpeta c
 # openssl (el del sistema) o none (solo HTTP)
 set(NEXUS_TLS "mbedtls" CACHE STRING "mbedtls | openssl | none")
 option(NEXUS_STATIC_RUNTIME "Enlazar estatico el runtime de C++ (paquetes portables)" ON)
+# NEXUS_CORE_SHARED: el nucleo como biblioteca compartida (libnexus_core.so para la APK, nexus_core.dll junto al
+# ejecutable en Windows). Apagado (lo normal): un unico ejecutable autocontenido; el ELF de Linux solo depende de la
+# glibc. Con el nucleo compartido el runtime de C++ tiene que ser uno solo para los dos binarios: se enlaza dinamico
+# (MSVC /MD con sus DLL copiadas al lado al instalar; en Android, ANDROID_STL=c++_shared)
+option(NEXUS_CORE_SHARED "Nucleo como biblioteca compartida (.so en la APK, DLL en Windows)" OFF)
+if(NEXUS_CORE_SHARED)
+  set(NEXUS_STATIC_RUNTIME OFF)
+endif()
 option(NEXUS_BUILD_TESTS "Compilar las pruebas" ON)
 # nexus-construir: instaladores, APK, manuales en PDF, prueba de humo y datos (no va en los paquetes)
 option(NEXUS_BUILD_TOOLS "Compilar la herramienta de construccion nexus-construir" ON)
@@ -120,10 +128,84 @@ endif()
 
 find_package(Threads REQUIRED)
 
+# ------------------------------------------------------------------ artefacto y SDK de hardware (dossier de arquitectura)
+# Tres capas: orquestacion multiagente (agents, tools, office), motor core multiplataforma (llm, memory, rag, media,
+# pipeline, server) y abstraccion de hardware (hal, hardware). Ver docs/ARQUITECTURA.md.
+#
+# NEXUS_CORE_SHARED (arriba): el nucleo como biblioteca compartida; apagado, un unico ejecutable autocontenido.
+# SDK de hardware que se compilan dentro (por defecto ninguno: llama.cpp, sd.cpp y los motores de NPU se cargan en
+# tiempo de ejecucion y el binario sirve en cualquier equipo). Cada flag define NEXUS_SDK_<NOMBRE> y enlaza su SDK.
+option(NEXUS_SDK_CUDA "Compilar con el CUDA Toolkit (NVIDIA)" OFF)
+option(NEXUS_SDK_VULKAN "Compilar con Vulkan (GPU de escritorio, Mali, Adreno, Xclipse)" OFF)
+option(NEXUS_SDK_OPENCL "Compilar con OpenCL (Adreno, Mali, Intel)" OFF)
+option(NEXUS_SDK_QNN "Compilar con Qualcomm AI Engine Direct / QNN (NPU Hexagon)" OFF)
+option(NEXUS_SDK_NNAPI "Compilar con Android NNAPI (NPU del movil)" OFF)
+option(NEXUS_SDK_DIRECTML "Compilar con DirectML (GPU y NPU en Windows)" OFF)
+option(NEXUS_SDK_OPENVINO "Compilar con OpenVINO (Intel CPU/GPU/NPU)" OFF)
+set(NEXUS_QNN_SDK_ROOT "$ENV{QNN_SDK_ROOT}" CACHE PATH "Carpeta del SDK de QNN (con include/QNN)")
+set(NX_SDK_DEFS "")
+set(NX_SDK_LIBS "")
+set(NX_SDK_INCS "")
+if(NEXUS_SDK_CUDA)
+  find_package(CUDAToolkit REQUIRED)
+  list(APPEND NX_SDK_DEFS NEXUS_SDK_CUDA)
+  list(APPEND NX_SDK_LIBS CUDA::cudart)
+endif()
+if(NEXUS_SDK_VULKAN)
+  find_package(Vulkan REQUIRED)
+  list(APPEND NX_SDK_DEFS NEXUS_SDK_VULKAN)
+  list(APPEND NX_SDK_LIBS Vulkan::Vulkan)
+endif()
+if(NEXUS_SDK_OPENCL)
+  find_package(OpenCL REQUIRED)
+  list(APPEND NX_SDK_DEFS NEXUS_SDK_OPENCL)
+  list(APPEND NX_SDK_LIBS OpenCL::OpenCL)
+endif()
+if(NEXUS_SDK_QNN)
+  if(NOT EXISTS "${NEXUS_QNN_SDK_ROOT}/include/QNN/QnnInterface.h")
+    message(FATAL_ERROR "NEXUS_SDK_QNN: no esta el SDK de QNN en NEXUS_QNN_SDK_ROOT (${NEXUS_QNN_SDK_ROOT})")
+  endif()
+  list(APPEND NX_SDK_DEFS NEXUS_SDK_QNN)
+  list(APPEND NX_SDK_INCS "${NEXUS_QNN_SDK_ROOT}/include/QNN")   # el backend (libQnnHtp.so) se abre con dlopen
+endif()
+if(NEXUS_SDK_NNAPI)
+  if(NOT ANDROID)
+    message(FATAL_ERROR "NEXUS_SDK_NNAPI solo existe en Android")
+  endif()
+  list(APPEND NX_SDK_DEFS NEXUS_SDK_NNAPI)
+  list(APPEND NX_SDK_LIBS neuralnetworks)
+endif()
+if(NEXUS_SDK_DIRECTML)
+  if(NOT WIN32)
+    message(FATAL_ERROR "NEXUS_SDK_DIRECTML solo existe en Windows")
+  endif()
+  list(APPEND NX_SDK_DEFS NEXUS_SDK_DIRECTML)
+  list(APPEND NX_SDK_LIBS d3d12 dxgi)   # DirectML.dll se carga en tiempo de ejecucion
+endif()
+if(NEXUS_SDK_OPENVINO)
+  find_package(OpenVINO REQUIRED COMPONENTS Runtime)
+  list(APPEND NX_SDK_DEFS NEXUS_SDK_OPENVINO)
+  list(APPEND NX_SDK_LIBS openvino::runtime)
+endif()
+message(STATUS "Nucleo: ${NEXUS_CORE_SHARED} (compartido) · SDK de hardware: ${NX_SDK_DEFS}")
+
 # ------------------------------------------------------------------ nucleo de Nexus-Office
 file(GLOB_RECURSE NEXUS_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 list(FILTER NEXUS_SRC EXCLUDE REGEX "/src/main\\.cpp$")
-add_library(nexus_core STATIC ${NEXUS_SRC})
+if(NEXUS_CORE_SHARED)
+  add_library(nexus_core SHARED ${NEXUS_SRC})
+  # Windows: todas las funciones exportadas en la DLL sin anotar el codigo
+  set_target_properties(nexus_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+  target_compile_definitions(nexus_core PUBLIC NEXUS_CORE_SHARED PRIVATE NEXUS_CORE_BUILD)
+  # el ejecutable busca la biblioteca a su lado (Linux, Android)
+  set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
+  set(CMAKE_INSTALL_RPATH "$ORIGIN")
+else()
+  add_library(nexus_core STATIC ${NEXUS_SRC})
+endif()
+target_compile_definitions(nexus_core PUBLIC ${NX_SDK_DEFS})
+target_include_directories(nexus_core PRIVATE ${NX_SDK_INCS} ${TP}/onnxruntime)
+target_link_libraries(nexus_core PRIVATE ${NX_SDK_LIBS})
 target_include_directories(nexus_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${TP}/httplib ${TP}/json ${TP}/ryml ${TP}/stb)
 target_include_directories(nexus_core PRIVATE ${NEXUS_FLASHER})
 target_compile_definitions(nexus_core PUBLIC NEXUS_VERSION="${NEXUS_VERSION}" CPPHTTPLIB_THREAD_POOL_COUNT=16
@@ -132,7 +214,7 @@ target_link_libraries(nexus_core PUBLIC nx_sqlite3 nx_miniz nx_pcre2 nx_bz2 nx_x
 if(WIN32)
   target_compile_definitions(nexus_core PUBLIC _WIN32_WINNT=0x0A00 NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE
                              _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS)
-  target_link_libraries(nexus_core PUBLIC ws2_32 crypt32 bcrypt iphlpapi shell32 advapi32 cfgmgr32)
+  target_link_libraries(nexus_core PUBLIC ws2_32 crypt32 bcrypt iphlpapi shell32 advapi32 cfgmgr32 ole32 uuid runtimeobject)
   if(MSVC)
     target_compile_options(nexus_core PUBLIC /utf-8 /bigobj /Zc:__cplusplus)
   else()
@@ -195,6 +277,14 @@ add_custom_command(TARGET nexus-office POST_BUILD
   VERBATIM)
 
 install(TARGETS nexus-office RUNTIME DESTINATION .)
+if(NEXUS_CORE_SHARED)
+  install(TARGETS nexus_core RUNTIME DESTINATION . LIBRARY DESTINATION .)
+  if(MSVC)
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
+    include(InstallRequiredSystemLibraries)   # vcruntime140.dll y msvcp140.dll junto al ejecutable (portable)
+  endif()
+  set_target_properties(nexus-office PROPERTIES INSTALL_RPATH "$ORIGIN")
+endif()
 install(DIRECTORY ${NEXUS_RESOURCES}/web DESTINATION nexus)
 install(DIRECTORY ${NEXUS_RESOURCES}/office/perfiles ${NEXUS_RESOURCES}/office/agentes ${NEXUS_RESOURCES}/office/conocimiento
         DESTINATION nexus/office)

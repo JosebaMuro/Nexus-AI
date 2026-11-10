@@ -34,10 +34,10 @@ struct Libro {
 const std::vector<Libro> LIBROS = {
     {"Manual-de-usuario", "Manual de usuario", "Edición C++ · oficina de IA local para pymes",
      {"USUARIO.md", "CPP.md", "OFICINA.md", "BOLSA.md", "SERVICIO.md", "AVATAR.md", "SALON.md", "ACELERADOR.md",
-      "GRAFOS.md", "RAG.md", "DISPOSITIVOS.md"}},
+      "GRAFOS.md", "RAG.md", "DISPOSITIVOS.md", "UBICACION.md", "BETA.md"}},
     {"Documentacion-tecnica", "Documentación técnica", "Edición C++: cómo está hecha, administración y API",
-     {"CPP.md", "ACELERADOR.md", "ADMINISTRADOR.md", "SERVICIO.md", "API.md", "HERRAMIENTAS.md", "MEMORIA.md",
-      "GRAFOS.md", "RAG.md", "RED_COOPERATIVA.md", "VPN.md", "ACCESO_REMOTO.md", "DISPOSITIVOS.md"}},
+     {"CPP.md", "ACELERADOR.md", "ADMINISTRADOR.md", "SERVICIO.md", "API.md", "HERRAMIENTAS.md", "AGENTES.md", "MEMORIA.md",
+      "GRAFOS.md", "RAG.md", "RED_COOPERATIVA.md", "VPN.md", "ACCESO_REMOTO.md", "DISPOSITIVOS.md", "UBICACION.md", "BETA.md"}},
 };
 
 const char* CSS = R"(
@@ -97,7 +97,7 @@ std::string libro_html(const Libro& b) {
     items += cat("<li class=\"l", lvl, "\" style=\"margin-left:", fnum((lvl - 1) * 1.2, 1), "em\"><a href=\"#", sid, "\">",
                  html_escape(t), "</a></li>");
   return cat("<!doctype html><html lang='es'><head><meta charset='utf-8'><title>", b.titulo, "</title><style>", CSS,
-             "</style></head><body><div class='cover'><div class='v'>Nexus-Office ", version(), "</div><div class='t'>",
+             "</style></head><body><div class='cover'><div class='v'>Agente IA ", version(), "</div><div class='t'>",
              b.titulo, "</div><div class='s'>", b.subtitulo, "</div></div><div class='toc'><h2>", b.titulo,
              "</h2><ul>", items, "</ul></div>", body, "</body></html>");
 }
@@ -219,7 +219,7 @@ int pdf(const std::vector<std::string>& argv) {
     exe = rag::browser::find();
   }
   if (exe.empty()) throw Fallo("no hay Chromium, Chrome ni Edge: indicalo en NEXUS_CHROMIUM");
-  std::string footer = cat("<div style='font-size:8px;width:100%;text-align:right;padding-right:16mm;color:#667'>Nexus-Office ",
+  std::string footer = cat("<div style='font-size:8px;width:100%;text-align:right;padding-right:16mm;color:#667'>Agente IA ",
                            version(), " · <span class='pageNumber'></span>/<span class='totalPages'></span></div>");
   fs::path work = raiz() / "build-paquetes" / "pdf";
   fs::create_directories(work);

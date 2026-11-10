@@ -1,4 +1,4 @@
-/* Nexus-Office — webui */
+/* Agente IA — webui */
 (() => {
   "use strict";
   const $ = (s, r = document) => r.querySelector(s);
@@ -16,8 +16,10 @@
   const S = { token: store.get("nexus_admin", ""), session: local.get("nexus_session", null), status: null, agents: [], busy: false,
               speak: local.get("nexus_speak", false), attachments: [], projects: [], view: "chat", cfg: {} };
 
+  // usuario final de este navegador (cada persona de la oficina tiene su estilo); "" = el titular del equipo
+  function usuario() { try { return localStorage.getItem("nexus_usuario") || ""; } catch { return ""; } }
   async function api(path, opts = {}) {
-    const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...(S.token ? { "X-Admin-Token": S.token } : {}) };
+    const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...(S.token ? { "X-Admin-Token": S.token } : {}), ...(usuario() ? { "X-Nexus-Usuario": usuario() } : {}) };
     const res = await fetch(path, { method: opts.method || (opts.body ? "POST" : "GET"), headers,
       body: opts.body instanceof FormData ? opts.body : opts.body ? JSON.stringify(opts.body) : undefined });
     if (opts.raw) return res;
@@ -282,7 +284,7 @@
   function onEvent(e) {
     switch (e.type) {
       case "session": S.session = e.session_id; local.set("nexus_session", e.session_id); break;
-      case "agent": if (current && !e.sub) current.setAgent(e); break;
+      case "agent": if (!e.sub) hablante = e.agent || hablante; if (current && !e.sub) current.setAgent(e); break;
       case "state": setState(e.state); break;
       case "token": current && current.append(e.text); if (Live.on && !e.sub) Live.token(e.text); break;
       case "reasoning": current && current.reason(e.text); break;
@@ -305,9 +307,13 @@
       case "graph_update": loadGraph().catch(() => {}); if (explorer) loadScopes().catch(() => {}); break;
       case "approval_required": showApproval(e.approval); break;
       case "approval_resolved": $(`#ap-${e.id}`)?.remove(); break;
+      case "estilo": if (current && !e.sub) current.note("🎨 estilo", `Aprendido de tu mensaje: ${e.items.map((x) => x.label).join(", ")}. Ver y ajustar en Herramientas → Mi estilo.`); break;
+      case "inyeccion": toast(`⚠ ${e.tool} trajo texto que intenta dar órdenes al agente (${e.senales.join(", ")}). Se ha tratado solo como datos.`, true); break;
+      case "reanudada": toast(e.approved ? `Aprobada «${e.tool}»: la tarea pendiente continúa` : `Rechazada «${e.tool}»`); break;
       case "lounge": onLounge(e.message); break;
       case "agent_activity": if (offices) offices.onActivity(e.activity); break;
       case "coop": onCoop(e.event); break;
+      case "pantalla": case "difusion": case "percepcion": if (window.NexusPipeline) NexusPipeline.onEvent(e); break;
       case "remote": if (e.event === "paired") { toast(`Dispositivo emparejado: ${e.device.name}`); if (S.view === "net") remoteBox(); } break;
     }
   }
@@ -340,10 +346,10 @@
   /* ================================================================ chat */
   const box = $("#messages");
   const agentColor = (id) => (S.agents.find((a) => a.id === id) || {}).color || "var(--accent)";
-  const agentName = (id) => (S.agents.find((a) => a.id === id) || {}).name || id || "Nexus-Office";
+  const agentName = (id) => (S.agents.find((a) => a.id === id) || {}).name || id || "Agente IA";
   function scroll() { box.scrollTop = box.scrollHeight; }
   function welcome() {
-    box.innerHTML = `<div class="welcome"><h1>Nexus-Office</h1><div class="muted">Inteligencia multimodal con memoria, aprendizaje y agentes</div>
+    box.innerHTML = `<div class="welcome"><h1>Agente IA</h1><div class="muted">Inteligencia multimodal con memoria, aprendizaje y agentes</div>
       <div class="sugg">${["Hola, me llamo … y me gusta …", "¿Qué sabes de mí?", "Genera una imagen de una ciudad de neón bajo la lluvia",
         "Compón una música épica", "Cuánto es 2^16 / 7", "Info del sistema", "Busca noticias sobre IA"].map((s) => `<button>${esc(s)}</button>`).join("")}</div></div>`;
     $$(".sugg button", box).forEach((b) => (b.onclick = () => { $("#input").value = b.textContent; $("#input").focus(); }));
@@ -360,10 +366,10 @@
     el.innerHTML = `<div class="who"><span class="aname">${esc(agentName(agent)).toUpperCase()}</span></div>
       <div class="bubble"><div class="chips"></div><details class="think hidden"><summary>💭 Razonando…</summary><div class="think-text"></div></details><div class="text ${done ? "" : "cursor"}"></div></div><div class="msg-actions"></div>`;
     box.appendChild(el);
-    let raw = initial; const text = $(".text", el), chips = $(".chips", el);
+    let raw = initial, quien = agent; const text = $(".text", el), chips = $(".chips", el);
     let pend = false, thinkOn = false; const render = () => { pend = false; text.innerHTML = md(raw); scroll(); };
     const api_ = {
-      setAgent(e) { el.style.setProperty("--agent", e.color); $(".aname", el).textContent = `${e.icon || ""} ${e.name}`.toUpperCase(); },
+      setAgent(e) { quien = e.agent || quien; el.style.setProperty("--agent", e.color); $(".aname", el).textContent = `${e.icon || ""} ${e.name}`.toUpperCase(); },
       append(t) { raw += t; if (!pend) { pend = true; requestAnimationFrame(render); } if (thinkOn) { thinkOn = false; $(".think summary", el).textContent = "💭 Razonamiento"; } },
       reason(t) { const d = $(".think", el); d.classList.remove("hidden"); thinkOn = true; const tt = $(".think-text", el); tt.textContent += t; if (d.open) tt.scrollTop = tt.scrollHeight; scroll(); },
       note(label, title) { const c = document.createElement("span"); c.className = "chip done assist"; c.textContent = label; c.title = title; chips.appendChild(c); },
@@ -372,7 +378,7 @@
       progress(t) { const c = [...chips.querySelectorAll(".chip:not(.done)")].pop(); if (c) { c.innerHTML = `<span class="spin"></span>${esc(c.dataset.tool)} › ${esc(t)}`; } },
       toolDone(e) { const c = [...chips.querySelectorAll(".chip:not(.done)")].reverse().find((x) => x.dataset.tool === e.name);
         if (c) { const err = /"error"/.test(e.result); c.className = "chip " + (err ? "err" : "done"); c.querySelector(".spin")?.remove(); c.insertAdjacentText("afterbegin", err ? "✕ " : "✓ "); c.title = e.result; } },
-      finish(e) { raw = e.text; render(); text.classList.remove("cursor"); actions(e.message_id, e.text); if (S.speak && !Live.on) speak(e.text); },
+      finish(e) { raw = e.text; render(); text.classList.remove("cursor"); actions(e.message_id, e.text); if (S.speak && !Live.on) speak(e.text, quien); },
       error(m) { raw += `\n\n**Error:** ${m}`; render(); text.classList.remove("cursor"); },
     };
     function actions(id, content) {
@@ -382,7 +388,7 @@
       const fb = (score, b) => guard(async () => { if (!id) return; await api("/api/feedback", { body: { message_id: id, score, comment: "" } });
         up.classList.remove("on"); down.classList.remove("on"); b.classList.add("on"); toast(score > 0 ? "Aprendido: respuesta valorada" : "Aprendido: lo tendré en cuenta"); })();
       up.onclick = () => fb(1, up); down.onclick = () => fb(-1, down);
-      sp.onclick = () => speak(content); cp.onclick = () => copyText(content);
+      sp.onclick = () => speak(content, quien); cp.onclick = () => copyText(content);
       dl.onclick = () => saveFile(`nexus-respuesta-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}.md`, content, "text/markdown;charset=utf-8");
     }
     if (done) { render(); actions(mid, initial); }
@@ -410,14 +416,14 @@
     userMsg((text || (ready.length ? "" : "(imagen)")) + (ready.length ? `${text ? "\n\n" : ""}${ready.map((p) => `📦 ${p.name}`).join("  ")}` : ""), images);
     current = aiMsg($("#agent-select").value === "auto" ? "nexus" : $("#agent-select").value);
     S.busy = true; setBusy(true); setState("thinking");
-    ws.send(JSON.stringify({ type: "chat", text: note ? `${body}\n\n${note}` : body, agent: $("#agent-select").value, session_id: S.session, images, live: !!opts.live }));
+    ws.send(JSON.stringify({ type: "chat", text: note ? `${body}\n\n${note}` : body, agent: $("#agent-select").value, session_id: S.session, images, live: !!opts.live, usuario: usuario() }));
     $("#input").value = ""; autoGrow();
   }
   const autoGrow = () => { const t = $("#input"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 180) + "px"; };
   $("#input").addEventListener("input", autoGrow);
   // con teclado fisico Intro envia; en pantallas tactiles Intro es salto de linea y se envia con el boton
   $("#input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !NexusDevice.touch) { e.preventDefault(); send(); } });
-  const placeholder = () => { $("#input").placeholder = NexusDevice.layout === "phone" ? "Mensaje…" : NexusDevice.touch ? "Escribe a Nexus-Office…" : "Escribe a Nexus-Office… (Shift+Enter: nueva línea)"; };
+  const placeholder = () => { $("#input").placeholder = NexusDevice.layout === "phone" ? "Mensaje…" : NexusDevice.touch ? "Escribe a Agente IA…" : "Escribe a Agente IA… (Shift+Enter: nueva línea)"; };
   placeholder(); addEventListener("nexus-layout", placeholder);
   $("#btn-send").onclick = () => { NexusDevice.haptic(); send(); };
   $("#btn-attach").onclick = () => $("#file-attach").click();
@@ -495,10 +501,11 @@
       let s = 0; for (const v of data) s += ((v - 128) / 128) ** 2; avatar.setLevel(Math.sqrt(s / data.length) * 5); requestAnimationFrame(f); })();
   }
   const plain = (t) => t.replace(/<tool>[\s\S]*?<\/tool>/g, "").replace(/!\[[^\]]*\]\([^)]*\)|\[audio\]\([^)]*\)/g, "").replace(/```[\s\S]*?```/g, " código ").replace(/[*_#`>|]/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").trim();
-  async function speak(text) {
+  async function speak(text, agente = hablante) {
     const t = plain(text); if (!t) return;
+    const voz = Voces.de(agente);
     try {
-      const res = await api("/api/voice/tts", { body: { text: t, rate: S.cfg.speech_rate || 1 }, raw: true });
+      const res = await api("/api/voice/tts", { body: { text: t, rate: S.cfg.speech_rate || 1, agente }, raw: true });
       if (res.status === 200) {
         const audio = new Audio(URL.createObjectURL(await res.blob()));
         actx = actx || new (window.AudioContext || window.webkitAudioContext)();
@@ -507,13 +514,12 @@
         setState("speaking"); await audio.play(); levelLoop(an, () => ended); return;
       }
     } catch (e) { /* fallback al navegador */ }
-    if (window.NexusApp && NexusApp.speak && NexusApp.speak(t, S.cfg.speech_rate || 1)) {   // app Android: voz del sistema
+    if (Voces.android(t, voz)) {   // app Android: voz del sistema
       setState("speaking"); const iv = setInterval(() => avatar.setLevel(0.3 + Math.random() * 0.5), 110);
       setTimeout(() => { clearInterval(iv); avatar.setLevel(0); setState("idle"); }, Math.min(30000, 300 + t.length * 65)); return;
     }
     if (!("speechSynthesis" in window)) return;
-    const u = new SpeechSynthesisUtterance(t); u.lang = (S.cfg.language || "es") + "-" + ((S.cfg.language || "es") === "en" ? "US" : "ES"); u.rate = S.cfg.speech_rate || 1;
-    const v = speechSynthesis.getVoices().find((v) => v.lang.startsWith(S.cfg.language || "es") && (!S.cfg.voice_name || v.name.includes(S.cfg.voice_name))); if (v) u.voice = v;
+    const u = Voces.utter(t, voz, agente);
     let on = true; u.onend = u.onerror = () => { on = false; avatar.setLevel(0); setState("idle"); };
     u.onboundary = () => avatar.setLevel(0.5 + Math.random() * 0.5);
     setState("speaking"); speechSynthesis.cancel(); speechSynthesis.speak(u);
@@ -598,7 +604,7 @@
     async start() {
       if (this.on) return;
       this.engine = this.pickEngine();
-      if (!this.engine) return toast(micOK() ? "Para el modo en vivo instala la voz local (Sistema > faster-whisper) o usa Chrome, Edge o Safari" : "El micrófono del navegador solo funciona en https o en este mismo equipo; usa la app o abre Nexus-Office en localhost", true);
+      if (!this.engine) return toast(micOK() ? "Para el modo en vivo instala la voz local (Sistema > faster-whisper) o usa Chrome, Edge o Safari" : "El micrófono del navegador solo funciona en https o en este mismo equipo; usa la app o abre Agente IA en localhost", true);
       this.on = true; this.paused = false; this.said = ""; $("#live").classList.remove("hidden"); $("#btn-live").classList.add("on");
       $("#live-heard").textContent = ""; $("#live-said").textContent = "";
       $("#live-engine").textContent = { android: "voz del sistema Android", whisper: "Whisper local · " + (S.status?.voice?.stt_model || ""), browser: "reconocimiento del navegador" }[this.engine] +
@@ -679,15 +685,15 @@
     done(text) {
       if (!this.on) return;
       $("#live-said").textContent = plain(md2text(text)).slice(-900);
-      if (this.engine === "android") { const t = plain(text); if (t && NexusApp.speak(t, S.cfg.speech_rate || 1)) { this.ui("speaking", "HABLANDO"); this.fake(); } else this.listen(); return; }
+      if (this.engine === "android") { const t = plain(text); if (t && Voces.android(t, Voces.de(hablante))) { this.ui("speaking", "HABLANDO"); this.fake(); } else this.listen(); return; }
       if (this.buf.trim()) this.say(this.buf); this.buf = "";
       if (!this.queue.length && !this.playing) this.listen();
     },
     fake() { clearInterval(this.fakeIv); this.fakeIv = setInterval(() => this.phase === "speaking" ? this.level(0.3 + Math.random() * 0.5) : clearInterval(this.fakeIv), 110); },
-    say(part) { const t = plain(md2text(part)); if (!t) return; this.queue.push({ text: t, gen: this.gen, audio: null }); this.prefetch(); if (!this.playing) this.next(); },
+    say(part) { const t = plain(md2text(part)); if (!t) return; this.queue.push({ text: t, gen: this.gen, audio: null, agente: hablante }); this.prefetch(); if (!this.playing) this.next(); },
     prefetch() {   // la siguiente frase se sintetiza mientras suena la actual
       if (S.status?.voice?.tts_active === "browser") return;
-      for (const q of this.queue.slice(0, 2)) if (!q.audio) q.audio = api("/api/voice/tts", { body: { text: q.text, rate: S.cfg.speech_rate || 1 }, raw: true })
+      for (const q of this.queue.slice(0, 2)) if (!q.audio) q.audio = api("/api/voice/tts", { body: { text: q.text, rate: S.cfg.speech_rate || 1, agente: q.agente }, raw: true })
         .then((r) => (r.status === 200 ? r.blob() : null)).catch(() => null);
     },
     async next() {
@@ -708,8 +714,7 @@
         return;
       }
       if (!("speechSynthesis" in window)) return this.next();
-      const u = new SpeechSynthesisUtterance(q.text); u.lang = this.langTag(); u.rate = S.cfg.speech_rate || 1;
-      const v = speechSynthesis.getVoices().find((v) => v.lang.startsWith(S.cfg.language || "es") && (!S.cfg.voice_name || v.name.includes(S.cfg.voice_name))); if (v) u.voice = v;
+      const u = Voces.utter(q.text, Voces.de(q.agente), q.agente);
       u.onboundary = () => this.level(0.5 + Math.random() * 0.5);
       u.onend = u.onerror = () => { if (this.utt === u) { this.utt = null; this.level(0); this.next(); } };
       this.utt = u; speechSynthesis.speak(u);
@@ -745,6 +750,7 @@
     const el = document.createElement("div"); el.className = "approval"; el.id = `ap-${a.id}`;
     el.innerHTML = `<h4>⚠ APROBACIÓN REQUERIDA ${a.level === "admin" ? "· ADMIN" : ""}</h4>
       <div><b>${esc(a.agent)}</b>${a.remote ? " (nodo remoto)" : ""} quiere usar <b>${esc(a.tool)}</b> <span class="tag ${a.risk}">${a.risk}</span></div>
+      ${a.motivo ? `<div class="muted">${esc(a.motivo)}</div>` : ""}${a.diferida ? `<div class="muted">Quedó pendiente: al aprobarla, la tarea se reanuda.</div>` : ""}
       <pre class="code" style="max-height:140px;margin:8px 0">${esc(JSON.stringify(a.args, null, 1))}</pre>
       <div class="row" style="justify-content:flex-end"><button class="btn danger sm">DENEGAR</button><button class="btn ok sm">APROBAR</button></div>`;
     const [deny, ok] = $$("button", el);
@@ -783,7 +789,7 @@
     if (c.user.avatar_enabled !== false) applyAvatar(c.user.avatar_style || "geisha", c.user.avatar_model || "");
   }
   async function loadAgents() {
-    S.agents = await api("/api/agents");
+    S.agents = await api("/api/agents"); Voces.cargar(true).catch(() => {});
     const sel = $("#agent-select"), cur = sel.value || S.cfg.default_agent || "auto";
     sel.innerHTML = `<option value="auto">◇ Automático</option>` + S.agents.filter((a) => a.enabled).map((a) => `<option value="${a.id}">${esc(a.icon)} ${esc(a.name)}</option>`).join("");
     sel.value = [...sel.options].some((o) => o.value === cur) ? cur : "auto";
@@ -926,25 +932,50 @@
           : r.job.max_pages > r.job.batch_pages ? `Rastreo en marcha por lotes de ${r.job.batch_pages} páginas` : "Rastreo en marcha");
     loadCrawls();
   });
+  // lista de URLs: cada una es un rastreo y van a la cola del servidor (de una en una, rag.crawl_parallel)
+  const urlList = (t) => { const seen = new Set(); return t.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith("#") && !l.startsWith("//"))
+    .flatMap((l) => l.split(/[\s,;]+/)).map((u) => u.replace(/^[<>"'()\[\]{}]+|[<>"'()\[\]{}]+$/g, "")).filter((u) => /^https?:\/\/\S+\.\S+/i.test(u) || /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(:\d+)?([/?#]\S*)?$/i.test(u))
+    .filter((u) => { const k = u.toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, ""); return !seen.has(k) && seen.add(k); }); };
+  const countList = () => { const n = urlList($("#rag-crawl-list").value).length; $("#rag-crawl-list-count").textContent = `${n} URL${n === 1 ? "" : "s"}`; };
+  $("#rag-crawl-list-toggle").onclick = () => { const b = $("#rag-crawl-list-box"), open = b.style.display === "none"; b.style.display = open ? "" : "none"; if (open) $("#rag-crawl-list").focus(); };
+  $("#rag-crawl-list").oninput = countList;
+  $("#rag-crawl-list-file-go").onclick = () => $("#rag-crawl-list-file").click();
+  $("#rag-crawl-list-file").onchange = guard(async (e) => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    const t = await f.text(), cur = $("#rag-crawl-list").value.trim();
+    $("#rag-crawl-list").value = (cur ? cur + "\n" : "") + t.trim(); countList();
+    toast(`${urlList(t).length} URLs leídas de ${f.name}`);
+  });
+  $("#rag-crawl-list-go").onclick = guard(async () => {
+    const text = $("#rag-crawl-list").value; if (!urlList(text).length) return toast("Pega al menos una URL http(s)", true);
+    const max_pages = Math.max(1, Math.min(100000, +$("#rag-crawl-max").value || 40)), scope = $("#rag-crawl-scope").value;
+    const max_depth = max_pages > 500 ? 50 : 3;
+    const r = await api("/api/rag/crawl", { body: { urls: text, max_pages, max_depth, scope, agent: ragTarget() } });
+    $("#rag-crawl-list").value = ""; countList(); $("#rag-crawl-list-box").style.display = "none";
+    toast(`${r.jobs.length} rastreos en cola${r.parallel > 1 ? ` (${r.parallel} a la vez)` : ", de uno en uno"}${r.invalid.length ? ` · ${r.invalid.length} líneas no eran URLs` : ""}`, false);
+    loadCrawls();
+  });
   let crawlTimer = null, crawlStep = "";
-  const crawlLabel = { "en curso": "ok", "completado": "accent", "pausado": "warn", "interrumpido": "warn", "error": "bad" };
+  const crawlLabel = { "en curso": "ok", "completado": "accent", "pausado": "warn", "interrumpido": "warn", "error": "bad", "en cola": "" };
   async function loadCrawls() {
     const jobs = await api("/api/rag/crawls");
-    const live = jobs.some((j) => j.running);
-    $("#rag-jobs").innerHTML = jobs.slice(0, 12).map((j) => {
+    const live = jobs.some((j) => j.running || j.status === "en cola");
+    const queued = jobs.filter((j) => !j.running && j.status === "en cola").sort((a, b) => (a.list || "").localeCompare(b.list || "") || (a.list_pos || 0) - (b.list_pos || 0));
+    const shown = [...jobs.filter((j) => j.running), ...queued.slice(0, 8), ...jobs.filter((j) => !j.running && j.status !== "en cola").slice(0, 12)];
+    $("#rag-jobs").innerHTML = shown.map((j) => {
       const pct = Math.min(100, Math.round(100 * j.pages_done / Math.max(1, j.pending ? j.pages_done + Math.min(j.pending, j.max_pages - j.pages_done) : j.pages_done)));
       const last = j.batches[j.batches.length - 1];
-      return `<div class="item"><div class="row"><span class="tag ${crawlLabel[j.status] || ""}">${esc(j.status)}</span><div style="flex:1"><div class="t">${esc(j.title || j.url)}</div>
+      return `<div class="item"><div class="row"><span class="tag ${crawlLabel[j.status] || ""}">${esc(j.status)}</span><div style="flex:1"><div class="t">${esc(j.title || j.url)}${j.list_total > 1 ? ` <span class="tag" title="Posición en la lista de URLs">${j.list_pos}/${j.list_total}</span>` : ""}</div>
         <div class="d mono">${j.pages_done} págs. en ${j.batches.length} lote${j.batches.length === 1 ? "" : "s"} de ${j.batch_pages}${j.pending ? ` · ${j.pending} pendientes` : ""} · ${j.complete ? "sin límite" : `máx. ${j.max_pages}`} · ${esc(j.scope === "domain" ? "todo el dominio y subdominios" : "sección")}${j.reason ? ` · ${esc(j.reason)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
         ${j.knowledge ? `<div class="d">🧠 Grafo del dominio: ${j.knowledge.nodes} nodos · ${j.knowledge.concepts} conceptos · ${j.knowledge.facts} afirmaciones (${(j.knowledge.facts_by_status || {})["contrastada"] || 0} contrastadas) · ${j.knowledge.topics} temas${j.knowledge.reasoned_topics ? ` (${j.knowledge.reasoned_topics} razonados)` : ""}</div>` : j.knowledge_error ? `<div class="d bad">${esc(j.knowledge_error)}</div>` : ""}
         ${j.running && crawlStep ? `<div class="d"><span class="spin"></span> ${esc(crawlStep)}</div>` : last ? `<div class="d">Último: ${esc(last.title)}</div>` : ""}</div>
-        ${j.running ? `<button class="btn sm" data-cjpause="${j.id}">PAUSAR</button>` : j.status !== "completado" ? `<button class="btn sm primary" data-cjresume="${j.id}">REANUDAR</button>` : ""}
+        ${j.running ? `<button class="btn sm" data-cjpause="${j.id}">PAUSAR</button>` : j.status === "en cola" ? `<button class="btn sm" data-cjpause="${j.id}" title="Sacarlo de la cola (queda en pausa)">SACAR DE LA COLA</button><button class="btn sm primary" data-cjresume="${j.id}" title="Rastrearlo ya, sin esperar su turno">EMPEZAR YA</button>` : j.status !== "completado" ? `<button class="btn sm primary" data-cjresume="${j.id}">REANUDAR</button>` : ""}
         ${j.complete && j.pages_done && !j.running ? `<button class="btn sm" data-cjkg="${j.id}" title="Razonar ya el grafo multicapa con lo leído">${j.knowledge ? "REHACER GRAFO" : "CREAR GRAFO"}</button>` : ""}
         ${j.knowledge ? `<a class="btn sm" href="/api/rag/crawls/${j.id}/knowledge" title="Paquete importable: grafo + conocimiento + manifiesto">⬇ ZIP</a><select class="input sm" data-cjto="${j.id}" style="width:auto">${[["", "general"], ...S.agents.map((a) => [a.id, a.name])].map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join("")}</select><button class="btn sm primary" data-cjimp="${j.id}" title="Darle a ese agente el conocimiento del dominio">DAR A AGENTE</button>` : ""}
         <button class="btn danger sm" data-cjdel="${j.id}" title="Quitar el rastreo (los lotes ya indexados se pueden conservar)">✕</button></div>
         <div class="bar"><i style="width:${j.status === "completado" ? 100 : pct}%"></i></div></div>`;
-    }).join("");
-    $$("[data-cjpause]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/rag/crawls/${b.dataset.cjpause}/pause`, { body: {} }); toast("Se pausará al terminar la página en curso"); setTimeout(loadCrawls, 800); })));
+    }).join("") + (queued.length > 8 ? `<div class="muted">… y ${queued.length - 8} rastreos más en cola</div>` : "");
+    $$("[data-cjpause]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/rag/crawls/${b.dataset.cjpause}/pause`, { body: {} }); toast("Se pausará al terminar la página en curso (o sale de la cola si aún no había empezado)"); setTimeout(loadCrawls, 800); })));
     $$("[data-cjresume]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/rag/crawls/${b.dataset.cjresume}/resume`, { body: {} }); toast("Rastreo reanudado por el siguiente lote"); loadCrawls(); })));
     $$("[data-cjkg]").forEach((b) => (b.onclick = guard(async () => { b.disabled = true; toast("Razonando el grafo del dominio…"); try { const k = await api(`/api/rag/crawls/${b.dataset.cjkg}/knowledge`, { body: {} }); toast(`Grafo listo: ${k.nodes} nodos, ${k.facts} afirmaciones`); } finally { loadCrawls(); } })));
     $$("[data-cjimp]").forEach((b) => (b.onclick = guard(async () => { const agent = $(`[data-cjto="${b.dataset.cjimp}"]`).value; const r = await api(`/api/rag/crawls/${b.dataset.cjimp}/knowledge/import`, { body: { agent } }); toast(`Conocimiento dado a ${agent || "general"}: ${r.graph.nodes} nodos y ${r.rag_chunks} fragmentos`); loadRag(); })));
@@ -994,6 +1025,7 @@
 
   /* ================================================================ vista: ESTUDIO */
   loaders.studio = async () => {
+    if (window.NexusPipeline) NexusPipeline.cargar();
     const st = S.status || (await api("/api/status"));
     $("#img-engine").textContent = `${st.image.engine}${st.image.model ? " · " + st.image.model : ""}${st.image.runtime ? " · " + st.image.runtime : ""}`;
     $("#vision-engine").textContent = st.llm.backend === "builtin" ? "análisis básico (sin LLM)" : "visión con " + st.llm.model;
@@ -1193,7 +1225,7 @@
     $$("[data-cancel]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/bolsa/orden/${b.dataset.cancel}/cancelar`, { body: {} }); loaders.bolsa(); })));
     $$("[data-confirm]").forEach((b) => (b.onclick = guard(async () => {
       const o = d.ordenes.find((x) => String(x.id) === b.dataset.confirm);
-      const t = prompt(`Orden REAL: ${o.lado} ${o.cantidad} ${o.simbolo} (${o.tipo}). Nexus-Office no la envía a ningún bróker: la ejecutas tú después.\nEscribe ${d.confirmacion} para confirmarla.`);
+      const t = prompt(`Orden REAL: ${o.lado} ${o.cantidad} ${o.simbolo} (${o.tipo}). Agente IA no la envía a ningún bróker: la ejecutas tú después.\nEscribe ${d.confirmacion} para confirmarla.`);
       if (t == null) return; await api(`/api/bolsa/orden/${o.id}/confirmar`, { body: { confirmacion: t } }); toast("Orden confirmada: ejecútala en tu bróker"); loaders.bolsa(); })));
     $$("[data-fill]").forEach((b) => (b.onclick = guard(async () => {
       const px = prompt("Precio de ejecución en tu bróker (divisa del valor):"); if (!px) return;
@@ -1320,10 +1352,10 @@
     const profs = await api("/api/office/profiles"), act = profs.find((p) => p.active), box = $("#office-panel");
     const chips = (p) => p.agents.map((a) => `<span class="tag${a.gremio ? " accent" : ""}" title="${esc(a.description)}">${esc(a.icon)} ${esc(a.name)}</span>`).join("");
     box.innerHTML = `<h3>PERFIL DE OFICINA</h3>
-      <p class="muted">${act ? `<b>${esc(act.icon)} ${esc(act.name)}</b> · ${esc(act.sector)} · ${esc(act.description)}` : "Sin perfil: agentes por defecto de Nexus-Office. Elige el tipo de pyme para convertir esta instalación en su oficina, con agentes de oficina y del gremio, cada uno con su propio grafo de conocimiento."}</p>
+      <p class="muted">${act ? `<b>${esc(act.icon)} ${esc(act.name)}</b> · ${esc(act.sector)} · ${esc(act.description)}` : "Sin perfil: agentes por defecto de Agente IA. Elige el tipo de pyme para convertir esta instalación en su oficina, con agentes de oficina y del gremio, cada uno con su propio grafo de conocimiento."}</p>
       ${act ? `<div class="row">${chips(act)}</div>` : ""}
       <div class="row admin-only" style="margin-top:12px"><select class="input" id="office-select" style="flex:1 1 260px;min-width:0">
-        <option value="">— Sin perfil (agentes por defecto de Nexus-Office) —</option>${profs.map((p) => `<option value="${p.id}" ${p.active ? "selected" : ""}>${esc(p.icon)} ${esc(p.name)} · ${p.agents.length} agentes</option>`).join("")}</select>
+        <option value="">— Sin perfil (agentes por defecto de Agente IA) —</option>${profs.map((p) => `<option value="${p.id}" ${p.active ? "selected" : ""}>${esc(p.icon)} ${esc(p.name)} · ${p.agents.length} agentes</option>`).join("")}</select>
         <button class="btn primary" id="office-apply">APLICAR</button></div>
       <div class="row admin-only" id="office-preview" style="margin-top:8px"></div>`;
     const sel = $("#office-select"), prev = () => { const p = profs.find((x) => x.id === sel.value); $("#office-preview").innerHTML = p ? chips(p) : ""; };
@@ -1342,7 +1374,9 @@
       <p class="muted">${esc(a.description)}</p>
       <div class="row">${(a.tools[0] === "*" ? ["todas"] : a.tools).slice(0, 7).map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>
       <div class="row" style="margin-top:8px">${a.keywords.slice(0, 6).map((k) => `<span class="tag accent">${esc(k)}</span>`).join("")}</div>
-      <div class="row admin-only" style="margin-top:12px"><button class="btn sm" data-edit="${a.id}">EDITAR</button></div></div>`).join("");
+      <div class="row admin-only" style="margin-top:12px"><button class="btn sm primary" data-wiz="${a.id}" title="Asistente paso a paso">✨ CONFIGURAR</button><button class="btn sm" data-edit="${a.id}" title="Editor avanzado: todos los campos a mano">EDITAR</button></div></div>`).join("");
+    $$("[data-wiz]").forEach((b) => (b.onclick = () => window.AgentWizard ? AgentWizard.open(S.agents.find((a) => a.id === b.dataset.wiz)) : toast("El asistente no se ha cargado", true)));
+    $("#agent-wizard").onclick = () => window.AgentWizard ? AgentWizard.open(null) : toast("El asistente no se ha cargado", true);
     $$("[data-edit]").forEach((b) => (b.onclick = () => editAgent(S.agents.find((a) => a.id === b.dataset.edit), tools)));
     $("#agent-new").onclick = () => editAgent({ id: "", name: "", description: "", system_prompt: "Eres un agente especialista de {assistant_name}.", model: "default", temperature: 0.7, max_tokens: null, tools: [], memory: true, can_delegate_to: [], keywords: [], specialty: "", color: "#00f0ff", icon: "◆", enabled: true, sexo: "" }, tools);
   };
@@ -1361,6 +1395,7 @@
     <label class="field" style="margin-top:10px">Prompt de sistema<textarea class="input" name="system_prompt" rows="5">${esc(a.system_prompt)}</textarea></label>
     <label class="field" style="margin-top:10px">Palabras clave de enrutado (coma)<input class="input" name="keywords" value="${esc(a.keywords.join(", "))}"></label>
     <label class="field" style="margin-top:10px">Especialidad: su saber hacer (áreas y términos, coma). Lo que encaja aquí va a su memoria propia; lo demás es común<textarea class="input" name="specialty" rows="2" placeholder="Vacío: generalista (todo lo que aprende es común)">${esc(a.specialty || "")}</textarea></label>
+    <div class="field" style="margin-top:10px">Voz <small class="muted">para reconocer quién habla; sin cambios usa la general${S.cfg.voz_distinta !== false ? " con un tono propio" : ""}</small><div id="ag-voz"></div></div>
     <label class="field" style="margin-top:10px">Puede delegar en (coma, * = todos)<input class="input" name="can_delegate_to" value="${esc(a.can_delegate_to.join(", "))}"></label>
     <div class="field" style="margin-top:10px">Herramientas<div class="row"><label class="row"><input type="checkbox" name="tool" value="*" ${a.tools.includes("*") ? "checked" : ""}> todas</label>${tools.map((t) => `<label class="row"><input type="checkbox" name="tool" value="${t.name}" ${a.tools.includes(t.name) ? "checked" : ""}> ${t.name} <span class="tag ${t.risk}">${t.risk}</span></label>`).join("")}</div></div>
     <div class="row" style="margin-top:12px"><label class="row"><span class="switch"><input type="checkbox" name="memory" ${a.memory ? "checked" : ""}><span></span></span>memoria</label>
@@ -1368,13 +1403,14 @@
       <span style="flex:1"></span>${a.id && a.id !== "nexus" ? '<button class="btn danger" id="ag-del">BORRAR</button>' : ""}<button class="btn ghost" id="ag-cancel">CANCELAR</button><button class="btn primary" id="ag-save">GUARDAR</button></div>`;
     const v = (n) => $(`[name=${n}]`, ed);
     const list = (s) => s.split(",").map((x) => x.trim()).filter(Boolean);
+    let edVoz = null; Voces.editor($("#ag-voz", ed), { ...(a.voz || {}) }, { probarTexto: a.name ? `Hola, soy ${a.name}.` : "" }).then((x) => (edVoz = x)).catch(() => {});
     $("#ag-cancel").onclick = () => ed.classList.add("hidden");
     $("#ag-save").onclick = guard(async () => {
       await api("/api/agents", { method: "PUT", body: { id: v("id").value, name: v("name").value, description: v("description").value, system_prompt: v("system_prompt").value,
         model: v("model").value || "default", temperature: v("temperature").value === "" ? null : +v("temperature").value, max_tokens: v("max_tokens").value === "" ? null : +v("max_tokens").value,
         tools: $$("[name=tool]:checked", ed).map((c) => c.value), memory: v("memory").checked, enabled: v("enabled").checked,
-        keywords: list(v("keywords").value), specialty: v("specialty").value.trim(), can_delegate_to: list(v("can_delegate_to").value), color: v("color").value, icon: v("icon").value || "◆", sexo: v("sexo").value } });
-      toast("Agente guardado"); ed.classList.add("hidden"); loaders.agents();
+        keywords: list(v("keywords").value), specialty: v("specialty").value.trim(), can_delegate_to: list(v("can_delegate_to").value), color: v("color").value, icon: v("icon").value || "◆", sexo: v("sexo").value, voz: edVoz ? edVoz.valor() : (a.voz || {}), perfil: a.perfil } });
+      toast("Agente guardado"); Voces.cargar(true).catch(() => {}); ed.classList.add("hidden"); loaders.agents();
     });
     $("#ag-del") && ($("#ag-del").onclick = guard(async () => { if (!confirm("¿Borrar agente?")) return; await api(`/api/agents/${a.id}`, { method: "DELETE" }); ed.classList.add("hidden"); loaders.agents(); }));
     ed.scrollIntoView({ behavior: "smooth" });
@@ -1382,20 +1418,33 @@
 
   /* ================================================================ vista: MODELOS */
   const FIT = { ideal: "ideal", ok: "compatible", pesado: "pesado", no_cabe: "no cabe" };
+  // filtro por formato: el motor que lo ejecuta y como se reconoce cada formato (catalogo y ficheros de un repositorio)
+  const FMT = {
+    gguf: { motor: "llama-server", cat: (f) => f === "gguf", file: /\.gguf$/i },
+    onnx: { motor: "ONNX Runtime GenAI", cat: (f) => f === "onnx-genai" || f === "onnx", file: /(\.onnx(\.data|_data)?|genai_config\.json)$/i },
+    litertlm: { motor: "LiteRT-LM", cat: (f) => f === "litertlm", file: /\.(litertlm|task|tflite)$/i },
+    genie: { motor: "Qualcomm Genie", cat: (f) => f === "genie", file: /(genie_config\.json|\.bin|tokenizer\.json|htp_backend_ext_config\.json)$/i },
+    safetensors: { motor: "Transformers / sd.cpp", cat: (f) => ["safetensors", "transformers", "diffusers"].includes(f), file: /\.safetensors$/i },
+  };
+  const fmtSel = () => FMT[$("#fmt-filter").value];
+  const MOTOR_DE = { gguf: "llama-server", litertlm: "LiteRT-LM", "onnx-genai": "ONNX Runtime GenAI", genie: "Qualcomm Genie" };
   let jobsTimer = null;
   loaders.models = async () => {
     const [rec, m] = await Promise.all([api("/api/models/recommended"), api("/api/models")]);
     $("#rec-profile").textContent = `perfil ${rec.profile.tier} · hasta ${rec.profile.max_model_b}B · ideal ${rec.profile.recommended_model_b}B`;
     const active = Object.values(m.active);
-    const items = rec.items.slice().sort((a, b) => (b.sector ? 1 : 0) - (a.sector ? 1 : 0));   // los de tu oficina, primero
+    const fr = fmtSel();
+    const items = rec.items.filter((r) => !fr || fr.cat(r.formato || (/\.gguf$/i.test(r.file || "") ? "gguf" : ""))).sort((a, b) => (b.sector ? 1 : 0) - (a.sector ? 1 : 0));   // los de tu oficina, primero
     $("#rec-grid").innerHTML = items.map((r) => `<div class="item col" style="gap:6px"><div class="row"><span class="tag accent">${r.kind}</span><b style="flex:1">${esc(r.name)}</b>${r.best ? '<span class="tag ok">★ recomendado</span>' : ""}${r.best_especialidad ? `<span class="tag ok">★ IA ${esc(r.especialidad)} para este equipo</span>` : ""}${r.sector ? '<span class="tag warn">◆ para tu oficina</span>' : ""}</div>
-      ${r.sector ? `<div class="d"><b>Para tu oficina:</b> ${esc(r.sector)}</div>` : ""}<div class="d">${esc(r.desc)}</div><div class="row mono muted"><span class="tag ${r.fit}">${FIT[r.fit]}</span><span>${r.size_mb >= 1000 ? (r.size_mb / 1024).toFixed(1) + " GB" : r.size_mb + " MB"}</span>${r.vision ? '<span class="tag">visión</span>' : ""}${r.baseline ? '<span class="tag">base CPU</span>' : ""}</div>
+      ${r.sector ? `<div class="d"><b>Para tu oficina:</b> ${esc(r.sector)}</div>` : ""}<div class="d">${esc(r.desc)}</div><div class="row mono muted"><span class="tag ${r.fit}">${FIT[r.fit]}</span><span>${r.size_mb >= 1000 ? (r.size_mb / 1024).toFixed(1) + " GB" : r.size_mb + " MB"}</span>${r.vision ? '<span class="tag">visión</span>' : ""}${r.baseline ? '<span class="tag">base CPU</span>' : ""}${r.para_tu_chip ? '<span class="tag ok">para tu chip</span>' : ""}${r.motor_nombre ? `<span class="tag ${r.motor_ok ? "ok" : "warn"}">${esc(r.motor_nombre)}${r.motor_ok ? "" : " · no incluido aquí"}</span>` : ""}</div>
       <div>${r.installed ? (active.includes(r.id) ? '<span class="tag ok">● activo</span>' : `<button class="btn sm" data-act="${r.id}">ACTIVAR</button>`) : `<button class="btn sm ${r.fit === "no_cabe" ? "danger" : "primary"}" data-rec="${r.id}">DESCARGAR</button>`}</div></div>`).join("");
-    $("#catalog-list").innerHTML = m.catalog.map((c) => `<div class="item row"><span class="tag accent">${c.kind}</span><div style="flex:1"><div class="t">${esc(c.name)}</div><div class="d mono">${c.format} · ${fmtB(c.size)} · ${esc(c.source)}${c.vision ? " · visión" : ""}${c.meta?.quant ? " · " + c.meta.quant : ""}</div></div>
-      ${active.includes(c.id) ? '<span class="tag ok">activo</span>' : ["llm", "image", "tts", "embed"].includes(c.kind) ? `<button class="btn sm" data-act="${c.id}">ACTIVAR</button>` : ""}<button class="btn danger sm admin-only" data-delm="${c.id}">✕</button></div>`).join("") || `<span class="muted">Ningún modelo instalado. Descarga uno recomendado.</span>`;
+    const ff = fmtSel();
+    $("#fmt-note").textContent = ff ? `se ejecutan con ${ff.motor}` : "";
+    $("#catalog-list").innerHTML = m.catalog.filter((c) => !ff || ff.cat(c.format)).map((c) => `<div class="item row"><span class="tag accent">${c.kind}</span><div style="flex:1"><div class="t">${esc(c.name)}</div><div class="d mono">${c.format} · ${fmtB(c.size)} · ${esc(c.source)}${c.vision ? " · visión" : ""}${c.meta?.quant ? " · " + c.meta.quant : ""}${c.acelera ? " · " + esc(c.acelera) : ""}${MOTOR_DE[c.format] ? " · " + MOTOR_DE[c.format] : ""}</div></div>
+      ${active.includes(c.id) ? '<span class="tag ok">activo</span>' : ["llm", "image", "tts", "embed", "vision-embed"].includes(c.kind) ? `<button class="btn sm" data-act="${c.id}">ACTIVAR</button>` : ""}<button class="btn danger sm admin-only" data-delm="${c.id}">✕</button></div>`).join("") || `<span class="muted">${ff ? "Ningún modelo instalado de este formato." : "Ningún modelo instalado. Descarga uno recomendado."}</span>`;
     if (m.ollama.length) $("#catalog-list").insertAdjacentHTML("beforeend", `<div class="item"><b>Ollama local:</b> ${m.ollama.map((o) => `<button class="btn sm" data-spec="ollama:${esc(o)}">${esc(o)}</button>`).join(" ")}</div>`);
     $("#src-select").innerHTML = m.sources.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
-    $$("[data-rec]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/models/recommended/${b.dataset.rec}`, { body: {} }); toast("Descarga iniciada"); watchJobs(); })));
+    $$("[data-rec]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/models/recommended/${b.dataset.rec}`, { body: {} }); toast("Descarga iniciada: al terminar queda activado y con su motor configurado"); watchJobs(); })));
     $$("[data-act]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/models/activate/${b.dataset.act}`, { body: {} }); toast("Modelo activado"); loadStatus(); loaders.models(); })));
     $$("[data-delm]").forEach((b) => (b.onclick = guard(async () => { if (!confirm("¿Quitar del catálogo y borrar ficheros?")) return; await api(`/api/models/${b.dataset.delm}?files=true`, { method: "DELETE" }); loaders.models(); })));
     $$("[data-spec]").forEach((b) => (b.onclick = guard(async () => { await api("/api/models/activate-spec", { body: { spec: b.dataset.spec } }); toast("LLM cambiado"); loadStatus(); })));
@@ -1414,7 +1463,7 @@
   $("#src-go").onclick = guard(async () => {
     const src = $("#src-select").value, q = $("#src-q").value.trim(); if (!q) return;
     $("#src-results").innerHTML = `<div class="chip"><span class="spin"></span>buscando en ${src}…</div>`; $("#src-files").innerHTML = "";
-    const res = await api(`/api/models/search?source=${src}&q=${encodeURIComponent(q)}&kind=${$("#src-kind").value}`);
+    const res = await api(`/api/models/search?source=${src}&q=${encodeURIComponent(q)}&kind=${$("#src-kind").value}&formato=${$("#fmt-filter").value}`);
     $("#src-results").innerHTML = res.map((r) => `<div class="item" data-repo="${esc(r.id)}" style="cursor:pointer"><div class="t">${esc(r.name)}</div><div class="d mono">${r.downloads ? "↓ " + r.downloads.toLocaleString() : ""} ${esc(r.task || "")}</div></div>`).join("") || `<span class="muted">Sin resultados.</span>`;
     $$("#src-results [data-repo]").forEach((el) => (el.onclick = guard(async () => {
       $("#src-files").innerHTML = `<div class="chip"><span class="spin"></span>listando ficheros…</div>`;
@@ -1422,7 +1471,7 @@
       const isRepo = files.some((f) => /(^|\/)(config|model_index)\.json$/.test(f.path)) && ["huggingface", "modelscope"].includes(src);
       const FITN = { ideal: "ideal", ok: "cabe", pesado: "pesado", "?": "" };
       $("#src-files").innerHTML = `<div class="row"><b style="flex:1">${esc(el.dataset.repo)}</b>${isRepo ? '<button class="btn sm primary" id="dl-repo">DESCARGAR REPOSITORIO COMPLETO</button>' : ""}</div>` +
-        files.filter((f) => !/\.(md|txt|gitattributes|json|png|jpg)$/i.test(f.path) || /onnx\.json$/.test(f.path)).slice(0, 120).map((f) => `<div class="item"><div class="row">
+        files.filter((f) => (!/\.(md|txt|gitattributes|json|png|jpg)$/i.test(f.path) || /(onnx|genai_config|genie_config)\.json$/.test(f.path)) && (!fmtSel() || fmtSel().file.test(f.path))).slice(0, 120).map((f) => `<div class="item"><div class="row">
           <span style="flex:1" class="mono">${f.recommended ? "★ " : ""}${esc(f.path)}</span><span class="muted mono">${f.size ? fmtB(f.size) : ""}</span>
           <button class="btn sm ${f.recommended ? "primary" : ""}" data-dl="${esc(f.path)}">↓</button></div>
           <div class="row" style="margin-top:4px">${f.kind ? `<span class="tag accent">${esc(f.kind)}</span>` : ""}${f.quant ? `<span class="tag">${esc(f.quant)}</span>` : ""}
@@ -1432,11 +1481,118 @@
       $("#dl-repo") && ($("#dl-repo").onclick = guard(async () => { await api("/api/models/download-repo", { body: { source: src, repo: el.dataset.repo, kind: $("#src-kind").value } }); toast("Descargando el repositorio completo"); watchJobs(); }));
     })));
   });
-  $("#imp-go").onclick = guard(async () => { const r = await api("/api/models/import", { body: { path: $("#imp-path").value.trim(), copy_file: $("#imp-copy").checked } }); toast(`Importado: ${r.name} (${r.kind}, ${r.format})`); loaders.models(); });
+  $("#fmt-filter").onchange = guard(() => loaders.models());
+  async function importModel(path) {
+    const r = await api("/api/models/import", { body: { path, copy_file: $("#imp-copy").checked } });
+    toast(`Importado: ${r.name} (${r.kind}, ${r.format})`); loaders.models();
+  }
+  $("#imp-go").onclick = guard(() => importModel($("#imp-path").value.trim()));
+
+  /* ---- explorador de archivos para importar: el del sistema si la interfaz va en el mismo equipo; si no (movil,
+     acceso remoto, servicio sin escritorio), el propio, que navega por las carpetas del equipo de Agente IA */
+  const FX = { path: "", sel: null, dialogo: null };
+  async function fxSystem(carpeta) {
+    const r = await api("/api/fs/dialogo", { body: { carpeta } });
+    if (r.unavailable) { FX.dialogo = false; return false; }
+    if (r.path) { $("#imp-path").value = r.path; $("#fx-dialog").open && $("#fx-dialog").close(); await importModel(r.path); }
+    return true;   // elegido o cancelado
+  }
+  async function fxOpen(carpeta) {
+    if (FX.dialogo !== false && await fxSystem(carpeta).catch(() => false)) return;
+    const dlg = $("#fx-dialog"); if (!dlg.open) dlg.showModal();
+    await fxLoad($("#imp-path").value.trim() || FX.path);
+  }
+  async function fxLoad(ruta) {
+    let d;
+    try { d = await api(`/api/fs/listar?ruta=${encodeURIComponent(ruta || "")}&todos=${$("#fx-all").checked ? 1 : 0}`); }
+    catch (e) { toast(e.message, true); if (ruta) return fxLoad(""); return; }
+    FX.path = d.path; FX.parent = d.parent; FX.dialogo = d.dialogo; fxPick(d.modelo ? { path: d.path, formato: d.modelo, dir: true } : null);
+    $("#fx-path").value = d.path; $("#fx-up").disabled = !d.parent; $("#fx-system").style.display = d.dialogo ? "" : "none";
+    $("#fx-roots").innerHTML = d.roots.map((r) => `<button class="btn sm" data-fxr="${esc(r.path)}" title="${esc(r.path)}">${esc(r.name)}</button>`).join("");
+    $("#fx-info").textContent = `${d.dirs.length} carpetas · ${d.files.length} ${$("#fx-all").checked ? "archivos" : "modelos"}`;
+    $("#fx-list").innerHTML = d.dirs.map((x) => `<div class="item" data-fxd="${esc(x.path)}" data-fmt="${esc(x.modelo)}">📁<span class="n">${esc(x.name)}</span>${x.modelo ? `<span class="tag ok">${esc(x.modelo)}</span>` : ""}</div>`).join("") +
+      d.files.map((x) => `<div class="item" data-fxf="${esc(x.path)}" data-fmt="${esc(x.formato)}">📄<span class="n">${esc(x.name)}</span>${x.formato ? `<span class="tag accent">${esc(x.formato)}</span>` : ""}<span class="muted mono">${fmtB(x.size)}</span></div>`).join("") ||
+      `<span class="muted">No hay modelos en esta carpeta. Marca «todos los archivos» para verlo todo.</span>`;
+    $$("[data-fxr]").forEach((b) => (b.onclick = () => fxLoad(b.dataset.fxr)));
+    // carpeta: un toque la elige si es un modelo (ONNX GenAI, Genie) y dos entran; un archivo se elige y con dos se importa
+    $$("#fx-list [data-fxd]").forEach((el) => {
+      el.onclick = () => (el.dataset.fmt ? fxPick({ path: el.dataset.fxd, formato: el.dataset.fmt, dir: true }, el) : fxLoad(el.dataset.fxd));
+      el.ondblclick = () => fxLoad(el.dataset.fxd);
+    });
+    $$("#fx-list [data-fxf]").forEach((el) => {
+      el.onclick = () => fxPick({ path: el.dataset.fxf, formato: el.dataset.fmt }, el);
+      el.ondblclick = guard(() => fxImport());
+    });
+  }
+  function fxPick(sel, el) {
+    FX.sel = sel; $$("#fx-list .item.sel").forEach((x) => x.classList.remove("sel")); el && el.classList.add("sel");
+    $("#fx-ok").disabled = !sel;
+    $("#fx-sel").textContent = sel ? `${sel.dir ? "Carpeta" : "Archivo"}: ${sel.path}${sel.formato ? ` (${sel.formato})` : ""}` : "Elige un archivo de modelo (.gguf, .onnx, .litertlm, .safetensors…) o la carpeta de un modelo ONNX GenAI o Genie.";
+  }
+  async function fxImport() {
+    if (!FX.sel) return;
+    $("#imp-path").value = FX.sel.path; $("#fx-dialog").close(); await importModel(FX.sel.path);
+  }
+  $("#imp-browse").onclick = guard(() => fxOpen(false));
+  $("#imp-browse-dir").onclick = guard(() => fxOpen(true));
+  $("#fx-up").onclick = () => FX.parent && fxLoad(FX.parent);
+  $("#fx-go").onclick = () => fxLoad($("#fx-path").value.trim());
+  $("#fx-path").onkeydown = (e) => { if (e.key === "Enter") fxLoad(e.target.value.trim()); };
+  $("#fx-all").onchange = () => fxLoad(FX.path);
+  $("#fx-here").onclick = () => fxPick({ path: FX.path, dir: true });
+  $("#fx-system").onclick = guard(() => fxSystem(!!(FX.sel && FX.sel.dir)));
+  $("#fx-cancel").onclick = () => $("#fx-dialog").close();
+  $("#fx-ok").onclick = guard(() => fxImport());
   $("#spec-go").onclick = guard(async () => { await api("/api/models/activate-spec", { body: { spec: $("#spec-in").value.trim() } }); toast("LLM externo activado"); loadStatus(); });
 
   /* ================================================================ vista: HERRAMIENTAS */
+  const pctm = (x) => `${Math.round((x || 0) * 100)} %`;
+  async function loadMetricas() {
+    const m = await api(`/api/metricas?dias=${$("#met-dias").value}`), g = m.global;
+    if (!g.tareas) { $("#met-box").innerHTML = `<span class="muted">Sin tareas en este periodo.</span>`; return; }
+    const kpi = (lbl, val, hint) => `<div class="setting"><div class="lbl"><b>${lbl}</b><div class="muted">${hint}</div></div><b class="mono">${val}</b></div>`;
+    $("#met-box").innerHTML = kpi("Tasa de éxito", pctm(g.tasa_exito), `${g.tareas} tareas${g.valoradas ? ` · ${pctm(g.tasa_exito_valorada)} de las valoradas` : ""}`)
+      + kpi("Latencia por tarea", `${g.latencia_p50_s} s`, `p95 ${g.latencia_p95_s} s · primer token ${g.primer_token_p50_s} s · ${g.tokens_por_tarea} tokens${g.coste_total ? ` · ${g.coste_por_tarea.toFixed(4)} €` : ""}`)
+      + kpi("Escalado humano", pctm(g.tasa_escalado_humano), `tareas que pidieron aprobación · ${g.aprobaciones_rechazadas_o_pendientes} rechazadas o pendientes`)
+      + kpi("Precisión de herramientas", pctm(g.precision_herramientas), `${g.llamadas_herramientas} llamadas · ${pctm(g.precision_herramientas_sin_reparar)} sin reparar`)
+      + kpi("Adaptación al estilo", `${g.correcciones_estilo_por_100}`, `correcciones de estilo por cada 100 tareas (debe bajar) · ${g.reformulaciones_por_100} reformulaciones`)
+      + (g.posibles_inyecciones ? kpi("Posibles inyecciones", g.posibles_inyecciones, "texto externo que intentaba dar órdenes") : "")
+      + `<details><summary class="muted" style="cursor:pointer">Por agente</summary><table class="tbl"><tr><th>AGENTE</th><th>TAREAS</th><th>ÉXITO</th><th>P50</th><th>HERRAMIENTAS</th></tr>${Object.entries(m.por_agente).map(([k, a]) => `<tr><td>${esc(k)}</td><td>${a.tareas}</td><td>${pctm(a.tasa_exito)}</td><td>${a.latencia_p50_s} s</td><td>${pctm(a.precision_herramientas)}</td></tr>`).join("")}</table></details>`;
+  }
+  const ESTILO_DIMS = { longitud: ["Corto", "Detallado"], formalidad: ["Tú", "Usted"], formato: ["Prosa", "Listas y tablas"], tecnico: ["Sencillo", "Técnico"], emojis: ["Sin emojis", "Con emojis"], tono: ["Directo", "Cercano"] };
+  async function loadEstilo() {
+    $("#est-user").value = usuario();
+    const p = await api("/api/estilo");
+    $("#est-box").innerHTML = Object.entries(ESTILO_DIMS).map(([k, [a, b]]) => { const d = p.dims[k] || {};
+      return `<div class="setting"><div class="lbl"><b>${a} ↔ ${b}</b><div class="muted">${d.locked ? "fijado por ti" : d.signals ? `${d.signals} señales · confianza ${pctm(d.confidence)}` : "aún sin datos"}</div></div>
+        <input type="range" min="-100" max="100" value="${Math.round((d.value || 0) * 100)}" data-est="${k}" style="width:140px"></div>`; }).join("")
+      + (p.routines.length ? `<div class="muted" style="margin-top:6px">Rutinas: ${p.routines.map((r) => `${esc(r.seq)} (${r.count})`).join(" · ")}</div>` : "")
+      + (p.recent.length ? `<details><summary class="muted" style="cursor:pointer">Últimas señales</summary>${p.recent.slice(0, 8).map((r) => `<div class="muted">${esc(r.kind)} · ${esc(r.dim || "-")} · «${esc(r.text || "valoración")}»</div>`).join("")}</details>` : "");
+    $$("[data-est]").forEach((r) => (r.onchange = guard(async () => { await api("/api/estilo", { method: "PUT", body: { dim: r.dataset.est, value: Number(r.value) / 100, fijar: true } }); toast("Estilo fijado"); loadEstilo(); })));
+  }
+  $("#met-dias") && ($("#met-dias").onchange = guard(loadMetricas));
+  $("#est-user-save") && ($("#est-user-save").onclick = guard(async () => { try { localStorage.setItem("nexus_usuario", $("#est-user").value.trim()); } catch {} toast("Perfil de usuario cambiado"); loadEstilo(); }));
+  $("#est-reset") && ($("#est-reset").onclick = guard(async () => { if (!confirm("¿Olvidar todo lo aprendido de tu estilo?")) return; await api("/api/estilo", { method: "DELETE" }); loadEstilo(); }));
+  const loadMcp = async () => {
+    const m = await api("/api/mcp");
+    const base = location.origin + m.url;
+    const clientes = Object.values(m.clientes || {});
+    $("#mcp-box").innerHTML = `<div class="setting"><div class="lbl"><b>Servidor MCP de Agente IA</b><span>Otros programas (asistentes de escritorio, editores) usan las herramientas de aquí, con la misma política de aprobaciones.
+      HTTP: <span class="mono">${esc(base)}</span> · stdio: <span class="mono">nexus-office mcp</span>${m.token ? " · fuera de este equipo con el token mcp.token" : ""}</span></div><button class="btn sm ghost" id="mcp-copiar">⧉ COPIAR URL</button></div>
+      ${clientes.length ? clientes.map((c) => `<div class="item"><b>${esc(c.nombre)}</b> ${c.ok ? `<span class="tag ok">conectado</span> <span class="muted">${c.herramientas} herramientas · ${esc((c.servidor || {}).name || "")}</span>` : `<span class="tag bad">sin conexión</span> <span class="muted">${esc(c.error || "")}</span>`}</div>`).join("") : `<div class="muted">Sin servidores MCP externos.</div>`}`;
+    $("#mcp-copiar").onclick = () => copyText(base);
+    if ($("#mcp-servidores") !== document.activeElement) $("#mcp-servidores").value = JSON.stringify(m.servidores || [], null, 2);
+  };
+  $("#mcp-guardar").onclick = guard(async () => {
+    let servidores;
+    try { servidores = JSON.parse($("#mcp-servidores").value || "[]"); } catch (e) { return toast("JSON no válido: " + e.message, true); }
+    await api("/api/mcp/servidores", { method: "PUT", body: { servidores } });
+    toast("Conectando con los servidores MCP…"); setTimeout(() => loaders.tools(), 2500);
+  });
+  $("#mcp-reconectar").onclick = guard(async () => { await api("/api/mcp/reconectar", { method: "POST" }); toast("Reconectando…"); setTimeout(() => loaders.tools(), 2500); });
+
   loaders.tools = async () => {
+    loadMetricas().catch(() => {}); loadEstilo().catch(() => {}); loadMcp().catch(() => {});
     const d = await api("/api/tools");
     $("#pending-list").innerHTML = d.pending.map((p) => `<div class="item"><b>${esc(p.agent)}</b> → ${esc(p.tool)} <span class="tag ${p.risk}">${p.risk}</span><span class="muted"> · requiere ${p.level}</span></div>`).join("") || `<span class="muted">Nada pendiente.</span>`;
     d.pending.forEach(showApproval);
@@ -1444,7 +1600,7 @@
     $("#policy-box").innerHTML = ["low", "medium", "high"].map((r) => `<div class="setting"><div class="lbl"><b>Riesgo <span class="tag ${r}">${r}</span></b></div>
       <select class="input" data-pol="${r}" style="width:auto" ${S.token ? "" : "disabled"}>${opts.map((o) => `<option value="${o}" ${pol[r] === o ? "selected" : ""}>${names[o]}</option>`).join("")}</select></div>`).join("") + `<div class="muted">Las peticiones de nodos remotos se elevan un nivel.</div>`;
     $$("[data-pol]").forEach((s) => (s.onchange = guard(async () => { await api("/api/config", { method: "PUT", body: { "tools.policy": { ...pol, [s.dataset.pol]: s.value } } }); toast("Política actualizada"); })));
-    $("#tools-table").innerHTML = `<table class="tbl"><tr><th>HERRAMIENTA</th><th>DESCRIPCIÓN</th><th>RIESGO</th><th>PERMISOS</th><th>ORIGEN</th><th class="admin-only">ACTIVA</th></tr>${d.tools.map((t) => `<tr><td class="mono">${esc(t.name)}</td><td>${esc(t.description)}</td><td><span class="tag ${t.risk}">${t.risk}</span></td><td class="mono muted">${esc(t.permissions.join(", "))}</td><td>${t.source === "community" ? '<span class="tag accent">comunidad</span>' : "integrada"}</td>
+    $("#tools-table").innerHTML = `<table class="tbl"><tr><th>HERRAMIENTA</th><th>DESCRIPCIÓN</th><th>RIESGO</th><th>PERMISOS</th><th>ORIGEN</th><th class="admin-only">ACTIVA</th></tr>${d.tools.map((t) => `<tr><td class="mono">${esc(t.name)}</td><td>${esc(t.description)}</td><td><span class="tag ${t.risk}">${t.risk}</span></td><td class="mono muted">${esc(t.permissions.join(", "))}</td><td>${t.source === "community" ? '<span class="tag accent">comunidad</span>' : t.source === "mcp" ? '<span class="tag accent">MCP</span>' : "integrada"}</td>
       <td class="admin-only"><label class="switch"><input type="checkbox" data-ten="${t.name}" ${t.enabled ? "checked" : ""}><span></span></label>${t.source === "community" ? ` <button class="btn danger sm" data-unin="${t.name}">✕</button>` : ""}</td></tr>`).join("")}</table>`;
     $$("[data-ten]").forEach((c) => (c.onchange = guard(() => api(`/api/tools/${c.dataset.ten}/enabled`, { body: { enabled: c.checked } }))));
     $$("[data-unin]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/tools/community/${b.dataset.unin}`, { method: "DELETE" }); loaders.tools(); })));
@@ -1502,13 +1658,13 @@
       $("#lan-box").innerHTML = `<div class="row"><span class="tag ${l.listening_lan ? "ok" : "warn"}">${l.listening_lan ? "accesible desde la red" : "solo este equipo"}</span>
           <span class="muted">Clave de red: <b class="mono">${esc(l.key)}</b></span>
           <button class="btn sm admin-only" id="lan-toggle">${l.listening_lan ? "DESACTIVAR ACCESO DE RED" : "PERMITIR ACCESO DESDE LA RED"}</button></div>
-        ${l.listening_lan ? "" : '<div class="muted">Activa el acceso de red (modo admin) y reinicia Nexus-Office para usarlo desde otros dispositivos.</div>'}
-        <div class="muted">Abre una de estas direcciones en el móvil, tablet o consola (o búscalas con la app Android Nexus-Office):</div>
+        ${l.listening_lan ? "" : '<div class="muted">Activa el acceso de red (modo admin) y reinicia Agente IA para usarlo desde otros dispositivos.</div>'}
+        <div class="muted">Abre una de estas direcciones en el móvil, tablet o consola (o búscalas con la app Android Agente IA):</div>
         ${l.urls.map((u) => `<div class="invite row"><span style="flex:1">${esc(u)}</span><button class="btn sm" data-copy="${esc(u)}">COPIAR</button></div>`).join("")}
-        ${term ? `<div class="muted">Nexus-Office completo en Android (Termux):</div><div class="invite row"><span style="flex:1">${esc(term)}</span><button class="btn sm" data-copy="${esc(term)}">COPIAR</button></div>` : ""}`;
+        ${term ? `<div class="muted">Agente IA completo en Android (Termux):</div><div class="invite row"><span style="flex:1">${esc(term)}</span><button class="btn sm" data-copy="${esc(term)}">COPIAR</button></div>` : ""}`;
       $$("[data-copy]").forEach((b) => (b.onclick = () => navigator.clipboard?.writeText(b.dataset.copy).then(() => toast("Copiado"))));
       $("#lan-toggle") && ($("#lan-toggle").onclick = guard(async () => { const r = await api("/api/lan/enable", { body: { enabled: !l.listening_lan } });
-        toast(`Guardado (${r.host}). Reinicia Nexus-Office para aplicarlo.`); loaders.net(); }));
+        toast(`Guardado (${r.host}). Reinicia Agente IA para aplicarlo.`); loaders.net(); }));
     }).catch(() => ($("#lan-box").innerHTML = '<span class="muted">Disponible solo desde el propio equipo.</span>'));
     if (S.token) { guard(remoteBox)(); guard(vpnBox)(); }
   };
@@ -1521,18 +1677,18 @@
     const cmds = (list) => list.map((c) => `<div class="invite row"><span class="mono" style="flex:1;white-space:pre-wrap">${esc(c)}</span><button class="btn sm" data-copy="${esc(c)}">COPIAR</button></div>`).join("");
     box.innerHTML = `
       <div class="row"><span class="tag ${state[0]}">${state[1]}</span><span class="muted mono">Curve25519 · ChaCha20‑Poly1305 · clave precompartida por dispositivo</span></div>
-      <div class="muted">La app <b>Nexus-Office VPN</b> para Android crea un túnel WireGuard cifrado solo hacia este PC: funciona en casa y fuera (datos móviles), sin exponer Nexus-Office a internet. Solo viaja por el túnel el tráfico de la app.</div>
+      <div class="muted">La app <b>Agente IA VPN</b> para Android crea un túnel WireGuard cifrado solo hacia este PC: funciona en casa y fuera (datos móviles), sin exponer Agente IA a internet. Solo viaja por el túnel el tráfico de la app.</div>
       <div class="setting"><div class="lbl"><b>Activar VPN</b><small>Puerto UDP del túnel (ábrelo en el router para usarla fuera de casa)</small></div>
         <div class="row"><input class="input" id="vpn-port" type="number" min="1" max="65535" value="${v.port}" style="width:110px">
           <label class="switch"><input type="checkbox" id="vpn-on" ${v.enabled ? "checked" : ""}><span></span></label></div></div>
       ${v.enabled ? `
-      ${v.listening_lan ? "" : '<div class="notice bad">Nexus-Office solo escucha en este equipo: reinícialo para que la app lo alcance por el túnel.</div>'}
+      ${v.listening_lan ? "" : '<div class="notice bad">Agente IA solo escucha en este equipo: reinícialo para que la app lo alcance por el túnel.</div>'}
       <div class="remote-sub">1 · Túnel en este PC (${esc(ins[plat].title)})</div>
       <div class="row"><button class="btn sm primary" id="vpn-apply">LEVANTAR / RECARGAR TÚNEL</button><button class="btn sm" id="vpn-conf">⤓ DESCARGAR ${esc("nexusvpn.conf")}</button>
         <button class="btn sm" id="vpn-upnp">ABRIR UDP ${v.port} EN EL ROUTER (UPnP)</button></div>
       <div id="vpn-apply-res"></div>
       ${v.wireguard ? "" : `<div class="muted">Instala WireGuard:</div>${cmds(ins[plat].install)}`}
-      <div class="muted">${v.tunnel_up ? "Tras añadir o quitar dispositivos, recarga el túnel:" : "Para levantarlo a mano (si Nexus-Office no tiene permisos de administrador):"}</div>
+      <div class="muted">${v.tunnel_up ? "Tras añadir o quitar dispositivos, recarga el túnel:" : "Para levantarlo a mano (si Agente IA no tiene permisos de administrador):"}</div>
       ${cmds(v.tunnel_up ? ins[plat].reload : ins[plat].up)}
       <details><summary class="muted">Otros sistemas (Windows, Linux, macOS, WSL)</summary>${order.slice(1).map((p) => `<div class="remote-sub">${esc(ins[p].title)}</div>${cmds([...ins[p].install, ...ins[p].up])}`).join("")}</details>
       <div class="remote-sub">2 · Añadir un móvil</div>
@@ -1545,7 +1701,7 @@
         : '<span class="muted">Ninguno todavía.</span>'}</div>` : ""}`;
     $$("#vpn-box [data-copy]").forEach((b) => (b.onclick = () => copyText(b.dataset.copy)));
     const save = guard(async () => { const x = await api("/api/vpn/enable", { body: { enabled: $("#vpn-on").checked, port: +$("#vpn-port").value } });
-      toast(x.restart_required ? "VPN activada. Reinicia Nexus-Office para que escuche por el túnel." : "Guardado"); vpnBox(); });
+      toast(x.restart_required ? "VPN activada. Reinicia Agente IA para que escuche por el túnel." : "Guardado"); vpnBox(); });
     $("#vpn-on").onchange = save; $("#vpn-port").onchange = save;
     if (!v.enabled) return;
     $("#vpn-conf").onclick = guard(async () => { const r = await api("/api/vpn/server.conf", { raw: true }); if (!r.ok) throw new Error(r.statusText); saveFile("nexusvpn.conf", await r.text(), "text/plain;charset=utf-8"); });
@@ -1560,7 +1716,7 @@
     $("#vpn-add").onclick = guard(async () => {
       const x = await api("/api/vpn/peers", { body: { name: $("#vpn-name").value.trim(), lookup_public_ip: $("#vpn-pubip").checked } });
       $("#vpn-add-box").innerHTML = `<div class="panel col" style="margin-top:8px">
-          <div class="muted"><b>App Nexus-Office VPN:</b> «Conectar por VPN» → pega este código. Contiene la clave privada del móvil: <b>se muestra una sola vez</b> y no lo compartas.</div>
+          <div class="muted"><b>App Agente IA VPN:</b> «Conectar por VPN» → pega este código. Contiene la clave privada del móvil: <b>se muestra una sola vez</b> y no lo compartas.</div>
           <div class="invite row"><span style="flex:1;word-break:break-all">${esc(x.code)}</span><button class="btn sm" data-copy="${esc(x.code)}">COPIAR</button></div>
           <div class="row"><button class="btn sm" id="vpn-dl-code">⤓ DESCARGAR CÓDIGO</button><button class="btn sm" id="vpn-dl-conf">⤓ DESCARGAR .conf (app WireGuard oficial)</button></div>
           <div class="muted">Direcciones incluidas: ${x.endpoints.map(esc).join(" · ")}. Ahora <b>recarga el túnel</b> del PC para que acepte el móvil nuevo.</div></div>`;
@@ -1577,7 +1733,7 @@
     const box = $("#remote-box"); if (!S.token || !box) return;
     const r = await api("/api/remote");
     const up = r.upnp || {}, ago = (t) => (t ? (Date.now() / 1000 - t < 120 ? "ahora" : new Date(t * 1000).toLocaleString()) : "—");
-    const state = r.listening ? ["ok", `escuchando en el puerto ${r.port}`] : r.enabled ? ["warn", "activado: reinicia Nexus-Office para abrir el puerto"] : ["", "desactivado"];
+    const state = r.listening ? ["ok", `escuchando en el puerto ${r.port}`] : r.enabled ? ["warn", "activado: reinicia Agente IA para abrir el puerto"] : ["", "desactivado"];
     box.innerHTML = `
       <div class="row"><span class="tag ${state[0]}">${state[1]}</span><span class="muted mono">${esc(r.crypto)}</span></div>
       <div class="setting"><div class="lbl"><b>Permitir acceso desde internet</b><small>Puerto HTTPS propio; el puerto local (${S.fullCfg?.server?.port || 8775}) no cambia</small></div>
@@ -1591,7 +1747,7 @@
         <button class="btn sm" id="rm-ip">DETECTAR IP PÚBLICA</button></div>
       ${up.error ? `<div class="notice bad">UPnP: ${esc(up.error)}. Abre el puerto TCP ${r.port} a mano en el router hacia este equipo, o usa Tailscale/ZeroTier.</div>` : ""}
       ${up.mapped ? `<div class="notice" style="border-color:var(--ok)">Puerto ${r.port} abierto en el router hacia ${esc(up.internal || "este equipo")}. IP pública: <b>${esc(up.external_ip)}</b></div>` : ""}
-      ${up.cgnat || r.behind_cgnat ? `<div class="notice bad">Tu operador comparte la IP pública (CGNAT): abrir puertos no basta. Usa Tailscale o ZeroTier (Nexus-Office detecta su dirección) o un túnel como Cloudflare Tunnel apuntando a https://localhost:${r.port}.</div>` : ""}
+      ${up.cgnat || r.behind_cgnat ? `<div class="notice bad">Tu operador comparte la IP pública (CGNAT): abrir puertos no basta. Usa Tailscale o ZeroTier (Agente IA detecta su dirección) o un túnel como Cloudflare Tunnel apuntando a https://localhost:${r.port}.</div>` : ""}
       ${r.urls.length ? r.urls.map((u) => `<div class="invite row"><span class="tag ${u.kind === "internet" ? "accent" : ""}">${esc(u.kind)}</span><span style="flex:1">${esc(u.url)}</span><button class="btn sm" data-copy="${esc(u.url)}">COPIAR</button></div>`).join("") : '<span class="muted">Sin direcciones todavía.</span>'}
       <div class="remote-sub">Emparejar un dispositivo nuevo</div>
       <div class="row"><input class="input" id="rm-name" placeholder="Nombre (p. ej. Móvil de Ana)" maxlength="40" style="flex:1"><button class="btn primary" id="rm-pair">GENERAR CÓDIGO</button></div>
@@ -1606,7 +1762,7 @@
     $("#rm-wizard").onclick = () => { go("settings"); setTimeout(() => { $("#router-panel").scrollIntoView({ behavior: "smooth" }); guard(routerWizard)(); }, 300); };
     const save = guard(async () => {
       const x = await api("/api/remote/enable", { body: { enabled: $("#rm-on").checked, port: +$("#rm-port").value } });
-      toast(x.restart_required ? "Guardado. Reinicia Nexus-Office para aplicarlo." : "Guardado"); remoteBox();
+      toast(x.restart_required ? "Guardado. Reinicia Agente IA para aplicarlo." : "Guardado"); remoteBox();
     });
     $("#rm-on").onchange = save; $("#rm-port").onchange = save;
     const upnp = (open) => guard(async () => { toast(open ? "Buscando el router…" : "Cerrando el puerto…"); await api("/api/remote/upnp", { body: { open } }); remoteBox(); });
@@ -1614,7 +1770,7 @@
     $("#rm-ip").onclick = guard(async () => { const x = await api("/api/remote/public-ip", { body: {} }); toast("IP pública: " + x.public_ip); remoteBox(); });
     $("#rm-cert").onclick = guard(async () => {
       if (!confirm("¿Regenerar el certificado? Las apps emparejadas dejarán de conectar hasta volver a emparejarlas.")) return;
-      await api("/api/remote/certificate", { body: {} }); toast("Certificado nuevo. Reinicia Nexus-Office."); remoteBox();
+      await api("/api/remote/certificate", { body: {} }); toast("Certificado nuevo. Reinicia Agente IA."); remoteBox();
     });
     $$("[data-revoke]").forEach((b) => (b.onclick = guard(async () => {
       if (!confirm("¿Revocar el acceso de este dispositivo? Se desconecta al momento.")) return;
@@ -1653,10 +1809,10 @@
     const step = (n, cls, title, body) => `<div class="step ${cls}"><div class="n">${cls === "ok" ? "✓" : n}</div><div class="body"><h4>${title}</h4>${body}</div></div>`;
     const copyRow = (k, v) => `<dt>${k}</dt><dd>${esc(v)}</dd><button class="btn sm ghost" data-copy="${esc(v)}">COPIAR</button>`;
     const s1 = d.listening ? ["ok", `Escuchando en el puerto ${port} con TLS 1.3.`]
-      : d.enabled ? ["warn", "Activado, falta <b>reiniciar Nexus-Office</b> para abrir el puerto."]
+      : d.enabled ? ["warn", "Activado, falta <b>reiniciar Agente IA</b> para abrir el puerto."]
       : ["bad", `Desactivado. <button class="btn sm primary" id="rw-enable">ACTIVAR (PUERTO ${port})</button>`];
     box.innerHTML = `<div class="steps">
-      ${step(1, s1[0], "Acceso remoto en Nexus-Office", `<div>${s1[1]}</div>`)}
+      ${step(1, s1[0], "Acceso remoto en Agente IA", `<div>${s1[1]}</div>`)}
       ${step(2, d.gateway ? "ok" : "bad", "Tu router", d.gateway ? `
         <div><b>${esc(d.brand_name)}</b>${d.page_title && d.page_title !== d.brand_name ? ` · «${esc(d.page_title)}»` : ""} en <span class="mono">${esc(d.gateway)}</span>
           · este equipo: <span class="mono">${esc(d.local_ip)}</span>${d.interface.name ? ` (${esc(d.interface.name)})` : ""}</div>
@@ -1672,16 +1828,16 @@
           ${copyRow("IP interna (este equipo)", rule.internal_ip)}${copyRow("Puerto interno (LAN)", String(rule.internal_port))}</dl>
         ${d.interface.mac ? `<div class="muted">Recomendado: en el apartado DHCP del router, <b>reserva la IP ${esc(rule.internal_ip)}</b> para este equipo (MAC <span class="mono">${esc(d.interface.mac)}</span>
           <button class="btn sm ghost" data-copy="${esc(d.interface.mac)}">COPIAR MAC</button>) para que la regla siga valiendo tras reiniciar.</div>` : ""}
-        ${d.upnp_igd ? "" : '<div class="muted">Alternativa sin tocar el router: Tailscale o ZeroTier en el PC y en el móvil (Nexus-Office muestra su dirección en Red COOP → Acceso remoto).</div>'}`)}
+        ${d.upnp_igd ? "" : '<div class="muted">Alternativa sin tocar el router: Tailscale o ZeroTier en el PC y en el móvil (Agente IA muestra su dirección en Red COOP → Acceso remoto).</div>'}`)}
       ${step(4, "", "Comprobar desde internet", `<div class="row"><button class="btn sm" id="rw-check">COMPROBAR AHORA</button><span class="muted">Consulta tu IP pública e intenta conectar a ella.</span></div><div id="rw-check-res"></div>`)}
       ${step(5, "", "Conectar la app Android", `<div class="row"><button class="btn sm primary" id="rw-pair">GENERAR CÓDIGO PARA LA APP</button>
-        <span class="muted">En el móvil: app Nexus-Office → «Conectar desde internet» → pega el código. Para probarlo de verdad, desactiva la Wi‑Fi y usa datos móviles.</span></div><div id="rw-pair-res"></div>`)}
+        <span class="muted">En el móvil: app Agente IA → «Conectar desde internet» → pega el código. Para probarlo de verdad, desactiva la Wi‑Fi y usa datos móviles.</span></div><div id="rw-pair-res"></div>`)}
       </div><div class="row"><button class="btn sm ghost" id="router-scan">BUSCAR DE NUEVO</button></div>`;
     $$("#router-box [data-copy]").forEach((b) => (b.onclick = () => copyText(b.dataset.copy)));
     $$("#router-box [data-open]").forEach((b) => (b.onclick = () => openExternal(b.dataset.open)));
     $("#router-scan").onclick = guard(routerWizard);
     $("#rw-enable") && ($("#rw-enable").onclick = guard(async () => {
-      await api("/api/remote/enable", { body: { enabled: true, port } }); toast("Acceso remoto activado: reinicia Nexus-Office para abrir el puerto"); routerWizard();
+      await api("/api/remote/enable", { body: { enabled: true, port } }); toast("Acceso remoto activado: reinicia Agente IA para abrir el puerto"); routerWizard();
     }));
     $("#rw-upnp") && ($("#rw-upnp").onclick = guard(async () => {
       const x = await api("/api/remote/upnp", { body: { open: true } });
@@ -1693,7 +1849,7 @@
       res.innerHTML = x.reachable
         ? `<div class="notice" style="border-color:var(--ok)">Accesible desde internet: <b class="mono">${esc(x.url)}</b> responde con TLS 1.3. Ya puedes emparejar la app.</div>`
         : x.behind_cgnat ? `<div class="notice bad">Tu operador comparte la IP pública (CGNAT, IP ${esc(x.public_ip)}): abrir puertos no basta. Pide a tu operador una IP pública (a veces gratis, «salir de CGNAT») o usa Tailscale / ZeroTier.</div>`
-        : !x.listening ? '<div class="notice bad">Nexus-Office aún no escucha en el puerto remoto: actívalo (paso 1) y reinicia Nexus-Office.</div>'
+        : !x.listening ? '<div class="notice bad">Agente IA aún no escucha en el puerto remoto: actívalo (paso 1) y reinicia Agente IA.</div>'
         : `<div class="notice">Tu IP pública es <b class="mono">${esc(x.public_ip)}</b>, pero desde este equipo no responde el puerto ${x.port}. O la regla del router aún no está bien, o tu router no permite la prueba desde dentro de casa (es frecuente): la prueba definitiva es el móvil con datos móviles en <span class="mono">${esc(x.url)}</span>.</div>`;
     });
     $("#rw-pair").onclick = guard(async () => {
@@ -1740,7 +1896,8 @@
       .map(([k, v, s]) => `<div class="panel hw-card"><h3>${k}</h3><div class="big">${v}</div><div class="muted mono" style="margin-top:6px">${esc(s)}</div></div>`).join("");
     const L = p.llm;
     $("#profile-kv").innerHTML = [["Perfil", `${p.id} (${p.tier})`], ["Dispositivo", p.device_name], ["LLM recomendado", `≤ ${L.recommended_model_b}B (máx ${L.max_model_b}B) ${L.quant}`],
-      ["Contexto", `${L.n_ctx} (máx ${L.max_ctx})`], ["Hilos / lote", `${L.n_threads} / ${L.n_batch}`], ["Capas GPU", L.gpu_layers === -1 ? "todas" : L.gpu_layers], ["Runtime llama.cpp", L.llamacpp_wheel],
+      ["Contexto", `${L.n_ctx} (máx ${L.max_ctx})`], ["Hilos / lote", `${L.n_threads} / ${L.n_batch}`], ["Capas GPU", L.gpu_layers === -1 ? "todas" : L.gpu_layers],
+      ["Lote físico / caché KV", `${L.n_ubatch || "auto"} / ${L.kv_quant || "16 bits"}`], ["Caché de prompts", L.cache_ram_mb >= 0 && L.cache_ram_mb !== undefined ? `${L.cache_ram_mb} MB de RAM` : "la de llama.cpp"], ["Runtime llama.cpp", L.llamacpp_wheel],
       ["Imagen", `${p.image.device} · ${p.image.resolution}px · ${p.image.neural ? "neural GPU" : "CPU"}`], ["Voz (STT)", `whisper ${p.stt.model} · ${p.stt.compute_type} · ${p.stt.device}`],
       ["Embeddings", p.embeddings.device], ["NPU", p.npu.present ? `${p.npu.name} · ${p.npu.ready ? "en uso" : "sin runtime"}` : "—"]].map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
     const log = (d.tuning_state.log || []).slice().reverse();
@@ -1799,7 +1956,7 @@
     const box = $("#service-box");
     if (window.NexusApp && NexusApp.setBootStart) {   // app Android autonoma: servicio en primer plano al encender el movil
       const on = NexusApp.bootStart();
-      box.innerHTML = `<div class="row"><span style="flex:1">${on ? "Nexus-Office arranca solo al encender el móvil." : "Nexus-Office arranca al abrir la app."}</span>
+      box.innerHTML = `<div class="row"><span style="flex:1">${on ? "Agente IA arranca solo al encender el móvil." : "Agente IA arranca al abrir la app."}</span>
         <button class="btn sm ${on ? "" : "primary"}" id="svc-toggle">${on ? "DESACTIVAR" : "ARRANCAR AL ENCENDER"}</button></div>`;
       $("#svc-toggle").onclick = () => { NexusApp.setBootStart(!on); serviceBox(); };
       return;
@@ -1807,7 +1964,7 @@
     const st = await api("/api/service").catch(() => null);
     if (!st || !st.supported) { box.innerHTML = '<span class="muted">No disponible en este dispositivo.</span>'; return; }
     const kinds = { systemd: "systemd", cron: "cron @reboot", launchd: "launchd", windows: "Programador de tareas", termux: "termux-services" };
-    box.innerHTML = `<div class="row"><span style="flex:1">${st.registered ? `<span class="tag ok">activo</span> ${esc(kinds[st.kind] || st.kind)} · <span class="mono muted">${esc(st.registered)}</span>` : "Sin servicio: Nexus-Office arranca cuando lo abres."}</span>
+    box.innerHTML = `<div class="row"><span style="flex:1">${st.registered ? `<span class="tag ok">activo</span> ${esc(kinds[st.kind] || st.kind)} · <span class="mono muted">${esc(st.registered)}</span>` : "Sin servicio: Agente IA arranca cuando lo abres."}</span>
       <span class="admin-only">${st.registered ? '<button class="btn sm danger" id="svc-off">QUITAR</button>' : '<label class="muted"><input type="checkbox" id="svc-red"> accesible desde la red local</label> <button class="btn sm primary" id="svc-on">INSTALAR SERVICIO</button>'}</span></div>
       <div class="muted" style="margin-top:6px">${st.admin_os ? "Con permisos de administrador: arrancará con el equipo." : "Sin permisos de administrador arranca al iniciar sesión; para que arranque con el equipo instálalo desde el instalador o con <span class=mono>sudo … -m nexus servicio instalar</span>."}</div>
       <div class="user-only muted">Entra en modo administrador para cambiarlo.</div>`;
@@ -1819,14 +1976,139 @@
     $("#mon-session").textContent = `sesión ${m.session} · ${Math.round(m.uptime_s / 60)} min · ${m.summary.llm_calls} llamadas · ${m.summary.avg_tps} tok/s`;
     lines($("#mon-chart"), [m.samples.map((s) => s.cpu), m.samples.map((s) => s.ram_pct), m.samples.map((s) => s.gpu_util || 0)], ["#00f0ff", "#ff3df2", "#7cff6b"]);
   }
-  $("#shutdown").onclick = guard(async () => { if (!confirm("¿Apagar Nexus-Office? Se guardará el rendimiento de la sesión para el autoajuste.")) return;
-    await api("/api/admin/shutdown", { body: {} }); toast("Nexus-Office se está apagando…"); });
+  $("#shutdown").onclick = guard(async () => { if (!confirm("¿Apagar Agente IA? Se guardará el rendimiento de la sesión para el autoajuste.")) return;
+    await api("/api/admin/shutdown", { body: {} }); toast("Agente IA se está apagando…"); });
   $("#redetect").onclick =guard(async () => { toast("Detectando hardware…"); await api("/api/hardware/redetect", { body: {} }); loaders.system(); loadStatus(); });
 
   /* ================================================================ vista: AJUSTES */
   const LAYOUT_NAMES = { phone: "Móvil", tablet: "Tablet", desktop: "Escritorio" };
+  /* ---- voces: la general (Ajustes) y la de cada agente (su configuración), para reconocer quién habla */
+  const Voces = {
+    info: null, lista: null,
+    async cargar(forzar) { if (!this.info || forzar) this.info = await api("/api/voice").catch(() => null); return this.info || {}; },
+    async disponibles() {
+      if (!this.lista) this.lista = await api("/api/voice/voces").catch(() => ({ piper: [], sistema: [], variantes: [], motores: ["browser"] }));
+      return this.lista;
+    },
+    de(agente) { const i = this.info || {}; return (i.agentes || {})[agente || "nexus"] || i.general || {}; },
+    semilla(id) { let h = 2166136261; for (const c of String(id || "")) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0; return h; },
+    navegador(voz, agente) {
+      const vs = "speechSynthesis" in window ? speechSynthesis.getVoices() : [], lang = S.cfg.language || "es";
+      const name = voz.navegador || S.cfg.voice_name;
+      let v = name ? vs.find((x) => x.name === name) || vs.find((x) => x.name.includes(name)) : null;
+      if (!v) { const c = vs.filter((x) => x.lang.startsWith(lang)); if (c.length) v = voz.auto && c.length > 1 ? c[this.semilla(agente) % c.length] : c[0]; }
+      return v;
+    },
+    // frase para la voz del navegador con el tono, la velocidad y el volumen de esa voz
+    utter(texto, voz, agente) {
+      const lang = S.cfg.language || "es", u = new SpeechSynthesisUtterance(texto);
+      u.lang = lang + "-" + (lang === "en" ? "US" : "ES");
+      u.rate = Math.min(4, (S.cfg.speech_rate || 1) * (voz.velocidad || 1));
+      u.pitch = Math.max(0, Math.min(2, voz.tono || 1)); u.volume = Math.max(0, Math.min(1, voz.volumen ?? 1));
+      const v = this.navegador(voz, agente); if (v) u.voice = v;
+      return u;
+    },
+    android(texto, voz) {
+      if (!(window.NexusApp && NexusApp.speak)) return false;
+      const rate = (S.cfg.speech_rate || 1) * (voz.velocidad || 1);
+      return NexusApp.speakVoz ? NexusApp.speakVoz(texto, rate, voz.tono || 1, voz.navegador || "") : NexusApp.speak(texto, rate);
+    },
+    async probar(voz, texto) {
+      texto = texto || "Hola, así sueno cuando hablo.";
+      const res = await api("/api/voice/tts", { body: { text: texto, rate: S.cfg.speech_rate || 1, voz }, raw: true });
+      if (res.status === 200) { const a = new Audio(URL.createObjectURL(await res.blob())); await a.play(); return; }
+      if (this.android(texto, voz)) return;
+      if ("speechSynthesis" in window) { speechSynthesis.cancel(); speechSynthesis.speak(this.utter(texto, voz, "")); }
+    },
+    resumen(v) {
+      const p = [];
+      if (v.motor && v.motor !== "auto") p.push({ piper: "Piper", sistema: "sistema", browser: "navegador" }[v.motor] || v.motor);
+      if (v.nombre) p.push(v.nombre); if (v.navegador) p.push(v.navegador);
+      if (v.hablante != null && v.hablante !== "") p.push("hablante " + v.hablante); if (v.variante) p.push("variante " + v.variante);
+      if (v.tono && v.tono !== 1) p.push("tono ×" + (+v.tono).toFixed(2)); if (v.velocidad && v.velocidad !== 1) p.push("velocidad ×" + (+v.velocidad).toFixed(2));
+      if (v.volumen != null && v.volumen !== 1) p.push("volumen " + Math.round(v.volumen * 100) + "%");
+      return p.join(" · ") || "la general";
+    },
+    // editor de una voz: motor, modelo Piper y hablante, voz del sistema (y variante de espeak), voz del navegador,
+    // velocidad, tono y volumen; devuelve { valor() } con solo lo que se ha cambiado
+    async editor(el, voz = {}, { probarTexto } = {}) {
+      const d = await this.disponibles(), nav = ("speechSynthesis" in window ? speechSynthesis.getVoices() : []);
+      const motores = ["auto", ...d.motores.filter((m) => m !== "auto")];
+      const NOM = { auto: "Automático", piper: "Piper (neuronal, sin conexión)", sistema: "Voz del sistema", browser: "Voz del navegador" };
+      const opt = (val, txt, sel) => `<option value="${esc(String(val))}" ${String(sel ?? "") === String(val) ? "selected" : ""}>${esc(txt)}</option>`;
+      const rango = (k, min, max, step, def) => `<label class="field">${{ velocidad: "Velocidad", tono: "Tono (grave · agudo)", volumen: "Volumen" }[k]} <b data-vv="${k}">${(voz[k] ?? def).toFixed(2)}</b>
+        <input type="range" data-v="${k}" min="${min}" max="${max}" step="${step}" value="${voz[k] ?? def}"></label>`;
+      el.innerHTML = `<div class="grid g3 voz-editor">
+        <label class="field">Motor<select class="input" data-v="motor">${motores.map((m) => opt(m, NOM[m] || m, voz.motor || "auto")).join("")}</select></label>
+        <label class="field" data-solo="piper">Modelo Piper<select class="input" data-v="modelo">${opt("", "El general", voz.modelo)}${d.piper.map((p) => opt(p.id, p.nombre, voz.modelo)).join("")}</select></label>
+        <label class="field" data-solo="piper">Hablante<select class="input" data-v="hablante"></select></label>
+        <label class="field" data-solo="sistema">Voz del sistema<select class="input" data-v="nombre">${opt("", "Automática", voz.nombre)}${d.sistema.map((s) => opt(s.nombre, s.descripcion ? `${s.descripcion} (${s.nombre})` : `${s.nombre} · ${s.idioma}`, voz.nombre)).join("")}</select></label>
+        ${d.variantes.length ? `<label class="field" data-solo="sistema">Variante<select class="input" data-v="variante">${opt("", "Ninguna", voz.variante)}${d.variantes.map((x) => opt(x, x, voz.variante)).join("")}</select></label>` : ""}
+        <label class="field" data-solo="browser">Voz del navegador<select class="input" data-v="navegador">${opt("", "Automática", voz.navegador)}${nav.map((v) => opt(v.name, `${v.name} · ${v.lang}`, voz.navegador)).join("")}</select></label>
+        ${rango("velocidad", 0.5, 2, 0.05, 1)}${rango("tono", 0.5, 1.6, 0.01, 1)}${rango("volumen", 0, 1.5, 0.05, 1)}
+      </div>
+      <div class="row" style="margin-top:6px"><input class="input" data-v="frase" placeholder="Frase de prueba" value="${esc(probarTexto || "")}" style="flex:1;min-width:0"><button class="btn sm" data-voz-probar>▶ PROBAR</button><button class="btn sm ghost" data-voz-reset>RESTABLECER</button></div>`;
+      const q = (k) => $(`[data-v="${k}"]`, el);
+      const hablantes = () => {
+        const m = d.piper.find((p) => p.id === q("modelo").value) || d.piper[0], hs = (m && m.hablantes) || [];
+        q("hablante").innerHTML = opt("", hs.length ? "Automático" : "Uno solo", voz.hablante) + hs.map((h) => opt(h.id, h.nombre, voz.hablante)).join("");
+        q("hablante").disabled = !hs.length;
+      };
+      const visibles = () => {
+        const m = q("motor").value, activo = m === "auto" ? (S.status?.voice?.tts_active || d.motores[0]) : m;
+        $$("[data-solo]", el).forEach((f) => (f.style.display = f.dataset.solo === activo || f.dataset.solo === "browser" ? "" : "none"));
+      };
+      q("modelo").onchange = () => { voz.hablante = undefined; hablantes(); };
+      q("motor").onchange = visibles;
+      $$("input[type=range]", el).forEach((r) => (r.oninput = () => ($(`[data-vv="${r.dataset.v}"]`, el).textContent = (+r.value).toFixed(2))));
+      hablantes(); visibles();
+      const valor = () => {
+        const v = {};
+        for (const k of ["motor", "modelo", "nombre", "variante", "navegador"]) { const x = q(k)?.value; if (x && !(k === "motor" && x === "auto")) v[k] = x; }
+        if (q("hablante").value !== "") v.hablante = +q("hablante").value;
+        for (const k of ["velocidad", "tono", "volumen"]) { const x = +q(k).value; if (Math.abs(x - 1) > 0.004) v[k] = x; }
+        return v;
+      };
+      $("[data-voz-probar]", el).onclick = guard(() => this.probar(valor(), q("frase").value.trim()));
+      $("[data-voz-reset]", el).onclick = () => this.editor(el, {}, { probarTexto: q("frase").value });
+      el._voz = { valor };
+      return el._voz;
+    },
+  };
+  let hablante = "nexus";   // agente que esta respondiendo (para hablar con su voz)
+
+  async function loadVoces() {
+    const info = await Voces.cargar(true), box = $("#voces-general"); if (!box) return;
+    await Voces.editor(box, { ...(info.general || {}) }, { probarTexto: "Hola, soy tu asistente." });
+    $("#voz-distinta").checked = info.distinta !== false;
+    const ags = S.agents.filter((a) => a.enabled);
+    $("#voces-agentes").innerHTML = ags.map((a) => {
+      const v = (info.agentes || {})[a.id] || {}, propia = a.voz && Object.keys(a.voz).length;
+      return `<div class="item voz-agente" style="--agent:${esc(a.color)}"><div class="row"><b style="color:var(--agent)">${esc(a.icon)} ${esc(a.name)}</b>
+        <span class="tag ${propia ? "accent" : ""}">${propia ? "voz propia" : v.auto ? "automática" : "la general"}</span><span class="muted" style="flex:1">${esc(Voces.resumen(v))}</span>
+        <button class="btn sm" data-vprobar="${a.id}">▶</button><button class="btn sm admin-only" data-veditar="${a.id}">EDITAR</button></div><div class="voz-ed hidden" data-ved="${a.id}"></div></div>`;
+    }).join("") || `<span class="muted">Sin agentes.</span>`;
+    $$("[data-vprobar]").forEach((b) => (b.onclick = guard(() => { const a = S.agents.find((x) => x.id === b.dataset.vprobar);
+      return Voces.probar(Voces.de(a.id), `Hola, soy ${a.name}.`); })));
+    $$("[data-veditar]").forEach((b) => (b.onclick = guard(async () => {
+      const a = S.agents.find((x) => x.id === b.dataset.veditar), box = $(`[data-ved="${a.id}"]`);
+      if (!box.classList.contains("hidden")) return box.classList.add("hidden");
+      box.classList.remove("hidden");
+      const ed = await Voces.editor(box, { ...(a.voz || {}) }, { probarTexto: `Hola, soy ${a.name}.` });
+      box.insertAdjacentHTML("beforeend", `<div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn sm ghost" data-vgen>USAR LA GENERAL</button><button class="btn sm primary" data-vguardar>GUARDAR SU VOZ</button></div>`);
+      const guardar = async (voz) => { await api("/api/agents", { method: "PUT", body: { ...a, voz } }); await loadAgents(); toast(`Voz de ${a.name} guardada`); loadVoces(); };
+      $("[data-vguardar]", box).onclick = guard(() => guardar(ed.valor()));
+      $("[data-vgen]", box).onclick = guard(() => guardar({}));
+    })));
+  }
+  $("#voces-guardar") && ($("#voces-guardar").onclick = guard(async () => {
+    const v = $("#voces-general")._voz ? $("#voces-general")._voz.valor() : {};
+    await api("/api/config", { method: "PUT", body: { "user.voz": v, "user.voz_distinta": $("#voz-distinta").checked } });
+    await loadConfig(); toast("Voz guardada"); loadVoces();
+  }));
+
   loaders.settings = async () => {
-    await loadConfig(); const u = S.cfg;
+    await loadConfig(); const u = S.cfg; loadVoces().catch(() => {});
     const voices = ("speechSynthesis" in window ? speechSynthesis.getVoices() : []).filter((v) => v.lang.startsWith(u.language || "es"));
     const row = (lbl, sub, ctrl) => `<div class="setting"><div class="lbl"><b>${lbl}</b>${sub ? `<small>${sub}</small>` : ""}</div>${ctrl}</div>`;
     const sw = (k) => `<label class="switch"><input type="checkbox" data-u="${k}" ${u[k] ? "checked" : ""}><span></span></label>`;
@@ -1875,6 +2157,7 @@
       await loadConfig(); toast("Guardado");
     })));
     if (window.NexusKG) guard(NexusKG.load)();   // gestor de conocimiento (js/kgadmin.js)
+    if (window.NexusUbicacion) guard(NexusUbicacion.load)();   // ubicacion en tiempo real (js/ubicacion.js)
     if (!S.token) return;
     guard(profesorPanel)();
     const c = S.fullCfg; const sections = Object.keys(c).filter((k) => k !== "user");
@@ -1964,16 +2247,21 @@
   loaders.chat = async () => { await loadSessions(); };
 
   // utilidades para los modulos de la interfaz que viven en otros ficheros (js/kgadmin.js)
-  window.NexusUI = { api, toast, esc, guard, ago, fmtB, saveFile, agents: () => S.agents, admin: () => !!S.token,
-                     agentName: (id) => agentName(id), refreshGraph: () => { loadGraph().catch(() => {}); } };
+  loaders.beta = async () => { if (window.NexusBeta) await NexusBeta.load(); };   // laboratorio BETA (js/beta.js)
+
+  window.NexusUI = { api, toast, esc, guard, ago, fmtB, saveFile, agents: () => S.agents, admin: () => !!S.token, cfg: () => S.cfg,
+                     agentName: (id) => agentName(id), go: (v) => go(v),
+                     reloadAgents: () => { loaders.agents().catch(() => {}); },
+                     probarAgente: async (id) => { await loadAgents(); $("#agent-select").value = id; go("chat"); toast("Escríbele para probarlo"); },
+                     refreshGraph: () => { loadGraph().catch(() => {}); } };
 
   /* ================================================================ selector de inicio: motor llama y CPU/GPU/NPU */
   const Accel = {
-    d: null, engine: "auto", accel: "auto",
+    d: null, engine: "auto", accel: "auto", runtime: "auto",
     async open(force) {
       const d = this.d = await api("/api/accel");
       if (!force && !d.ask) return;
-      this.engine = d.engine; this.accel = d.accel;
+      this.engine = d.engine; this.accel = d.accel; this.runtime = d.runtime || "auto";
       const n = typeof d.capas === "number", sel = $("#accel-capas"), num = $("#accel-capas-n");
       sel.value = n ? "n" : d.capas || "auto"; num.value = n ? d.capas : num.value; num.disabled = !n;
       const tot = String((d.effective || {}).offloaded || "").split("/")[1];
@@ -1988,21 +2276,32 @@
       const opt = (list, cur, key) => list.map((o) => `<button type="button" data-${key}="${o.id}" class="${o.id === cur ? "on" : ""} ${o.available ? "" : "na"}">${esc(o.label)}${o.note ? `<small>${esc(o.note)}</small>` : ""}</button>`).join("");
       $("#accel-engines").innerHTML = opt(this.d.engines, this.engine, "eng");
       $("#accel-accels").innerHTML = opt(this.d.accels, this.accel, "acc");
-      $$("[data-eng]").forEach((b) => (b.onclick = () => { this.engine = b.dataset.eng; this.render(); }));
+      // runtimes concretos del motor elegido (variantes de llama.cpp o aceleradores de LiteRT-LM, ONNX y Genie)
+      const rts = (this.d.runtimes || {})[this.engine === "auto" ? "llamaserver" : this.engine] || [];
+      if (!rts.some((r) => r.id === this.runtime)) this.runtime = "auto";
+      $("#accel-runtimes").innerHTML = opt(rts, this.runtime, "rt");
+      $$("[data-eng]").forEach((b) => (b.onclick = () => { if (this.engine !== b.dataset.eng) this.runtime = "auto"; this.engine = b.dataset.eng; this.render(); }));
       $$("[data-acc]").forEach((b) => (b.onclick = () => { this.accel = b.dataset.acc; this.render(); }));
-      const a = this.d.accels.find((x) => x.id === this.accel), e = this.d.engines.find((x) => x.id === this.engine);
-      $("#accel-note").textContent = [e && !e.available ? `${e.label}: ${e.note}; se usará el siguiente disponible` : "", a && !a.available ? a.note : ""].filter(Boolean).join(" · ");
+      $$("[data-rt]").forEach((b) => (b.onclick = () => { this.runtime = b.dataset.rt; this.render(); }));
+      const a = this.d.accels.find((x) => x.id === this.accel), e = this.d.engines.find((x) => x.id === this.engine), r = rts.find((x) => x.id === this.runtime);
+      $("#accel-note").textContent = [e && !e.available ? `${e.label}: ${e.note}; se usará el siguiente disponible` : "", a && !a.available ? a.note : "", r && !r.available ? `${r.label}: ${r.note}` : ""].filter(Boolean).join(" · ");
     },
     result(r) {
       const eff = r.effective || {};
-      $("#accel-result").innerHTML = `Ahora: <b>${esc(r.selected)}</b> · perfil ${esc(r.profile.accelerator)}${r.profile.gpu_layers ? " (capas en GPU)" : ""}` +
+      $("#accel-result").innerHTML = `Ahora: <b>${esc(r.selected)}</b>${eff.acelerador ? ` · ${esc(eff.acelerador)}` : ""}${eff.variante ? ` (${esc(eff.variante)})` : ""} · perfil ${esc(r.profile.accelerator)}${r.profile.gpu_layers ? " (capas en GPU)" : ""}` +
         (eff.device ? ` · el modelo está en <b>${esc(eff.device)}</b>${eff.offloaded ? ` (${esc(eff.offloaded)} capas)` : ""}${eff.detail ? ` · ${esc(eff.detail)}` : ""}${eff.ok === false ? ` <span class="tag warn">se pidió ${esc(eff.requested)}</span>` : ""}` : "") +
         (r.tokens_s ? ` · ${r.tokens_s} tok/s` : "") + (r.error ? `<div class="bad">${esc(r.error)}</div>` : "");
     },
     capas() { const v = $("#accel-capas").value; return v === "n" ? Math.max(1, +$("#accel-capas-n").value || 1) : v; },
-    async apply() { await api("/api/accel", { body: { engine: this.engine, accel: this.accel, remember: $("#accel-remember").checked, capas: this.capas() } }); },
+    async apply() { await api("/api/accel", { body: { engine: this.engine, accel: this.accel, runtime: this.runtime, remember: $("#accel-remember").checked, capas: this.capas() } }); },
   };
-  $("#accel-go").onclick = guard(async () => { await Accel.apply(); $("#accel-dialog").close(); toast("Motor y acelerador aplicados"); loadStatus(); });
+  // el dialogo se cierra al pulsar, sin esperar a la respuesta: mientras sigue abierto (modal) el chat no recibe el
+  // teclado y lo que se escribe nada mas arrancar se pierde; si falla, vuelve a abrirse con el error
+  $("#accel-go").onclick = async () => {
+    $("#accel-dialog").close();
+    try { await Accel.apply(); toast("Motor y acelerador aplicados"); loadStatus(); }
+    catch (e) { toast(e.message, true); $("#accel-dialog").showModal(); }
+  };
   $("#accel-test").onclick = guard(async () => {
     const b = $("#accel-test"); b.disabled = true; $("#accel-result").innerHTML = `<span class="spin"></span> Cargando el modelo y probando…`;
     try { await Accel.apply(); const r = await api("/api/accel/test", { body: {} }); Accel.d = { ...Accel.d, ...r }; Accel.result(r); toast(r.ok ? "Prueba correcta" : "La prueba ha fallado", !r.ok); }
@@ -2056,7 +2355,7 @@
       if (d.act === "engine" || d.act === "accel") {
         const cur = await api("/api/accel");
         busy("Aplicando… (se reinicia el modelo)");
-        await api("/api/accel", { body: { engine: d.act === "engine" ? d.v : cur.engine, accel: d.act === "accel" ? d.v : cur.accel, remember: true } });
+        await api("/api/accel", { body: { engine: d.act === "engine" ? d.v : cur.engine, accel: d.act === "accel" ? d.v : cur.accel, runtime: d.act === "engine" ? "auto" : cur.runtime, remember: true } });
       } else if (d.act === "model") {
         busy("Cargando el modelo…"); await api(`/api/models/activate/${encodeURIComponent(d.v)}`, { body: {} });
       } else if (d.act === "hwp") {

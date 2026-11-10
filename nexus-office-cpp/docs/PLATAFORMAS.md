@@ -15,14 +15,14 @@ paso: [Guía de usuario → Instalación](USUARIO.md#instalación).
 | **Steam Deck** (SteamOS) | `Nexus-Office-<ver>-linux-x86_64.run` o `.AppImage` | ✅ CPU / Vulkan (APU AMD) | Instala en modo escritorio en tu carpeta de usuario (SteamOS es de solo lectura) y añade `start.sh` como *juego no‑Steam*. |
 | Linux ARM64 (Raspberry Pi 4/5, Jetson, Orange Pi) | `Nexus-Office-<ver>-linux-aarch64.run`, `.AppImage`, `.flatpak`, `nexus-office-c_<ver>_arm64.deb` | ✅ CPU y Vulkan (Pi 5: Qwen3‑VL 2B Thinking); CUDA en Jetson Orin | Hace falta un sistema de **64 bits** (Raspberry Pi OS 64‑bit, Ubuntu). Los de 32 bits (`armv7l`) no están soportados. Usa disco SSD/USB3 para los modelos. |
 | macOS Apple Silicon / Intel | `Nexus-Office-<ver>-macos-arm64.tar.gz`, `Nexus-Office-<ver>-macos-x86_64.tar.gz` | ✅ Metal (Apple Silicon), CPU | Incluye `Nexus-Office.command` y `Nexus-Office.app`. Primera apertura: clic derecho → Abrir (no está firmado). |
-| **Android** (app Nexus-Office, recomendada) | `Nexus-Office-<ver>-android-autonomo.apk` | ✅ CPU, GPU (Adreno por OpenCL; Mali, Immortalis, Xclipse y PowerVR por Vulkan) y NPU Hexagon de los Snapdragon 8 Gen 2 o posteriores (experimental) | Nexus-Office 100 % en el móvil, sin PC (Android 9+, ARM64). La APK lleva el mismo `nexus-office` compilado para Android y llama.cpp (CPU y GPU); detecta CPU, GPU y NPU, mide si el modelo va más rápido en GPU o en CPU y solo descarga el modelo adecuado a la RAM del móvil. Arranque al encender opcional. También se conecta al Nexus-Office del PC (*RED → Conectar a mi ordenador*). |
-| **Android** (app Nexus-Office VPN) | `Nexus-Office-<ver>-android-vpn.apk` | ⚙️ Cliente del PC | App nativa (Android 7+). Conecta con el Nexus-Office de tu PC por **VPN WireGuard cifrada**, por HTTPS con certificado anclado o por la Wi‑Fi de la oficina. Ver [VPN.md](VPN.md). |
+| **Android** (app Agente IA, recomendada) | `Nexus-Office-<ver>-android-autonomo.apk` | ✅ CPU, GPU (Adreno por OpenCL; Mali, Immortalis, Xclipse y PowerVR por Vulkan) y NPU Hexagon de los Snapdragon 8 Gen 2 o posteriores (experimental) | Agente IA 100 % en el móvil, sin PC (Android 9+, ARM64). La APK lleva el mismo `nexus-office` compilado para Android y llama.cpp (CPU y GPU); detecta CPU, GPU y NPU, mide si el modelo va más rápido en GPU o en CPU y solo descarga el modelo adecuado a la RAM del móvil. Arranque al encender opcional. También se conecta al Agente IA del PC (*RED → Conectar a mi ordenador*). |
+| **Android** (app Agente IA VPN) | `Nexus-Office-<ver>-android-vpn.apk` | ⚙️ Cliente del PC | App nativa (Android 7+). Conecta con el Agente IA de tu PC por **VPN WireGuard cifrada**, por HTTPS con certificado anclado o por la Wi‑Fi de la oficina. Ver [VPN.md](VPN.md). |
 | iPhone / iPad | PWA | ⚠️ Cliente | iOS no permite ejecutar este tipo de servidor; úsalo como app web conectada a tu PC o a tu red cooperativa. |
 | **Xbox Series** | PWA (Microsoft Edge) | ⚠️ Cliente | Las consolas son plataformas cerradas. Abre la interfaz de tu PC desde Edge (puede instalarse como app). |
-| **PlayStation 5** | Navegador | ⚠️ Cliente | Sin instalación posible; acceso por navegador a un Nexus-Office de la red. |
+| **PlayStation 5** | Navegador | ⚠️ Cliente | Sin instalación posible; acceso por navegador a un Agente IA de la red. |
 | **Nintendo Switch** | — | ❌ | No dispone de un navegador general utilizable. |
 
-> **Por qué las consolas son "cliente"**: PlayStation, Xbox y Switch solo ejecutan software firmado por el fabricante. Nexus-Office sí funciona en ellas como interfaz (PWA) mientras la IA corre en un PC, Steam Deck, servidor o en tu red cooperativa, que además permite que varios equipos compartan el modelo más potente.
+> **Por qué las consolas son "cliente"**: PlayStation, Xbox y Switch solo ejecutan software firmado por el fabricante. Agente IA sí funciona en ellas como interfaz (PWA) mientras la IA corre en un PC, Steam Deck, servidor o en tu red cooperativa, que además permite que varios equipos compartan el modelo más potente.
 
 La edición C++ se instala en carpetas propias (`Nexus-Office-C`, `nexus-office-c`), así que convive con la edición
 Python sin pisarla. Ver [CPP.md](CPP.md#convivencia-con-la-edición-python).
@@ -31,10 +31,10 @@ Python sin pisarla. Ver [CPP.md](CPP.md#convivencia-con-la-edición-python).
 
 | Instalador | Cómo instala | Opciones |
 |---|---|---|
-| `.exe` (Windows, NSIS) | Copia la carpeta portable a `%LOCALAPPDATA%\Nexus-Office-C` (o la elegida) sin pedir administrador y después ejecuta `nexus-office` con las opciones elegidas: `oficina <perfil>`, `nexus-office modelos --descargar` y, si se pidió, `nexus-office servicio instalar [--red]` con UAC solo para ese paso. Accesos directos sin consola (`nexus-office-w.exe`) y *Nexus-Office (consola)* con `start.bat`. | Página de opciones: perfil de oficina, descargar el modelo, servicio al encender, acceso desde la red local, acceso directo en el escritorio. Silencioso: `/S /OFICINA=<perfil> /SERVICIO /RED /MODELOS=auto\|todos\|no /D=<carpeta>` (`/D` siempre al final). |
+| `.exe` (Windows, NSIS) | Copia la carpeta portable a `%LOCALAPPDATA%\Nexus-Office-C` (o la elegida) sin pedir administrador y después ejecuta `nexus-office` con las opciones elegidas: `oficina <perfil>`, `nexus-office modelos --descargar` y, si se pidió, `nexus-office servicio instalar [--red]` con UAC solo para ese paso. Accesos directos sin consola (`nexus-office-w.exe`) y *Agente IA (consola)* con `start.bat`. | Página de opciones: perfil de oficina, descargar el modelo, servicio al encender, acceso desde la red local, acceso directo en el escritorio. Silencioso: `/S /OFICINA=<perfil> /SERVICIO /RED /MODELOS=auto\|todos\|no /D=<carpeta>` (`/D` siempre al final). |
 | `.run` (Linux) | Script `sh` con el `.tar.gz` incrustado. Lo extrae en la carpeta indicada (por defecto `~/.local/share/nexus-office-c`, o `/opt/nexus-office-c` con `sudo`) y ejecuta `install.sh` con el resto de opciones. | `sh Nexus-Office-<ver>-linux-<arch>.run [carpeta] [--oficina=<perfil>] [--servicio [--red]] [--modelos=auto\|todos\|no]` |
 | `.deb` (Debian, Ubuntu, Raspberry Pi OS 64 bits) | Programa en `/opt/nexus-office-c`, lanzador `/usr/bin/nexus-office-c` y entrada de menú. No hay nada que preparar al instalar: el programa ya está listo. Los datos de cada usuario van a `~/.local/share/nexus-office-c` (`NEXUS_DATA_DIR`). La primera ejecución evalúa el hardware y descarga el modelo. `prerm` quita el servicio. | `nexus-office-c [servicio\|modelos\|oficina\|detect\|pull\|chat\|comprobar\|firmware\|grafo] …`; servicio con `sudo nexus-office-c servicio instalar [--red]`. |
-| `.AppImage` y `.flatpak` (Linux) | Nexus-Office ya instalado dentro, de solo lectura. Ver [AppImage y Flatpak](#appimage-y-flatpak). | Sin argumentos arrancan Nexus-Office; con argumentos son órdenes de `nexus-office`. |
+| `.AppImage` y `.flatpak` (Linux) | Agente IA ya instalado dentro, de solo lectura. Ver [AppImage y Flatpak](#appimage-y-flatpak). | Sin argumentos arrancan Agente IA; con argumentos son órdenes de `nexus-office`. |
 | `.tar.gz` (macOS) | Carpeta portable. `Nexus-Office.command` ejecuta `install.sh` la primera vez (quita la cuarentena de Gatekeeper a los binarios incluidos) y después `start.sh`. | `./install.sh --oficina=<perfil> --servicio [--red] --modelos=…` |
 
 Con el **instalador gráfico de Windows** y con `install.sh`/`install.bat`, el último paso es `nexus-office modelos`:
@@ -56,7 +56,7 @@ Las opciones de la edición Python (`--offline`, `--clean`, `--no-clean`, `--ski
 hacen nada: aquí no hay Python ni dependencias que instalar.
 
 ### Aceleración incluida en los instaladores
-Cada instalador lleva todo lo necesario para acelerar con la GPU o la NPU de su plataforma, sin internet. Nexus-Office
+Cada instalador lleva todo lo necesario para acelerar con la GPU o la NPU de su plataforma, sin internet. Agente IA
 elige al arrancar: prueba primero la variante de GPU adecuada a tu hardware y, si el equipo no tiene el driver (por
 ejemplo, `libcuda` o `vulkan-1.dll`), pasa a la siguiente y, al final, a la CPU. La comprobación del arranque
 (*Sistema → Comprobación y autorreparación*) también pasa de la GPU a la CPU si la GPU no arranca.
@@ -86,9 +86,9 @@ ya no sirve para llevarla a otro equipo con otro hardware: para eso, guarda el i
 ### AppImage y Flatpak
 
 `nexus-construir paquetes` genera `Nexus-Office-<ver>-linux-<arch>.AppImage` y `.flatpak` para x86_64 y aarch64. Los dos
-son de solo lectura, así que Nexus-Office va **ya instalado** dentro, con `bundled/runtimes`. Los datos van a
+son de solo lectura, así que Agente IA va **ya instalado** dentro, con `bundled/runtimes`. Los datos van a
 `~/.local/share/nexus-office-c` (AppImage) o a la carpeta de la app en `~/.var/app/ai.nexus.NexusOfficeCpp` (Flatpak).
-Sin argumentos arrancan Nexus-Office (y la primera vez eligen y descargan el modelo); con argumentos son órdenes de
+Sin argumentos arrancan Agente IA (y la primera vez eligen y descargan el modelo); con argumentos son órdenes de
 `nexus-office` (`servicio`, `modelos`, `oficina`, `chat`...).
 
 - **AppImage**: `appimagetool` y el `runtime-<arch>` de AppImage/type2-runtime (se descargan a `.cache/appimage/`).
@@ -106,14 +106,14 @@ y la herramienta de construcción), el firmware de las placas y los flujos de Gi
 cmake -S nexus-office-cpp -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
-cmake --install build --prefix ~/Nexus-Office      # carpeta portable: nexus-office y nexus/ (web y recursos)
+cmake --install build --prefix ~/Agente IA      # carpeta portable: nexus-office y nexus/ (web y recursos)
 ```
 
 Hace falta un compilador C++20 (GCC 12, Clang 15, MSVC 2022 o Apple Clang 15) y CMake 3.20. No hace falta Python. Para
 usar la GPU, copia en `bundled/runtimes/llama/<variante>/` el llama-server de esa variante (o instálalo desde
 *Sistema → Runtimes* con internet).
 
-**WSL**: instala Nexus-Office en tu carpeta de Linux (`~/Nexus-Office`), no en `/mnt/c/...`, que es mucho más lenta.
+**WSL**: instala Agente IA en tu carpeta de Linux (`~/Agente IA`), no en `/mnt/c/...`, que es mucho más lenta.
 
 ## Servicio y descargas para la oficina
 
@@ -121,8 +121,8 @@ usar la GPU, copia en `bundled/runtimes/llama/<variante>/` el llama-server de es
   systemd (del sistema como root, de usuario con `loginctl enable-linger` si no), cron `@reboot` sin systemd, launchd
   (LaunchDaemon o LaunchAgent) o el Programador de tareas de Windows (al iniciar el equipo como SYSTEM si es
   administrador, al iniciar sesión si no; reinicio ante fallos, sin límite de tiempo y regla de firewall con `--red`).
-  La app Nexus-Office autónomo arranca su servicio en primer plano al encender. Todo en [SERVICIO.md](SERVICIO.md).
-- **Descargas**: Nexus-Office lista los ficheros de `<datos>/descargas/` (por ejemplo,
+  La app Agente IA autónomo arranca su servicio en primer plano al encender. Todo en [SERVICIO.md](SERVICIO.md).
+- **Descargas**: Agente IA lista los ficheros de `<datos>/descargas/` (por ejemplo,
   `data/descargas/windows/Nexus-Office-Setup-<ver>-windows-x64.exe`) y los clasifica por plataforma según su nombre.
   Para repartir los instaladores en la oficina, copia ahí la carpeta de una entrega (`windows/`, `linux/`, `macos/`,
   `android/`…). *Sistema → Descargas* marca el del sistema anfitrión y el del dispositivo que mira la página. Se
@@ -130,7 +130,7 @@ usar la GPU, copia en `bundled/runtimes/llama/<variante>/` el llama-server de es
 
 ## Empaquetado
 
-Lo hace `nexus-construir` (`tools/construir/`, en C++), que se compila junto a Nexus-Office. En GitHub Actions,
+Lo hace `nexus-construir` (`tools/construir/`, en C++), que se compila junto a Agente IA. En GitHub Actions,
 `.github/workflows/cpp-entrega.yml` compila en cada sistema, construye los instaladores y los prueba instalados con un
 modelo real; `cpp-publicar.yml` firma la APK, genera los manuales en PDF y publica la Release.
 
@@ -177,7 +177,7 @@ compilados, datos, modelos ni cachés; `nexus-construir` se para si encuentra fi
 Los modelos no se incluyen en los instaladores (son de varios GB y tienen sus propias licencias): los descarga el
 propio instalador si hay internet, la aplicación desde *Modelos → Recomendados* o `nexus-office modelos --descargar`.
 
-En la red de la oficina es cómodo copiar `dist/` en `data/descargas/` del PC con Nexus-Office y descargarlos desde
+En la red de la oficina es cómodo copiar `dist/` en `data/descargas/` del PC con Agente IA y descargarlos desde
 *Sistema → Descargas*.
 
 ## Apps Android
@@ -186,7 +186,7 @@ La app **autónoma** es la única que hace falta: lleva la IA en el móvil y, en
 cliente de la app VPN (red local, HTTPS anclado y VPN WireGuard). La app VPN se sigue publicando para móviles que no
 pueden con la IA local. Las dos pueden instalarse a la vez:
 
-| | Nexus-Office VPN | Nexus-Office autónomo |
+| | Agente IA VPN | Agente IA autónomo |
 |---|---|---|
 | Fichero | `Nexus-Office-<ver>-android-vpn.apk` | `Nexus-Office-<ver>-android-autonomo.apk` |
 | Android | 7.0 o superior (API 24) | 9.0 o superior (API 28), ARM64 |
@@ -199,11 +199,11 @@ trabajo `android` de `cpp-entrega.yml`, que la prueba en un emulador de Android 
 
 ## Portabilidad
 La carpeta instalada es autosuficiente: copiarla a otro equipo con el mismo sistema y arquitectura conserva modelos,
-memoria y configuración; Nexus-Office re-detecta el hardware al arrancar y adapta el perfil. Si tenías el servicio
+memoria y configuración; Agente IA re-detecta el hardware al arrancar y adapta el perfil. Si tenías el servicio
 instalado, vuelve a instalarlo en la carpeta nueva.
 
 ## Acceso desde otros dispositivos (móvil, tablet, consola, TV)
-En *Red COOP → Conectar dispositivos* (modo admin) activa **Permitir acceso desde la red** y reinicia Nexus-Office (o
+En *Red COOP → Conectar dispositivos* (modo admin) activa **Permitir acceso desde la red** y reinicia Agente IA (o
 instala el servicio con `--red`). Los dispositivos que no sean el propio PC necesitan la **clave de red** (se muestra
 ahí; la app Android y la URL con `?key=` la recuerdan). `/api/ping` es lo único público, para que la app encuentre el
 servidor.

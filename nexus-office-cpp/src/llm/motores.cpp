@@ -7,6 +7,8 @@
 #include <chrono>
 #include <thread>
 
+#include "hal/cpu.h"
+#include <set>
 #include "models/runtimes.h"
 #include "util/crypto.h"
 #include "util/dynlib.h"
@@ -23,7 +25,8 @@ static const auto L = log::get("motores");
 
 const std::vector<Info>& lista() {
   static const std::vector<Info> v = {{"litert", "LiteRT-LM (Google)", "litertlm", "litert-lm"},
-                                      {"onnx", "ONNX Runtime GenAI (Microsoft)", "onnx-genai", "onnxruntime-genai"}};
+                                      {"onnx", "ONNX Runtime GenAI (Microsoft)", "onnx-genai", "onnxruntime-genai"},
+                                      {"genie", "Qualcomm Genie (QAIRT)", "genie", "Genie"}};
   return v;
 }
 
@@ -48,7 +51,7 @@ static std::optional<fs::path> lib_in(const fs::path& dir, const std::string& na
   return std::nullopt;
 }
 
-static std::pair<std::optional<fs::path>, std::string> buscar(const std::string& motor) {
+static std::pair<std::optional<fs::path>, std::string> buscar(const std::string& motor, const std::string& variante = "") {
   const Info* i = info(motor);
   if (!i) return {std::nullopt, ""};
   std::string name = dynlib_name(i->lib);
@@ -57,6 +60,9 @@ static std::pair<std::optional<fs::path>, std::string> buscar(const std::string&
     if (is_file(P(forced))) return {P(forced), "embedded"};
     if (auto p = lib_in(P(forced), name)) return {p, "embedded"};
   }
+  if (!variante.empty())
+    for (auto& base : {paths::sub({"runtimes"}) / motor, runtimes::bundled_dir() / motor})
+      if (auto p = lib_in(base / variante, name)) return {p, variante};
   for (auto& base : {paths::sub({"runtimes"}) / motor, runtimes::bundled_dir() / motor}) {
     if (!is_dir(base)) continue;
     std::vector<fs::path> vars;
@@ -74,13 +80,81 @@ static std::pair<std::optional<fs::path>, std::string> buscar(const std::string&
   return {std::nullopt, ""};
 }
 
-std::optional<fs::path> lib_path(const std::string& motor) { return buscar(motor).first; }
+std::optional<fs::path> lib_path(const std::string& motor, const std::string& variante) {
+  return buscar(motor, variante).first;
+}
+
+std::vector<std::string> variantes(const std::string& motor) {
+  const Info* i = info(motor);
+  std::vector<std::string> out;
+  if (!i) return out;
+  std::string name = dynlib_name(i->lib);
+  for (auto& base : {paths::sub({"runtimes"}) / motor, runtimes::bundled_dir() / motor}) {
+    if (!is_dir(base)) continue;
+    std::error_code ec;
+    for (auto& e : fs::directory_iterator(base, ec)) {
+      std::string v = S(e.path().filename());
+      if (e.is_directory() && lib_in(e.path(), name) && std::find(out.begin(), out.end(), v) == out.end()) out.push_back(v);
+    }
+  }
+  // Android: una sola carpeta (la de la APK) con todo
+  if (out.empty() && buscar(motor).first) out.push_back("embedded");
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+std::vector<Acelerador> aceleradores(const std::string& motor) {
+  if (motor == "litert")
+    return {{"cpu", "CPU (XNNPACK)", ""}, {"gpu", "GPU (OpenCL, Vulkan, Metal o WebGPU)", ""},
+            {"npu", "NPU (Google Tensor, Snapdragon Hexagon, MediaTek APU o Intel)", ""}};
+  if (motor == "onnx")
+    return {{"modelo", "El proveedor del modelo", ""},     {"cpu", "CPU", "cpu"},
+            {"cuda", "NVIDIA CUDA", "cuda"},               {"dml", "DirectML (cualquier GPU en Windows)", "dml"},
+            {"qnn", "NPU Hexagon (QNN, Snapdragon X)", "qnn"}, {"OpenVINO", "Intel OpenVINO (NPU, GPU y CPU)", "openvino"},
+            {"VitisAI", "AMD Ryzen AI (VitisAI)", "vitisai"}};
+  if (motor == "genie") return {{"npu", "NPU Hexagon (HTP)", ""}};
+  return {};
+}
+
+// proveedor para el que se exporto un modelo ONNX (genai_config.json: model.decoder.session_options.provider_options)
+static std::string proveedor_onnx(const json& entry) {
+  fs::path dir = P(jstr(entry, "path"));
+  if (!is_dir(dir)) dir = dir.parent_path();
+  json cfg = jparse(read_text(dir / "genai_config.json"));
+  if (!cfg.is_object()) return "";
+  json po = cfg.value("model", json::object()).value("decoder", json::object()).value("session_options", json::object())
+                .value("provider_options", json::array());
+  if (po.is_array())
+    for (auto& o : po)
+      if (o.is_object() && !o.empty()) return lower(o.begin().key());
+  return "";
+}
+
+std::string variante_para(const std::string& motor, const std::string& acelerador, const json& entry) {
+  if (motor != "onnx") return "";
+  std::string a = lower(acelerador);
+  if (a == "modelo") a = proveedor_onnx(entry);
+  if (a.empty() || a == "cpu") return "cpu";
+  if (a == "dml" || a == "directml") return "dml";
+  if (a == "qnn") return "qnn";
+  if (a == "cuda" || a == "tensorrt" || a == "nvtensorrtrtx") return "cuda";
+  if (a == "openvino") return "openvino";
+  if (a == "vitisai") return "vitisai";
+  return "";
+}
 
 json estado() {
   json out = json::object();
   for (auto& i : lista()) {
     auto [p, v] = buscar(i.id);
-    out[i.id] = {{"nombre", i.nombre}, {"formato", i.formato}, {"lib", p ? json(S(*p)) : json()}, {"variante", v}};
+    json acc = json::array();
+    auto vs = variantes(i.id);
+    for (auto& a : aceleradores(i.id))
+      acc.push_back({{"id", a.id}, {"nombre", a.nombre},
+                     {"incluido", a.variante.empty() ? !vs.empty()
+                                                      : std::find(vs.begin(), vs.end(), a.variante) != vs.end()}});
+    out[i.id] = {{"nombre", i.nombre}, {"formato", i.formato}, {"lib", p ? json(S(*p)) : json()}, {"variante", v},
+                 {"variantes", vs}, {"aceleradores", acc}};
   }
   return out;
 }
@@ -104,6 +178,9 @@ std::vector<std::string> orden(const std::string& motor, const json& profile, co
     if (!forced.empty()) out.push_back(forced);
     out.push_back("modelo");
     out.push_back("cpu");
+  } else if (motor == "genie") {
+    // los binarios de contexto de Genie estan compilados para la NPU Hexagon: no hay otro acelerador
+    out.push_back("npu");
   } else {
     if (!forced.empty()) out.push_back(forced);
     std::string want = soc_del_modelo(S(P(jstr(entry, "path")).filename()) + " " + jstr(entry, "name"));
@@ -153,7 +230,7 @@ static std::string sse(const json& j) { return "data: " + jdump(j) + "\n\n"; }
 
 int main_motor(const std::vector<std::string>& argv) {
   if (argv.empty() || !info(argv[0])) {
-    std::fprintf(stderr, "uso: nexus-office motor <litert|onnx> --modelo RUTA --puerto N [--acelerador cpu|gpu|npu]\n");
+    std::fprintf(stderr, "uso: nexus-office motor <litert|onnx|genie> --modelo RUTA --puerto N [--acelerador cpu|gpu|npu]\n");
     return 2;
   }
   std::string motor = argv[0];
@@ -186,7 +263,7 @@ int main_motor(const std::vector<std::string>& argv) {
   std::unique_ptr<Motor> m;
   double t0 = now();
   try {
-    m = motor == "litert" ? abrir_litert(c) : abrir_onnx(c);
+    m = motor == "litert" ? abrir_litert(c) : motor == "genie" ? abrir_genie(c) : abrir_onnx(c);
   } catch (const std::exception& e) {
     std::fprintf(stderr, "ERROR al cargar %s con %s: %s\n", S(c.modelo.filename()).c_str(), c.acelerador.c_str(), e.what());
     return 4;
@@ -299,8 +376,96 @@ json MotorBackend::effective() {
   return effective_;
 }
 
+// ---------------------------------------------------------------- marcas de los motores dentro del proceso
+namespace {
+std::mutex g_marcas_mu;
+std::set<std::string> g_marcas_propias;   // marcas puestas por este proceso (no son de una caida anterior)
+
+fs::path dir_marcas() { return paths::sub({"cache", "motores", "en-proceso"}); }
+fs::path marca(const std::string& motor, const std::string& acel) { return dir_marcas() / P(motor + "-" + acel + ".marca"); }
+fs::path caida(const std::string& motor, const std::string& acel) { return dir_marcas() / P(motor + "-" + acel + ".caida"); }
+
+// una marca que no puso este proceso es de una ejecucion que se cayo con el motor dentro: pasa a caida
+bool cayo(const std::string& motor, const std::string& acel) {
+  std::lock_guard<std::mutex> lk(g_marcas_mu);
+  fs::path m = marca(motor, acel), c = caida(motor, acel);
+  std::error_code ec;
+  if (is_file(m) && !g_marcas_propias.count(S(m))) {
+    fs::rename(m, c, ec);
+    LM.warning("El motor ", motor, " se cayo en ", acel, " dentro del proceso: desde ahora va en un proceso aparte");
+  }
+  return is_file(c);
+}
+
+struct Marca {
+  fs::path p;
+  Marca(const std::string& motor, const std::string& acel) : p(marca(motor, acel)) {
+    std::lock_guard<std::mutex> lk(g_marcas_mu);
+    g_marcas_propias.insert(S(p));
+    write_file(p, std::to_string((long long)now()));
+  }
+  ~Marca() {
+    std::lock_guard<std::mutex> lk(g_marcas_mu);
+    std::error_code ec;
+    fs::remove(p, ec);
+    g_marcas_propias.erase(S(p));
+  }
+};
+}  // namespace
+
+json MotorBackend::caidas() {
+  json out = json::array();
+  for (auto& f : glob(dir_marcas(), "*.caida")) out.push_back(stem(f));
+  return out;
+}
+
+void MotorBackend::olvidar_caidas() {
+  std::error_code ec;
+  for (auto& f : glob(dir_marcas(), "*.caida")) fs::remove(f, ec);
+}
+
+bool MotorBackend::abrir_local(const std::string& acel, const fs::path& lib, const std::string& modelo, int n_ctx,
+                               int hilos, std::string& error) {
+  motores::Config c;
+  c.lib = lib;
+  c.modelo = P(modelo);
+  c.acelerador = acel;
+  c.hilos = hilos > 0 ? hilos : hal::hilos_calculo();
+  c.n_ctx = std::max(512, n_ctx);
+  c.cache = paths::sub({"cache", "motores", motor_});
+  c.dispatch = lib.parent_path();
+  for (auto& d : glob(lib.parent_path() / "vendors", "dispatch", true))
+    if (is_dir(d)) {
+      c.dispatch = d;
+      break;
+    }
+#ifndef _WIN32
+  if (sys::is_android()) {
+    // NPU Hexagon: el DSP busca sus bibliotecas (skel) en ADSP_LIBRARY_PATH
+    std::string adsp = S(lib.parent_path()) + ";/vendor/dsp/cdsp;/vendor/lib/rfsa/adsp;/dsp";
+    setenv("ADSP_LIBRARY_PATH", adsp.c_str(), 0);
+  }
+  if (motor_ == "onnx")
+    for (auto& o : glob(lib.parent_path(), "libonnxruntime.*"))
+      if (!contains(S(o.filename()), "genai") && !contains(S(o.filename()), "providers")) setenv("ORT_LIB_PATH", S(o).c_str(), 0);
+#endif
+  try {
+    Marca m(motor_, acel);
+    local_ = motor_ == "litert" ? motores::abrir_litert(c) : motor_ == "genie" ? motores::abrir_genie(c) : motores::abrir_onnx(c);
+    return true;
+  } catch (const std::exception& e) {
+    error = e.what();
+    local_.reset();
+    return false;
+  }
+}
+
 void MotorBackend::stop() {
   std::lock_guard<std::recursive_mutex> lk(mu_);
+  {
+    std::lock_guard<std::mutex> g(gen_mu_);
+    local_.reset();
+  }
   if (proc_ && proc_->running()) {
     proc_->terminate();
     if (!proc_->wait(10)) proc_->kill();
@@ -314,18 +479,53 @@ void MotorBackend::ensure(const std::string& model, const json& opts) {
   const motores::Info* inf = motores::info(motor_);
   if (!resolved) throw std::runtime_error("No hay modelo " + inf->formato + " activo. Descarga uno en Modelos.");
   auto& [path, entry] = *resolved;
-  auto lib = motores::lib_path(motor_);
-  if (!lib) throw std::runtime_error(inf->nombre + " no esta instalado en este equipo (Sistema > Runtimes)");
+  if (!motores::lib_path(motor_)) throw std::runtime_error(inf->nombre + " no esta instalado en este equipo (Sistema > Runtimes)");
   int n_ctx = (int)jnum(opts.value("n_ctx", json(4096)), 4096), hilos = (int)jnum(opts.value("n_threads", json(0)), 0);
   std::string key = cat(path, "|", n_ctx, "|", hilos);
   std::lock_guard<std::recursive_mutex> lk(mu_);
-  if (proc_ && proc_->running() && key_ == key) return;
+  if ((local_ || (proc_ && proc_->running())) && key_ == key) return;
   stop();
   if (key != cat(jstr(effective_, "key"))) fallidos_.clear();
   fs::path log_path = paths::logs_dir() / ("motor-" + motor_ + ".log");
   std::vector<std::string> errores;
   for (auto& acel : motores::orden(motor_, profile_(), entry)) {
     if (std::find(fallidos_.begin(), fallidos_.end(), acel) != fallidos_.end()) continue;
+    // cada proveedor de ONNX Runtime va en su carpeta (cuda, dml, qnn, openvino...): la de este acelerador
+    std::string var = motores::variante_para(motor_, acel, entry);
+    auto vs = motores::variantes(motor_);
+    bool embebido = vs.size() == 1 && vs[0] == "embedded";
+    if (!var.empty() && var != "cpu" && !embebido && std::find(vs.begin(), vs.end(), var) == vs.end()) {
+      errores.push_back(acel + ": no va incluido en este paquete (falta " + motor_ + "/" + var + ")");
+      continue;
+    }
+    auto lib = motores::lib_path(motor_, var);
+    if (!lib) continue;
+    // dentro del proceso, salvo que este motor y acelerador ya tumbaran Agente IA alguna vez
+    if (en_proceso.load() && !cayo(motor_, acel)) {
+      double t0 = now();
+      std::string err;
+      if (abrir_local(acel, *lib, path, n_ctx, hilos, err)) {
+        key_ = key;
+        effective_ = {{"motor", motor_},
+                      {"acelerador", local_->acelerador()},
+                      {"variante", var},
+                      {"lib", S(*lib)},
+                      {"requested", motores::orden(motor_, profile_(), entry)[0]},
+                      {"device", acel == "npu" ? "NPU" : acel == "cpu" ? "CPU" : "GPU"},
+                      {"proceso", "dentro"},
+                      {"marca", acel},
+                      {"at", now()},
+                      {"key", key},
+                      {"fallidos", fallidos_}};
+        effective_["ok"] = acel == jstr(effective_, "requested");
+        LM.info(inf->nombre, " listo DENTRO del proceso en ", acel, " (", fnum(now() - t0, 1), "s)");
+        return;
+      }
+      fallidos_.push_back(acel);
+      errores.push_back(acel + ": " + uright(err, 300));
+      LM.warning(inf->nombre, " no cargo en ", acel, " dentro del proceso: ", uright(err, 200));
+      continue;
+    }
     port = net::free_port(8191);
     std::vector<std::string> cmd = {S(paths::exe_path()), "motor", motor_, "--modelo", path, "--puerto",
                                     std::to_string(port), "--acelerador", acel, "--lib", S(*lib), "--ctx",
@@ -368,12 +568,15 @@ void MotorBackend::ensure(const std::string& model, const json& opts) {
       effective_ = json::object();
       effective_["motor"] = motor_;
       effective_["acelerador"] = acel;
+      effective_["variante"] = var;
+      effective_["lib"] = S(*lib);
       effective_["requested"] = requested;
       effective_["device"] = acel == "npu" ? "NPU" : acel == "cpu" ? "CPU" : "GPU";
       effective_["ok"] = acel == requested;
       effective_["at"] = now();
       effective_["key"] = key;
       effective_["fallidos"] = fallidos_;
+      effective_["proceso"] = "aparte";
       LM.info(inf->nombre, " listo en ", acel, " (", fnum(now() - t0, 1), "s)");
       return;
     }
@@ -395,6 +598,31 @@ void MotorBackend::stream_chat(const json& messages, const std::string& model, c
   ensure(model, opts.o);
   json msgs = messages;
   for (auto& m : msgs) m["images"] = json::array();
+  {
+    std::unique_lock<std::mutex> g(gen_mu_);
+    if (local_) {
+      // dentro del proceso: cada trozo llega por una llamada directa, sin HTTP ni SSE
+      const json& o = opts.o;
+      motores::Params p;
+      json t = o.value("temperature", json(0.7)), mt = o.value("max_tokens", json(1024));
+      p.temperature = t.is_number() ? t.get<double>() : 0.7;
+      p.max_tokens = mt.is_number() ? mt.get<int>() : 1024;
+      if (o.contains("top_p") && o["top_p"].is_number()) p.top_p = o["top_p"].get<double>();
+      if (o.contains("top_k") && o["top_k"].is_number()) p.top_k = o["top_k"].get<int>();
+      if (o.contains("seed") && o["seed"].is_number()) p.seed = o["seed"].get<long long>();
+      std::string acel;
+      {
+        std::lock_guard<std::recursive_mutex> lk(mu_);
+        acel = jstr(effective_, "marca");
+      }
+      Marca m(motor_, acel.empty() ? "cpu" : acel);
+      local_->generar(msgs, p, [&](const std::string& piece) {
+        out(piece);
+        return true;
+      });
+      return;
+    }
+  }
   Opts o2 = opts;
   o2.o.erase("tool_specs");   // sin herramientas nativas: el protocolo de texto de Nexus-Office
   bool produced = false;

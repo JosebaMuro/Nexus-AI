@@ -65,7 +65,7 @@ final class RuntimeInstaller {
             }
         });
         int threads = Math.max(2, Math.min(4, Runtime.getRuntime().availableProcessors()));
-        progress.update(10, "Descomprimiendo Nexus-Office (" + threads + " hilos)...");
+        progress.update(10, "Descomprimiendo Agente IA (" + threads + " hilos)...");
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         final AtomicLong done = new AtomicLong();
         List<Future<?>> jobs = new ArrayList<Future<?>>();

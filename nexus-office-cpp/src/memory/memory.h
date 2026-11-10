@@ -298,15 +298,17 @@ class Learner {
  public:
   Learner(DB& db, MemoryStore& memory, KnowledgeGraph& graph, Organizer& organizer);
   json on_user_message(const std::string& text, const std::string& session_id, const std::string& agent = "",
-                       bool llm_extraction = false);
-  json learn_text(const std::string& text, const std::string& agent = "", bool llm_extraction = false);
+                       bool llm_extraction = false, const std::string& user = "");
+  json learn_text(const std::string& text, const std::string& agent = "", bool llm_extraction = false,
+                  const std::string& user = "");
   void on_exchange(const std::string& session_id, const std::string& user, const std::string& assistant,
                    const std::string& agent, int consolidate_every = 12);
   json feedback(long long message_id, int score, const std::string& comment = "");
   std::string consolidate(const std::string& session_id,
                           const std::function<std::string(const std::string&)>& summarize = nullptr);
-  std::vector<std::string> behaviors(int limit = 8);
-  json build_context(const std::string& query, const std::string& agent = "", int k = 6);
+  // pautas del usuario: las suyas (cada usuario final tiene las suyas; "" = el titular)
+  std::vector<std::string> behaviors(int limit = 8, const std::string& user = "");
+  json build_context(const std::string& query, const std::string& agent = "", int k = 6, const std::string& user = "");
   std::function<std::string(const std::string&)> llm_complete;
   std::function<std::string(const std::string&)> namer = [](const std::string& a) { return a; };
   DB& db;

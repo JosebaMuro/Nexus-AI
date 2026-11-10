@@ -213,7 +213,7 @@ void recursos() {
     anotar("recursos", "Ficheros del programa", "ok", "interfaz, agentes y certificados en su sitio");
   else
     anotar("recursos", "Ficheros del programa", "error",
-           "faltan " + join(faltan, ", ") + ": vuelve a instalar Nexus-Office (tus datos no se tocan)");
+           "faltan " + join(faltan, ", ") + ": vuelve a instalar Agente IA (tus datos no se tocan)");
 }
 
 void configuracion(bool reparar) {
@@ -347,7 +347,7 @@ void disco() {
   char b[32];
   std::snprintf(b, sizeof b, "%.1f GB libres", gb);
   if (gb < 0.3)
-    anotar("disco", "Espacio en disco", "error", std::string(b) + ": libera espacio, Nexus-Office puede no guardar los datos");
+    anotar("disco", "Espacio en disco", "error", std::string(b) + ": libera espacio, Agente IA puede no guardar los datos");
   else if (gb < 2)
     anotar("disco", "Espacio en disco", "aviso", std::string(b) + ": queda poco para modelos y copias");
   else
@@ -459,7 +459,7 @@ void motor(Services& s, bool reparar) {
            "la variante " + f->variant + " no arranca en este equipo (" + e + "): se usa la " + v + ". Puedes volver a probar la GPU en Motor y CPU/GPU/NPU");
     return;
   }
-  anotar("motor", "Motor de IA (llama-server)", "error", "la variante " + f->variant + " no arranca (" + e + ") y no hay otra que funcione: reinstala Nexus-Office");
+  anotar("motor", "Motor de IA (llama-server)", "error", "la variante " + f->variant + " no arranca (" + e + ") y no hay otra que funcione: reinstala Agente IA");
 }
 
 void imagen(Services& s) {

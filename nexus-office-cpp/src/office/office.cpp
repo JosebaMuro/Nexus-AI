@@ -28,7 +28,8 @@ const std::vector<std::string> OFFICE_ROLES = {"recepcion", "administracion", "p
 // herramientas del coordinador: todas las que funcionan sin internet
 const std::vector<std::string> COORDINATOR_TOOLS = {
     "delegate",   "list_agents",  "memory_search", "memory_save", "knowledge_graph", "graph_import", "rag_search",
-    "rag_list",   "calculator",   "datetime_now",  "file_read",   "file_write",      "file_list",    "system_info"};
+    "rag_list",   "calculator",   "datetime_now",  "file_read",   "file_write",      "file_list",    "system_info",
+    "ubicacion_actual"};
 const char* COORDINATOR_PROMPT = R"(Eres {assistant_name}, la oficina virtual de una pyme y coordinas a su equipo de agentes.
 {context}
 Atiendes al usuario (el dueño o el personal de la empresa) con trato cercano y profesional. Lo que es de un gremio
@@ -257,7 +258,7 @@ json Office::apply(const std::string& pid, bool reset_agents) {
   for (auto& a : team) names[a] = jstr(cat[a], "name");
   write(coordinator(profile, names));
   std::string an = jstr(profile, "assistant_name");
-  config_.set("user.assistant_name", an.empty() ? "Nexus-Office" : an, false);
+  config_.set("user.assistant_name", an.empty() ? "Agente IA" : an, false);
   config_.set("user.default_agent", "auto", false);
   config_.set("office.profile", pid);
   L.info("Perfil de oficina aplicado: ", pid, " (", team.size(), " agentes)");
@@ -278,7 +279,7 @@ void Office::clear() {
       set_enabled(dst, true);
     }
   }
-  config_.set("user.assistant_name", "Nexus-Office", false);
+  config_.set("user.assistant_name", "Agente IA", false);
   config_.set("office.profile", "");
 }
 

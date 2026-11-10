@@ -12,9 +12,10 @@ namespace nx {
 const json& config_defaults() {
   static const json D = json::parse(R"JSON({
   "user": {
-    "assistant_name": "Nexus-Office", "sexo": "", "language": "es", "response_style": "equilibrado", "voice_enabled": true,
+    "assistant_name": "Agente IA", "sexo": "", "language": "es", "response_style": "equilibrado", "voice_enabled": true,
     "voice_name": "", "speech_rate": 1.0, "auto_speak": false, "default_agent": "auto", "memory_enabled": true,
-    "accent_color": "#00f0ff", "avatar_enabled": true, "avatar_style": "geisha", "avatar_model": "", "theme": {}
+    "accent_color": "#00f0ff", "avatar_enabled": true, "avatar_style": "geisha", "avatar_model": "", "theme": {},
+    "voz": {}, "voz_distinta": true
   },
   "llm": {
     "backend_order": ["llamaserver", "llamacpp", "ollama", "openai", "transformers", "builtin"],
@@ -50,7 +51,10 @@ const json& config_defaults() {
   "remote": {"enabled": false, "port": 8443, "host": "0.0.0.0"},
   "vpn": {"enabled": false, "port": 51820, "subnet": "10.78.0.0/24", "endpoints": []},
   "performance": {"workers": 0, "crawl_connections": 0},
-  "rag": {"crawl_batch_pages": 0, "allow_private_urls": false, "browser": "auto", "browser_path": ""},
+  "rag": {"crawl_batch_pages": 0, "crawl_parallel": 1, "allow_private_urls": false, "browser": "auto", "browser_path": ""},
+  "ubicacion": {"activada": true, "fuente": "auto", "manual": {"lat": null, "lon": null, "nombre": ""}, "lugares": [],
+                "serie": "", "baudios": 9600, "gpsd": "127.0.0.1:2947", "navegador": false, "remota": false,
+                "usuarios": false, "frescura_s": 120, "timeout_s": 8},
   "bolsa": {"datos": "reales", "refresco_s": 20,
             "agente": {"activo": true, "intervalo_s": 60, "capital": 10000.0, "riesgo_pct": 1.0, "max_posiciones": 8,
                        "max_peso_pct": 20.0, "reserva_pct": 10.0, "universo": []}},

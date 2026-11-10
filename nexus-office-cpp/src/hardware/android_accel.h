@@ -19,7 +19,8 @@ json device_info(const fs::path& path = {});
 std::string vendor_lib(const std::vector<std::string>& names, const std::vector<std::string>& dirs = {});
 json soc(const json& props, const json& info);
 json npu(const json& soc, const LibFinder& lib = nullptr);
-std::map<std::string, std::string> gpu_env(const std::string& libs);
+// sin npu el backend Hexagon no abre ninguna sesion en el DSP (GGML_HEXAGON_DEVICES=0): la GPU no depende de la NPU
+std::map<std::string, std::string> gpu_env(const std::string& libs, bool npu = true);
 json parse_devices(const std::string& out);
 std::string gpu_vendor(const std::string& name);
 bool is_npu_dev(const std::string& dev);

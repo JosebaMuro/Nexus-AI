@@ -148,7 +148,7 @@ std::string CoopNode::network_id() const { return s_.config.str("coop.network_id
 std::string CoopNode::name() const {
   std::string n = s_.config.str("coop.node_name");
   if (!n.empty()) return n;
-  return s_.config.str("user.assistant_name", "Nexus-Office") + "-" + node_id.substr(0, 4);
+  return s_.config.str("user.assistant_name", "Agente IA") + "-" + node_id.substr(0, 4);
 }
 
 std::string CoopNode::vip() const {

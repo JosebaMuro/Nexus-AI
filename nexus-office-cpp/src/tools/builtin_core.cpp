@@ -7,6 +7,7 @@
 
 #include "agents/agents.h"
 #include "core/services.h"
+#include "devices/ubicacion.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
 #include "memory/kg.h"
@@ -318,6 +319,17 @@ json datetime_now(const json&, ToolContext&) {
           {"iso", strftime_local("%Y-%m-%dT%H:%M:%S", t)}};
 }
 
+// ubicacion en tiempo real del equipo (devices/ubicacion.h): nunca se manda a otros nodos ni a usuarios que no son el
+// titular salvo que se active en Ajustes, y la posicion no sale del equipo
+json ubicacion_actual(const json& args, ToolContext& ctx) {
+  Config& cfg = get_config();
+  if (ctx.remote && !truthy(cfg.get("ubicacion.remota", false)))
+    throw ToolError("PermissionError", "la ubicacion de este equipo no se comparte con otros nodos de la red");
+  if (!ctx.user.empty() && !truthy(cfg.get("ubicacion.usuarios", false)))
+    throw ToolError("PermissionError", "solo el titular puede consultar la ubicacion de este equipo (Ajustes > Ubicacion)");
+  return ubicacion::consultar(args.is_object() ? args : json::object());
+}
+
 json memory_search(const json& args, ToolContext& ctx) {
   Services& s = *ctx.services;
   std::string q = jstr(args, "query");
@@ -340,11 +352,20 @@ json memory_search(const json& args, ToolContext& ctx) {
 json memory_save(const json& args, ToolContext& ctx) {
   Services& s = *ctx.services;
   std::string content = jstr(args, "content");
-  long long mid = s.memory->remember(content, jstr(args, "kind", "note"), jnum(args.value("importance", json(0.7)), 0.7),
-                                     "agente:" + ctx.agent);
-  // datos del usuario, pautas y relaciones al general; los temas, al especialista que corresponda (o comunes)
-  s.learner->learn_text(content, ctx.agent);
-  return {{"saved", true}, {"id", mid}};
+  double importance = jnum(args.value("importance", json(0.7)), 0.7);
+  std::string source = "agente:" + ctx.agent;
+  bool tainted = ctx.stats && ctx.stats->is_tainted();
+  if (tainted) {   // se pidio guardar despues de leer contenido de terceros: pesa menos y queda marcado
+    importance = std::min(importance, 0.4);
+    source += ":tras_contenido_externo";
+  }
+  long long mid = s.memory->remember(content, jstr(args, "kind", "note"), importance, source);
+  // datos del usuario, pautas y relaciones al general; los temas, al especialista que corresponda (o comunes).
+  // Lo que llega tras contenido externo no crea pautas de comportamiento (seria una puerta a la inyeccion).
+  if (!tainted) s.learner->learn_text(content, ctx.agent, false, ctx.user);
+  json out = {{"saved", true}, {"id", mid}};
+  if (tainted) out["nota"] = "guardado con importancia reducida porque el turno leyo contenido externo";
+  return out;
 }
 
 json knowledge_graph(const json& args, ToolContext& ctx) {
@@ -460,7 +481,7 @@ json list_agents(const json&, ToolContext& ctx) {
   return {{"agents", out}};
 }
 
-Register r1("calculator", calculator), r2("datetime_now", datetime_now), r3("memory_search", memory_search),
+Register r1("calculator", calculator), r2("datetime_now", datetime_now), r12("ubicacion_actual", ubicacion_actual), r3("memory_search", memory_search),
     r4("memory_save", memory_save), r5("knowledge_graph", knowledge_graph), r6("system_info", system_info),
     r10("graph_import", graph_import),
     r7("delegate", delegate), r8("propose_tool", propose_tool), r9("list_agents", list_agents),

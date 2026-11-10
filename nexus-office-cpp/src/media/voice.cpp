@@ -4,6 +4,7 @@
 // Edicion C++: Piper y Whisper son los ejecutables piper y whisper-cli (whisper.cpp) incluidos en el paquete o en el
 // PATH; la "voz del sistema" sustituye a pyttsx3 (SAPI en Windows, say en macOS, espeak-ng en Linux). El motor de
 // dictado se anuncia como "faster-whisper" para que la interfaz web, compartida con la version Python, lo use igual.
+#include <algorithm>
 #include <cmath>
 
 #include "media/media.h"
@@ -96,14 +97,178 @@ json VoiceEngine::info() {
           {"stt_active", pick(stt_l, ps)},
           {"stt_model", prof["stt"]["model"]}};
 }
+// ---------------------------------------------------------------- voces de los agentes
+// numero de 0 a 1 estable para cada agente (FNV-1a de su id)
+static double semilla_voz(const std::string& id) {
+  uint64_t h = 1469598103934665603ULL;
+  for (unsigned char c : id) h = (h ^ c) * 1099511628211ULL;
+  return (double)(h % 10007) / 10006.0;
+}
 
-std::optional<std::pair<std::string, std::string>> VoiceEngine::tts(const std::string& raw, double rate) {
+static double num_voz(const json& v, const char* k, double def, double lo, double hi) {
+  if (!v.is_object() || !v.contains(k) || !v[k].is_number()) return def;
+  return std::clamp(v[k].get<double>(), lo, hi);
+}
+
+json VoiceEngine::voz_de(const std::string& agente, const json& voz_agente, int indice) {
+  json general = config_.get("user.voz", json::object());
+  json v = general.is_object() ? general : json::object();
+  bool propia = voz_agente.is_object() && !voz_agente.empty();
+  if (propia)
+    for (auto& [k, x] : voz_agente.items())
+      if (!x.is_null() && !(x.is_string() && x.get<std::string>().empty())) v[k] = x;
+  if (!propia && !agente.empty() && agente != "nexus" && config_.flag("user.voz_distinta", true)) {
+    // sin voz propia: un tono distinto por agente alrededor del general y, si el modelo Piper tiene varios hablantes,
+    // uno de ellos; con espeak, una variante
+    // tonos bien separados (alternando grave y agudo) y, con indice, consecutivos para que no se repitan
+    static const double tonos[] = {0.86, 1.14, 0.94, 1.06, 0.80, 1.22, 0.90, 1.10, 0.98, 1.18};
+    static const char* variantes[] = {"m3", "f2", "m1", "f4", "m7", "f3", "m2", "f1", "m4", "f5"};
+    int i = indice >= 0 ? indice : (int)(semilla_voz(agente) * 1000);
+    double base = num_voz(v, "tono", 1.0, 0.5, 2.0);
+    v["tono"] = std::round(base * tonos[i % 10] * 100) / 100;
+    v["auto"] = true;
+    json m = jstr(v, "modelo").empty() ? piper_model() : catalog_.get(jstr(v, "modelo"));
+    json hs = m.is_null() ? json::array() : piper_hablantes(m);
+    if (hs.size() > 1 && !v.contains("hablante")) v["hablante"] = hs[i % (int)hs.size()]["id"];
+    bool espeak = !sys::is_windows() && !sys::is_macos() && !system_tts_cmd().empty();
+    if (espeak && jstr(v, "nombre").find('+') == std::string::npos) v["variante"] = variantes[i % 10];
+  }
+  return v;
+}
+
+json VoiceEngine::piper_hablantes(const json& modelo) {
+  json out = json::array();
+  std::string path = jstr(modelo, "path");
+  if (path.empty()) return out;
+  json cfg = jparse(read_file(P(path + ".json")).value_or(""));
+  if (cfg.is_discarded() || !cfg.is_object()) {
+    cfg = json();
+    fs::path pp = P(path);
+    if (is_dir(pp))
+      for (auto& f : glob(pp, "*.onnx.json")) {
+        cfg = jparse(read_file(f).value_or(""));
+        break;
+      }
+  }
+  if (cfg.is_discarded() || !cfg.is_object()) return out;
+  json mapa = cfg.value("speaker_id_map", json::object());
+  if (mapa.is_object() && !mapa.empty()) {
+    std::vector<std::pair<int, std::string>> l;
+    for (auto& [n, id] : mapa.items())
+      if (id.is_number()) l.push_back({id.get<int>(), n});
+    std::sort(l.begin(), l.end());
+    if (l.size() > 1)
+      for (auto& [id, n] : l) out.push_back({{"id", id}, {"nombre", n}});
+  } else {
+    int n = cfg.value("num_speakers", 1);
+    for (int i = 0; n > 1 && i < n; ++i) out.push_back({{"id", i}, {"nombre", "Hablante " + std::to_string(i + 1)}});
+  }
+  return out;
+}
+
+json VoiceEngine::voces() {
+  json piper = json::array();
+  for (auto& m : catalog_.list())
+    if (jstr(m, "kind") == "tts")
+      piper.push_back({{"id", jstr(m, "id")}, {"nombre", jstr(m, "name", jstr(m, "id"))}, {"hablantes", piper_hablantes(m)}});
+  json sistema = json::array(), variantes = json::array();
+  auto cmd = system_tts_cmd();
+  try {
+    if (!cmd.empty() && sys::is_windows()) {
+      auto r = proc::run({cmd[0], "-NoProfile", "-NonInteractive", "-Command",
+                          "Add-Type -AssemblyName System.Speech;(New-Object System.Speech.Synthesis.SpeechSynthesizer)."
+                          "GetInstalledVoices()|%{$_.VoiceInfo.Name+'|'+$_.VoiceInfo.Culture.Name}"},
+                         30, {.capture = true});
+      for (auto& l : splitlines(r.out)) {
+        auto pos = l.find('|');
+        if (pos != std::string::npos) sistema.push_back({{"nombre", trim(l.substr(0, pos))}, {"idioma", trim(l.substr(pos + 1))}});
+      }
+    } else if (!cmd.empty() && sys::is_macos()) {
+      auto r = proc::run({cmd[0], "-v", "?"}, 30, {.capture = true});
+      for (auto& l : splitlines(r.out)) {
+        auto pos = l.find("  ");
+        if (pos == std::string::npos) continue;
+        std::string resto = trim(l.substr(pos));
+        sistema.push_back({{"nombre", trim(l.substr(0, pos))}, {"idioma", resto.substr(0, resto.find(' '))}});
+      }
+    } else if (!cmd.empty()) {
+      // espeak-ng --voices: Pty Language Age/Gender VoiceName File Other
+      auto r = proc::run({cmd[0], "--voices"}, 30, {.capture = true});
+      bool cab = true;
+      for (auto& l : splitlines(r.out)) {
+        if (cab) {
+          cab = false;
+          continue;
+        }
+        std::vector<std::string> c;
+        for (auto& x : split(l, " "))
+          if (!trim(x).empty()) c.push_back(trim(x));
+        if (c.size() >= 4) sistema.push_back({{"nombre", c[1]}, {"idioma", c[1]}, {"descripcion", c[3]}});
+      }
+      for (const char* x : {"m1", "m2", "m3", "m4", "m5", "m6", "m7", "f1", "f2", "f3", "f4", "f5", "croak", "whisper"})
+        variantes.push_back(x);
+    }
+  } catch (const std::exception& e) {
+    L.warning("No se pudieron listar las voces del sistema: ", e.what());
+  }
+  return {{"piper", piper}, {"sistema", sistema}, {"variantes", variantes}, {"motores", tts_engines()}};
+}
+
+// tono y volumen sobre el WAV de 16 bits: el tono cambia la frecuencia de muestreo de la cabecera (sale mas agudo y
+// mas rapido; quien llama ya lo sintetizo mas lento en la misma proporcion) y el volumen escala las muestras
+void tono_volumen(std::string& wav, double tono, double volumen) {
+  if (wav.size() < 44 || wav.compare(0, 4, "RIFF") != 0 || wav.compare(8, 4, "WAVE") != 0) return;
+  auto u16 = [&](size_t o) { return (uint16_t)((uint8_t)wav[o] | ((uint8_t)wav[o + 1] << 8)); };
+  auto u32 = [&](size_t o) { return (uint32_t)u16(o) | ((uint32_t)u16(o + 2) << 16); };
+  auto put32 = [&](size_t o, uint32_t v) {
+    for (int i = 0; i < 4; ++i) wav[o + i] = (char)((v >> (8 * i)) & 0xff);
+  };
+  size_t pos = 12;
+  int bits = 0;
+  while (pos + 8 <= wav.size()) {
+    std::string id = wav.substr(pos, 4);
+    uint32_t len = u32(pos + 4);
+    size_t body = pos + 8;
+    if (id == "fmt " && body + 16 <= wav.size()) {
+      bits = u16(body + 14);
+      if (std::abs(tono - 1) > 0.005) {
+        put32(body + 4, (uint32_t)std::lround(u32(body + 4) * tono));   // muestras por segundo
+        put32(body + 8, (uint32_t)std::lround(u32(body + 8) * tono));   // bytes por segundo
+      }
+    } else if (id == "data" && bits == 16 && std::abs(volumen - 1) > 0.005) {
+      size_t fin = std::min<size_t>(body + (size_t)len, wav.size());
+      for (size_t o = body; o + 1 < fin; o += 2) {
+        int s = (int16_t)u16(o);
+        s = std::clamp((int)std::lround(s * volumen), -32768, 32767);
+        wav[o] = (char)(s & 0xff);
+        wav[o + 1] = (char)((s >> 8) & 0xff);
+      }
+    }
+    if (len > wav.size()) break;
+    pos = body + len + (len & 1);
+  }
+}
+
+std::optional<std::pair<std::string, std::string>> VoiceEngine::tts(const std::string& raw, double rate, const json& voz_in) {
+  json voz = voz_in.is_object() ? voz_in : json::object();
   std::string engine = jstr(info(), "tts_active");
+  std::string pedido = jstr(voz, "motor");
+  if (!pedido.empty() && pedido != "auto") {
+    auto l = tts_engines();
+    if (std::find(l.begin(), l.end(), pedido) != l.end()) engine = pedido;
+  }
   std::string text = uleft(trim(raw), 2000);
   if (text.empty() || engine == "browser") return std::nullopt;
+  double tono = num_voz(voz, "tono", 1.0, 0.5, 2.0), volumen = num_voz(voz, "volumen", 1.0, 0.0, 2.0);
+  // se sintetiza a velocidad/tono para que, al subir el tono en la cabecera, la duracion quede en la pedida
+  double vel = std::clamp(rate * num_voz(voz, "velocidad", 1.0, 0.3, 3.0) / tono, 0.25, 4.0);
   try {
-    if (engine == "piper") return std::make_pair(tts_piper(text, rate), std::string("piper"));
-    if (engine == "sistema") return std::make_pair(tts_system(text, rate), std::string("sistema"));
+    std::string wav;
+    if (engine == "piper") wav = tts_piper(text, vel, voz);
+    else if (engine == "sistema") wav = tts_system(text, vel, voz);
+    else return std::nullopt;
+    tono_volumen(wav, tono, volumen);
+    return std::make_pair(std::move(wav), engine);
   } catch (const std::exception& e) {
     L.warning("TTS ", engine, " fallo: ", e.what());
   }
@@ -112,27 +277,31 @@ std::optional<std::pair<std::string, std::string>> VoiceEngine::tts(const std::s
 
 static fs::path temp_file(const std::string& suffix) { return paths::sub({"cache"}) / P("voz-" + token_hex(6) + suffix); }
 
-std::string VoiceEngine::tts_piper(const std::string& text, double rate) {
-  json entry = piper_model();
+std::string VoiceEngine::tts_piper(const std::string& text, double rate, const json& voz) {
+  json entry = jstr(voz, "modelo").empty() ? json() : catalog_.get(jstr(voz, "modelo"));
+  if (entry.is_null() || jstr(entry, "kind") != "tts") entry = piper_model();
   auto exe = piper_exe();
   if (!exe || entry.is_null()) throw std::runtime_error("Piper no disponible");
   std::lock_guard<std::mutex> lk(mu_);
   fs::path out = temp_file(".wav");
-  auto r = proc::run({S(*exe), "--model", jstr(entry, "path"), "--output_file", S(out), "--length_scale",
-                      pyfloat(1.0 / std::max(0.5, rate))},
-                     120, {.cwd = exe->parent_path(), .env = runtimes::lib_env(*exe), .capture = true, .input = text + "\n"});
+  std::vector<std::string> a = {S(*exe), "--model", jstr(entry, "path"), "--output_file", S(out), "--length_scale",
+                                pyfloat(1.0 / std::max(0.25, rate))};
+  if (voz.contains("hablante") && voz["hablante"].is_number())
+    a.insert(a.end(), {"--speaker", std::to_string(voz["hablante"].get<int>())});
+  auto r = proc::run(a, 120, {.cwd = exe->parent_path(), .env = runtimes::lib_env(*exe), .capture = true, .input = text + "\n"});
   auto data = read_file(out);
   remove_file(out);
   if (!r.ok() || !data || data->empty()) throw std::runtime_error(uright(r.err.empty() ? r.out : r.err, 300));
   return *data;
 }
 
-std::string VoiceEngine::tts_system(const std::string& text, double rate) {
+std::string VoiceEngine::tts_system(const std::string& text, double rate, const json& voz) {
   auto cmd = system_tts_cmd();
   if (cmd.empty()) throw std::runtime_error("No hay voz del sistema");
   std::lock_guard<std::mutex> lk(mu_);
   fs::path out = temp_file(".wav");
-  std::string lang = config_.str("user.language", "es"), wanted = config_.str("user.voice_name", "");
+  std::string lang = config_.str("user.language", "es"), wanted = jstr(voz, "nombre");
+  if (wanted.empty()) wanted = config_.str("user.voice_name", "");
   proc::Result r;
   if (sys::is_windows()) {
     fs::path txt = temp_file(".txt");
@@ -154,8 +323,9 @@ std::string VoiceEngine::tts_system(const std::string& text, double rate) {
     a.push_back(text);
     r = proc::run(a, 120, {.capture = true});
   } else {
-    std::vector<std::string> a = {cmd[0], "-s", std::to_string((int)(170 * rate)), "-v", wanted.empty() ? lang : wanted,
-                                  "-w", S(out), text};
+    std::string v = wanted.empty() ? lang : wanted;
+    if (!jstr(voz, "variante").empty() && v.find('+') == std::string::npos) v += "+" + jstr(voz, "variante");
+    std::vector<std::string> a = {cmd[0], "-s", std::to_string((int)(170 * rate)), "-v", v, "-w", S(out), text};
     r = proc::run(a, 120, {.capture = true});
   }
   auto data = read_file(out);

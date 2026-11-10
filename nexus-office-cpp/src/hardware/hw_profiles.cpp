@@ -274,6 +274,8 @@ json elegir_gpu(Services& s, const std::string& gpu) {
     json q = p;
     if (!gpu.empty()) q["gpu"] = gpu;
     superponer(profile, q);
+  } else if (cfg.flag("hardware.adaptive_tuning", true)) {
+    apply_overrides(profile);
   }
   aplicar_capas(profile, cfg);
   s.profile = profile;

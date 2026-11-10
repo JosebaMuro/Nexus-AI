@@ -1,6 +1,6 @@
 # Edición C++
 
-Nexus-Office reescrito en C++20, con todas las funciones de la edición Python. Es la misma aplicación: la misma interfaz web (los ficheros de
+Agente IA reescrito en C++20, con todas las funciones de la edición Python. Es la misma aplicación: la misma interfaz web (los ficheros de
 `nexus-office/nexus/web` se usan tal cual), la misma API HTTP y WebSocket, los mismos perfiles de oficina, agentes,
 paquetes de conocimiento, base de datos y configuración. Cambia el motor: en vez de Python con sus dependencias es un
 único ejecutable nativo, `nexus-office` (`nexus-office.exe` en Windows).
@@ -30,7 +30,7 @@ marcha, lo que más ocupa es llama-server, que es el mismo en las dos.
   editar, mover, fusionar, reorganizar y buscar duplicados), embeddings, retroalimentación y consolidación.
 - **Biblioteca (RAG)**: PDF, Word, OpenDocument, PowerPoint, Excel, EPUB, RTF, HTML, Markdown, texto, código y
   archivos ZIP, TAR, 7z y RAR; búsqueda híbrida con citas.
-- **Multimedia**: imagen con stable-diffusion.cpp (o arte procedural sin modelo), música con el compositor procedural
+- **Multimedia**: imagen con stable-diffusion.cpp (o, sin modelo, el compositor de escenas que dibuja la hora, el clima, el lugar y los sujetos del prompt), música con el compositor procedural
   (WAV + MIDI), voz con Piper o la voz del sistema (SAPI, `say`, espeak-ng) y dictado con Whisper (whisper.cpp).
 - **Agentes y herramientas**: agentes YAML, enrutado y delegación, salón y reuniones, herramientas supervisadas con
   aprobaciones, sandbox y auditoría, y propuestas de herramientas nuevas.

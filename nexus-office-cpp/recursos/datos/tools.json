@@ -311,6 +311,38 @@
     "permissions": []
   },
   {
+    "name": "ubicacion_actual",
+    "description": "Ubicacion actual del dispositivo en tiempo real (GPS del movil, receptor GPS, servicio de ubicacion del sistema o la fija de Ajustes): coordenadas, precision, velocidad, lugar guardado o ciudad cercana y, si se pide, distancia en linea recta hasta un lugar. Todo sin internet: la posicion no sale del equipo",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "hasta": {
+          "type": "string",
+          "description": "lugar guardado, ciudad o 'lat, lon' para dar la distancia y el rumbo"
+        },
+        "fuente": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "app",
+            "gpsd",
+            "nmea",
+            "windows",
+            "geoclue",
+            "navegador",
+            "manual"
+          ],
+          "default": "auto"
+        }
+      }
+    },
+    "risk": "low",
+    "permissions": [
+      "location"
+    ],
+    "timeout": 40
+  },
+  {
     "name": "memory_search",
     "description": "Busca en la memoria a largo plazo lo que se sabe sobre algo o sobre el usuario",
     "parameters": {
@@ -610,6 +642,10 @@
         },
         "seed": {
           "type": "integer"
+        },
+        "asincrona": {
+          "type": "boolean",
+          "description": "true: no esperar; la imagen sale en la pantalla de difusion"
         }
       },
       "required": [
@@ -621,6 +657,29 @@
       "media"
     ],
     "timeout": 900
+  },
+  {
+    "name": "percepcion_buscar",
+    "description": "Busca por significado en lo que ha visto el motor de percepcion (camara o frames recibidos): descripciones, hora y enlace a cada frame",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "k": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    },
+    "risk": "low",
+    "permissions": [
+      "memory"
+    ],
+    "timeout": 60
   },
   {
     "name": "compose_music",
@@ -926,5 +985,58 @@
     "permissions": [
       "network"
     ]
+  },
+  {
+    "name": "crear_video",
+    "description": "Monta un video a partir de una secuencia de imagenes (las generadas con generate_image o ficheros de la carpeta de trabajo): encuadre, zoom lento y fundido entre imagenes. Devuelve el video (AVI) y un enlace al editor web para exportarlo a WebM/MP4 con titulos y musica.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "imagenes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "URLs /outputs/images/... o rutas del sandbox, en orden. Vacio = las ultimas imagenes generadas"
+        },
+        "ultimas": {
+          "type": "integer",
+          "description": "si no se dan imagenes: cuantas de las ultimas generadas (6)"
+        },
+        "titulo": {
+          "type": "string"
+        },
+        "segundos_por_imagen": {
+          "type": "number"
+        },
+        "transicion": {
+          "type": "number",
+          "description": "segundos de fundido (0 = corte)"
+        },
+        "formato": {
+          "type": "string",
+          "enum": [
+            "16:9",
+            "1080p",
+            "9:16",
+            "1:1",
+            "4:3",
+            "480p"
+          ]
+        },
+        "fps": {
+          "type": "integer"
+        },
+        "movimiento": {
+          "type": "boolean",
+          "description": "zoom y desplazamiento lentos (Ken Burns)"
+        }
+      }
+    },
+    "risk": "low",
+    "permissions": [
+      "media"
+    ],
+    "timeout": 900
   }
 ]

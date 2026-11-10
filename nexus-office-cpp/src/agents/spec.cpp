@@ -46,6 +46,8 @@ AgentSpec AgentSpec::from_json(const json& d) {
   if (d.contains("keywords") && !d["keywords"].is_null()) a.keywords = as_list(d["keywords"]);
   if (d.contains("memory")) a.memory = truthy(d["memory"]);
   if (d.contains("enabled")) a.enabled = truthy(d["enabled"]);
+  if (d.contains("perfil") && d["perfil"].is_object()) a.perfil = d["perfil"];
+  if (d.contains("voz") && d["voz"].is_object()) a.voz = d["voz"];
   return a;
 }
 
@@ -67,6 +69,8 @@ json AgentSpec::to_json() const {
   j["icon"] = icon;
   j["enabled"] = enabled;
   j["sexo"] = sexo;
+  if (perfil.is_object() && !perfil.empty()) j["perfil"] = perfil;
+  if (voz.is_object() && !voz.empty()) j["voz"] = voz;
   return j;
 }
 

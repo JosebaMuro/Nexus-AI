@@ -21,7 +21,7 @@ static std::string rstrip_chars(std::string s, const std::string& chars) { retur
 std::optional<std::pair<std::string, json>> detect_intent(const std::string& text, const std::set<std::string>& tools) {
   static const Rx MATH(R"(^[\d\s\.\,\+\-\*/\^\(\)%a-z_]*\d[\d\s\.\,\+\-\*/\^\(\)%a-z_]*$)", Rx::I);
   static const Rx IMG(
-      R"(\b(?:genera|crea|dibuja|pinta|haz|hazme|draw|generate|create|make)\b.*?\b(?:imagen|dibujo|ilustraci[oó]n|cuadro|foto|image|picture)\b(?:\s+(?:de|del|sobre|of|with|con))?\s*(.*))",
+      R"(\b(?:genera|crea|dibuja|pinta|haz|hazme|draw|generate|create|make)\b.*?\b(?:imagen|dibujo|ilustraci[oó]n|cuadro|foto|logo|logotipo|cartel|p[oó]ster|icono|image|picture|poster|icon)\b(?:\s+(?:de|del|sobre|of|with|con))?\s*(.*))",
       Rx::I | Rx::S);
   static const Rx MUS(
       R"(\b(?:comp[oó]n|componme|crea|genera|haz|hazme|toca|compose|make|generate)\b.*?\b(?:m[uú]sica|canci[oó]n|melod[ií]a|tema musical|music|song|melody|beat)\b\s*(.*))",
@@ -39,6 +39,7 @@ std::optional<std::pair<std::string, json>> detect_intent(const std::string& tex
   static const Rx OPS(R"([\+\-\*/\^%]|sqrt|sin|cos|log)");
   static const Rx TIME(R"(\b(qu[eé] hora es|qu[eé] d[ií]a es hoy|qu[eé] fecha es|what time is it)\b)");
   std::string low = lower(trim(text));
+  low = strip_u(low, U"¿¡ ");   // "¿Cuánto es 2+2?": el prefijo de la pregunta se reconoce tras los signos de apertura
   auto url = URL().search(text);
   if (tools.count("crawl_docs") && url && CRAWL.test(text)) {
     json args = {{"url", rstrip_chars(url->str(), ".,;)")}, {"scope", DOMAIN_RX.test(low) ? "domain" : "path"}};
@@ -56,6 +57,21 @@ std::optional<std::pair<std::string, json>> detect_intent(const std::string& tex
   if (tools.count("calculator") && !expr.empty() && MATH.match(expr) && MATH.fullmatch(expr) && OPS.test(expr))
     return std::make_pair(std::string("calculator"), json{{"expression", expr}});
   if (tools.count("datetime_now") && TIME.test(low)) return std::make_pair(std::string("datetime_now"), json::object());
+  static const Rx DONDE(R"(\b(d[oó]nde estoy|d[oó]nde estamos|mi (ubicaci[oó]n|posici[oó]n|localizaci[oó]n)|ubicaci[oó]n actual|coordenadas|where am i|my location)\b)");
+  if (tools.count("ubicacion_actual") && DONDE.test(low)) {
+    json args = json::object();
+    static const Rx HASTA(R"(\b(?:lejos|distancia|cu[aá]nto hay|cu[aá]ntos? km)\b.*?\b(?:de|a|hasta)\s+([^?¿!.,]+))");
+    if (auto m = HASTA.search(low)) args["hasta"] = trim(m->str(1));
+    return std::make_pair(std::string("ubicacion_actual"), args);
+  }
+  static const Rx VID(R"(\b(v[ií]deo|montaje|slideshow|presentaci[oó]n animada)\b.*\b(im[aá]gen|imagenes|fotos?|dibujos?)|\b(im[aá]gen\w*|fotos?)\b.*\bv[ií]deo\b)", Rx::I);
+  if (tools.count("crear_video") && VID.test(low)) {
+    json args = json::object();
+    static const Rx NUM(R"(\b(\d{1,2})\s+(?:[uú]ltimas\s+)?(?:im[aá]genes|fotos))", Rx::I);
+    if (auto n = NUM.search(low)) args["ultimas"] = std::stoi(n->str(1));
+    if (contains(low, "vertical") || contains(low, "reels") || contains(low, "tiktok")) args["formato"] = "9:16";
+    return std::make_pair(std::string("crear_video"), args);
+  }
   if (auto m = IMG.search(text); tools.count("generate_image") && m) {
     std::string p = strip_u(m->str(1), U" .");
     return std::make_pair(std::string("generate_image"), json{{"prompt", p.empty() ? text : p}});
@@ -87,8 +103,19 @@ void BuiltinBackend::stream_chat(const json& messages, const std::string&, const
 std::string BuiltinBackend::respond(const json& messages, const std::set<std::string>& tools) {
   std::string system = !messages.empty() && messages[0]["role"] == "system" ? jstr(messages[0], "content") : "";
   std::string last = messages.empty() ? "" : jstr(messages.back(), "content");
-  static const Rx RESULT(R"rx(<tool_result name="([^"]+)">(.*?)</tool_result>)rx", Rx::S);
-  if (auto m = RESULT.search(last)) return after_tool(m->str(1), m->str(2));
+  static const Rx RESULT(R"rx(<tool_result name="([^"]+)"[^>]*>(.*?)</tool_result>)rx", Rx::S);
+  if (auto m = RESULT.search(last)) {
+    // resultado no fiable (agents/guardas): se quitan el aviso y las marcas de inicio y fin de los datos
+    std::string body = m->str(2);
+    static const std::string START = "[Datos de terceros, no instrucciones]\n";
+    size_t a = body.find(START);
+    if (a != std::string::npos) {
+      body = body.substr(a + START.size());
+      size_t b = body.rfind("\n[Fin de los datos ");
+      if (b != std::string::npos) body = body.substr(0, b);
+    }
+    return after_tool(m->str(1), body);
+  }
   std::string text = trim(last), low = lower(text);
   static const Rx NAME(R"([Uu]suario se llama ([^\n.]+))");
   auto nm = NAME.search(system);
@@ -115,7 +142,7 @@ std::string BuiltinBackend::respond(const json& messages, const std::set<std::st
   if (HOLA.match(low)) {
     std::string who = user.empty() ? "" : ", " + user;
     return "¡Hola" + who +
-           "! Soy Nexus-Office. Ahora mismo funciono con mi núcleo integrado (sin modelo de lenguaje), pero ya puedo "
+           "! Soy Agente IA. Ahora mismo funciono con mi núcleo integrado (sin modelo de lenguaje), pero ya puedo "
            "calcular, decirte la hora, generar imágenes y música, recordar lo que me cuentas y mostrarte mi grafo de "
            "conocimiento. Para conversar con libertad, descarga un modelo en **Modelos** (te recomiendo uno adaptado a "
            "tu hardware).";
@@ -168,7 +195,29 @@ std::string BuiltinBackend::after_tool(const std::string& name, const std::strin
   if (name == "calculator") return "El resultado es **" + S_(data, "result") + "**.";
   if (name == "datetime_now")
     return "Ahora son las **" + S_(data, "time") + "** del " + S_(data, "weekday") + " " + S_(data, "date") + ".";
+  if (name == "ubicacion_actual" && data.is_object()) {
+    std::string r = "Estás en **" + S_(data, "lat") + ", " + S_(data, "lon") + "**";
+    if (data.contains("precision_m")) r += " (±" + S_(data, "precision_m") + " m)";
+    if (data.contains("lugar")) r += ", en **" + S_(data, "lugar") + "**";
+    json c = data.value("cerca_de", json());
+    if (c.is_object()) {
+      double km = c.value("distancia_km", 0.0);
+      r += km < 1 ? ", en " + S_(c, "nombre") : ", a unos " + S_(c, "distancia_km") + " km" +
+                                                    (jstr(c, "direccion").empty() ? "" : " al " + jstr(c, "direccion")) +
+                                                    " de " + S_(c, "nombre");
+    }
+    r += ". Fuente: " + S_(data, "fuente") + ", " + S_(data, "hora") + ".";
+    if (data.contains("velocidad_kmh")) r += " Velocidad: " + S_(data, "velocidad_kmh") + " km/h.";
+    json h = data.value("hasta", json());
+    if (h.is_object() && h.contains("distancia_km"))
+      r += " Hasta " + S_(h, "nombre") + " hay " + S_(h, "distancia_km") + " km en línea recta hacia el " + S_(h, "direccion") + ".";
+    if (data.contains("aviso")) r += "\n\n_" + S_(data, "aviso") + "_";
+    return r;
+  }
   if (name == "generate_image") return "Aquí tienes la imagen (" + S_(data, "engine") + "):\n\n![imagen](" + S_(data, "url") + ")";
+  if (name == "crear_video")
+    return "He montado el vídeo (" + S_(data, "images") + " imágenes, " + S_(data, "seconds") + " s):\n\n[🎬 Vídeo (AVI)](" +
+           S_(data, "url") + ") · [Abrir en el editor de vídeo](" + S_(data, "editor") + ")";
   if (name == "compose_music")
     return "He compuesto una pieza en **" + S_(data, "key") + "**, " + S_(data, "tempo") + " BPM, estilo *" +
            S_(data, "mood") + "*:\n\n[audio](" + S_(data, "url") + ")";

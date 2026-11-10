@@ -3,6 +3,7 @@
 #pragma once
 #include <atomic>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -54,6 +55,7 @@ std::string selected_gpu();
 bool gpu_matches(const GPU& g, const std::string& want);
 std::pair<std::string, const GPU*> choose_accelerator(const HardwareInfo& hw, const std::string& override_ = "");
 json build_profile(const HardwareInfo& hw, const std::string& override_ = "");
+int cache_ram_for(double ram_gb, bool tight);   // MB de cache de prompts de llama-server
 bool android();
 
 // selector de inicio (accel_choice)
@@ -75,6 +77,7 @@ struct TuneResult {
 };
 TuneResult tune(const json& profile, const json& history, bool previous_unclean, int cores_logical,
                 const json& state = nullptr, const json& previous_info = nullptr);
+void apply_overrides(json& profile);   // lo aprendido por el autoajuste sobre un perfil recien calculado
 
 // monitor
 json load_history();
@@ -86,6 +89,7 @@ class Monitor {
   json stop();
   void record_llm(const std::string& backend, const std::string& model, int tokens, double seconds, double ttft);
   void record_error(const std::string& kind, const std::string& message);
+  void set_setting(const std::string& key, const json& value);   // p. ej. las capas que llama-server metio en la GPU
   json live();
   json summary(bool final_ = false);
   std::vector<json> llm_calls();
@@ -93,6 +97,7 @@ class Monitor {
   json previous_info = json::object();
   json settings;
   std::string session_id;
+  std::function<bool()> busy;   // hay una respuesta del modelo en marcha (muestrear la GPU a menudo)
 
  private:
   void loop();
@@ -107,15 +112,20 @@ class Monitor {
   std::atomic<bool> stop_{false};
   std::thread th_;
   std::string nvsmi_;
+  std::atomic<double> last_llm_{0};
+  int idle_ticks_ = 0;
+  json last_gpu_ = json::object();
 };
+json amd_sysfs_vram(const fs::path& drm);   // VRAM de una AMD en Linux (sysfs de amdgpu)
 
 struct Startup {
   HardwareInfo hw;
   json profile;
+  json plan;   // con el acelerador elegido a mano (hardware.accel), el plan de build_for
   std::vector<std::string> reasons;
 };
 Startup startup(const std::string& override_ = "", bool adaptive = true,
                 const std::string& ollama_url = "http://127.0.0.1:11434", bool previous_unclean = false,
-                const json& previous_info = nullptr);
+                const json& previous_info = nullptr, const std::string& accel = "auto");
 
 }  // namespace nx::hw
