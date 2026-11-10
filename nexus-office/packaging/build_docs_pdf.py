@@ -1,5 +1,5 @@
 """Genera Manual-de-usuario.pdf y Documentacion-tecnica.pdf a partir de los .md de docs/ (y la guia de la app
-autonoma), con portada, indice y pie «Nexus-Office <version> · pagina/total». Los usa packaging/build.py --docs.
+autonoma), con portada, indice y pie «Agente IA <version> · pagina/total». Los usa packaging/build.py --docs.
 
     venv/bin/pip install markdown playwright      # Chromium: el de Playwright o PLAYWRIGHT_BROWSERS_PATH
     venv/bin/python packaging/build_docs_pdf.py [carpeta_salida]     # por defecto dist/
@@ -81,7 +81,7 @@ def build_html(title: str, subtitle: str, files: list[str]) -> str:
     items = "".join(f'<li class="l{lvl}" style="margin-left:{(lvl - 1) * 1.2}em"><a href="#{sid}">{html.escape(t)}</a></li>'
                     for lvl, t, sid in toc)
     return (f"<!doctype html><html lang='es'><head><meta charset='utf-8'><title>{title}</title><style>{CSS}</style></head>"
-            f"<body><div class='cover'><div class='v'>Nexus-Office {VERSION}</div><div class='t'>{title}</div>"
+            f"<body><div class='cover'><div class='v'>Agente IA {VERSION}</div><div class='t'>{title}</div>"
             f"<div class='s'>{subtitle}</div></div><div class='toc'><h2>{title}</h2><ul>{items}</ul></div>"
             f"{''.join(body)}</body></html>")
 
@@ -90,7 +90,7 @@ def main(out: Path) -> list[Path]:
     from playwright.sync_api import sync_playwright
     out.mkdir(parents=True, exist_ok=True)
     done = []
-    footer = (f"<div style='font-size:8px;width:100%;text-align:right;padding-right:16mm;color:#667'>Nexus-Office {VERSION} · "
+    footer = (f"<div style='font-size:8px;width:100%;text-align:right;padding-right:16mm;color:#667'>Agente IA {VERSION} · "
               "<span class='pageNumber'></span>/<span class='totalPages'></span></div>")
     with sync_playwright() as p:
         exe = os.environ.get("NEXUS_CHROMIUM")   # Chromium ya instalado, si el de Playwright no coincide de version
