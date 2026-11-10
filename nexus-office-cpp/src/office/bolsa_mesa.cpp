@@ -515,8 +515,8 @@ json Mesa::informes(const std::string& simbolo, int limite) {
   return out;
 }
 
-Mesa::LLM mesa_llm;
-std::function<json()> mesa_ia_info;
+NX_DATOS Mesa::LLM mesa_llm;
+NX_DATOS std::function<json()> mesa_ia_info;
 
 namespace {
 std::mutex g_mu;

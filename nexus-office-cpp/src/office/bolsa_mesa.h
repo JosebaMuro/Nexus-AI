@@ -45,8 +45,8 @@ class Mesa {
 };
 
 Mesa& mesa();                                  // la de la mesa actual
-extern Mesa::LLM mesa_llm;                     // lo pone main.cpp con el gestor de LLM
-extern std::function<json()> mesa_ia_info;
+extern NX_DATOS Mesa::LLM mesa_llm;                     // lo pone main.cpp con el gestor de LLM
+extern NX_DATOS std::function<json()> mesa_ia_info;
 void reset_mesas();
 
 }  // namespace nx::bolsa
