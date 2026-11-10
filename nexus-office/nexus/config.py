@@ -42,6 +42,10 @@ DEFAULTS: dict[str, Any] = {
         # orden de preferencia; se usa el primer backend disponible
         "backend_order": ["llamaserver", "llamacpp", "ollama", "openai", "transformers", "builtin"],
         "engine": "auto",               # motor elegido al arrancar: auto | llamaserver | llamacpp | ollama
+        # motor de inferencia por hardware (nexus.motores): auto (matriz por chip + banco medido) | onnx | openvino |
+        # litert | executorch | mlc | tensorrt | genie | llamaserver; y acelerador forzado ("" = automatico)
+        "motor": "auto",
+        "motor_acelerador": "",
         "default_model": "",            # id del catalogo, nombre ollama o modelo del endpoint
         "ollama_url": "http://127.0.0.1:11434",
         "openai_base_url": "http://127.0.0.1:1234/v1",   # LM Studio / vLLM / llama-server

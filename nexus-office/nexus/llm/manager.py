@@ -15,6 +15,8 @@ from .backends import LlamaCppBackend, OllamaBackend, OpenAICompatBackend, Trans
 from .builtin import BuiltinBackend
 from .cloud import CloudBackend
 from .llamaserver import LlamaServerBackend
+from .. import motores
+from ..motores import selector as motor_selector
 
 L = log.get("llm")
 REASONING_STOP = "\n\nYa he pensado bastante: respondo ahora con lo que tengo.\n"
@@ -39,8 +41,9 @@ def fit_context(messages: list[dict], n_ctx: int, reply_tokens: int) -> list[dic
 
 
 class LLMManager:
-    def __init__(self, config, catalog, profile: dict, monitor=None, runtimes=None) -> None:
+    def __init__(self, config, catalog, profile: dict, monitor=None, runtimes=None, hw=None) -> None:
         self.config, self.catalog, self.profile, self.monitor, self.runtimes = config, catalog, profile, monitor, runtimes
+        self.hw = hw   # HardwareInfo: para elegir motor por chip (nexus.motores)
         self.remote = None   # se inyecta desde coop para "peer:<nodo>"
         self._avail_cache: dict[str, tuple[float, bool]] = {}
         self.backends: dict = {}
@@ -64,7 +67,24 @@ class LLMManager:
             "builtin": BuiltinBackend(),
             "nube": CloudBackend(c, timeout),
         }
+        # motores por hardware (ONNX Runtime GenAI, OpenVINO, LiteRT-LM, ExecuTorch, MLC, TensorRT-LLM, Genie)
+        from ..motores.backend import MotorBackend   # noqa: PLC0415 - importa llm.backends
+        for mid, info in motores.MOTORES.items():
+            self.backends[mid] = MotorBackend(mid, self._resolve(info.formato), self._orden_aceleradores)
         self._avail_cache.clear()
+
+    def hw_dict(self) -> dict:
+        try:
+            return self.hw.to_dict() if self.hw is not None else {}
+        except Exception:  # noqa: BLE001
+            return {}
+
+    def _orden_aceleradores(self, motor: str, entry: dict) -> list[str]:
+        forzado = self.config.get("llm.motor_acelerador", "") or ""
+        return motor_selector.orden_aceleradores(motor, entry, self.hw_dict(), self.profile, forzado)
+
+    def motor_estado(self) -> dict:
+        return motor_selector.estado(self.catalog.list(), self.hw_dict(), self.profile, self.config)
 
     def _resolve(self, fmt: str):
         def resolve(model_id: str):
@@ -72,7 +92,7 @@ class LLMManager:
             if entry is None:
                 default = self.config.get("llm.default_model", "")
                 entry = self.catalog.get(default.split(":", 1)[-1]) if default else None
-            if entry is None:
+            if entry is None or (not model_id and entry.get("format") != fmt):
                 entry = next((m for m in self.catalog.list() if m.get("format") == fmt and m.get("kind", "llm") == "llm"), None)
             if entry and entry.get("format") == fmt:
                 return entry["path"], entry
@@ -110,6 +130,17 @@ class LLMManager:
             if self.is_available(backend):
                 return backend, model
         entry = self.catalog.get(default) if default else None
+        if entry is None and not default:
+            # sin modelo elegido: el mejor para este hardware (banco medido o matriz por chip)
+            best = motor_selector.elegir(self.catalog.list(), self.hw_dict(), self.profile,
+                                         self.config.get("llm.motor", "auto"))
+            entry = self.catalog.get(best["id"]) if best else None
+        motor = motores.motor_de_formato(entry.get("format", "")) if entry else ""
+        if entry and motor in motores.MOTORES:
+            if self.is_available(motor):
+                return motor, entry["id"]
+            L.warning("El modelo %s necesita %s, que no esta disponible: %s", entry["id"], motores.MOTORES[motor].nombre,
+                      motores.disponible(motor)[1])
         if entry:
             b = "llamacpp" if entry.get("format") == "gguf" else "transformers"
             if entry.get("format") == "gguf":
@@ -157,6 +188,9 @@ class LLMManager:
         if backend_name in ("llamaserver", "llamacpp"):
             r = self._resolve("gguf")(model)
             return bool(r and is_reasoning_model(r[1]))
+        if backend_name in motores.MOTORES:
+            r = self._resolve(motores.MOTORES[backend_name].formato)(model)
+            return bool(r and is_reasoning_model(r[1]))
         if backend_name == "transformers":
             r = self._resolve("transformers")(model)
             return bool(r and is_reasoning_model(r[1]))
@@ -201,7 +235,7 @@ class LLMManager:
                 # llama-server corta el razonamiento al agotar el presupuesto y obliga a responder
                 full["extra_body"] = {"reasoning_budget_tokens": budget,
                                       "reasoning_budget_message": REASONING_STOP}
-        if backend_name in ("llamaserver", "llamacpp", "ollama"):
+        if backend_name in ("llamaserver", "llamacpp", "ollama") or backend_name in motores.MOTORES:
             cap = full["n_ctx"] // 2 if thinking else full["n_ctx"] // 3
             full["max_tokens"] = min(full["max_tokens"] or 1024, max(256, cap))
             messages = fit_context(messages, full["n_ctx"], full["max_tokens"])

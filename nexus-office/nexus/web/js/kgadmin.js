@@ -1,4 +1,4 @@
-/* Nexus-Office — gestor de conocimiento (Ajustes): grafo general (común) y memoria propia de cada agente.
+/* Agente IA — gestor de conocimiento (Ajustes): grafo general (común) y memoria propia de cada agente.
    Pestañas: resumen, explorar y editar nodos, importar/exportar grafos, leer un ZIP (razonarlo y procesarlo),
    mantenimiento (reorganizar, duplicados, recuerdos) y modelo de embeddings. Usa window.NexusUI (app.js). */
 (() => {
@@ -160,13 +160,13 @@
   VIEWS.grafos = async () => {
     $("#kg-body").innerHTML = `<div class="grid g2">
       <div class="item col" style="gap:8px"><b>Importar un grafo como conocimiento</b>
-        <div class="d">Cualquier tipo y formato: el formato se reconoce solo por el contenido y lo importado se <b>fusiona</b> con lo que ya sabe Nexus-Office (los nodos con el mismo nombre se unen y las relaciones repetidas se refuerzan). Puedes soltar varios ficheros a la vez, por ejemplo <span class="mono">nodes.csv</span> y <span class="mono">edges.csv</span>, o un ZIP.</div>
+        <div class="d">Cualquier tipo y formato: el formato se reconoce solo por el contenido y lo importado se <b>fusiona</b> con lo que ya sabe Agente IA (los nodos con el mismo nombre se unen y las relaciones repetidas se refuerzan). Puedes soltar varios ficheros a la vez, por ejemplo <span class="mono">nodes.csv</span> y <span class="mono">edges.csv</span>, o un ZIP.</div>
         <details><summary class="d">Formatos admitidos</summary><div class="d" id="kgi-formats">Cargando…</div></details>
         <label class="field">Insertar en<select class="input" id="kgi-target">${scopeOpts("auto", { auto: true })}</select></label>
         <div class="drop" id="kgi-drop">Suelta aquí el grafo o los ficheros (o haz clic)</div><input type="file" id="kgi-file" hidden multiple></div>
-      <div class="item col" style="gap:8px"><b>Exportar</b><div class="d">Para copias de seguridad, para otro Nexus-Office (respeta general y agentes) o para Gephi, yEd, Cytoscape, Neo4j…</div>
+      <div class="item col" style="gap:8px"><b>Exportar</b><div class="d">Para copias de seguridad, para otro Agente IA (respeta general y agentes) o para Gephi, yEd, Cytoscape, Neo4j…</div>
         <label class="field">Grafo<select class="input" id="kge-scope">${scopeOpts("*", { all: true })}</select></label>
-        <label class="field">Formato<select class="input" id="kge-fmt"><option value="json">JSON de Nexus-Office</option><option value="graphml">GraphML</option><option value="csv">CSV (tripletas)</option></select></label>
+        <label class="field">Formato<select class="input" id="kge-fmt"><option value="json">JSON de Agente IA</option><option value="graphml">GraphML</option><option value="csv">CSV (tripletas)</option></select></label>
         <div class="row"><button class="btn primary sm" id="kge-go">DESCARGAR</button></div></div></div>`;
     const send = guard(async (files) => { files = [...(files || [])]; if (!files.length) return;
       const fd = new FormData(); files.forEach((f) => fd.append("files", f)); fd.append("target", $("#kgi-target").value);
@@ -196,7 +196,7 @@
   VIEWS.zip = async () => {
     const llm = ((await api("/api/status").catch(() => ({}))).llm || {}).backend;
     $("#kg-body").innerHTML = `<div class="item col" style="gap:8px">
-      <div class="d">Nexus-Office descomprime el archivo de forma segura, inserta los grafos que traiga (en cualquier formato: JSON, CSV, GraphML, GEXF, GML, DOT, RDF, Cypher, Mermaid… y notas con [[enlaces]]), lo añade a la biblioteca RAG,
+      <div class="d">Agente IA descomprime el archivo de forma segura, inserta los grafos que traiga (en cualquier formato: JSON, CSV, GraphML, GEXF, GML, DOT, RDF, Cypher, Mermaid… y notas con [[enlaces]]), lo añade a la biblioteca RAG,
         agrupa los documentos por temas con el modelo de embeddings y <b>razona</b> los más importantes con el LLM: resumen, hechos y procedimientos. Lo común va al grafo general y el saber hacer, al especialista.</div>
       <div class="grid g2" style="gap:8px">
         <label class="field">Destino<select class="input" id="kgz-target">${scopeOpts("auto", { auto: true })}</select></label>

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 
-from . import hardware, log
+from . import motores, hardware, log
 from .agents import AgentManager
 from .agents.lounge import Lounge
 from .config import get_config
@@ -61,7 +61,9 @@ class Services:
         self.embed_worker = EmbedWorker(self)   # vectores semanticos en segundo plano con modelos lentos en CPU
         self.rag.on_pending = self.memory.on_pending = self.embed_worker.wake
         self.models.on_activate.append(self._on_model_activated)
-        self.llm = LLMManager(cfg, self.models.catalog, self.profile, self.monitor, self.runtimes)
+        self.models.hw_getter = lambda: self.hw.to_dict()
+        motores.revisar_marcas()   # caidas de motores en el arranque anterior (driver de NPU/GPU)
+        self.llm = LLMManager(cfg, self.models.catalog, self.profile, self.monitor, self.runtimes, self.hw)
         self.models.ollama_pull = lambda name: self.llm.backends["ollama"].pull(name)   # falla -> descarga directa
         self.learner.llm_complete = lambda p: self.llm.complete(p, max_tokens=300, temperature=0.1)
         self.images = ImageEngine(cfg, self.models.catalog, self.runtimes, lambda: self.profile, self.llm)

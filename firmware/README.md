@@ -6,6 +6,7 @@
 | `nexuswatch/` | Reloj ESP32-2424S012C-Y / (B) (ESP32-C3, pantalla redonda táctil) | `nexuswatch-esp32c3.bin` |
 | `nexuspico/` | Avatar de bolsillo: Pico W + pantalla de tinta 2,13" del pwnagotchi | `nexuspico-picow.uf2` |
 | `flasher/` | **nexus-flash**, el grabador nativo en C++ (sin esptool ni Python) | se compila en CI para Windows, macOS, Linux y Android |
+| `flash.py`, `nexuspico/nexuspico.py` | Grabador y núcleo del Pico en Python que usa la edición Python de Agente IA (Dispositivos → Grabar firmware) y sus pruebas | recuperados de la 2.2.0-cpp para la 4.0.0 |
 
 Los `.bin` son imágenes completas (cargador + particiones + programa): se graban en la dirección `0x0`.
 `bin/firmware.json` lista la versión y la huella SHA-256 de cada uno. Los compila

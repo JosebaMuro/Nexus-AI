@@ -10,7 +10,7 @@ from nexus.llm.backends import OpenAICompatBackend, ThinkSplitter, is_reasoning_
 
 def test_catalog_llms_have_vision_and_reasoning():
     from nexus.models.recommended import RECOMMENDED
-    llms = [r for r in RECOMMENDED if r["kind"] == "llm" and not r.get("sector_only")]   # los de sector son solo sugerencias
+    llms = [r for r in RECOMMENDED if r["kind"] == "llm" and not r.get("sector_only") and not r.get("motor")]   # sector: sugerencias; motor: otros formatos
     assert llms and all(r["vision"] and r["reasoning"] and r.get("mmproj") for r in llms)
     # Qwen3.5 razona por defecto (razonamiento hibrido); Qwen3-VL solo en sus variantes «Thinking»
     assert all(r["id"].startswith("qwen3.5-") or ("Thinking" in r["repo"] and "Thinking" in r["file"]) for r in llms)

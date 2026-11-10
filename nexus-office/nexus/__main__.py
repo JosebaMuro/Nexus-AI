@@ -131,6 +131,47 @@ def cmd_pull(args) -> None:
         print(f"\r{mid}: {mm.jobs[jid]['status']} {mm.jobs[jid].get('error', '')}".ljust(70))
 
 
+def _tps(c: dict) -> str:
+    return "" if c.get("tps") is None else f" {c['tps']:.1f} tok/s"
+
+
+def cmd_motores(args) -> None:
+    """Motores de inferencia por hardware: estado (chip, matriz, instalados, modelos) o banco (mide tokens/s)."""
+    import json as _json
+    from . import log
+    from .core import Services
+    log.setup()
+    s = Services(detect_hardware=args.detectar)
+    try:
+        if args.accion == "banco":
+            from .motores import banco
+            data = banco.ejecutar(s.llm, s.models.catalog.list(), args.solo or None, progreso=print)
+            filas = sorted(data["resultados"].items(), key=lambda kv: -(kv[1].get("tps") or 0))
+            print(f"\n{'motor:modelo':48s} {'tok/s':>8s} {'1er token':>10s}  acelerador")
+            for k, r in filas:
+                if "error" in r:
+                    print(f"{k:48s} {'error':>8s}  {r['error'][:60]}")
+                else:
+                    print(f"{k:48s} {r['tps']:8.1f} {r['ttft_s']:9.2f}s  {r['acelerador']}")
+            if args.json:
+                print(_json.dumps(data, indent=1, ensure_ascii=False))
+            return
+        est = s.llm.motor_estado()
+        print(f"Chip: {est['chip']} · plataforma {est['plataforma']}\n{est['matriz']['nota']}\nOrden de partida:")
+        for p in est["matriz"]["orden"]:
+            print(f"  {p['motor']:12s} {p['acelerador']:10s} {p['motivo']}")
+        print("Motores:")
+        for m in est["motores"]:
+            print(f"  {m['id']:12s} {'si' if m['instalado'] else 'no':3s} {m['motivo']}")
+        print("Modelos de texto (mejor primero):")
+        for c in est["modelos"]:
+            print(f"  {c['id']:32s} {c['motor']:12s} {'' if c['instalado'] else '(motor sin instalar)'}"
+                  f"{_tps(c)}")
+        print("Elegido:", est["elegido"]["id"] if est["elegido"] else "ninguno (descarga un modelo)")
+    finally:
+        s.monitor.stop()
+
+
 KIND_NAME = {"llm": "Chat y vision", "embed": "Documentos (RAG)", "tts": "Voz", "image": "Imagen"}
 ESSENTIAL = ("llm", "embed", "tts")           # lo que se descarga al instalar; la imagen con --todos
 
@@ -441,11 +482,16 @@ def main(argv=None) -> None:
     md.add_argument("--todos", action="store_true", help="incluye tambien el modelo de imagen")
     sv = sub.add_parser("servicio", help="instala Nexus-Office como servicio: instalar | quitar | estado [--red] [--puerto P]")
     sv.add_argument("rest", nargs=argparse.REMAINDER)
+    mo = sub.add_parser("motores", help="motores de inferencia por hardware: estado | banco (mide tokens/s)")
+    mo.add_argument("accion", nargs="?", default="estado", choices=["estado", "banco"])
+    mo.add_argument("--solo", action="append", help="solo motor:modelo (se puede repetir)")
+    mo.add_argument("--json", action="store_true", help="banco: muestra tambien el resultado en JSON")
+    mo.add_argument("--detectar", action="store_true", help="vuelve a detectar el hardware")
     sub.add_parser("wheels", help="prepara wheelhouse/ para instalar sin internet (ver --help)")
     sub.add_parser("cleanup", help="quita del paquete offline lo que este equipo no usa (ver --help)")
     args = p.parse_args(argv)
     {"run": cmd_run, "detect": cmd_detect, "setup": cmd_setup, "pull": cmd_pull, "chat": cmd_chat,
-     "oficina": cmd_office, "bolsa": cmd_bolsa, "grafo": cmd_graph, "modelos": cmd_models, "servicio": cmd_service}.get(
+     "oficina": cmd_office, "bolsa": cmd_bolsa, "grafo": cmd_graph, "modelos": cmd_models, "servicio": cmd_service, "motores": cmd_motores}.get(
         args.cmd or "run", cmd_run)(args if args.cmd else p.parse_args(["run"]))
 
 

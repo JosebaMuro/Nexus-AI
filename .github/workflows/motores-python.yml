@@ -1,0 +1,111 @@
+name: Agente IA (Python) - motores con modelos reales
+
+# Prueba la capa de motores de la edicion Python (nexus-office/nexus/motores) con modelos reales de Hugging Face y
+# compara su velocidad en los runners de GitHub (CPU x86_64 y ARM64): llama.cpp (GGUF), OpenVINO GenAI y ONNX Runtime
+# GenAI con el mismo tamano de modelo. El banco (python -m nexus motores banco) mide tokens/s y tiempo hasta el primer
+# token y deja la tabla en el resumen de la ejecucion y banco.json como artefacto. Las NPU y GPU no se pueden probar
+# aqui (los runners no las tienen): esa parte se mide en el equipo de cada usuario con Sistema > Motores > Medir.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - nexus-office/nexus/motores/**
+      - nexus-office/nexus/llm/manager.py
+      - .github/workflows/motores-python.yml
+
+permissions:
+  contents: read
+
+jobs:
+  banco:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, plat: linux-x86_64, openvino: "1" }
+          - { os: ubuntu-24.04-arm, plat: linux-aarch64, openvino: "" }
+    runs-on: ${{ matrix.os }}
+    env:
+      NEXUS_DATA_DIR: ${{ github.workspace }}/datos
+      NEXUS_NO_KNOWLEDGE_PACKS: "1"
+      PYTHONUTF8: "1"
+    defaults:
+      run:
+        working-directory: nexus-office
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Dependencias y motores
+        run: |
+          python -m pip install -q -r requirements.txt huggingface_hub jinja2 onnxruntime-genai
+          if [ -n "${{ matrix.openvino }}" ]; then python -m pip install -q openvino-genai; fi
+          python -m pytest -q tests/test_motores.py
+      - name: llama.cpp (llama-server CPU)
+        run: python -c "from nexus.runtimes import RuntimeManager; print(RuntimeManager().install('llama', 'cpu'))"
+      - name: Modelos (mismo tamano en cada formato)
+        run: |
+          set -e
+          python - <<'EOF'
+          import os
+          from pathlib import Path
+          from huggingface_hub import hf_hub_download, snapshot_download
+          base = Path(os.environ["NEXUS_DATA_DIR"]) / "models" / "huggingface"
+          def snap(repo, patterns=None):
+              return snapshot_download(repo, allow_patterns=patterns, local_dir=base / repo.replace("/", "__"))
+          hf_hub_download("Qwen/Qwen2.5-1.5B-Instruct-GGUF", "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+                          local_dir=base / "Qwen__Qwen2.5-1.5B-Instruct-GGUF")
+          snap("microsoft/Phi-4-mini-instruct-onnx", ["cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4/*"])
+          hf_hub_download("bartowski/microsoft_Phi-4-mini-instruct-GGUF", "microsoft_Phi-4-mini-instruct-Q4_K_M.gguf",
+                          local_dir=base / "bartowski__microsoft_Phi-4-mini-instruct-GGUF")
+          if os.environ.get("CON_OPENVINO"):
+              snap("OpenVINO/Qwen2.5-1.5B-Instruct-int4-ov")
+              snap("OpenVINO/Phi-3.5-mini-instruct-int4-ov")
+          EOF
+          du -sh "$NEXUS_DATA_DIR/models"/huggingface/*
+        env:
+          CON_OPENVINO: ${{ matrix.openvino }}
+      - name: Registrar los modelos
+        run: |
+          python - <<'EOF'
+          import os
+          from pathlib import Path
+          from nexus.config import get_config
+          from nexus.models import ModelManager
+          base = Path(os.environ["NEXUS_DATA_DIR"]) / "models" / "huggingface"
+          mm = ModelManager(get_config(), lambda: {})
+          for e in mm.catalog.list():
+              print("registrado:", e["id"], e["format"], e["path"])
+          EOF
+      - name: Estado de los motores
+        run: python -m nexus motores
+      - name: Banco (tokens/s en este runner)
+        run: |
+          python -m nexus motores banco --json | tee banco.txt
+          {
+            echo "### Banco de motores · ${{ matrix.plat }} (CPU del runner)"
+            echo '```'
+            sed -n '/^motor:modelo/,/^{/p' banco.txt | sed '$d'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          python - <<'EOF'
+          import json, os
+          from pathlib import Path
+          d = json.loads((Path(os.environ["NEXUS_DATA_DIR"]) / "motores" / "banco.json").read_text())
+          ok = [k for k, r in d["resultados"].items() if r.get("tps")]
+          print("motores medidos:", ok)
+          assert any(k.startswith("onnx:") for k in ok), "ONNX Runtime GenAI no genero texto"
+          assert any(k.startswith("llamaserver:") for k in ok), "llama.cpp no genero texto"
+          if os.environ.get("CON_OPENVINO"):
+              assert any(k.startswith("openvino:") for k in ok), "OpenVINO GenAI no genero texto"
+          EOF
+        env:
+          CON_OPENVINO: ${{ matrix.openvino }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: banco-motores-${{ matrix.plat }}
+          path: |
+            datos/motores/*.json
+          retention-days: 30

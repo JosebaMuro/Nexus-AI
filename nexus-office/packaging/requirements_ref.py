@@ -84,7 +84,7 @@ def _runtime_tag(rt: str) -> str:
 
 
 def _cat_line(r: dict) -> str:
-    files = r["file"] + (f" + {r['mmproj']}" if r.get("mmproj") else "") + "".join(f" + {Path(e).name}" for e in r.get("extra", []))
+    files = (r.get("file") or (r.get("carpeta") or "") + "/ (carpeta)") + (f" + {r['mmproj']}" if r.get("mmproj") else "") + "".join(f" + {Path(e).name}" for e in r.get("extra", []))
     return f"#   {r['id']:<16} {r['size_mb']:>5} MB  https://huggingface.co/{r['repo']}  ->  {files}"
 
 

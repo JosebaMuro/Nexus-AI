@@ -11,16 +11,16 @@ tarea. Detalle de cada módulo en `nexus-office-cpp/docs/ARQUITECTURA.md` y `doc
 
 | Carpeta | Qué es | Estado |
 |---|---|---|
-| `nexus-office-cpp/` | **Nexus-Office, edición C++** (oficina de IA local para pymes). Aquí va todo el trabajo nuevo. | activa |
-| `nexus-office/` | Edición Python original (y NexusAI particular). | **congelada**: no tocar salvo que se pida |
+| `nexus-office/` | **Agente IA, edición Python** (base desde la 4.0.0, 2026-11-10): motores de inferencia por hardware en `nexus/motores/` (ver `docs/MOTORES.md`). | **activa** |
+| `nexus-office-cpp/` | Edición C++ (3.2.3), se conserva como referencia. | referencia |
 | `firmware/` | NexusLED (ESP8266/ESP32), NexusWatch, NexusPico (Pico W, C++ con Pico SDK), grabador `nexus-flash`. | activa |
 | `.github/workflows/` | Compilación, instaladores y Releases (ver abajo). | |
 | `index.html`, `README.md`, `LEEME.txt` | Página de descargas (GitHub Pages) y presentación. | |
 
 ## Normas del proyecto (de Joseba, obligatorias)
 
-- **Todo en C++** (desde 2026-10-27). Nada nuevo en Python; las herramientas de construcción también son C++
-  (`tools/construir/`). Llamar a herramientas del sistema (osascript, zenity...) está bien; escribir scripts no.
+- **Python es la base desde 2026-11-10** (Agente IA 4.0.0), por los motores de inferencia por hardware. La norma
+  anterior «todo en C++» (2026-10-27) queda sustituida; la edición C++ se conserva como referencia.
 - **Entrega**: solo versión portable 100 % offline (los motores y runtimes van dentro), instalable como servicio.
   Formatos: `.exe` (Windows x64 y ARM64), `.run`, `.deb`, AppImage y Flatpak (Linux x86_64 y aarch64/Raspberry Pi),
   macOS `tar.gz`, APK autónoma y APK cliente, zip del código fuente limpio, más manuales (técnico y de usuario).
@@ -76,7 +76,7 @@ build/nexus-construir datos                        # tras tocar recursos/datos/*
 | `motores-npu.yml` | Compila lo que no viene hecho: LiteRT-LM con dispatch de NPU (Tensor, Qualcomm, MediaTek), QAIRT/Genie, llama.cpp CUDA ARM64. Artefactos 90 días. |
 | `cpp-publicar.yml` | Publica la Release a partir de una rama `publicar-cpp-<versión>` con `entrega/entrega.json`. |
 | `android-npu.yml`, `selector-runtimes.yml`, `gimp-runtimes.yml`, `firmware.yml`, `wikipedia-grafo.yml` | Runtimes y piezas aparte. |
-| `entrega.yml`, `apk.yml`, `publicar.yml`, `python.yml`, `release.yml` | Edición Python (congelada). |
+| `entrega.yml`, `apk.yml`, `publicar.yml`, `python.yml`, `motores-python.yml` | Edición Python (base desde 4.0.0): instaladores, APK, publicación, pruebas y banco de motores con modelos reales. |
 
 ## Beta, rendimiento y firma
 

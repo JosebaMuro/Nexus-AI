@@ -10,7 +10,7 @@ import time
 import uuid
 from pathlib import Path
 
-from .. import log, net, paths
+from .. import log, motores, net, paths
 from . import gguf
 from .recommended import RECOMMENDED, recommend
 from .sources import all_sources
@@ -125,6 +125,9 @@ class Catalog:
 def classify(path: Path, hint: str = "") -> dict:
     """Detecta formato y tipo de un fichero/carpeta de modelo."""
     info: dict = {"format": "unknown", "kind": "other"}
+    motor = motores.detectar_formato(path)   # ONNX GenAI, OpenVINO, LiteRT-LM, ExecuTorch, MLC, TensorRT, Genie
+    if motor:
+        return motor
     if path.is_dir():
         if (path / "config.json").exists():
             info.update(format="transformers", kind="llm")
@@ -157,6 +160,7 @@ class ModelManager:
     def __init__(self, config, profile_getter) -> None:
         self.config = config
         self.profile_getter = profile_getter
+        self.hw_getter = None   # HardwareInfo.to_dict (lo pone core.Services)
         self.catalog = Catalog()
         self.sources = all_sources(config)
         self.jobs: dict[str, dict] = {}
@@ -182,7 +186,14 @@ class ModelManager:
             sector = sector_models(self.config.get("office.profile", "") or "")
         except Exception as e:  # noqa: BLE001
             L.debug("Sin sugerencias de sector: %s", e)
-        recs = recommend(self.profile_getter(), sector)
+        orden = []
+        try:   # motores que la matriz pone para el chip de este equipo
+            from ..motores import chips, plataforma   # noqa: PLC0415
+            hw = self.hw_getter() if self.hw_getter else {}
+            orden = [p["motor"] for p in chips.matriz(chips.chip(hw, self.profile_getter()), plataforma())["orden"]]
+        except Exception as e:  # noqa: BLE001
+            L.debug("Sin matriz de motores: %s", e)
+        recs = recommend(self.profile_getter(), sector, orden)
         for r in recs:
             r["installed"] = self.catalog.get(r["id"]) is not None
         return recs
@@ -341,6 +352,8 @@ class ModelManager:
 
     def download_recommended(self, rec_id: str) -> str:
         base_rec = next(r for r in RECOMMENDED if r["id"] == rec_id)
+        if base_rec.get("carpeta") or base_rec.get("repo_completo"):
+            return self._download_motor(base_rec)
         hf = self.sources["huggingface"]
         jid = self._job(base_rec["name"])
 
@@ -363,6 +376,42 @@ class ModelManager:
             self._run(jid, files, done)
 
         threading.Thread(target=work, daemon=True).start()
+        return jid
+
+    def _download_motor(self, rec: dict) -> str:
+        """Modelos de carpeta (ONNX GenAI, OpenVINO, MLC, TensorRT): toda la subcarpeta o el repositorio."""
+        hf = self.sources["huggingface"]
+        jid = self._job(rec["name"])
+
+        def work():
+            try:
+                listing = self._files_cache.get(("huggingface", rec["repo"])) or hf.files(rec["repo"])
+                pref = (rec.get("carpeta") or "").strip("/")
+                keep = [f for f in listing if (not pref or f["path"].startswith(pref + "/"))
+                        and not REPO_SKIP.search(f["path"])]
+                if rec.get("format") == "tensorrt":   # solo pesos seguros; el .bin duplicado no
+                    keep = [f for f in keep if not f["path"].endswith((".bin", ".pt", ".pth", ".h5", ".msgpack"))]
+                if not keep:
+                    raise RuntimeError(f"{rec['repo']} no tiene ficheros en {pref or 'la raiz'}")
+                root = paths.models_dir() / "huggingface" / rec["repo"].replace("/", "__")
+                files = [(hf.download_url(rec["repo"], f["path"]), root / f["path"], {"size": f.get("size", 0)})
+                         for f in keep]
+            except Exception as e:  # noqa: BLE001
+                self.jobs[jid].update(status="error", error=str(e))
+                return
+            dest = root / pref if pref else root
+
+            def done():
+                if rec.get("format") == "tensorrt":
+                    (dest / "trtllm.json").write_text(json.dumps({"origen": rec["repo"]}), encoding="utf-8")
+                entry = self.register(dest, source="huggingface", repo=rec["repo"], kind="llm", mid=rec["id"],
+                                      name=rec["name"], extra={"reasoning": rec.get("reasoning", False),
+                                                               "motor": rec.get("motor")})
+                self._auto_activate(entry)
+                return entry
+            self._run(jid, files, done)
+
+        threading.Thread(target=work, daemon=True, name=f"dl-{jid}").start()
         return jid
 
     def cancel(self, jid: str) -> None:
@@ -400,10 +449,23 @@ class ModelManager:
     def _autoregister(self) -> None:
         """Registra ficheros presentes en data/models que no esten en el catalogo (p.ej. copiados a mano)."""
         known = {m["path"] for m in self.catalog.items.values()} | {m.get("mmproj") for m in self.catalog.items.values()}
-        recs = {(r["repo"].replace("/", "__"), Path(r["file"]).name): r for r in RECOMMENDED}
+        recs = {(r["repo"].replace("/", "__"), Path(r["file"]).name): r for r in RECOMMENDED if r.get("file")}
+        # modelos de carpeta de los motores (ONNX GenAI, OpenVINO, MLC, TensorRT) copiados o descargados a medias
+        for r in RECOMMENDED:
+            if not (r.get("carpeta") or r.get("repo_completo")) or self.catalog.get(r["id"]):
+                continue
+            d = paths.models_dir() / "huggingface" / r["repo"].replace("/", "__") / (r.get("carpeta") or "")
+            if d.is_dir() and motores.detectar_formato(d):
+                try:
+                    self.register(d, source="huggingface", repo=r["repo"], kind="llm", mid=r["id"], name=r["name"],
+                                  extra={"reasoning": r.get("reasoning", False), "motor": r.get("motor")})
+                except Exception as e:  # noqa: BLE001
+                    L.warning("No se pudo registrar %s: %s", d, e)
         for f in paths.models_dir().rglob("*"):
             if f.suffix.lower() not in (".gguf", ".safetensors", ".onnx") or str(f) in known or "mmproj" in f.name.lower():
                 continue
+            if any(motores.detectar_formato(d) for d in (f.parent, f.parent.parent)):
+                continue   # pieza de un modelo de carpeta (ONNX GenAI, OpenVINO, MLC...): se registra la carpeta
             rec = recs.get((f.parent.name, f.name))
             try:
                 if rec:
