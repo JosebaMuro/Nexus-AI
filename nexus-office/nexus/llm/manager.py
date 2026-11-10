@@ -239,6 +239,7 @@ class LLMManager:
             cap = full["n_ctx"] // 2 if thinking else full["n_ctx"] // 3
             full["max_tokens"] = min(full["max_tokens"] or 1024, max(256, cap))
             messages = fit_context(messages, full["n_ctx"], full["max_tokens"])
+        self._liberar_anterior(backend_name)
         self.inflight += 1
         try:
             yield from backend.stream_chat(messages, model=model, **full)
@@ -252,6 +253,28 @@ class LLMManager:
             if self.monitor and st.get("tokens"):
                 self.monitor.record_llm(backend_name, model, st["tokens"], st["seconds"], st["ttft"])
         self.last_used = (backend_name, model)
+
+    def _liberar_anterior(self, usar: str) -> None:
+        """Al cambiar de motor local (p. ej. de llama.cpp a OpenVINO) descarga el modelo del anterior: dos modelos
+        cargados a la vez se reparten la VRAM o llenan la RAM y los dos van lentos. Con memoria de sobra y sin GPU se
+        dejan los dos (alternar entre agentes con modelos distintos no recarga)."""
+        locales = {"llamaserver", "llamacpp", *motores.MOTORES}
+        previo = (getattr(self, "last_used", None) or ("", ""))[0]
+        if self.inflight or usar not in locales or previo not in locales or previo == usar:
+            return
+        if not self.profile["llm"].get("gpu_layers"):
+            try:
+                import psutil   # noqa: PLC0415
+                if psutil.virtual_memory().percent < 50:
+                    return
+            except Exception:  # noqa: BLE001
+                pass
+        b = self.backends.get(previo)
+        try:
+            (getattr(b, "unload", None) or getattr(b, "stop", lambda: None))()
+            L.info("Cambio de motor %s -> %s: se libera la memoria del anterior", previo, usar)
+        except Exception as e:  # noqa: BLE001
+            L.warning("No se pudo descargar %s: %s", previo, e)
 
     def complete(self, prompt: str, spec: str = "default", **opts) -> str:
         """Tareas internas (resumenes, extraccion...): poco razonamiento y, si no llega a responder, cadena vacia

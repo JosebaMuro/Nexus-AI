@@ -11,7 +11,12 @@ on:
     paths:
       - nexus-office/nexus/motores/**
       - nexus-office/nexus/llm/manager.py
+      - nexus-office/nexus/llm/llamaserver.py
       - .github/workflows/motores-python.yml
+
+concurrency:
+  group: motores-python-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -37,6 +42,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: nexus-office/requirements.txt
       - name: Dependencias y motores
         run: |
           python -m pip install -q -r requirements.txt huggingface_hub jinja2 onnxruntime-genai

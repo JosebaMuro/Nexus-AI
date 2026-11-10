@@ -1,5 +1,24 @@
 # Cambios
 
+## Agente IA 4.0.1: revisión de configuración, motores, flujos y rendimiento (2026-11-10)
+
+- **llama.cpp con GPU que falla**: si la gráfica no arrancaba, cada mensaje volvía a intentarla, esperaba el fallo y
+  caía a la CPU. Ahora sigue en la CPU 10 minutos y entonces la prueba otra vez.
+- **Lote físico** (`-ub`) de 1024 tokens con gráfica dedicada de 12 GB o más: el prompt de los agentes se procesa antes.
+- **Caché de prompts** de llama-server acotada al 10 % de la RAM (5 % en el móvil), entre 256 MB y 8 GB: por defecto
+  reservaba hasta 8 GB y llenaba los equipos de 8-16 GB.
+- **Carga de modelos grandes**: se espera hasta 15 minutos mientras llama-server siga escribiendo en su registro.
+- **Selector de motor**: entre los modelos medidos que van cómodos (8 tokens/s o más) se elige el mayor y, a igual
+  tamaño, el motor más rápido; antes ganaba siempre el modelo más pequeño.
+- **Banco**: una respuesta de calentamiento antes de medir; el tiempo de carga se apunta aparte (`carga_s`).
+- **Memoria**: al cambiar de motor local se descarga el modelo del anterior (con GPU siempre; sin GPU, si la RAM pasa
+  del 50 %), para no tener dos modelos cargados a la vez.
+- **OpenVINO**: prioridad a la latencia en CPU y GPU, y los hilos del perfil en la CPU.
+- **Instaladores de Linux**: ExecuTorch pasa a instalarse aparte (`nexus setup --all`); arrastraba PyTorch con CUDA y
+  los `.run` y `.deb` pesaban 4,5 GB.
+- **Actions**: las pruebas de Python corren en cada cambio (Linux y Windows) con caché de pip; un empuje nuevo
+  cancela las ejecuciones anteriores de la misma rama; `entrega.yml` falla si un fichero pasa de 2 GB.
+
 ## Agente IA 4.0.0: motores de inferencia por hardware (2026-11-10)
 
 La edición Python vuelve a ser la base del proyecto (la C++ 3.2.3 queda como referencia).

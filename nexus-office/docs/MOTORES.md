@@ -12,7 +12,7 @@ Qualcomm, LiteRT-LM para la TPU de los Pixel... llama.cpp sigue de respaldo en t
 | **ONNX Runtime GenAI** | CUDA, DirectML (cualquier GPU en Windows), QNN (NPU Snapdragon X), OpenVINO, VitisAI (NPU Ryzen AI), CPU | carpeta con `genai_config.json` | Windows x64 (DirectML), Windows ARM64, Linux, macOS |
 | **OpenVINO GenAI** | NPU Intel Core Ultra, iGPU Xe y Arc, CPU | carpeta con `openvino_model.xml` | Windows x64, Linux x86_64, macOS |
 | **LiteRT-LM** | NPU de Tensor, Snapdragon, MediaTek e Intel; GPU; CPU (XNNPACK) | `.litertlm` | Windows x64 (con NPU Intel), Linux, macOS Apple Silicon (rueda `litert-lm-api` y `motores-npu.yml`) |
-| **ExecuTorch** | XNNPACK (CPU), QNN, Vulkan, CoreML, MPS (según el `.pte`) | `.pte` + tokenizer | Windows x64, Linux, macOS Apple Silicon |
+| **ExecuTorch** | XNNPACK (CPU), QNN, Vulkan, CoreML, MPS (según el `.pte`) | `.pte` + tokenizer | Windows x64 y macOS Apple Silicon; en Linux aparte (arrastra torch con CUDA, unos 3 GB): `nexus setup --all` con internet |
 | **MLC LLM** | CUDA, ROCm, Vulkan, Metal, OpenCL (Adreno, Mali) | carpeta con `mlc-chat-config.json` | aparte (no hay rueda en PyPI): `nexus setup --all` con internet |
 | **TensorRT-LLM** | NVIDIA (Tensor Cores) | checkpoint de Hugging Face o `rank0.engine` | aparte (varios GB): `nexus setup --all` con internet |
 | **Qualcomm Genie** | NPU Hexagon (HTP) | carpeta de Qualcomm AI Hub con `genie_config.json` | Windows ARM64 y Linux ARM64 (QAIRT, de `motores-npu.yml`) |
@@ -46,6 +46,11 @@ La tabla es solo el punto de partida. En **Sistema → Motores de inferencia →
 motor y mide los **tokens por segundo** y el **tiempo hasta el primer token**. Desde ese momento se elige el más
 rápido medido en tu equipo, aunque la tabla diga otra cosa (por ejemplo, si en tu portátil llama.cpp en la iGPU
 supera a OpenVINO en la NPU). El resultado queda en `data/motores/banco.json`.
+
+Entre los modelos medidos que van cómodos (8 tokens/s o más) se elige **el mayor**, que suele responder mejor, y a
+igual tamaño el motor más rápido. Si ninguno llega a esa velocidad, el más rápido. Antes de medir se pide una
+respuesta mínima para que la carga del modelo (que se apunta aparte) no cuente en el tiempo hasta el primer token.
+Al cambiar de motor se descarga el modelo del anterior para no tener dos en memoria.
 
 ```bash
 python -m nexus motores          # chip, orden, motores instalados y modelos con su motor

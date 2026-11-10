@@ -109,8 +109,11 @@ jobs:
           ls -la "$RT"/litert/* "$RT"/genie/* 2>/dev/null || true
       - name: Construir
         run: cd nexus-office && python packaging/build.py --targets ${{ matrix.target }}
-      - name: Lista
-        run: ls -la nexus-office/dist/*/ && df -h /
+      - name: Lista (ningun fichero puede pasar de los 2 GB de una Release)
+        run: |
+          ls -la nexus-office/dist/*/ && df -h /
+          G=$(find nexus-office/dist -type f -size +2040M)
+          if [ -n "$G" ]; then echo "::error::pasan de 2 GB y no caben en la Release: $G"; exit 1; fi
       - uses: actions/upload-artifact@v4
         with:
           name: instalador-${{ matrix.target }}

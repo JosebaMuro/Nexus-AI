@@ -44,8 +44,10 @@ ACCEL = {
 MOTORES = {
     "windows-x64": ["onnxruntime-genai-directml", "openvino-genai", "executorch", "jinja2"],
     "windows-arm64": ["onnxruntime-genai", "jinja2"],
-    "linux-x86_64": ["onnxruntime-genai", "openvino-genai", "executorch", "jinja2"],
-    "linux-aarch64": ["onnxruntime-genai", "executorch", "jinja2"],
+    # en Linux executorch arrastra torch con todo CUDA 13 (unos 3 GB: el instalador pasaba de los 2 GB por fichero de
+    # una Release): alli se instala aparte con «nexus setup --all», como MLC y TensorRT-LLM
+    "linux-x86_64": ["onnxruntime-genai", "openvino-genai", "jinja2"],
+    "linux-aarch64": ["onnxruntime-genai", "jinja2"],
     "macos-arm64": ["onnxruntime-genai", "openvino-genai", "executorch", "jinja2"],
     "macos-x86_64": ["onnxruntime-genai", "openvino-genai", "jinja2"],
 }

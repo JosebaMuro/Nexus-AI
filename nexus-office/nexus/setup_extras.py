@@ -51,9 +51,9 @@ def motor_steps(profile: dict, hw) -> list[dict]:
         if m in vistos or m not in pkgs or disponible(m)[0]:
             continue
         vistos.add(m)
-        # MLC y TensorRT-LLM no estan en el paquete offline: solo si hay internet o rueda local
+        # MLC, TensorRT-LLM y (en Linux) ExecuTorch no estan en el paquete offline: solo si hay internet o rueda local
         out.append({"name": f"Motor {MOTORES[m].nombre}", "pip": [pkgs[m], "jinja2"],
-                    "reason": f"el mas rapido para este chip segun la matriz ({m})", "optional": m in ("mlc", "tensorrt")})
+                    "reason": f"el mas rapido para este chip segun la matriz ({m})", "optional": m in ("mlc", "tensorrt") or (m == "executorch" and plat.startswith("linux"))})
     return out
 
 

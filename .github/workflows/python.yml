@@ -1,11 +1,21 @@
-name: Nexus-Office Python (pruebas)
+name: Agente IA (Python) - pruebas
 
-# Edicion Python (nexus-office/): pruebas en Linux y Windows de 64 bits, mas las que necesitan internet
-# (cotizaciones reales de la mesa de bolsa), que en las sesiones de desarrollo no se pueden ejecutar.
-# La edicion Python esta congelada desde 2026-10-28 (todo el desarrollo sigue en C++, en nexus-office-cpp/):
-# estas pruebas solo se lanzan a mano.
+# Edicion Python (nexus-office/), la base desde la 4.0.0: pruebas en Linux y Windows de 64 bits en cada cambio. Las
+# que necesitan internet (cotizaciones reales de la mesa de bolsa), que en las sesiones de desarrollo no se pueden
+# ejecutar, solo al lanzarlo a mano para que una caida de la fuente no ponga en rojo un cambio.
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - nexus-office/**
+      - firmware/flash.py
+      - firmware/nexuspico/nexuspico.py
+      - .github/workflows/python.yml
+
+# un empuje nuevo a la misma rama cancela las pruebas del anterior
+concurrency:
+  group: python-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -17,6 +27,9 @@ jobs:
       matrix:
         os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      PYTHONUTF8: "1"
+      NEXUS_NO_KNOWLEDGE_PACKS: "1"
     defaults:
       run:
         working-directory: nexus-office
@@ -25,9 +38,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: nexus-office/requirements.txt
       - name: Dependencias
         run: python -m pip install -q -r requirements.txt
       - name: Cotizaciones reales (internet)
+        if: github.event_name == 'workflow_dispatch'
         env:
           NEXUS_ONLINE_TESTS: "1"
           PYTHONUTF8: "1"
