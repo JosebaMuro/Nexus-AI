@@ -19,6 +19,7 @@ const json& tareas_doradas() {
   static const json T = json::parse(R"JSON([
     {"id": "hora", "texto": "¿Qué hora es?", "agente": "nexus", "herramienta": "datetime_now"},
     {"id": "fecha", "texto": "¿Qué día es hoy?", "agente": "nexus", "herramienta": "datetime_now"},
+    {"id": "ubicacion", "texto": "¿Dónde estoy ahora mismo?", "agente": "nexus", "herramienta": "ubicacion_actual"},
     {"id": "calculo", "texto": "¿Cuánto es 1250 * 1.21?", "agente": "nexus", "herramienta": "calculator", "args": {"expression": "1250"}, "contiene": ["1512"]},
     {"id": "calculo-iva", "texto": "calcula 340 + 340 * 0.21", "agente": "programador", "herramienta": "calculator", "contiene": ["411"]},
     {"id": "imagen-logo", "texto": "Dibuja un logo para una panadería artesanal", "agente": "artista", "herramienta": "generate_image", "args": {"prompt": "panader"}},

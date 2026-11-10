@@ -14,7 +14,7 @@ namespace nx::tools {
 
 static auto L = log::get("tools");
 const std::vector<std::string> RISKS = {"low", "medium", "high"};
-const std::vector<std::string> PERMISSIONS = {"network", "filesystem", "code_exec", "system", "memory", "media", "agents"};
+const std::vector<std::string> PERMISSIONS = {"network", "filesystem", "code_exec", "system", "memory", "media", "agents", "location"};
 
 void link_builtin_core();
 void link_builtin_files();

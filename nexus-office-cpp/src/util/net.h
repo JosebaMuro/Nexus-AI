@@ -1,5 +1,6 @@
 // Utilidades de red locales: puertos libres e IP de la LAN.
 #pragma once
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -35,9 +36,11 @@ std::vector<UdpReply> udp_broadcast(const std::vector<std::pair<std::string, int
                                     double timeout, int rounds = 2);
 // UDP sin respuesta (estado en directo para las luces); false si no se pudo enviar
 bool udp_send(const std::string& host, int port, const std::string& data);
-// TCP en claro: conecta, envia y lee hasta cerrar o max bytes. nullopt si no se pudo conectar
+// TCP en claro: conecta, envia y lee hasta cerrar o max bytes. nullopt si no se pudo conectar. Con `listo`, para en
+// cuanto devuelve true con lo leido y timeout pasa a ser el tiempo total (servicios que no cierran, como gpsd)
 std::optional<std::string> tcp_exchange(const std::string& host, int port, const std::string& data, double timeout,
-                                        size_t max_bytes = 65536);
+                                        size_t max_bytes = 65536,
+                                        const std::function<bool(const std::string&)>& listo = {});
 
 // Todas las direcciones del nombre son publicas (ni privadas, ni loopback, ni enlace local, ni multicast); false si no
 // se resuelve

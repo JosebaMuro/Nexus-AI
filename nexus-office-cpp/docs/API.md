@@ -114,3 +114,13 @@ Eventos WebSocket nuevos: `percepcion`, `difusion` y `pantalla` (`{trabajo, paso
 | `GET /api/voice` | Además: `general` (voz general), `distinta` y `agentes` (la voz ya resuelta de cada agente). |
 | `GET /api/voice/voces` | Voces del equipo: modelos Piper con sus hablantes, voces del sistema, variantes de espeak y motores. |
 | `POST /api/voice/tts` | `{text, rate?, agente?, voz?}`: con `agente`, su voz; con `voz` (`{motor, modelo, hablante, nombre, variante, navegador, velocidad, tono, volumen}`), esa voz sobre la general. |
+
+## Ubicación en tiempo real
+
+Solo desde el propio equipo o en modo administrador. Ver [UBICACION.md](UBICACION.md).
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/ubicacion` | Fuentes de este equipo, configuración (`ubicacion.*`) y última posición. |
+| `POST /api/ubicacion/consultar` | `{fuente?, hasta?, timeout_s?}`: la posición ahora, con lugar guardado, ciudad cercana y distancia a `hasta`. |
+| `POST /api/ubicacion` | Posición del navegador `{lat, lon, precision?, altitud?, velocidad?, rumbo?, t?}` (requiere `ubicacion.navegador`). |
