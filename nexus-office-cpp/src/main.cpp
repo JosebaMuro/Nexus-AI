@@ -43,6 +43,9 @@
 #include "models/runtimes.h"
 #include "office/bolsa.h"
 #include "office/bolsa_agente.h"
+#include "office/bolsa_cuant.h"
+#include "office/bolsa_mesa.h"
+#include "office/bolsa_real.h"
 #include "rag/web.h"
 #include "remote/remote.h"
 #include "office/office.h"
@@ -212,6 +215,18 @@ int cmd_run(const Args& a) {
       if (v.is_object()) v["modelo"] = id.empty() ? jstr(s.llm->status(), "model") : id;
       return v;
     };
+  };
+  // mesa de analistas de bolsa: cada papel (tecnico, noticias, debate, riesgo, gestor) lo hace la IA financiera
+  bolsa::mesa_llm = [&s](const std::string& prompt) -> std::string {
+    if (!s.llm->has_real_llm()) return "";
+    llm::Opts o;
+    o.o = {{"max_tokens", 900}, {"temperature", 0.3}};
+    return s.llm->complete(prompt, "especialidad:finanzas", o);
+  };
+  bolsa::mesa_ia_info = [&s]() -> json {
+    std::string id = s.llm->especialista("finanzas");
+    if (!id.empty()) return {{"modelo", id}, {"especializada", true}};
+    return {{"modelo", s.llm->has_real_llm() ? s.llm->status()["model"] : json("")}, {"especializada", false}};
   };
   // el agente de bolsa autonomo trabaja solo, siempre en simulacion (con precios reales si hay conexion)
   if (cfg.flag("bolsa.agente.activo", true)) {

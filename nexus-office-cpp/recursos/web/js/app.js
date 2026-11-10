@@ -1218,15 +1218,16 @@
         <td>${o.estado === "por_confirmar" ? `<button class="btn sm primary admin-only" data-confirm="${o.id}">CONFIRMAR</button>` : ""}${o.estado === "confirmada" ? `<button class="btn sm admin-only" data-fill="${o.id}">REGISTRAR EJECUCIÓN</button>` : ""}${open ? `<button class="btn sm" data-cancel="${o.id}">CANCELAR</button>` : ""}</td></tr>`; }).join("")}</table>` : '<p class="muted">Sin órdenes.</p>';
     $("#bolsa-ops").innerHTML = d.operaciones.length ? `<table class="tbl"><tr><th>Fecha</th><th>Operación</th><th>Efectivo</th><th>Comisión</th><th>Impuestos</th><th>Cambio</th><th>Deslizam.</th><th>Total</th><th>Resultado</th></tr>${d.operaciones.map((o) =>
       `<tr><td class="mono muted">${esc(o.fecha.replace("T", " ").slice(0, 16))}</td><td>${o.lado === "compra" ? "Compra" : "Venta"} ${num(o.cantidad, 6)} <b>${esc(o.simbolo)}</b> a ${num(o.precio, 4)}${o.aviso ? `<div class="tag warn" title="${esc(o.aviso)}">regla 2 meses</div>` : ""}</td><td class="mono">${eur(o.efectivo_eur)}</td><td class="mono">${eur(o.comision_eur)}</td><td class="mono">${eur(o.impuestos_eur)}</td><td class="mono">${eur(o.cambio_eur)}</td><td class="mono">${eur(o.deslizamiento_eur)}</td><td class="mono">${eur(o.total_eur)}</td><td class="mono">${o.ganancia_eur == null ? "" : eur(o.ganancia_eur)}</td></tr>`).join("")}</table>` : '<p class="muted">Aún no hay operaciones.</p>';
-    await bolsaAgent().catch(() => {}); bolsaLive();
+    await bolsaAgent().catch(() => {}); bolsaLive(); bolsaLab().catch(() => {});
     if (!liveState.timer) liveState.timer = setInterval(() => { guard(bolsaLive)(); if (Date.now() - liveState.agentT > 15000) { liveState.agentT = Date.now(); guard(bolsaAgent)(); } }, 5000);
     if (!$("#bo-syms").childElementCount) $("#bo-syms").innerHTML = (await api("/api/bolsa/instrumentos")).map((i) => `<option value="${esc(i.simbolo)}">${esc(i.nombre)} · ${esc(i.mercado)}</option>`).join("");
     $$("[data-sell]").forEach((b) => (b.onclick = () => { $("#bo-sym").value = b.dataset.sell; $("#bo-lado").value = "venta"; $("#bo-qty").value = b.dataset.q; bolsaQuote().catch(() => {}); $("#bo-sym").scrollIntoView({ behavior: "smooth", block: "center" }); }));
     $$("[data-cancel]").forEach((b) => (b.onclick = guard(async () => { await api(`/api/bolsa/orden/${b.dataset.cancel}/cancelar`, { body: {} }); loaders.bolsa(); })));
     $$("[data-confirm]").forEach((b) => (b.onclick = guard(async () => {
       const o = d.ordenes.find((x) => String(x.id) === b.dataset.confirm);
-      const t = prompt(`Orden REAL: ${o.lado} ${o.cantidad} ${o.simbolo} (${o.tipo}). Agente IA no la envía a ningún bróker: la ejecutas tú después.\nEscribe ${d.confirmacion} para confirmarla.`);
-      if (t == null) return; await api(`/api/bolsa/orden/${o.id}/confirmar`, { body: { confirmacion: t } }); toast("Orden confirmada: ejecútala en tu bróker"); loaders.bolsa(); })));
+      const t = prompt(`Orden REAL${o.origen && o.origen.includes("propuesta") ? " propuesta por el agente" : ""}: ${o.lado} ${o.cantidad} ${o.simbolo} (${o.tipo}). Con un bróker conectado sale hacia él al confirmar; si no, la ejecutas tú después.\nEscribe ${d.confirmacion} para confirmarla.`);
+      if (t == null) return; const r = await api(`/api/bolsa/orden/${o.id}/confirmar`, { body: { confirmacion: t } });
+      toast(r.broker ? `Orden confirmada y enviada a ${r.broker.nombre} (${r.broker.entorno})` : r.broker_error ? `Confirmada, pero el bróker la rechazó: ${r.broker_error}` : "Orden confirmada: ejecútala en tu bróker", !!r.broker_error); loaders.bolsa(); })));
     $$("[data-fill]").forEach((b) => (b.onclick = guard(async () => {
       const px = prompt("Precio de ejecución en tu bróker (divisa del valor):"); if (!px) return;
       const com = prompt("Comisiones y gastos en € (0 si no hubo):", "0") ?? "0";
@@ -1305,7 +1306,7 @@
     $("#ba-diario").innerHTML = a.diario.length ? a.diario.map((e) => `<div class="e ${esc(e.tipo)}"><div class="t">${new Date(e.ts * 1000).toLocaleString("es-ES")} · ${esc(e.tipo)}${e.simbolo ? " · " + esc(e.simbolo) : ""}</div>${esc(e.texto)}</div>`).join("") : '<p class="muted">Todavía sin decisiones.</p>';
     if (a.error) $("#ba-diario").insertAdjacentHTML("afterbegin", `<div class="e error">${esc(a.error)}</div>`);
     const c = a.ajustes; $("#ba-riesgo").value = c.riesgo_pct; $("#ba-maxpos").value = c.max_posiciones; $("#ba-peso").value = c.max_peso_pct; $("#ba-reserva").value = c.reserva_pct; $("#ba-int").value = c.intervalo_s;
-    $("#ba-ia").checked = c.ia !== false; if (a.ia && a.ia.eleccion) $("#ba-iamodelo").value = a.ia.eleccion;
+    $("#ba-ia").checked = c.ia !== false; $("#ba-mesa").checked = !!c.mesa; $("#ba-maxdd").value = c.max_drawdown_pct; $("#ba-racha").value = c.racha_perdidas; $("#ba-perdia").value = c.perdida_diaria_pct; if (a.ia && a.ia.eleccion) $("#ba-iamodelo").value = a.ia.eleccion;
     $("#ba-ia-info").innerHTML = !a.ia ? "sin IA instalada: decide solo con sus reglas" : !a.ia.modelo ? "sin modelo de IA: decide solo con sus reglas"
       : a.ia.especializada ? `revisa: <b>${esc(a.ia.modelo)}</b>` : `revisa la IA general (${esc(a.ia.modelo)}); descarga una financiera en Modelos (◆ para tu oficina)`;
     if (document.activeElement !== $("#ba-universo")) $("#ba-universo").value = (c.universo || []).join(", ");
@@ -1314,8 +1315,89 @@
   $("#ba-cycle").onclick = guard(async () => { toast("El agente está analizando el mercado…"); await api("/api/bolsa/agente", { body: { ciclo: true } }); await loaders.bolsa(); });
   $("#ba-view").onclick = () => { if (!liveState.agent) return; bolsaState.cartera = liveState.agent.cartera; local.set("nexus_bolsa_cartera", bolsaState.cartera); refreshView(); };
   $("#ba-save").onclick = guard(async () => {
-    await api("/api/bolsa/agente", { body: { riesgo_pct: Number($("#ba-riesgo").value), max_posiciones: Number($("#ba-maxpos").value), max_peso_pct: Number($("#ba-peso").value), reserva_pct: Number($("#ba-reserva").value), intervalo_s: Number($("#ba-int").value), ia: $("#ba-ia").checked, ia_modelo: $("#ba-iamodelo").value, universo: $("#ba-universo").value.split(/[,\s]+/).filter(Boolean) } });
+    await api("/api/bolsa/agente", { body: { riesgo_pct: Number($("#ba-riesgo").value), max_posiciones: Number($("#ba-maxpos").value), max_peso_pct: Number($("#ba-peso").value), reserva_pct: Number($("#ba-reserva").value), intervalo_s: Number($("#ba-int").value), ia: $("#ba-ia").checked, mesa: $("#ba-mesa").checked, max_drawdown_pct: Number($("#ba-maxdd").value), racha_perdidas: Number($("#ba-racha").value), perdida_diaria_pct: Number($("#ba-perdia").value), ia_modelo: $("#ba-iamodelo").value, universo: $("#ba-universo").value.split(/[,\s]+/).filter(Boolean) } });
     toast("Ajustes del agente guardados"); bolsaAgent(); });
+  // ---- laboratorio de inversion: etapas, banco, backtest, Monte Carlo, mesa de analistas, optimizacion y broker
+  const labState = { bt: null };
+  const labSyms = () => $("#lab-syms").value.split(/[,\s;]+/).filter(Boolean).map((x) => x.toUpperCase());
+  const ETQ = { hecha: "hecha", pendiente: "pendiente", lista: "lista", habilitada: "habilitada", bloqueada: "bloqueada" };
+  async function bolsaLab() {
+    const e = await api("/api/bolsa/etapas");
+    $("#lab-etapas").innerHTML = e.etapas.map((x, i) => `<div class="et ${esc(x.estado)}"><b>${i + 1}. ${esc(x.nombre)}</b><span class="tag ${x.estado === "hecha" || x.estado === "habilitada" ? "ok" : x.estado === "lista" ? "accent" : ""}">${esc(ETQ[x.estado] || x.estado)}</span>
+      ${x.falta.length ? `<div class="f">Falta: ${x.falta.map(esc).join("; ")}</div>` : ""}<div class="f" title="Proyectos libres en los que se inspira">${x.proyectos.map(esc).join(" · ")}</div></div>`).join("");
+    const real = e.etapas.find((x) => x.id === "real");
+    $("#lab-real").checked = !!real.detalle.habilitado;
+    const carts = (bolsaState.data ? bolsaState.data.carteras : []).filter((c) => c.modo === "real");
+    $("#lab-real-cart").innerHTML = `<option value="">— cartera real —</option>` + carts.map((c) => `<option value="${c.id}" ${c.id === real.detalle.cartera ? "selected" : ""}>${esc(c.nombre)}</option>`).join("");
+    if (S.token) { const bk = await api("/api/bolsa/broker").catch(() => null); if (bk) {
+      $("#lab-bk-tipo").value = bk.tipo; $("#lab-bk-ent").value = bk.entorno; $("#lab-bk-auto").checked = bk.enviar_al_confirmar !== false;
+      $("#lab-bk-info").innerHTML = `${esc(bk.nota)}${bk.configurado ? ' <span class="tag ok">claves guardadas</span>' : ""}${bk.ordenes.length ? ` · ${bk.ordenes.length} orden(es) enviadas` : ""}`; } }
+  }
+  function metRow(k, a, b, c, f = (v) => v ?? "–") { return `<tr><td>${k}</td><td class="mono">${f(a)}</td><td class="mono">${f(b)}</td>${c === undefined ? "" : `<td class="mono">${f(c)}</td>`}</tr>`; }
+  function btTabla(r) {
+    const m = r.metricas, ref = r.referencia, fm = r.fuera_muestra ? r.fuera_muestra.metricas : undefined, o = r.operaciones, p = (v) => v == null ? "–" : pct(v);
+    const h = `<tr><th></th><th>Estrategia</th><th>Comprar y mantener</th>${fm ? `<th>Fuera de muestra (desde ${esc(r.fuera_muestra.desde)})</th>` : ""}</tr>`;
+    return `<table class="tbl">${h}${metRow("Rentabilidad", m.rentabilidad_pct, ref.rentabilidad_pct, fm && fm.rentabilidad_pct, p)}${metRow("Anualizada", m.cagr_pct, ref.cagr_pct, fm && fm.cagr_pct, p)}
+      ${metRow("Sharpe", m.sharpe, ref.sharpe, fm && fm.sharpe)}${metRow("Sortino", m.sortino, ref.sortino, fm && fm.sortino)}${metRow("Caída máxima", m.max_drawdown_pct, ref.max_drawdown_pct, fm && fm.max_drawdown_pct, (v) => v == null ? "–" : num(v) + " %")}
+      ${metRow("VaR 95 % diario", m.var95_pct, ref.var95_pct, fm && fm.var95_pct, (v) => v == null ? "–" : num(v) + " %")}</table>
+      <p class="muted" style="margin-top:6px">${esc(r.desde)} → ${esc(r.hasta)} · ${o.operaciones} operaciones · ${num(o.aciertos_pct)} % aciertos · factor de beneficio ${o.factor_beneficio ?? "–"} · resultado ${eur(o.resultado_eur)}</p>
+      ${r.avisos.length ? `<p class="muted">⚠ ${r.avisos.map(esc).join(" · ")}</p>` : ""}`;
+  }
+  $("#lab-banco").onclick = guard(async () => {
+    const syms = labSyms(); if (!syms.length) return toast("Escribe los valores a guardar", true);
+    toast("Descargando históricos…"); const r = await api("/api/bolsa/banco", { body: { simbolos: syms, rango: $("#lab-rango").value } });
+    toast(`Banco: ${r.banco.series} series, ${r.banco.sesiones} sesiones`); bolsaLab();
+  });
+  $("#lab-bt").onclick = guard(async () => {
+    toast("Probando la estrategia con el histórico…");
+    const syms = labSyms().length ? labSyms() : (liveState.agent?.ajustes?.universo || []);
+    const r = await api("/api/bolsa/backtest", { body: { simbolos: syms, rango: $("#lab-rango").value, estrategia: $("#lab-estr").value, ...(liveState.agent ? { riesgo_pct: liveState.agent.ajustes.riesgo_pct, max_posiciones: liveState.agent.ajustes.max_posiciones, max_peso_pct: liveState.agent.ajustes.max_peso_pct, reserva_pct: liveState.agent.ajustes.reserva_pct } : {}) } });
+    labState.bt = r; $("#lab-mc").disabled = false;
+    liveChart($("#lab-curve"), r.curva.map((c) => ({ ts: c.ts, precio: c.total })), [{ tipo: "entrada", precio: r.parametros.capital, texto: "Capital" }, { tipo: "objetivo", precio: r.curva.length ? r.curva[r.curva.length - 1].referencia : null, texto: "Comprar y mantener" }]);
+    $("#lab-bt-res").innerHTML = btTabla(r); bolsaLab();
+  });
+  $("#lab-mc").onclick = guard(async () => {
+    if (!labState.bt) return;
+    const r = await api("/api/bolsa/montecarlo", { body: { backtest: labState.bt.id, capital: labState.bt.parametros.capital, horizonte: 252 } }), v = r.valor_final;
+    $("#lab-bt-res").insertAdjacentHTML("beforeend", `<p><b>Monte Carlo</b> (${r.simulaciones} simulaciones a un año): mediana ${eur(v.p50)}, entre ${eur(v.p5)} y ${eur(v.p95)} en el 90 % de los casos · probabilidad de perder ${num(r.prob_perdida_pct)} % · caída máxima típica ${num(r.drawdown_mediano_pct)} % (p95 ${num(r.drawdown_p95_pct)} %)</p>`);
+  });
+  function informeHTML(r) {
+    const a = r.analistas, d = r.decision, sec = (cls, t, x) => `<div class="sec ${cls}"><b>${t}</b>\n${esc(x)}</div>`;
+    return `<div class="sec dec"><b>Decisión del gestor: ${esc(d.decision.toUpperCase())}</b> · confianza ${num(d.confianza * 100, 0)} % · peso ${num(d.peso_pct)} % (${esc(d.perfil_riesgo)})\n${esc(d.motivo)}</div>
+      ${sec("", "Analista técnico", a.tecnico.texto)}${sec("", "Noticias y sentimiento", a.noticias.texto)}${sec("", "Analista fundamental", a.fundamental.texto)}
+      ${r.debate.map((x) => sec("al", `Alcista · ronda ${x.ronda}`, x.alcista) + sec("ba", `Bajista · ronda ${x.ronda}`, x.bajista)).join("")}
+      ${sec("", "Operador", `${r.operador.decision}: ${r.operador.motivo}`)}${sec("", "Equipo de riesgo", ["agresivo", "neutral", "conservador"].map((k) => `${k}: ${num(r.riesgo[k].peso_pct)} % · ${r.riesgo[k].motivo}`).join("\n"))}
+      <p class="muted">${r.con_ia ? `Con IA (${esc((r.ia && r.ia.modelo) || "")}): ${r.papeles_ia.map(esc).join(", ")}` : "Sin IA instalada: cada papel lo hace una regla"} · ${r.datos_reales ? "datos reales" : "precios simulados"}. No es asesoramiento financiero.</p>`;
+  }
+  $("#lab-inf").onclick = guard(async () => {
+    const sym = $("#lab-sym").value.trim(); if (!sym) return toast("Escribe un símbolo", true);
+    $("#lab-inf-res").innerHTML = '<p class="muted">La mesa está analizando (con IA puede tardar)…</p>';
+    $("#lab-inf-res").innerHTML = informeHTML(await api("/api/bolsa/informe", { body: { simbolo: sym } })); bolsaLab();
+  });
+  $("#lab-not").onclick = guard(async () => {
+    const sym = $("#lab-sym").value.trim(); if (!sym) return toast("Escribe un símbolo", true);
+    const r = await api(`/api/bolsa/noticias/${encodeURIComponent(sym)}?refrescar=1`);
+    $("#lab-inf-res").innerHTML = `<p class="muted">Sentimiento ${num(r.sentimiento)}${r.en_linea ? "" : " · sin conexión: titulares guardados"}</p>` + (r.noticias.length ? r.noticias.map((n) =>
+      `<div class="sec ${n.sentimiento > 0.15 ? "al" : n.sentimiento < -0.15 ? "ba" : ""}">${esc(n.titulo)}<div class="muted">${esc(n.fuente)} · ${new Date(n.ts * 1000).toLocaleString("es-ES")}</div></div>`).join("") : '<p class="muted">Sin titulares.</p>');
+  });
+  $("#lab-opt").onclick = guard(async () => {
+    const syms = labSyms(); if (syms.length < 2) return toast("Escribe al menos dos valores", true);
+    const r = await api("/api/bolsa/optimizar", { body: { simbolos: syms, metodo: $("#lab-met").value, capital: Number($("#lab-cap").value), max_peso_pct: Number($("#lab-maxw").value), rango: $("#lab-rango").value } });
+    $("#lab-opt-res").innerHTML = `<table class="tbl"><tr><th>Valor</th><th>Peso</th><th>Riesgo que aporta</th>${r.asignacion ? "<th>Títulos</th><th>Importe</th>" : ""}</tr>${Object.keys(r.pesos_pct).map((k) =>
+      `<tr><td><b>${esc(k)}</b></td><td class="mono">${num(r.pesos_pct[k])} %</td><td class="mono">${num(r.contribucion_riesgo_pct[k])} %</td>${r.asignacion ? `<td class="mono">${num(r.asignacion[k].titulos, 4)}</td><td class="mono">${eur(r.asignacion[k].importe_eur)}</td>` : ""}</tr>`).join("")}</table>
+      <p class="muted">Rentabilidad anual esperada ${pct(r.rentabilidad_anual_pct)} · volatilidad ${num(r.volatilidad_anual_pct)} % · Sharpe ${num(r.sharpe)}${r.sobrante_eur != null ? ` · sobran ${eur(r.sobrante_eur)}` : ""}. ${esc(r.nota)} ${r.avisos.map(esc).join(" · ")}</p>`;
+  });
+  $("#lab-real-save").onclick = guard(async () => {
+    const cid = Number($("#lab-real-cart").value) || null, on = $("#lab-real").checked;
+    if (on && !confirm("El agente propondrá en tu cartera real las operaciones que haga en la simulada, solo si ha superado el backtest y la simulación. Ninguna sale sin que escribas CONFIRMO. ¿Habilitar?")) return;
+    await api("/api/bolsa/real", { body: { cartera: cid, habilitado: on } }); toast(on ? "Propuestas reales habilitadas" : "Propuestas reales apagadas"); bolsaLab();
+  });
+  $("#lab-bk-save").onclick = guard(async () => {
+    if ($("#lab-bk-ent").value === "real" && !confirm("Entorno REAL de Alpaca: las órdenes que confirmes moverán dinero de verdad. ¿Seguro?")) return;
+    const body = { tipo: $("#lab-bk-tipo").value, entorno: $("#lab-bk-ent").value, enviar_al_confirmar: $("#lab-bk-auto").checked };
+    if ($("#lab-bk-clave").value) body.clave = $("#lab-bk-clave").value; if ($("#lab-bk-secreto").value) body.secreto = $("#lab-bk-secreto").value;
+    await api("/api/bolsa/broker", { body }); $("#lab-bk-secreto").value = ""; toast("Bróker guardado"); bolsaLab();
+  });
   $("#bo-cartera").onchange = () => { bolsaState.cartera = Number($("#bo-cartera").value); local.set("nexus_bolsa_cartera", bolsaState.cartera); refreshView(); };
   $("#bo-quote").onclick = guard(bolsaQuote);
   $("#bo-sym").onchange = () => guard(bolsaQuote)();

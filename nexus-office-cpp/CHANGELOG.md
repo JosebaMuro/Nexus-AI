@@ -12,6 +12,20 @@
 - En los avatares 3D, la luz salta entre las partículas de conocimiento que se han leído y las deja encendidas.
 - Con «reducir movimiento» del sistema se ilumina el recorrido sin animar la luz.
 
+### Laboratorio de inversión: proyectos de bolsa con IA importados al agente
+- Etapas del dato a la inversión real (banco de datos, investigación, backtest, simulación y real asistida), con lo
+  que hacen TradingAgents, ai-hedge-fund, FinRL, Qlib, freqtrade, QuantStats, PyPortfolioOpt y Lean, reescrito en
+  C++ (ver docs/BOLSA_PROYECTOS.md).
+- Señales técnicas combinadas, backtest con costes frente a comprar y mantener y tramo fuera de muestra, Monte Carlo,
+  cartera óptima (varianza mínima, Sharpe máximo, paridad de riesgo, HRP) y métricas (Sharpe, Sortino, caída máxima,
+  VaR/CVaR).
+- Mesa de analistas IA (técnico, noticias con sentimiento, fundamental, debate alcista/bajista, operador, riesgo y
+  gestor); el agente autónomo puede pedirle permiso antes de cada compra (`bolsa.agente.mesa`).
+- Protecciones del agente: deja de comprar tras una caída fuerte, una racha de pérdidas o un mal día.
+- Inversión real asistida: si la estrategia supera backtest y simulación y lo habilitas, el agente propone sus
+  operaciones en tu cartera real, por confirmar con `CONFIRMO`. Bróker opcional Alpaca (empieza en papel).
+- Agente nuevo de la oficina de bolsa: **Laboratorio cuantitativo**, y 8 herramientas `bolsa_*` nuevas.
+
 ## Agente IA 3.2.3-cpp
 
 Ubicación en tiempo real para los agentes. Incluye todo lo de la 3.2.2.

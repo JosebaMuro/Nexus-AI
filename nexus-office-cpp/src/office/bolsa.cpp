@@ -1,5 +1,6 @@
 // Mesa de bolsa simulada (nexus/office/bolsa.py). Mismo esquema, mismas reglas y mismos JSON que la edicion Python.
 #include "office/bolsa.h"
+#include "office/bolsa_mesa.h"
 #include "office/bolsa_agente.h"
 
 #include <chrono>
@@ -1143,6 +1144,7 @@ Bolsa& get() {
 
 void reset_instances() {
   reset_agentes();   // los agentes usan la mesa: se paran antes de cerrarla
+  reset_mesas();
   std::lock_guard<std::mutex> lk(g_mu);
   g_inst.clear();
 }

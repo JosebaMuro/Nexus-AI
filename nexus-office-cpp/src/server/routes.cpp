@@ -29,6 +29,9 @@
 #include "models/runtimes.h"
 #include "office/bolsa.h"
 #include "office/bolsa_agente.h"
+#include "office/bolsa_cuant.h"
+#include "office/bolsa_mesa.h"
+#include "office/bolsa_real.h"
 #include "devices/devices.h"
 #include "core/salud.h"
 #include "devices/drivers.h"
@@ -1713,7 +1716,19 @@ void register_routes(App& app) {
     return B([&](bolsa::Bolsa& b) { return b.cancelar(c.pi("oid")); });
   });
   app.post("/api/bolsa/orden/{oid}/confirmar", [B](Ctx& c) -> Out {
-    return B([&](bolsa::Bolsa& b) { return b.confirmar(c.pi("oid"), c.bs("confirmacion", "")); });
+    return B([&](bolsa::Bolsa& b) {
+      json o = b.confirmar(c.pi("oid"), c.bs("confirmacion", ""));
+      // con un broker conectado, la orden que la persona acaba de confirmar sale hacia el
+      json bk = c.app.S().config.get("bolsa.broker", json::object());
+      if (bk.is_object() && jstr(bk, "tipo") == "alpaca" && bk.value("enviar_al_confirmar", true)) {
+        try {
+          o = bolsa::enviar_orden(b, c.pi("oid"), bk);
+        } catch (const std::exception& e) {
+          o["broker_error"] = e.what();
+        }
+      }
+      return o;
+    });
   }, true);
   app.post("/api/bolsa/orden/{oid}/ejecucion", [B](Ctx& c) -> Out {
     return B([&](bolsa::Bolsa& b) {
@@ -1788,7 +1803,8 @@ void register_routes(App& app) {
     Services& s = c.app.S();
     static const std::vector<std::pair<std::string, char>> allowed = {
         {"activo", 'b'}, {"intervalo_s", 'f'}, {"riesgo_pct", 'f'}, {"max_posiciones", 'i'}, {"max_peso_pct", 'f'},
-        {"reserva_pct", 'f'}, {"universo", 'l'}, {"capital", 'f'}, {"ia", 'b'}};
+        {"reserva_pct", 'f'}, {"universo", 'l'}, {"capital", 'f'}, {"ia", 'b'}, {"mesa", 'b'},
+        {"max_drawdown_pct", 'f'}, {"racha_perdidas", 'i'}, {"pausa_racha_h", 'f'}, {"perdida_diaria_pct", 'f'}};
     for (auto& [k, typ] : allowed) {
       if (!c.has_b(k)) continue;
       json v = c.body[k];
@@ -1822,6 +1838,159 @@ void register_routes(App& app) {
     if (c.has_b("activo") && c.body["activo"] == false) ag.stop();
     if (truthy(c.b("ciclo", false))) B([&](bolsa::Bolsa&) { return ag.ciclo(); });
     return ag.estado();
+  });
+
+  // ------------------------------------------------------------------ laboratorio de inversion (bolsa_cuant/mesa/real)
+  auto BX = [B](auto fn) -> Out {   // como B, y los fallos de red del broker como 502
+    try {
+      return B(fn);
+    } catch (const HttpErr&) {
+      throw;
+    } catch (const std::runtime_error& e) {
+      throw HttpErr(502, e.what());
+    }
+  };
+  app.get("/api/bolsa/senales/{simbolo}", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      json sr = b.serie(c.p("simbolo"), c.q("rango", "1y"));
+      json s = bolsa::senales(sr["puntos"]);
+      if (!s.is_object()) throw std::invalid_argument("serie demasiado corta para las señales (60 sesiones)");
+      s["simbolo"] = sr["simbolo"];
+      s["datos_reales"] = sr["real"];
+      return s;
+    });
+  });
+  app.post("/api/bolsa/backtest", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) { return bolsa::backtest_mesa(b, c.body.is_object() ? c.body : json::object()); });
+  });
+  app.get("/api/bolsa/backtests", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      long long id = c.qi("id", 0);
+      return id ? bolsa::backtest_guardado(b, id) : bolsa::backtests(b, (int)c.qi("limite", 20));
+    });
+  });
+  app.post("/api/bolsa/optimizar", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      auto syms = bolsa::lista_simbolos(c.b("simbolos", json()));
+      if (syms.size() > 30) throw std::invalid_argument("como mucho 30 valores");
+      json avisos = json::array();
+      auto series = bolsa::series_para(b, syms, c.bs("rango", "1y"), &avisos);
+      json r = bolsa::optimizar(series, c.bs("metodo", "hrp"), c.body);
+      for (auto& a : avisos) r["avisos"].push_back(a);
+      return r;
+    });
+  });
+  app.post("/api/bolsa/montecarlo", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      std::vector<double> rs;
+      std::string fuente;
+      if (truthy(c.b("backtest", nullptr))) {   // de la curva de un backtest guardado
+        json bt = bolsa::backtest_guardado(b, (long long)jnum(c.body["backtest"]));
+        std::vector<double> v;
+        for (auto& p : bt["curva"]) v.push_back(jnum(p["total"]));
+        for (size_t i = 1; i < v.size(); ++i)
+          if (v[i - 1] > 0) rs.push_back(v[i] / v[i - 1] - 1);
+        fuente = "backtest #" + jdump(c.body["backtest"]);
+      } else {   // de la serie diaria de un valor
+        json sr = b.serie(c.bs("simbolo", ""), "1y");
+        if (!truthy(sr["real"])) throw std::invalid_argument("sin histórico diario de " + c.bs("simbolo", ""));
+        std::vector<double> v;
+        for (auto& p : sr["puntos"]) v.push_back(jnum(p["precio"]));
+        for (size_t i = 1; i < v.size(); ++i)
+          if (v[i - 1] > 0) rs.push_back(v[i] / v[i - 1] - 1);
+        fuente = jstr(sr, "simbolo");
+      }
+      json r = bolsa::montecarlo(rs, (int)jnum(c.b("simulaciones", 1000), 1000), (int)jnum(c.b("horizonte", 252), 252),
+                                 jnum(c.b("capital", 10000), 10000));
+      r["fuente"] = fuente;
+      return r;
+    });
+  });
+  app.get("/api/bolsa/metricas", [B](Ctx& c) -> Out {   // de una cartera (o la del agente)
+    return B([&](bolsa::Bolsa& b) {
+      long long cid = c.qi("cartera", 0);
+      if (!cid || cid == bolsa::agente().cartera()) {
+        auto& ag = bolsa::agente();
+        std::vector<double> v;
+        for (auto& r : b.db().query("SELECT total_eur FROM agente_valor ORDER BY ts")) v.push_back(jnum(r["total_eur"]));
+        std::vector<double> g;
+        for (auto& r : b.db().query("SELECT ganancia_eur FROM operaciones WHERE cartera=? AND lado='venta' ORDER BY ts",
+                                    {ag.cartera()}))
+          g.push_back(jnum(r["ganancia_eur"]));
+        return json{{"cartera", ag.cartera()}, {"metricas", bolsa::metricas(v, 252)}, {"operaciones", bolsa::metricas_operaciones(g)},
+                    {"nota", "Curva del agente tomada en cada ciclo: la caída máxima y el resultado son exactos; las cifras "
+                             "anualizadas suponen un punto por sesión."}};
+      }
+      std::vector<double> g;
+      for (auto& r : b.db().query("SELECT ganancia_eur FROM operaciones WHERE cartera=? AND lado='venta' ORDER BY ts", {cid}))
+        g.push_back(jnum(r["ganancia_eur"]));
+      return json{{"cartera", cid}, {"resumen", b.resumen(cid)}, {"operaciones", bolsa::metricas_operaciones(g)}};
+    });
+  });
+  app.get("/api/bolsa/noticias/{simbolo}", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa&) { return bolsa::mesa().noticias(c.p("simbolo"), c.q("refrescar") == "1"); });
+  });
+  app.post("/api/bolsa/informe", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa&) {
+      json op = {{"rondas", c.b("rondas", 1)}};
+      json ag = c.app.S().config.get("bolsa.agente", json::object());
+      if (ag.is_object()) op["riesgo_pct"] = ag.value("riesgo_pct", json(1.0)), op["max_peso_pct"] = ag.value("max_peso_pct", json(20.0));
+      return bolsa::mesa().informe(c.bs("simbolo", ""), op);
+    });
+  });
+  app.get("/api/bolsa/informes", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa&) { return bolsa::mesa().informes(c.q("simbolo"), (int)c.qi("limite", 20)); });
+  });
+  app.get("/api/bolsa/banco", [B](Ctx&) -> Out { return B([&](bolsa::Bolsa& b) { return bolsa::banco(b); }); });
+  app.post("/api/bolsa/banco", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) {
+      return bolsa::banco_descargar(b, bolsa::lista_simbolos(c.b("simbolos", json())), c.bs("rango", "1y"));
+    });
+  });
+  app.get("/api/bolsa/etapas", [B](Ctx& c) -> Out {
+    return B([&](bolsa::Bolsa& b) { return bolsa::etapas(b, c.app.S().config.get("bolsa.real", json::object())); });
+  });
+  // modo real: solo la persona lo habilita y elige la cartera real donde el agente puede PROPONER ordenes
+  app.post("/api/bolsa/real", [B](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    return B([&](bolsa::Bolsa& b) {
+      if (c.has_b("cartera")) {
+        json cid = c.body["cartera"];
+        if (truthy(cid) && !b.db().one("SELECT id FROM carteras WHERE id=? AND modo='real'", {cid}))
+          throw std::invalid_argument("esa cartera no está en modo real");
+        s.config.set("bolsa.real.cartera", truthy(cid) ? cid : json(nullptr));
+      }
+      if (c.has_b("habilitado")) s.config.set("bolsa.real.habilitado", truthy(c.body["habilitado"]));
+      return bolsa::etapas(b, s.config.get("bolsa.real", json::object()));
+    });
+  }, true);
+  app.get("/api/bolsa/broker", [BX](Ctx& c) -> Out {
+    return BX([&](bolsa::Bolsa& b) {
+      return bolsa::broker_estado(b, c.app.S().config.get("bolsa.broker", json::object()), c.q("cuenta") == "1");
+    });
+  });
+  app.post("/api/bolsa/broker", [B](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    if (c.has_b("tipo")) {
+      std::string t = c.bs("tipo", "manual");
+      if (t != "manual" && t != "alpaca") throw HttpErr(400, "tipo: manual o alpaca");
+      s.config.set("bolsa.broker.tipo", t);
+    }
+    if (c.has_b("entorno")) s.config.set("bolsa.broker.entorno", c.bs("entorno", "papel") == "real" ? "real" : "papel");
+    for (auto* k : {"clave", "secreto"})
+      if (c.has_b(k) && c.bs(k, "") != "********") s.config.set(std::string("bolsa.broker.") + k, trim(c.bs(k, "")));
+    if (c.has_b("enviar_al_confirmar")) s.config.set("bolsa.broker.enviar_al_confirmar", truthy(c.body["enviar_al_confirmar"]));
+    return B([&](bolsa::Bolsa& b) { return bolsa::broker_estado(b, s.config.get("bolsa.broker", json::object())); });
+  }, true);
+  app.post("/api/bolsa/orden/{oid}/enviar", [BX](Ctx& c) -> Out {
+    return BX([&](bolsa::Bolsa& b) {
+      return bolsa::enviar_orden(b, c.pi("oid"), c.app.S().config.get("bolsa.broker", json::object()));
+    });
+  });
+  app.post("/api/bolsa/broker/sincronizar", [BX](Ctx& c) -> Out {
+    return BX([&](bolsa::Bolsa& b) {
+      return bolsa::sincronizar_broker(b, c.app.S().config.get("bolsa.broker", json::object()));
+    });
   });
 
   // ------------------------------------------------------------------ dispositivos: luces, reloj y avatar Pico W
