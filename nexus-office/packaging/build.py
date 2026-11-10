@@ -169,13 +169,14 @@ def offline(target: str, dest: Path) -> None:
     wheelhouse.write_manifest(wh, [py_target])
     log(f"offline: {len(wheelhouse.wheels(wh))} wheels")
     # llama-server y sd-cli precompilados (todas las variantes: CPU, Vulkan, CUDA, Metal): sin descargar runtimes
-    for rt, exe in (("llama", "llama-server"), ("sd", "sd-cli")):
+    # tambien LiteRT-LM y Qualcomm Genie (bibliotecas que la capa nexus/motores carga con ctypes)
+    for rt, exe in (("llama", "llama-server"), ("sd", "sd-cli"), ("litert", "LiteRT-LM"), ("genie", "Genie (QAIRT)")):
         src = DESKTOP_RT / target / rt
         if src.is_dir() and any(src.iterdir()):
             shutil.copytree(src, dest / "bundled" / "runtimes" / rt)
             log(f"offline: {exe} {', '.join(sorted(p.name for p in src.iterdir()))}")
         else:
-            log(f"offline: sin {exe} precompilado para {target} (se descargara desde Sistema > Runtimes)")
+            log(f"offline: sin {exe} precompilado para {target}" + ("" if rt in ("litert", "genie") else " (se descargara desde Sistema > Runtimes)"))
     # motor «llama.cpp integrado» del selector de inicio: wheel de llama-cpp-python de la plataforma del Python
     # (Windows ARM usa el Python x64) mas sus dependencias puras; se instala sin red al elegirlo
     lp = DESKTOP_RT / py_target / "llama-python"

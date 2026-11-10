@@ -106,5 +106,6 @@ jobs:
         if: always()
         with:
           name: banco-motores-${{ matrix.plat }}
-          path: datos/motores/
+          path: |
+            datos/motores/*.json
           retention-days: 30

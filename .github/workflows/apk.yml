@@ -1,4 +1,4 @@
-name: APK de Nexus-Office (sin la firma definitiva)
+name: APK de Agente IA, edicion Python (sin la firma definitiva)
 
 # Compila la app Android «VPN» y la «autonoma» con el SDK de Android del runner. El runtime ARM64 (Python, llama.cpp
 # con CPU, GPU y NPU) se toma de la APK autonoma de la Release anterior (BASE). Se firman con una clave temporal: la

@@ -1,4 +1,4 @@
-name: Instaladores de Nexus-Office (construir y probar)
+name: Instaladores de Agente IA, edicion Python (construir y probar)
 
 # Construye los instaladores 100 % offline de escritorio de la version del codigo (nexus-office/nexus/__init__.py)
 # y los prueba instalandolos en cada sistema. Los runtimes nativos (CPython, llama-server y sd-cli en sus variantes)
@@ -19,6 +19,7 @@ permissions:
 
 env:
   BASE: v1.8.0
+  LITERT: "0.19.0"
   GH_TOKEN: ${{ github.token }}
 
 jobs:
@@ -76,6 +77,36 @@ jobs:
           fi
           rm -rf sel
           ls "$RT/$T" "$RT/$T/llama" "$RT/$PYT/llama-python"; df -h /
+      - name: Motores con biblioteca nativa (LiteRT-LM y Qualcomm Genie)
+        run: |
+          # LiteRT-LM de su rueda de PyPI (CPU y GPU) y, de motores-npu.yml, los dispatch de NPU y QAIRT/Genie
+          T=${{ matrix.target }}; RT=nexus-office/.cache/desktop-runtimes/$T
+          pypi() {  # pypi <paquete> <version> <patron del fichero> <dest> <patron de bibliotecas>
+            local url; url=$(curl -fsSL "https://pypi.org/pypi/$1${2:+/$2}/json" | jq -r --arg p "$3" '[.urls[] | select(.filename | test($p))][0].url')
+            [ "$url" != null ] || { echo "::warning::$T: sin $1 ($3) en PyPI"; return 0; }
+            rm -rf w && mkdir -p w "$4" && curl -fsSL -o w/p.zip "$url" && unzip -q -o w/p.zip -d w/x
+            (cd w/x && find . -type f -regextype posix-extended -regex "$5" -exec cp {} "$OLDPWD/$4/" \;)
+            rm -rf w; echo "$T: $1 <- $(basename "$url")"
+          }
+          npu_art() {  # npu_art <artefacto> <destino>: de la ultima ejecucion de motores-npu.yml que lo tenga
+            local id
+            for id in $(gh run list -R "$GITHUB_REPOSITORY" -w motores-npu.yml -L 15 --json databaseId,status -q '.[] | select(.status=="completed") | .databaseId'); do
+              rm -rf a && if gh run download "$id" -R "$GITHUB_REPOSITORY" -n "$1" -D a 2>/dev/null; then
+                mkdir -p "$2" && cp -a a/. "$2/" && rm -rf a && echo "$T: $1 <- motores-npu $id" && return 0
+              fi
+            done
+            echo "::warning::$T: no hay artefacto $1 (lanza motores-npu.yml)"; return 0
+          }
+          case $T in
+            windows-x64) pypi litert-lm-api "$LITERT" 'win_amd64' "$RT/litert/todo" '.*\.dll'
+                         npu_art litert-windows-intel "$RT/litert/intel" ;;
+            windows-arm64) npu_art qairt-windows-arm64 "$RT/genie/qnn" ;;
+            linux-x86_64) pypi litert-lm-api "$LITERT" 'manylinux.*_x86_64' "$RT/litert/todo" '.*\.so.*' ;;
+            linux-aarch64) pypi litert-lm-api "$LITERT" 'manylinux.*_aarch64' "$RT/litert/todo" '.*\.so.*'
+                           npu_art qairt-linux-aarch64 "$RT/genie/qnn" ;;
+            macos-arm64) pypi litert-lm-api "$LITERT" 'macosx.*arm64' "$RT/litert/todo" '.*\.dylib' ;;
+          esac
+          ls -la "$RT"/litert/* "$RT"/genie/* 2>/dev/null || true
       - name: Construir
         run: cd nexus-office && python packaging/build.py --targets ${{ matrix.target }}
       - name: Lista

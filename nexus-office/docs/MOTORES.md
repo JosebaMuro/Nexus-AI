@@ -11,14 +11,18 @@ Qualcomm, LiteRT-LM para la TPU de los Pixel... llama.cpp sigue de respaldo en t
 |---|---|---|---|
 | **ONNX Runtime GenAI** | CUDA, DirectML (cualquier GPU en Windows), QNN (NPU Snapdragon X), OpenVINO, VitisAI (NPU Ryzen AI), CPU | carpeta con `genai_config.json` | Windows x64 (DirectML), Windows ARM64, Linux, macOS |
 | **OpenVINO GenAI** | NPU Intel Core Ultra, iGPU Xe y Arc, CPU | carpeta con `openvino_model.xml` | Windows x64, Linux x86_64, macOS |
-| **LiteRT-LM** | NPU de Tensor, Snapdragon, MediaTek e Intel; GPU; CPU (XNNPACK) | `.litertlm` | biblioteca nativa (Android y escritorio, de `motores-npu.yml`) |
+| **LiteRT-LM** | NPU de Tensor, Snapdragon, MediaTek e Intel; GPU; CPU (XNNPACK) | `.litertlm` | Windows x64 (con NPU Intel), Linux, macOS Apple Silicon (rueda `litert-lm-api` y `motores-npu.yml`) |
 | **ExecuTorch** | XNNPACK (CPU), QNN, Vulkan, CoreML, MPS (según el `.pte`) | `.pte` + tokenizer | Windows x64, Linux, macOS Apple Silicon |
 | **MLC LLM** | CUDA, ROCm, Vulkan, Metal, OpenCL (Adreno, Mali) | carpeta con `mlc-chat-config.json` | aparte (no hay rueda en PyPI): `nexus setup --all` con internet |
 | **TensorRT-LLM** | NVIDIA (Tensor Cores) | checkpoint de Hugging Face o `rank0.engine` | aparte (varios GB): `nexus setup --all` con internet |
-| **Qualcomm Genie** | NPU Hexagon (HTP) | carpeta de Qualcomm AI Hub con `genie_config.json` | biblioteca nativa (QAIRT, de `motores-npu.yml`) |
+| **Qualcomm Genie** | NPU Hexagon (HTP) | carpeta de Qualcomm AI Hub con `genie_config.json` | Windows ARM64 y Linux ARM64 (QAIRT, de `motores-npu.yml`) |
 | **llama.cpp** | CPU, CUDA, ROCm, Vulkan, Metal, SYCL | `.gguf` | siempre (respaldo) |
 
 Si falta el paquete o la biblioteca de un motor, Agente IA dice por qué y usa el siguiente.
+
+> **Android (APK autónoma) en la 4.0.0:** el Python de la app usa su propio cargador (musl) y no puede cargar las
+> bibliotecas de Android de LiteRT-LM ni de Genie dentro del proceso. En el móvil sigue llama.cpp con CPU y GPU; la NPU
+> del móvil por LiteRT-LM y Genie llegará con un proceso auxiliar nativo (como el de la edición C++).
 
 ## Qué motor va con cada chip
 
@@ -88,4 +92,19 @@ formato y lo asigna a su motor.
 - `tests/test_motores.py`: formatos, matriz por chip, selector, banco, caídas y backend con un motor simulado.
 - `.github/workflows/motores-python.yml`: descarga modelos reales y mide llama.cpp, ONNX Runtime GenAI y OpenVINO
   GenAI en los runners de GitHub (CPU x86_64 y ARM64); la tabla queda en el resumen de la ejecución.
+- Primera medida en los runners (2026-11-10, solo CPU, respuesta corta):
+
+  | Runner | Modelo | Motor | tok/s | 1.er token |
+  |---|---|---|---|---|
+  | x86_64 | Qwen2.5 1.5B | llama.cpp (Q4_K_M) | 24.7 | 4.50 s |
+  | x86_64 | Qwen2.5 1.5B | OpenVINO (int4) | 15.3 | 7.41 s |
+  | x86_64 | Phi-4 mini | ONNX Runtime GenAI (int4) | 12.0 | 6.65 s |
+  | x86_64 | Phi-4 mini | llama.cpp (Q4_K_M) | 10.5 | 4.04 s |
+  | x86_64 | Phi-3.5 mini | OpenVINO (int4) | 5.2 | 17.68 s |
+  | ARM64 | Qwen2.5 1.5B | llama.cpp | 31.5 | 2.21 s |
+  | ARM64 | Phi-4 mini | llama.cpp | 12.8 | 3.82 s |
+  | ARM64 | Phi-4 mini | ONNX Runtime GenAI | 12.1 | 5.05 s |
+
+  En CPU pura llama.cpp sigue siendo igual o más rápido salvo Phi-4 mini en x86 con ONNX Runtime: la ventaja de los
+  otros motores está en la NPU y la GPU, y por eso manda el banco de cada equipo.
 - Las NPU y GPU no se pueden probar en GitHub: se miden en el equipo de cada usuario con el banco.
