@@ -1164,12 +1164,47 @@ void register_routes(App& app) {
     return res;
   });
 
-  // rastreo de un sitio de documentacion; background=true (o todo el dominio): por lotes reanudables
+  // rastreo de un sitio de documentacion; background=true (o todo el dominio): por lotes reanudables.
+  // urls (lista o texto con una URL por linea): cada URL es un trabajo y van todos a la cola, que los rastrea en orden
   app.post("/api/rag/crawl", [rag_target](Ctx& c) -> Out {
-    std::string url = c.bs("url"), scope = c.bs("scope", "path");
+    std::string scope = c.bs("scope", "path");
     int max_pages = (int)c.bn("max_pages", 40), max_depth = (int)c.bn("max_depth", 3), batch_pages = (int)c.bn("batch_pages", 0);
     bool background = c.bb("background", false);
     if (scope != "path" && scope != "domain") throw HttpErr(400, "scope debe ser 'path' o 'domain'");
+    json list = c.b("urls", nullptr);
+    if (!list.is_null()) {
+      std::string text;
+      if (list.is_array())
+        for (auto& u : list) text += Ctx::as_str(u) + "\n";
+      else if (list.is_string())
+        text = list.get<std::string>();
+      else
+        throw HttpErr(400, "urls debe ser una lista o un texto con una URL por linea");
+      std::vector<std::string> invalid;
+      std::vector<std::string> urls = rag::crawl_jobs::parse_url_list(text, &invalid);
+      if (urls.empty()) throw HttpErr(400, "la lista no tiene ninguna URL http(s)");
+      if (urls.size() > 1000) throw HttpErr(400, "como mucho 1000 URLs por lista");
+      std::string target = rag_target(c.bs("agent", ""));
+      auto [pages, chars] = rag::crawl_jobs::auto_batch(c.app.S().profile);
+      std::string lid = strftime_local("%Y%m%d%H%M%S-") + token_hex(3);
+      json jobs = json::array();
+      std::vector<std::string> ids;
+      for (size_t i = 0; i < urls.size(); ++i) {
+        json job = rag::crawl_jobs::create(urls[i], max_pages, max_depth, scope, target, true,
+                                           std::clamp(batch_pages ? batch_pages : pages, 1, 500), chars, true);
+        job["list"] = lid;
+        job["list_pos"] = i + 1;
+        job["list_total"] = urls.size();
+        rag::crawl_jobs::save(job);
+        ids.push_back(job["id"]);
+        jobs.push_back(rag::crawl_jobs::pub(job));
+      }
+      App* a = &c.app;
+      rag::crawl_jobs::enqueue(c.app.S(), ids, [a](const json& e) { a->broadcast(e); });
+      return json{{"list", lid}, {"jobs", jobs}, {"invalid", invalid},
+                  {"parallel", std::clamp((int)c.app.S().config.num("rag.crawl_parallel", 1), 1, 4)}};
+    }
+    std::string url = c.bs("url");
     if (!re_search(R"(^https?://)", url, Rx::I)) throw HttpErr(400, "la URL debe empezar por http:// o https://");
     std::string target = rag_target(c.bs("agent", ""));
     App* a = &c.app;
@@ -1437,10 +1472,44 @@ void register_routes(App& app) {
     return json{{"ok", true}};
   });
 
-  app.get("/api/voice", [](Ctx& c) -> Out { return c.app.S().voice->info(); });
+  // voz de cada agente ya resuelta (la general con la suya, o una distinta derivada de su id)
+  auto voces_agentes = [](Services& s) {
+    json out = json::object();
+    out["nexus"] = s.voice->voz_de("nexus", json::object());
+    int i = 0;
+    for (auto& a : s.agents->all()) out[a.id] = s.voice->voz_de(a.id, a.voz, a.id == "nexus" ? -1 : i++);
+    return out;
+  };
+  app.get("/api/voice", [voces_agentes](Ctx& c) -> Out {
+    json j = c.app.S().voice->info();
+    j["general"] = c.app.S().config.get("user.voz", json::object());
+    j["distinta"] = c.app.S().config.flag("user.voz_distinta", true);
+    j["agentes"] = voces_agentes(c.app.S());
+    return j;
+  });
+  app.get("/api/voice/voces", [](Ctx& c) -> Out { return c.app.S().voice->voces(); });
 
+  // texto a voz con la voz del agente que habla (agente) o una voz concreta para probarla en el editor (voz)
   app.post("/api/voice/tts", [](Ctx& c) -> Out {
-    auto res = c.app.S().voice->tts(c.bs("text"), c.bn("rate", 1.0));
+    auto& s = c.app.S();
+    json voz = json::object();
+    std::string ag = c.bs("agente", "");
+    if (c.has_b("voz") && c.b("voz").is_object()) {
+      voz = s.config.get("user.voz", json::object());
+      if (!voz.is_object()) voz = json::object();
+      for (auto& [k, x] : c.b("voz").items())
+        if (!x.is_null() && !(x.is_string() && x.get<std::string>().empty())) voz[k] = x;
+    } else if (!ag.empty()) {
+      auto a = s.agents->get(ag);
+      int i = 0, indice = -1;
+      for (auto& x : s.agents->all()) {   // mismo puesto que en GET /api/voice
+        if (x.id == ag) indice = ag == "nexus" ? -1 : i;
+        if (x.id != "nexus") ++i;
+      }
+      voz = s.voice->voz_de(ag, a ? a->voz : json::object(), indice);
+    } else
+      voz = s.voice->voz_de("", json::object());
+    auto res = s.voice->tts(c.bs("text"), c.bn("rate", 1.0), voz);
     if (!res) return Raw{204, "", "", {{"X-TTS-Engine", "browser"}}};   // sin motor local: la voz del navegador
     return Raw{200, res->first, "audio/wav", {{"X-TTS-Engine", res->second}}};
   });
@@ -1908,6 +1977,7 @@ void register_routes(App& app) {
 
   // ------------------------------------------------------------------ metricas, estilo y aprobaciones diferidas
   register_agent_routes(app);
+  register_pipeline_routes(app);
 
   // ------------------------------------------------------------------ herramientas
   app.get("/api/tools", [](Ctx& c) -> Out {

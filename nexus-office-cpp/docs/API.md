@@ -23,7 +23,7 @@ Eventos recibidos: `session`, `agent`, `state` (`thinking|tool|idle`), `token`, 
 | `GET /api/graph?scope=` (`*` = general con el subgrafo de cada agente, por defecto; vacío = solo el general; id de agente = solo su grafo individual), `GET /api/graph/scopes` (tamaño y documentos de cada grafo), `DELETE /api/graph/{id}` | Grafo de conocimiento. |
 | `POST /api/image/generate`, `POST /api/image/analyze` (multipart), `POST /api/music/generate`, `GET /api/outputs` | Multimedia. |
 | `GET /api/voice`, `POST /api/voice/tts` (WAV o 204 = usar navegador), `POST /api/voice/stt` (multipart) | Voz. |
-| `GET /api/rag`, `GET /api/rag/search?q=`, `GET /api/rag/formats` (formatos admitidos y herramientas de descompresión disponibles), `POST /api/rag/upload` (multipart; documentos y archivos ZIP/RAR/7z/TAR), `POST /api/rag/import` (multipart, varios `files`; devuelve `{results, ok, failed, seconds}`), `POST /api/rag/url` `{url}`, `POST /api/rag/crawl` `{url, max_pages, max_depth, scope}` (rastreo de documentación), `GET /api/rag/{id}/file`, `DELETE /api/rag/{id}`. Destino: campo `agent` en upload, import, url y crawl (vacío = grafo general; id = solo ese agente); `PATCH /api/rag/{id}` `{agent}` lo mueve; `GET /api/rag?agent=` y `/api/rag/search?agent=` filtran como lo vería ese agente | Biblioteca RAG y URL → PDF. |
+| `GET /api/rag`, `GET /api/rag/search?q=`, `GET /api/rag/formats` (formatos admitidos y herramientas de descompresión disponibles), `POST /api/rag/upload` (multipart; documentos y archivos ZIP/RAR/7z/TAR), `POST /api/rag/import` (multipart, varios `files`; devuelve `{results, ok, failed, seconds}`), `POST /api/rag/url` `{url}`, `POST /api/rag/crawl` `{url, max_pages, max_depth, scope}` (rastreo de documentación; con `urls` —lista o texto con una URL por línea— en vez de `url`, cada URL va a la cola de rastreos y devuelve `{list, jobs, invalid, parallel}`), `GET /api/rag/{id}/file`, `DELETE /api/rag/{id}`. Destino: campo `agent` en upload, import, url y crawl (vacío = grafo general; id = solo ese agente); `PATCH /api/rag/{id}` `{agent}` lo mueve; `GET /api/rag?agent=` y `/api/rag/search?agent=` filtran como lo vería ese agente | Biblioteca RAG y URL → PDF. |
 | `POST /api/avatar/upload` (GLB/GLTF/VRM) | Modelo 3D propio para el avatar. |
 | `GET/PUT /api/agents`, `DELETE /api/agents/{id}` | Agentes. |
 | `GET /api/agents/asistente` (plantillas de puesto con sus respuestas, paquetes de herramientas instaladas, agentes y modelos); `POST /api/agents/asistente` `{respuestas, editar?, guardar?}` *(admin)* | Asistente de configuración de agentes: devuelve `{agente, avisos, conocimiento}`; con `guardar: true` lo guarda y siembra su grafo con el de la plantilla (`sembradas`). Ver [AGENTES.md](AGENTES.md). |
@@ -84,3 +84,33 @@ Puerto remoto: `https://IP:8443` (TLS 1.3). Ahí todas las rutas, salvo `/`, `/a
 | `POST /api/remote/certificate` *(admin)* | Certificado nuevo (cambia la huella anclada). |
 | `GET /api/remote/router` *(admin)* | Asistente del router: puerta de enlace, IP y MAC de este equipo, URLs de configuración, marca y ruta del menú, UPnP‑IGD y la regla exacta. |
 | `POST /api/remote/check` *(admin)* | IP pública, CGNAT y si el puerto responde en la IP pública. |
+
+## Capa de hardware y pipelines (3.1)
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/hal` | SDK compilados, artefacto, acelerador del perfil y estado del asignador zero-copy. |
+| `GET /api/hal/latencia?vueltas=` | Mide la ida y vuelta entre dos hilos por los rings lock-free (ns). |
+| `GET /api/pipeline` | Estado de percepción, cola de difusión, buffer de pantalla y capa de hardware. |
+| `POST /api/pipeline/frame?fuente=&esperar=` | Frame para la percepción (cuerpo `image/*` o multipart `frame`); 429 si la cola está llena. |
+| `GET /api/pipeline/percepcion?q=&k=` | Lo percibido: recientes o búsqueda semántica. |
+| `POST /api/pipeline/difusion` | `{prompt, negative?, size?, steps?, seed?}` → `{id}`; se genera en segundo plano. |
+| `GET /api/pipeline/difusion[/{id}]` | Trabajos de difusión y su estado (`en cola`, `generando`, `hecho`, `error`). |
+| `GET /api/pipeline/pantalla` | Último frame del buffer de pantalla (PNG; cabeceras `X-Pantalla-*`); 204 si aún no hay. |
+
+Eventos WebSocket nuevos: `percepcion`, `difusion` y `pantalla` (`{trabajo, paso, final, version, url}`).
+
+## Motores, MCP y video (3.2)
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/hal` | Además: memorias del acelerador, núcleos, matriz por chip, ONNX Runtime y motores dentro del proceso. |
+| `POST /api/hal/caidas/olvidar` | (Admin) Borra las marcas de motores que se cayeron dentro del proceso. |
+| `POST /mcp` | Servidor MCP (JSON-RPC 2.0, protocolo 2025-06-18; una petición o un lote). Las notificaciones devuelven 202. Desde otro equipo: clave de red o `Authorization: Bearer <mcp.token>`. |
+| `GET /api/mcp` | Clientes MCP conectados, servidores configurados y si hay token. |
+| `PUT /api/mcp/servidores` | (Admin) `{servidores: [{nombre, orden[] \| url, env?, cabeceras?, riesgo?, activo?}]}` y reconecta. |
+| `POST /api/mcp/reconectar` | (Admin) Vuelve a conectar con los servidores MCP. |
+| `POST /api/media/video/subir?nombre=` | Cuerpo `video/webm`: guarda el video del codificador del Estudio en `outputs/videos`. |
+| `GET /api/voice` | Además: `general` (voz general), `distinta` y `agentes` (la voz ya resuelta de cada agente). |
+| `GET /api/voice/voces` | Voces del equipo: modelos Piper con sus hablantes, voces del sistema, variantes de espeak y motores. |
+| `POST /api/voice/tts` | `{text, rate?, agente?, voz?}`: con `agente`, su voz; con `voz` (`{motor, modelo, hablante, nombre, variante, navegador, velocidad, tono, volumen}`), esa voz sobre la general. |

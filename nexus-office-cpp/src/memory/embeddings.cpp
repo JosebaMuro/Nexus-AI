@@ -5,6 +5,7 @@
 #include <cmath>
 #include <numeric>
 
+#include "hardware/hardware.h"
 #include "memory/memory.h"
 #include "models/runtimes.h"
 #include "util/crypto.h"
@@ -186,9 +187,13 @@ void GGUFEmbedder::start_server() {
   if (!found) throw std::runtime_error("Falta el runtime llama.cpp (Sistema > Runtimes) para el modelo de embeddings");
   fs::path exe = found->first;
   port_ = net::free_port(0);
+  // varias secuencias a la vez: con un solo slot cada texto de un lote se procesaba de uno en uno; con 4 (2 en el
+  // movil), los trozos cortos de la Biblioteca RAG entran juntos en el mismo lote de 2048 tokens (indexar va varias
+  // veces mas rapido) y cada slot sigue con 2048 de contexto
+  const int np = hw::android() ? 2 : 4;
   std::vector<std::string> cmd = {S(exe), "-m", path_, "--host", "127.0.0.1", "--port", std::to_string(port_),
-                                  "--embedding", "-c", "2048", "-b", "2048", "-ub", "2048", "-np", "1", "-ngl", "0",
-                                  "--no-webui"};
+                                  "--embedding", "-c", std::to_string(2048 * np), "-b", "2048", "-ub", "2048", "-np",
+                                  std::to_string(np), "-ngl", "0", "--no-webui"};
   if (!pooling_.empty()) {
     cmd.push_back("--pooling");
     cmd.push_back(pooling_);

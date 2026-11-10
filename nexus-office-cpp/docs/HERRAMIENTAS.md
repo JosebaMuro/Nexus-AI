@@ -42,3 +42,30 @@ Por defecto: riesgo bajo `auto`, medio `ask`, alto `admin`. Las peticiones que l
 3. El administrador revisa en **Herramientas → Propuestas**: puede editar el código (se re-analiza), **probarlo en el sandbox** con argumentos de prueba, aprobarlo, rechazarlo o compartirlo con la red.
 4. Al aprobar, si el análisis sugiere un riesgo mayor que el declarado, **se eleva automáticamente**.
 5. El motivo de un rechazo se guarda como *lección* que el agente verá en el futuro.
+
+## MCP (3.2)
+
+**Agente IA como servidor MCP.** Otros programas usan las herramientas de Agente IA con el Model Context Protocol:
+
+- HTTP: `http://127.0.0.1:8775/mcp`.
+- stdio: la orden `nexus-office mcp` (opciones `--url` y `--token`), para los programas que arrancan el servidor ellos
+  mismos. Por ejemplo, en la configuración MCP de un asistente de escritorio:
+  `{"agente-ia": {"command": "C:/Agente IA/nexus-office.exe", "args": ["mcp"]}}`.
+
+Cada llamada pasa por el supervisor como la de un agente (`mcp:<cliente>`): la política por riesgo, las aprobaciones y
+la auditoría son las mismas. Desde otro equipo hace falta la clave de red o el token `mcp.token`. Las herramientas que
+vienen de otros servidores MCP no se reexportan.
+
+**Herramientas MCP para los agentes.** En **Herramientas > MCP** (modo administrador) se añaden servidores MCP
+externos en `mcp.servidores`:
+
+```json
+[{"nombre": "ficheros", "orden": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "C:/Docs"], "riesgo": "medium"},
+ {"nombre": "wiki", "url": "http://192.168.1.20:9000/mcp", "cabeceras": {"Authorization": "Bearer ..."}, "riesgo": "low"}]
+```
+
+Sus herramientas aparecen en el repositorio como `mcp_<servidor>_<nombre>` (origen MCP) con el riesgo indicado
+(`medium` por defecto, que pide aprobación según la política) y los agentes que tengan `*` pueden usarlas.
+
+MCP no acelera la inferencia: es otro canal para las herramientas. Dentro de Agente IA las integradas se siguen
+llamando directamente.

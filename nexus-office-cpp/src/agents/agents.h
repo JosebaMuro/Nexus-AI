@@ -90,6 +90,9 @@ class Lounge {
  private:
   Services& s_;
   std::atomic<bool> meeting_{false};
+  // reunion automatica en segundo plano: cede el modelo a las peticiones del usuario (con una sola GPU o NPU cada
+  // frase de la reunion hacia esperar o iba a medias con la respuesta del usuario)
+  std::atomic<bool> background_{false};
   json spec_for_gap(const json& gap, const std::vector<std::string>& related);
   std::string say(const AgentSpec& agent, const std::string& prompt_ctx, const std::string& fallback);
 };

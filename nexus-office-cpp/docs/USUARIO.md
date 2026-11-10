@@ -298,6 +298,24 @@ deslizar, zoom, cortinilla o corte), el movimiento suave tipo Ken Burns, rótulo
 vertical con las 6 últimas imágenes»* (herramienta `crear_video`); te devuelve el vídeo y un enlace para retocarlo en el
 editor.
 
+Desde la 3.2.1 el generador también **mejora las imágenes** y **separa las hojas con varias diapositivas**:
+- *✨ Mejorar todas* (o ✨ en cada miniatura) ajusta niveles, color y nitidez, y amplía hasta el doble las imágenes más
+  pequeñas que el vídeo. Pulsa otra vez ✨ en una imagen para volver a la original. Con *Al añadir, mejorar las
+  imágenes* se hace solo.
+- Si una imagen trae varias diapositivas juntas (una captura en cuadrícula, una página con 4 o 6 por hoja), se recortan
+  y se ponen **en orden de lectura** (de arriba abajo y de izquierda a derecha) al añadirla; el aviso trae *Deshacer*.
+  *✂ Separar diapositivas* lo hace con todas, y ✂ en una miniatura con esa sola: si no ve las separaciones, te pide
+  cuántas filas y columnas tiene la hoja. Las recortadas llevan la marca ✂.
+
+**Vídeo con imágenes** (3.2): el panel del Estudio para hacer un vídeo WebM al momento con una serie de imágenes.
+Suéltalas (o tráelas de la galería), ordénalas, elige segundos por imagen, transición (fundido, Ken Burns o corte),
+tamaño y fotogramas por segundo, y pulsa *Crear vídeo*. Se codifica en tu navegador con la aceleración por hardware
+del equipo, sin conexión; luego *Descargar* o *Guardar en Agente IA*.
+
+**Imágenes con la NPU** (3.2): los modelos de imagen en carpeta ONNX (por ejemplo **SD-Turbo ONNX**) usan el motor de
+difusión propio de Agente IA, que va en la NPU de Snapdragon, en la GPU (NVIDIA, AMD, Intel, Apple) o en la CPU según
+tu equipo, y enseña cada paso de la imagen mientras se hace.
+
 **En el móvil** el generador de imágenes (stable-diffusion.cpp) viene dentro de la APK, con GPU Vulkan y CPU: no hace
 falta instalar nada. Si la GPU falla, la siguiente imagen se hace en la CPU sola. Descarga un modelo de imagen apto para
 móvil en *Modelos → Recomendados* (por ejemplo **SDXS**, **SD-Turbo** o **LCM SSD-1B**).
@@ -319,6 +337,18 @@ diminuto que acelera mucho el final de cada imagen. Para generar imágenes de m�
 (VAE y codificadores de texto). Si copias a mano un GGUF de imagen que es solo el modelo de difusión, déjalo en la
 misma carpeta que sus piezas; *Imagen* te dice cuál falta. Los modelos `.litertlm` (LiteRT-LM, ideales en Pixel y
 Snapdragon) y las carpetas ONNX con `genai_config.json` también se pueden usar: Agente IA elige el motor solo.
+
+### Voces: reconocer qué agente habla
+En **Ajustes > Voces** eliges la voz general (motor, voz, velocidad, tono y volumen; *Probar* la reproduce). Con
+*Voz distinta para cada agente* activado, cada agente habla con su propio tono (y con otro hablante si tu voz Piper
+tiene varios), así sabes quién te responde sin mirar la pantalla. En modo administrador, *Editar* junto a cada agente
+(o la sección *Voz* al editar el agente) le da una voz propia, independiente de las demás.
+
+### Herramientas y MCP
+En **Herramientas > MCP** ves la dirección del **servidor MCP** de Agente IA: otros programas compatibles con MCP
+(asistentes de escritorio, editores de código) pueden usar las herramientas de Agente IA, con los mismos permisos y
+aprobaciones que tus agentes. En modo administrador también puedes añadir **servidores MCP externos** para que tus
+agentes usen sus herramientas. Ver [HERRAMIENTAS.md](HERRAMIENTAS.md#mcp-32).
 
 ### Ajustes
 Nombre del asistente, idioma, estilo de respuesta (breve/equilibrado/detallado), agente por defecto, memoria, voz, velocidad de voz, avatar y color de acento.

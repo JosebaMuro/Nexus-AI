@@ -49,6 +49,9 @@ input[type=range]{accent-color:var(--acc);width:100%}
 .clip input{margin-top:6px;padding:4px 6px;font-size:13px}
 .clip .acts{display:flex;gap:4px;margin-top:6px}
 .clip .acts button{flex:1;padding:2px;min-height:30px;font-size:13px}
+.clip .acts button.on{border-color:var(--acc);color:var(--acc)}
+.clip .tag{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.7);color:var(--acc);border-radius:6px;padding:0 6px;font-size:12px}
+.msg button{min-height:28px;padding:2px 10px;margin-left:8px;font-size:13px}
 .prog{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden;margin:10px 0}
 .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--acc2))}
 .msg{font-size:13px;color:var(--muted);min-height:1.4em}
@@ -90,9 +93,13 @@ video.out{width:100%;border-radius:10px;margin-top:10px;background:#000}
         <button id="from-app">Desde Agente IA</button>
         <button id="sort-name" title="Ordenar por nombre de fichero">A→Z</button>
         <button id="reverse" title="Invertir el orden">⇄</button>
+        <button id="enh-all" title="Niveles, color y nitidez automáticos; amplía las imágenes pequeñas">✨ Mejorar todas</button>
+        <button id="split-all" title="Recorta las hojas que traen varias diapositivas y las pone en orden">✂ Separar diapositivas</button>
         <button id="clear" class="danger">Vaciar</button>
         <input type="file" id="files" accept="image/*" multiple hidden>
       </div>
+      <label class="check" style="margin:10px 0 0"><input type="checkbox" id="auto-split" checked> Al añadir, separar las hojas con varias diapositivas</label>
+      <label class="check" style="margin:4px 0 0"><input type="checkbox" id="auto-enh"> Al añadir, mejorar las imágenes</label>
       <div class="strip" id="strip"></div>
       <div class="drop" id="drop">Suelta aquí imágenes (PNG, JPEG, WebP, GIF). Arrastra las miniaturas para cambiar el orden.</div>
     </div>
@@ -140,6 +147,7 @@ video.out{width:100%;border-radius:10px;margin-top:10px;background:#000}
   <div class="row"><button class="primary" id="pick-ok">Añadir seleccionadas</button><button id="pick-all">Todas</button><button id="pick-close">Cerrar</button></div>
 </dialog>
 
+<script src="/static/js/video-imagen.js"></script>
 <script>
 "use strict";
 const $ = (s) => document.querySelector(s);
@@ -168,12 +176,93 @@ function loadImg(src, name) {
     im.src = src;
   });
 }
+const VI = window.VideoImagen;
+const iw = (im) => im.naturalWidth || im.width, ih = (im) => im.naturalHeight || im.height;
+function lienzo(w, h) { const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; }
+function pixeles(im, maxLado) {
+  const s = Math.min(1, maxLado / Math.max(iw(im), ih(im))), c = lienzo(iw(im) * s, ih(im) * s), g = c.getContext("2d", { willReadFrequently: true });
+  g.imageSmoothingQuality = "high"; g.drawImage(im, 0, 0, c.width, c.height);
+  return { img: g.getImageData(0, 0, c.width, c.height), s };
+}
+function miniatura(canvas) {
+  return new Promise((ok) => canvas.toBlob((b) => ok(b ? URL.createObjectURL(b) : canvas.toDataURL("image/jpeg", 0.85)), "image/jpeg", 0.9));
+}
+// recorta las diapositivas de una hoja; devuelve los clips nuevos (o [] si no las hay). estricto: solo si todas las
+// celdas son casi iguales (al añadir), para no partir una foto normal
+async function separarClip(c, estricto, rejilla) {
+  const { img, s } = pixeles(c.im, 1000);
+  let cel = rejilla ? VI.cuadricula(img.width, img.height, rejilla[0], rejilla[1]) : VI.separar(img);
+  if (estricto && cel.length) {
+    const med = (k) => cel.map((x) => x[k]).sort((a, b) => a - b)[(cel.length / 2) | 0];
+    const mw = med("w"), mh = med("h");
+    if (cel.some((x) => Math.abs(x.w - mw) > mw * 0.2 || Math.abs(x.h - mh) > mh * 0.2)) cel = [];
+  }
+  if (cel.length < 2) return [];
+  const out = [];
+  for (const [k, r] of cel.entries()) {
+    // de la imagen analizada a la original, con 1 px de margen hacia dentro (sin el borde de la calle)
+    const x = Math.floor(r.x / s) + 1, y = Math.floor(r.y / s) + 1, w = Math.floor(r.w / s) - 2, h = Math.floor(r.h / s) - 2;
+    const cv2 = lienzo(w, h); cv2.getContext("2d").drawImage(c.im, x, y, w, h, 0, 0, w, h);
+    out.push({ im: cv2, src: await miniatura(cv2), name: `${c.name} · ${k + 1}`, cap: "", dur: c.dur, hoja: c });
+  }
+  return out;
+}
+// mejora: amplia (hasta x2) si la imagen es mas pequena que el video y aplica niveles, color y nitidez
+async function mejorarClip(c, o = opts()) {
+  if (c.orig) return c;
+  const im = c.im, up = Math.min(2, Math.max(1, Math.max(o.w / iw(im), o.h / ih(im))));
+  const s = Math.min(up, Math.sqrt(4.2e6 / (iw(im) * ih(im))));
+  const cv2 = lienzo(iw(im) * s, ih(im) * s);
+  const g = cv2.getContext("2d", { willReadFrequently: true });
+  g.imageSmoothingQuality = "high"; g.drawImage(im, 0, 0, cv2.width, cv2.height);
+  const r = VI.mejorar(g.getImageData(0, 0, cv2.width, cv2.height), { enfoque: up > 1.2 ? 0.8 : 0.55 });
+  g.putImageData(new ImageData(r.data, r.width, r.height), 0, 0);
+  c.orig = { im: c.im, src: c.src }; c.im = cv2; c.src = await miniatura(cv2);
+  return c;
+}
+function deshacerMejora(c) { if (c.orig) { c.im = c.orig.im; c.src = c.orig.src; delete c.orig; } }
+async function separarEn(i, estricto, rejilla) {
+  const nuevos = await separarClip(S.clips[i], estricto, rejilla);
+  if (nuevos.length) S.clips.splice(i, 1, ...nuevos);
+  return nuevos.length;
+}
+function unir(hoja) {   // deshace la separacion de una hoja: vuelve a ser una sola imagen en su sitio
+  const i = S.clips.findIndex((c) => c.hoja === hoja);
+  if (i < 0) return;
+  S.clips = S.clips.filter((c) => c.hoja !== hoja); S.clips.splice(i, 0, hoja);
+  render(); draw();
+}
+let ocupado = false;
+async function tarea(texto, fn) {
+  if (ocupado) return; ocupado = true; msg(texto);
+  try { await fn(); } catch (e) { msg("No se pudo: " + e.message, "err"); } finally { ocupado = false; render(); draw(); }
+}
 async function addSources(list) {
   const got = await Promise.all(list.map(([src, name]) => loadImg(src, name)));
   const ok = got.filter(Boolean);
+  const from = S.clips.length;
   S.clips.push(...ok);
   if (ok.length < got.length) msg(`${got.length - ok.length} fichero(s) no son imágenes legibles`, "err");
   render(); draw();
+  const sep = $("#auto-split").checked, enh = $("#auto-enh").checked;
+  if (!sep && !enh) return;
+  await tarea("Revisando las imágenes nuevas…", async () => {
+    const hojas = [];
+    if (sep)
+      for (let i = S.clips.length - 1; i >= from; i--) {
+        const c = S.clips[i];
+        if (await separarEn(i, true)) hojas.push(c);
+      }
+    if (enh) for (const c of S.clips.slice(from)) await mejorarClip(c);
+    if (hojas.length) {
+      const n = S.clips.filter((c) => hojas.includes(c.hoja)).length;
+      msg(`Separadas ${n} diapositivas de ${hojas.length} hoja(s), en orden de lectura.`, "ok");
+      const b = document.createElement("button"); b.textContent = "Deshacer";
+      b.onclick = () => { hojas.forEach(unir); msg("Hojas sin separar"); };
+      $("#msg").appendChild(b);
+    } else if (enh) msg("Imágenes mejoradas", "ok");
+    else msg("");
+  });
 }
 function addFiles(files) {
   const imgs = [...files].filter((f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(f.name));
@@ -188,14 +277,24 @@ function render() {
     const d = document.createElement("div");
     d.className = "clip" + (i === S.sel ? " cur" : "");
     d.draggable = true;
-    d.innerHTML = `<span class="n">${i + 1}</span><img alt=""><input type="text" placeholder="Pie de imagen" value=""><div class="row" style="margin-top:6px;gap:4px"><input type="number" min="0.5" max="30" step="0.5" title="Segundos (vacío = los de ajustes)" placeholder="${o.dur} s" style="flex:1"></div><div class="acts"><button title="Antes">◀</button><button title="Después">▶</button><button title="Quitar" class="danger">✕</button></div>`;
+    d.innerHTML = `<span class="n">${i + 1}</span><img alt=""><input type="text" placeholder="Pie de imagen" value=""><div class="row" style="margin-top:6px;gap:4px"><input type="number" min="0.5" max="30" step="0.5" title="Segundos (vacío = los de ajustes)" placeholder="${o.dur} s" style="flex:1"></div><div class="acts"><button title="Antes">◀</button><button title="Después">▶</button><button title="Mejorar (otra vez: deshacer)" class="${c.orig ? "on" : ""}">✨</button><button title="Separar las diapositivas de esta hoja">✂</button><button title="Quitar" class="danger">✕</button></div>${c.hoja ? `<span class="tag" title="Recortada de ${c.hoja.name}">✂</span>` : ""}`;
     d.querySelector("img").src = c.src;
     const [cap, dur] = d.querySelectorAll("input");
     cap.value = c.cap; dur.value = c.dur || "";
     cap.oninput = () => { c.cap = cap.value; draw(); };
     dur.oninput = () => { c.dur = +dur.value || 0; updateTime(); };
-    const [prev, next, del] = d.querySelectorAll(".acts button");
+    const [prev, next, enh, cut, del] = d.querySelectorAll(".acts button");
     prev.onclick = () => move(i, i - 1); next.onclick = () => move(i, i + 1);
+    enh.onclick = () => tarea("Mejorando…", async () => { if (c.orig) { deshacerMejora(c); msg("Mejora deshecha"); } else { await mejorarClip(c); msg("Imagen mejorada", "ok"); } });
+    cut.onclick = () => tarea("Buscando diapositivas…", async () => {
+      let n = await separarEn(i, false);
+      if (!n) {
+        const r = prompt("No se ven separaciones claras entre diapositivas. ¿Cuántas filas x columnas tiene la hoja?", "2x2");
+        const m = r && r.match(/^\s*(\d+)\s*[x×*]\s*(\d+)\s*$/i);
+        if (m && +m[1] * +m[2] > 1 && +m[1] * +m[2] <= 64) n = await separarEn(i, false, [+m[1], +m[2]]);
+      }
+      msg(n ? `Separadas ${n} diapositivas, en orden de lectura` : "Sin cambios", n ? "ok" : "");
+    });
     del.onclick = () => { S.clips.splice(i, 1); render(); draw(); };
     d.querySelector("img").onclick = () => { S.sel = i; S.t = startOf(i) + 0.01; render(); draw(); };
     d.ondragstart = (e) => { e.dataTransfer.setData("text/clip", String(i)); d.classList.add("drag"); };
@@ -214,24 +313,24 @@ function startOf(i, o = opts()) { let t = o.title ? 2.5 : 0; for (let k = 0; k <
 
 /* ---------- composicion de un fotograma ---------- */
 function place(c, o, p, k, idx) {
-  const im = c.im, iw = im.naturalWidth, ih = im.naturalHeight;
-  let s = o.fit === "cover" ? Math.max(o.w / iw, o.h / ih) : Math.min(o.w / iw, o.h / ih);
+  const W = iw(c.im), H = ih(c.im);
+  let s = o.fit === "cover" ? Math.max(o.w / W, o.h / H) : Math.min(o.w / W, o.h / H);
   let dx = 0, dy = 0, z = 1;
   if (o.kb) {
     const inn = idx % 2 === 0, q = inn ? p : 1 - p;
-    z = 1 + 0.1 * q;
+    z = 1.06 + 0.1 * q;   // 6 % de margen: el desplazamiento no deja bandas negras en los bordes
     const dir = idx % 4 < 2 ? 1 : -1;
     dx = dir * (p - 0.5) * o.w * 0.04; dy = (idx % 3 === 0 ? -1 : 1) * (p - 0.5) * o.h * 0.03;
   }
   s *= z * (k.zoom || 1);
-  const w = iw * s, h = ih * s;
+  const w = W * s, h = H * s;
   return { x: (o.w - w) / 2 + dx + (k.dx || 0), y: (o.h - h) / 2 + dy + (k.dy || 0), w, h };
 }
 function drawClip(c, o, p, idx, k = {}) {
   if (o.fit === "contain") {   // fondo: la misma imagen ampliada y difuminada
     ctx.save(); ctx.filter = "blur(28px) brightness(.55)";
-    const iw = c.im.naturalWidth, ih = c.im.naturalHeight, s = Math.max(o.w / iw, o.h / ih) * 1.1;
-    ctx.drawImage(c.im, (o.w - iw * s) / 2 + (k.dx || 0), (o.h - ih * s) / 2 + (k.dy || 0), iw * s, ih * s);
+    const W = iw(c.im), H = ih(c.im), s = Math.max(o.w / W, o.h / H) * 1.1;
+    ctx.drawImage(c.im, (o.w - W * s) / 2 + (k.dx || 0), (o.h - H * s) / 2 + (k.dy || 0), W * s, H * s);
     ctx.restore();
   }
   const r = place(c, o, p, k, idx);
@@ -373,6 +472,15 @@ $("#cancel").onclick = () => stopRec(true);
 $("#add").onclick = () => $("#files").click();
 $("#files").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
 $("#clear").onclick = () => { if (S.clips.length && confirm("¿Quitar todas las imágenes?")) { S.clips = []; S.t = 0; render(); draw(); } };
+$("#enh-all").onclick = () => tarea("Mejorando las imágenes…", async () => {
+  for (const [k, c] of S.clips.entries()) { msg(`Mejorando ${k + 1} de ${S.clips.length}…`); await mejorarClip(c); }
+  msg("Imágenes mejoradas (✨ en cada una para deshacer)", "ok");
+});
+$("#split-all").onclick = () => tarea("Buscando diapositivas…", async () => {
+  let n = 0, hojas = 0;
+  for (let i = S.clips.length - 1; i >= 0; i--) { const k = await separarEn(i, false); if (k) { n += k; hojas++; } }
+  msg(n ? `Separadas ${n} diapositivas de ${hojas} hoja(s), en orden de lectura` : "No hay hojas con varias diapositivas (✂ en una imagen para indicar filas x columnas)", n ? "ok" : "");
+});
 $("#reverse").onclick = () => { S.clips.reverse(); render(); draw(); };
 $("#sort-name").onclick = () => { S.clips.sort((a, b) => a.name.localeCompare(b.name, "es", { numeric: true })); render(); draw(); };
 const drop = $("#drop");

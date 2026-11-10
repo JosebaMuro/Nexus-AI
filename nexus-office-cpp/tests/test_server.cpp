@@ -157,3 +157,35 @@ TEST("servidor: API, administrador, memoria, biblioteca y chat por WebSocket") {
   CHECK(answer.find("84") != std::string::npos);
   ws.close();
 }
+
+TEST("servidor: rastrear una lista de URLs en cola") {
+  Server srv;
+  httplib::Client c("127.0.0.1", srv.port);
+  c.set_read_timeout(60);
+  // direcciones privadas: el rastreador las rechaza enseguida, sin salir a la red
+  auto r = c.Post("/api/rag/crawl",
+                  R"({"urls":"# lista\nhttp://127.0.0.1:9/a\nhttp://127.0.0.1:9/b, esto-no\nhttp://127.0.0.1:9/a","max_pages":5})",
+                  "application/json");
+  CHECK(r && r->status == 200);
+  json b = body(r);
+  CHECK_EQ(b["jobs"].size(), (size_t)2);
+  CHECK_EQ(b["invalid"].size(), (size_t)1);
+  CHECK_EQ(b["parallel"].get<int>(), 1);
+  if (b["jobs"].size() == 2) {
+    CHECK_EQ(jstr(b["jobs"][0], "list"), jstr(b, "list"));
+    CHECK_EQ(b["jobs"][1]["list_pos"].get<int>(), 2);
+    CHECK_EQ(b["jobs"][1]["list_total"].get<int>(), 2);
+  }
+  bool idle = false;   // la cola los rastrea de uno en uno hasta vaciarse
+  for (int i = 0; i < 300 && !idle; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    idle = true;
+    for (auto& j : body(c.Get("/api/rag/crawls")))
+      if (jstr(j, "list") == jstr(b, "list") && (j.value("running", false) || jstr(j, "status") == "en cola")) idle = false;
+  }
+  CHECK(idle);
+  auto vacia = c.Post("/api/rag/crawl", R"({"urls":["esto no es una url"]})", "application/json");
+  CHECK(vacia && vacia->status == 400);
+  auto mala = c.Post("/api/rag/crawl", R"({"urls":42})", "application/json");
+  CHECK(mala && mala->status == 400);
+}

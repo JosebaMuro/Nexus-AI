@@ -143,6 +143,9 @@ class OpenAICompatBackend : public Backend {
   std::vector<std::pair<std::string, std::string>> headers() const;
 };
 
+// opciones de rendimiento de llama-server a partir de su --help (separado para las pruebas)
+std::vector<std::string> flags_rendimiento_para(const std::string& ayuda, int ubatch, int cache_ram_mb, bool flash);
+
 class LlamaServerBackend : public OpenAICompatBackend {
  public:
   using Resolver = std::function<std::optional<std::pair<std::string, json>>(const std::string&)>;
@@ -183,7 +186,16 @@ class LlamaServerBackend : public OpenAICompatBackend {
   json gpu_ = json::object();
   std::string gpu_error_;
   bool kv_quant_failed_ = false;   // este llama-server no arranca con la cache KV cuantizada
+  // -ub, --cache-ram y -fa segun lo que admita este binario
+  static std::vector<std::string> flags_rendimiento(const fs::path& exe, int ubatch, int cache_ram_mb, bool flash);
   bool ngl_auto_failed_ = false;   // este llama-server es anterior a «-ngl auto»
+  // escritorio: la GPU fallo (al arrancar o en mitad de una respuesta): hasta esta hora se usa la CPU y despues se
+  // vuelve a probar la GPU una vez (antes se quedaba en la CPU toda la sesion por un fallo pasajero)
+  double gpu_retry_at_ = 0;
+ public:
+  static constexpr double GPU_RETRY_S = 600;
+  double gpu_retry_at() { std::lock_guard<std::recursive_mutex> lk(mu_); return gpu_retry_at_; }
+ private:
   double gpu_gb_ = 0;
   std::recursive_mutex mu_;
 };

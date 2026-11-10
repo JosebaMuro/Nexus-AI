@@ -7,6 +7,8 @@
 #include <chrono>
 #include <thread>
 
+#include "hal/cpu.h"
+#include <set>
 #include "models/runtimes.h"
 #include "util/crypto.h"
 #include "util/dynlib.h"
@@ -374,8 +376,96 @@ json MotorBackend::effective() {
   return effective_;
 }
 
+// ---------------------------------------------------------------- marcas de los motores dentro del proceso
+namespace {
+std::mutex g_marcas_mu;
+std::set<std::string> g_marcas_propias;   // marcas puestas por este proceso (no son de una caida anterior)
+
+fs::path dir_marcas() { return paths::sub({"cache", "motores", "en-proceso"}); }
+fs::path marca(const std::string& motor, const std::string& acel) { return dir_marcas() / P(motor + "-" + acel + ".marca"); }
+fs::path caida(const std::string& motor, const std::string& acel) { return dir_marcas() / P(motor + "-" + acel + ".caida"); }
+
+// una marca que no puso este proceso es de una ejecucion que se cayo con el motor dentro: pasa a caida
+bool cayo(const std::string& motor, const std::string& acel) {
+  std::lock_guard<std::mutex> lk(g_marcas_mu);
+  fs::path m = marca(motor, acel), c = caida(motor, acel);
+  std::error_code ec;
+  if (is_file(m) && !g_marcas_propias.count(S(m))) {
+    fs::rename(m, c, ec);
+    LM.warning("El motor ", motor, " se cayo en ", acel, " dentro del proceso: desde ahora va en un proceso aparte");
+  }
+  return is_file(c);
+}
+
+struct Marca {
+  fs::path p;
+  Marca(const std::string& motor, const std::string& acel) : p(marca(motor, acel)) {
+    std::lock_guard<std::mutex> lk(g_marcas_mu);
+    g_marcas_propias.insert(S(p));
+    write_file(p, std::to_string((long long)now()));
+  }
+  ~Marca() {
+    std::lock_guard<std::mutex> lk(g_marcas_mu);
+    std::error_code ec;
+    fs::remove(p, ec);
+    g_marcas_propias.erase(S(p));
+  }
+};
+}  // namespace
+
+json MotorBackend::caidas() {
+  json out = json::array();
+  for (auto& f : glob(dir_marcas(), "*.caida")) out.push_back(stem(f));
+  return out;
+}
+
+void MotorBackend::olvidar_caidas() {
+  std::error_code ec;
+  for (auto& f : glob(dir_marcas(), "*.caida")) fs::remove(f, ec);
+}
+
+bool MotorBackend::abrir_local(const std::string& acel, const fs::path& lib, const std::string& modelo, int n_ctx,
+                               int hilos, std::string& error) {
+  motores::Config c;
+  c.lib = lib;
+  c.modelo = P(modelo);
+  c.acelerador = acel;
+  c.hilos = hilos > 0 ? hilos : hal::hilos_calculo();
+  c.n_ctx = std::max(512, n_ctx);
+  c.cache = paths::sub({"cache", "motores", motor_});
+  c.dispatch = lib.parent_path();
+  for (auto& d : glob(lib.parent_path() / "vendors", "dispatch", true))
+    if (is_dir(d)) {
+      c.dispatch = d;
+      break;
+    }
+#ifndef _WIN32
+  if (sys::is_android()) {
+    // NPU Hexagon: el DSP busca sus bibliotecas (skel) en ADSP_LIBRARY_PATH
+    std::string adsp = S(lib.parent_path()) + ";/vendor/dsp/cdsp;/vendor/lib/rfsa/adsp;/dsp";
+    setenv("ADSP_LIBRARY_PATH", adsp.c_str(), 0);
+  }
+  if (motor_ == "onnx")
+    for (auto& o : glob(lib.parent_path(), "libonnxruntime.*"))
+      if (!contains(S(o.filename()), "genai") && !contains(S(o.filename()), "providers")) setenv("ORT_LIB_PATH", S(o).c_str(), 0);
+#endif
+  try {
+    Marca m(motor_, acel);
+    local_ = motor_ == "litert" ? motores::abrir_litert(c) : motor_ == "genie" ? motores::abrir_genie(c) : motores::abrir_onnx(c);
+    return true;
+  } catch (const std::exception& e) {
+    error = e.what();
+    local_.reset();
+    return false;
+  }
+}
+
 void MotorBackend::stop() {
   std::lock_guard<std::recursive_mutex> lk(mu_);
+  {
+    std::lock_guard<std::mutex> g(gen_mu_);
+    local_.reset();
+  }
   if (proc_ && proc_->running()) {
     proc_->terminate();
     if (!proc_->wait(10)) proc_->kill();
@@ -393,7 +483,7 @@ void MotorBackend::ensure(const std::string& model, const json& opts) {
   int n_ctx = (int)jnum(opts.value("n_ctx", json(4096)), 4096), hilos = (int)jnum(opts.value("n_threads", json(0)), 0);
   std::string key = cat(path, "|", n_ctx, "|", hilos);
   std::lock_guard<std::recursive_mutex> lk(mu_);
-  if (proc_ && proc_->running() && key_ == key) return;
+  if ((local_ || (proc_ && proc_->running())) && key_ == key) return;
   stop();
   if (key != cat(jstr(effective_, "key"))) fallidos_.clear();
   fs::path log_path = paths::logs_dir() / ("motor-" + motor_ + ".log");
@@ -410,6 +500,32 @@ void MotorBackend::ensure(const std::string& model, const json& opts) {
     }
     auto lib = motores::lib_path(motor_, var);
     if (!lib) continue;
+    // dentro del proceso, salvo que este motor y acelerador ya tumbaran Agente IA alguna vez
+    if (en_proceso.load() && !cayo(motor_, acel)) {
+      double t0 = now();
+      std::string err;
+      if (abrir_local(acel, *lib, path, n_ctx, hilos, err)) {
+        key_ = key;
+        effective_ = {{"motor", motor_},
+                      {"acelerador", local_->acelerador()},
+                      {"variante", var},
+                      {"lib", S(*lib)},
+                      {"requested", motores::orden(motor_, profile_(), entry)[0]},
+                      {"device", acel == "npu" ? "NPU" : acel == "cpu" ? "CPU" : "GPU"},
+                      {"proceso", "dentro"},
+                      {"marca", acel},
+                      {"at", now()},
+                      {"key", key},
+                      {"fallidos", fallidos_}};
+        effective_["ok"] = acel == jstr(effective_, "requested");
+        LM.info(inf->nombre, " listo DENTRO del proceso en ", acel, " (", fnum(now() - t0, 1), "s)");
+        return;
+      }
+      fallidos_.push_back(acel);
+      errores.push_back(acel + ": " + uright(err, 300));
+      LM.warning(inf->nombre, " no cargo en ", acel, " dentro del proceso: ", uright(err, 200));
+      continue;
+    }
     port = net::free_port(8191);
     std::vector<std::string> cmd = {S(paths::exe_path()), "motor", motor_, "--modelo", path, "--puerto",
                                     std::to_string(port), "--acelerador", acel, "--lib", S(*lib), "--ctx",
@@ -460,6 +576,7 @@ void MotorBackend::ensure(const std::string& model, const json& opts) {
       effective_["at"] = now();
       effective_["key"] = key;
       effective_["fallidos"] = fallidos_;
+      effective_["proceso"] = "aparte";
       LM.info(inf->nombre, " listo en ", acel, " (", fnum(now() - t0, 1), "s)");
       return;
     }
@@ -481,6 +598,31 @@ void MotorBackend::stream_chat(const json& messages, const std::string& model, c
   ensure(model, opts.o);
   json msgs = messages;
   for (auto& m : msgs) m["images"] = json::array();
+  {
+    std::unique_lock<std::mutex> g(gen_mu_);
+    if (local_) {
+      // dentro del proceso: cada trozo llega por una llamada directa, sin HTTP ni SSE
+      const json& o = opts.o;
+      motores::Params p;
+      json t = o.value("temperature", json(0.7)), mt = o.value("max_tokens", json(1024));
+      p.temperature = t.is_number() ? t.get<double>() : 0.7;
+      p.max_tokens = mt.is_number() ? mt.get<int>() : 1024;
+      if (o.contains("top_p") && o["top_p"].is_number()) p.top_p = o["top_p"].get<double>();
+      if (o.contains("top_k") && o["top_k"].is_number()) p.top_k = o["top_k"].get<int>();
+      if (o.contains("seed") && o["seed"].is_number()) p.seed = o["seed"].get<long long>();
+      std::string acel;
+      {
+        std::lock_guard<std::recursive_mutex> lk(mu_);
+        acel = jstr(effective_, "marca");
+      }
+      Marca m(motor_, acel.empty() ? "cpu" : acel);
+      local_->generar(msgs, p, [&](const std::string& piece) {
+        out(piece);
+        return true;
+      });
+      return;
+    }
+  }
   Opts o2 = opts;
   o2.o.erase("tool_specs");   // sin herramientas nativas: el protocolo de texto de Nexus-Office
   bool produced = false;

@@ -25,6 +25,7 @@
 #endif
 
 #include "llm/motores.h"
+#include "mcp/mcp.h"
 #include "agents/agents.h"
 #include "agents/evaluar.h"
 #include "coop/coop.h"
@@ -965,6 +966,8 @@ const char* HELP =
     "  nexus-office importar-runtime <Nexus-Office-runtime-...zip>   runtimes sin conexion (CUDA 13, ROCm, SYCL...)\n"
     "  nexus-office bench [--rondas N] [--tokens N] [--sin-llm|--solo-llm] [--json|--informe]   (beta) mide CPU,\n"
     "                     memoria, disco y la IA (TTFT y tokens/s) y lo guarda para comparar\n"
+    "  nexus-office mcp [--url http://127.0.0.1:8775] [--token T]   servidor MCP por stdio (herramientas de Agente IA\n"
+    "                     para otros programas; necesita el servidor en marcha)\n"
     "  nexus-office --version\n";
 
 }  // namespace
@@ -984,6 +987,8 @@ int run_main(std::vector<std::string> argv) {
   if (cmd == "servicio") return service::main(argv);
   // motor de inferencia aparte de llama.cpp (LiteRT-LM, ONNX Runtime GenAI) en su propio proceso: lo arranca el LLM
   if (cmd == "motor") return motores::main_motor(argv);
+  // puente MCP por stdio: los asistentes de escritorio y editores lo arrancan y hablan con el /mcp del servidor
+  if (cmd == "mcp") return mcp::main_stdio(argv);
   if (cmd == "importar-runtime") {   // paquete de runtimes sin conexion (Nexus-Office-runtime-*.zip)
     if (argv.empty()) die("uso: nexus-office importar-runtime <Nexus-Office-runtime-...zip>", 2);
     try {

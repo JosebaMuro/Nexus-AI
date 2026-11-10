@@ -29,6 +29,7 @@ memory:
   zip_reason_docs: 12       # documentos de un ZIP que razona el LLM
 rag:
   crawl_batch_pages: 0      # páginas por lote al rastrear dominios (0 = según la RAM)
+  crawl_parallel: 1         # rastreos de una lista de URLs a la vez (1-4)
   allow_private_urls: false # permitir rastrear la red local / localhost
 tools:
   policy: {low: auto, medium: ask, high: admin}   # auto | ask | admin | deny

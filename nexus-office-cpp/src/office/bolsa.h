@@ -12,14 +12,15 @@
 #include <string>
 #include <vector>
 
+#include "util/exporta.h"
 #include "core/db.h"
 #include "office/bolsa_datos.h"
 #include "util/json.h"
 
 namespace nx::bolsa {
 
-extern const char* AVISO;
-extern const char* CONFIRMACION;
+extern NX_DATOS const char* AVISO;
+extern NX_DATOS const char* CONFIRMACION;
 extern const std::vector<std::string> ORDER_TYPES;
 
 // PermissionError de Python (la API responde 403)

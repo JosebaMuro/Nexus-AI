@@ -7,6 +7,7 @@
 #include "hardware/gpu_devices.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
+#include "hal/cpu.h"
 #include "models/runtimes.h"
 #include "util/crypto.h"
 #include "util/http.h"
@@ -15,6 +16,46 @@
 #include "util/text.h"
 
 namespace nx::llm {
+
+namespace {
+// ayuda de un llama-server (--help, una vez por binario): los antiguos no conocen --cpu-mask, --cache-ram...
+std::string ayuda(const fs::path& exe) {
+  static std::mutex mu;
+  static std::map<std::string, std::string> ayudas;
+  std::lock_guard<std::mutex> lk(mu);
+  auto& h = ayudas[S(exe)];
+  if (h.empty()) {
+    proc::Options o;
+    o.cwd = exe.parent_path();
+    o.capture = true;
+    o.env = runtimes::lib_env(exe);
+    auto r = proc::run({S(exe), "--help"}, 30, o);
+    h = r.out + "\n" + r.err + " ";
+  }
+  return h;
+}
+bool admite(const fs::path& exe, const std::string& flag) { return ayuda(exe).find(flag) != std::string::npos; }
+}  // namespace
+
+std::vector<std::string> flags_rendimiento_para(const std::string& ayuda, int ubatch, int cache_ram_mb, bool flash) {
+  std::vector<std::string> out;
+  auto tiene = [&](const char* f) { return ayuda.find(f) != std::string::npos; };
+  // lote fisico: trozos mas grandes del prompt en una grafica dedicada grande
+  if (ubatch > 0 && tiene("--ubatch-size")) out.insert(out.end(), {"-ub", std::to_string(ubatch)});
+  // cache de prompts en la RAM: llama.cpp reserva hasta 8 GB por defecto; se limita a lo que el equipo aguanta
+  if (cache_ram_mb >= 0 && tiene("--cache-ram")) out.insert(out.end(), {"--cache-ram", std::to_string(cache_ram_mb)});
+  // atencion rapida: los llama-server recientes la ponen en «auto» solos; los antiguos (opcion sin valor) la
+  // necesitan para la cache V en 8 bits y en CUDA/Metal van mas rapido con ella
+  bool fa_valor = tiene("--flash-attn [on|off|auto]") || tiene("'on', 'off', or 'auto'");
+  if (flash && tiene("--flash-attn") && !fa_valor) out.push_back("-fa");
+  return out;
+}
+
+std::vector<std::string> LlamaServerBackend::flags_rendimiento(const fs::path& exe, int ubatch, int cache_ram_mb,
+                                                                bool flash) {
+  if (ubatch <= 0 && cache_ram_mb < 0 && !flash) return {};
+  return flags_rendimiento_para(ayuda(exe), ubatch, cache_ram_mb, flash);
+}
 
 static const auto L = log::get("llamaserver");
 
@@ -80,21 +121,30 @@ double LlamaServerBackend::gpu_gb() {
 void LlamaServerBackend::ensure(const std::string& model, const json& opts_in) {
   // Android: si la NPU o la GPU no arrancan con este driver, se apunta y se pasa a la siguiente (NPU -> GPU -> CPU)
   json opts = opts_in;
+  bool desktop = nx::env("NEXUS_RUNTIME_LLAMA_CPU").empty();
+  if (desktop && truthy(opts.value("gpu_layers", json(0)))) {
+    std::lock_guard<std::recursive_mutex> lk(mu_);
+    if (gpu_retry_at_ > now()) {   // la GPU fallo hace poco: CPU hasta que toque volver a probarla
+      opts["gpu_layers"] = 0;
+      opts["device"] = "";
+    }
+  }
   for (int i = 0; i < 3; ++i) {
     try {
       ensure_once(model, opts);
       return;
     } catch (const GpuFailed& e) {
-      if (nx::env("NEXUS_RUNTIME_LLAMA_CPU").empty()) {   // escritorio: la GPU elegida no arranca -> CPU
-        L.warning(e.what(), ": se sigue en la CPU");
+      if (desktop) {   // escritorio: la GPU elegida no arranca -> CPU un rato y despues se vuelve a probar
+        L.warning(e.what(), ": se sigue en la CPU y se vuelve a probar la GPU en ", (int)(GPU_RETRY_S / 60), " min");
         {
           std::lock_guard<std::recursive_mutex> lk(mu_);
           gpu_error_ = uleft(e.what(), 300);
+          // no se toca el perfil: antes se quedaba en la CPU toda la sesion. Con la espera tampoco se recarga el
+          // modelo dos veces en cada respuesta
+          gpu_retry_at_ = now() + GPU_RETRY_S;
         }
         opts["gpu_layers"] = 0;
         opts["device"] = "";
-        // se queda apuntado en el perfil: si no, cada respuesta volvia a probar la GPU y recargaba el modelo dos veces
-        if (set_llm_opts) set_llm_opts({{"gpu_layers", 0}, {"device", ""}});
         continue;
       }
       json nxt = gpu_failed(e.what(), jstr(opts, "device"));
@@ -177,10 +227,17 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
   bool kv_ram = truthy(opts.value("kv_ram", json(false))), mlock = truthy(opts.value("mlock", json(false)));
   std::string kv_quant = jstr(opts, "kv_quant");
   int threads_batch = (int)jnum(opts.value("n_threads_batch", json(0)), 0);
+  int n_batch = (int)jnum(opts.value("n_batch", json(256)), 256);
+  int ubatch = (int)jnum(opts.value("n_ubatch", json(0)), 0);
+  if (ngl == 0 && ubatch > 512) ubatch = 0;   // en la CPU el lote grande no acelera y gasta RAM
+  if (ubatch > 0) n_batch = std::max(n_batch, ubatch);
+  int cache_ram = (int)jnum(opts.value("cache_ram_mb", json(-1)), -1);
+  bool flash = truthy(opts.value("flash_attn", json(false)));
   std::string mmproj = entry.value("mmproj", json()).is_string() ? entry["mmproj"].get<std::string>() : "";
   std::string key = cat(S(exe), "|", path, "|", mmproj, "|", jdump(opts.value("n_ctx", json())), "|",
                         jdump(opts.value("n_threads", json())), "|", jdump(opts.value("n_batch", json())), "|", ngl, "|",
-                        device, "|", jdump(extra_env), "|", kv_ram, "|", mlock, "|", kv_quant, "|", threads_batch);
+                        device, "|", jdump(extra_env), "|", kv_ram, "|", mlock, "|", kv_quant, "|", threads_batch, "|",
+                        ubatch, "|", cache_ram);
   std::lock_guard<std::recursive_mutex> lk(mu_);
   if (proc_ && proc_->running() && key_ == key) return;
   stop();
@@ -203,7 +260,7 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
                                   "-c",
                                   std::to_string((int)jnum(opts.value("n_ctx", json(4096)), 4096)),
                                   "-b",
-                                  std::to_string((int)jnum(opts.value("n_batch", json(256)), 256)),
+                                  std::to_string(n_batch),
                                   "-ngl",
                                   ngl_arg(ngl, var),
                                   "--jinja",
@@ -216,6 +273,11 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
     cmd.push_back("--device");
     cmd.push_back(device);
   }
+  // big.LITTLE e Intel hibridos: la generacion fijada a los nucleos grandes (un hilo en un nucleo pequeno frena a
+  // todos en cada token); el prompt (-tb) sigue con todos
+  if (std::string mask = hal::mascara_grandes(); !mask.empty() && admite(exe, "--cpu-mask") &&
+      (int)jnum(opts.value("n_threads", json(0)), 0) <= (int)hal::nucleos().grandes.size())
+    cmd.insert(cmd.end(), {"--cpu-mask", mask, "--cpu-strict", "1"});
   if (kv_ram && ngl) cmd.push_back("--no-kv-offload");   // perfil de hardware: la cache KV en la RAM (mas capas en la VRAM)
   if (mlock) cmd.push_back("--mlock");                    // perfil de hardware: el modelo fijo en la RAM
   // prompt con todos los hilos logicos; la generacion con los fisicos (-t)
@@ -224,6 +286,8 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
   // cache KV en 8 bits con la memoria justa: cabe el doble de contexto (necesita atencion rapida; si este binario o
   // esta GPU no la tienen, se arranca sin ella)
   if (!kv_quant.empty() && !kv_quant_failed_) cmd.insert(cmd.end(), {"-ctk", kv_quant, "-ctv", kv_quant});
+  for (auto& a : flags_rendimiento(exe, ubatch, cache_ram, flash || (!kv_quant.empty() && !kv_quant_failed_)))
+    cmd.push_back(a);
   cmd.push_back("-np");
   // un solo slot tambien con la variante de GPU forzada a CPU (-ngl 0): si no, cada slot se queda con medio contexto.
   // En el movil, uno siempre: un solo usuario, y con dos slots la GPU o la NPU trabajaban con la mitad del contexto
@@ -259,8 +323,15 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
   key_ = key;
   device_ = device;
   variant = var;
-  double t0 = now();
-  while (now() - t0 < 300) {
+  double t0 = now(), last_growth = t0;
+  uint64_t last_size = log_from;
+  // 5 minutos, o hasta 15 mientras llama-server siga escribiendo en su log (un modelo grande en un disco lento o la
+  // primera compilacion de los kernels de la GPU): antes se cortaba a los 5 y se pasaba a la CPU
+  while (now() - t0 < 300 || (now() - t0 < 900 && now() - last_growth < 60)) {
+    if (uint64_t sz = is_file(log_path) ? fsize(log_path) : 0; sz != last_size) {
+      last_size = sz;
+      last_growth = now();
+    }
     if (!proc_->running()) {
       std::string tail = read_text(log_path);
       tail = valid_utf8(tail.size() > 1500 ? tail.substr(tail.size() - 1500) : tail);
@@ -294,9 +365,10 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
       }
       proc_.reset();
       key_.clear();
-      if (!device.empty())
-        throw GpuFailed(cat("llama-server con ", starts_with(device, "HTP") ? "NPU" : "GPU", " (", device,
-                            ") termino al arrancar: ", uright(tail, 300)));
+      // escritorio con una sola GPU (sin --device): tambien se sigue en la CPU en vez de dejar sin respuesta
+      if (!device.empty() || (on_gpu && nx::env("NEXUS_RUNTIME_LLAMA_CPU").empty()))
+        throw GpuFailed(cat("llama-server con ", starts_with(device, "HTP") ? "NPU" : "GPU", " (",
+                            device.empty() ? var : device, ") termino al arrancar: ", uright(tail, 300)));
       throw std::runtime_error("llama-server termino al arrancar: " + uright(tail, 600));
     }
     if (http::get(cat("http://127.0.0.1:", port, "/health"), {}, 1).status == 200) {
@@ -321,9 +393,9 @@ void LlamaServerBackend::ensure_once(const std::string& model, const json& opts)
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
-  if (!device.empty()) {
+  if (!device.empty() || (on_gpu && nx::env("NEXUS_RUNTIME_LLAMA_CPU").empty())) {
     stop();
-    throw GpuFailed("llama-server con GPU (" + device + ") no respondio a tiempo");
+    throw GpuFailed("llama-server con GPU (" + (device.empty() ? var : device) + ") no respondio a tiempo");
   }
   throw std::runtime_error("llama-server no respondio a tiempo");
 }
@@ -357,8 +429,13 @@ void LlamaServerBackend::stream_chat(const json& messages, const std::string& mo
       key_.clear();
       dev = device_;
     }
-    if (!dev.empty()) {   // se cayo usando la GPU o la NPU: driver inestable, se sigue en la siguiente
-      o.update(gpu_failed("llama-server con GPU (" + dev + ") se detuvo durante una respuesta", dev));
+    if (!nx::env("NEXUS_RUNTIME_LLAMA_CPU").empty()) {
+      if (!dev.empty())   // movil: se cayo usando la GPU o la NPU (driver inestable), se sigue en la siguiente
+        o.update(gpu_failed("llama-server con GPU (" + dev + ") se detuvo durante una respuesta", dev));
+    } else if (truthy(o.value("gpu_layers", json(0)))) {
+      // escritorio: se reintenta igual (una caida suelta no es el driver); si vuelve a fallar al arrancar,
+      // ensure() pasa a la CPU un rato. Antes se marcaba la GPU como rota con la logica del movil
+      L.warning("llama-server se detuvo con la GPU", dev.empty() ? std::string() : " (" + dev + ")");
     }
     ensure(model, o);
     Opts o2{o, opts.on_reasoning};

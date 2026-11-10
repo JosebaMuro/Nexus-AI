@@ -610,6 +610,10 @@
         },
         "seed": {
           "type": "integer"
+        },
+        "asincrona": {
+          "type": "boolean",
+          "description": "true: no esperar; la imagen sale en la pantalla de difusion"
         }
       },
       "required": [
@@ -621,6 +625,29 @@
       "media"
     ],
     "timeout": 900
+  },
+  {
+    "name": "percepcion_buscar",
+    "description": "Busca por significado en lo que ha visto el motor de percepcion (camara o frames recibidos): descripciones, hora y enlace a cada frame",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "k": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    },
+    "risk": "low",
+    "permissions": [
+      "memory"
+    ],
+    "timeout": 60
   },
   {
     "name": "compose_music",

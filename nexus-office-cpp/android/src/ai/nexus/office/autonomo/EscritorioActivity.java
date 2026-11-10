@@ -855,6 +855,23 @@ public class EscritorioActivity extends Activity implements NexusVpnService.List
         public boolean speak(String text, float rate) {
             if (!ttsReady) return false;
             tts.setSpeechRate(rate > 0 ? rate : 1f);
+            tts.setPitch(1f);
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nexus");
+            return true;
+        }
+
+        // voz de un agente: velocidad, tono y, si se eligio, una voz concreta del motor del sistema
+        @JavascriptInterface
+        public boolean speakVoz(String text, float rate, float pitch, String voiceName) {
+            if (!ttsReady) return false;
+            tts.setSpeechRate(rate > 0 ? rate : 1f);
+            tts.setPitch(pitch > 0 ? pitch : 1f);
+            if (voiceName != null && !voiceName.isEmpty()) {
+                try {
+                    for (android.speech.tts.Voice v : tts.getVoices())
+                        if (v.getName().equals(voiceName)) { tts.setVoice(v); break; }
+                } catch (Exception e) { }
+            }
             tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nexus");
             return true;
         }

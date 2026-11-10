@@ -47,6 +47,11 @@ struct Raw {
   std::string body;
   std::string mime = "application/octet-stream";
   std::vector<std::pair<std::string, std::string>> headers;
+  // sin copiar: si vista no es nulo se envian esos bytes directamente (body se ignora) y retener los mantiene vivos
+  // hasta que la respuesta sale (un bloque del asignador zero-copy, por ejemplo)
+  const char* vista = nullptr;
+  size_t vista_len = 0;
+  std::shared_ptr<void> retener;
 };
 
 struct FileOut {
@@ -155,6 +160,8 @@ class App {
 void register_routes(App& app);   // routes.cpp
 // rutas_agentes.cpp: metricas por tarea, estilo de cada usuario y aprobaciones diferidas
 void register_agent_routes(App& app);
+// rutas_pipeline.cpp: capa de hardware (zero-copy, rings), percepcion, difusion asincrona y buffer de pantalla
+void register_pipeline_routes(App& app);
 std::string user_of(Ctx& c);                       // usuario final de la peticion ("" = el titular)
 std::string sanitize_user(const std::string& raw);
 json metricas(DB& db, double since, const std::string& user = "", const std::string& agent = "");

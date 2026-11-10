@@ -57,6 +57,13 @@ No se ha podido probar con dos GPU físicas; la elección se ha probado con la s
 | **LiteRT-LM** (2.5) | Motor de Google para modelos `.litertlm` | ✓ | OpenCL/Vulkan/Metal/WebGPU | Google Tensor, Snapdragon, Dimensity, Intel (con el *dispatch* del fabricante) | — |
 | **ONNX Runtime GenAI** (2.5) | Motor de Microsoft para carpetas ONNX con `genai_config.json` | ✓ | DirectML (cualquier GPU en Windows), CUDA | QNN (Snapdragon X en Windows ARM), OpenVINO, VitisAI | — |
 
+| **Difusión ONNX** (3.2) | Motor de imagen propio sobre ONNX Runtime para carpetas diffusers/optimum | ✓ | TensorRT, CUDA, ROCm, DirectML, CoreML, WebGPU | QNN (Hexagon), OpenVINO, NNAPI | CLIP/SigLIP |
+
+Desde la 3.2, LiteRT-LM, ONNX Runtime GenAI y Genie se cargan **dentro del proceso** de Agente IA; si uno se cae, se
+marca y la siguiente vez va en su proceso aparte (`motores.en_proceso: false` lo fuerza siempre). La **matriz por chip**
+(`GET /api/hal`, campo `matriz`) dice qué motor y proveedor se prueba primero en cada equipo. La difusión ONNX toma el
+proveedor de `media.difusion_proveedor` (`auto` = la matriz).
+
 llama-server va **incluido en los instaladores offline** con todas sus variantes: no se descarga nada al elegirlo.
 La opción **llama.cpp integrado** de la edición Python (llama-cpp-python dentro del programa) no existe en la edición
 C++: el selector la muestra como no disponible y llama-server, que es el mismo llama.cpp, hace su trabajo.
@@ -167,6 +174,29 @@ Si lo tienes instalado, Agente IA lo sigue usando cuando no hay otro motor.
   mitad. Si la sonda solo ve la NPU Hexagon (sin nombre de GPU), se usa igualmente.
 - **ARM** (Snapdragon X, Raspberry Pi, móviles): se cuentan todos los núcleos para los hilos. Antes un Snapdragon X
   de 12 núcleos se contaba como de 4.
+
+### Rendimiento y autoajuste adaptativo (3.2.2)
+- **Lote físico de la GPU** (`-ub`, `hardware` → perfil `llm.n_ubatch`): con una gráfica dedicada de 12 GB o más el
+  prompt se procesa en trozos de 1024 tokens (antes 512). El prompt de los agentes es lo que más tarda en la GPU.
+- **Caché de prompts en la RAM** (`--cache-ram`, perfil `llm.cache_ram_mb`): llama-server guarda por defecto hasta
+  8 GB de prompts en la RAM; ahora se limita al 10 % de la RAM (5 % en el móvil, la mitad si la memoria va justa),
+  entre 256 MB y 8 GB. En móviles y PC de 8-16 GB llenaba la memoria y el sistema tiraba del disco o mataba la app.
+- **Atención rápida**: los llama-server antiguos (opción `-fa` sin valor) la reciben cuando la caché KV va en 8 bits o
+  en CUDA/Metal; los recientes ya la ponen en `auto`.
+- **Embeddings**: el servidor de embeddings atiende 4 secuencias a la vez (2 en el móvil). Antes, con un solo slot,
+  cada fragmento de la Biblioteca RAG se calculaba de uno en uno.
+- **Monitor**: con AMD en Linux la VRAM se lee de sysfs (antes el autoajuste no veía la VRAM de AMD). nvidia-smi se
+  lanza en cada muestra solo mientras el modelo trabaja; en reposo, cada 10 s (deja a la gráfica bajar de consumo).
+- **Autoajuste adaptativo**, en cada arranque y sobre lo medido en la sesión anterior:
+  - VRAM por encima del 92 %: primero la caché KV en 8 bits, después el lote físico a la mitad, y solo entonces menos
+    capas. Así el modelo sigue entero en la GPU.
+  - RAM por encima del 92 % con el modelo en la CPU: caché KV en 8 bits antes de recortar el contexto.
+  - RAM por encima del 90 %: caché de prompts a la mitad; por debajo del 75 %, se recupera.
+  - Primera palabra lenta (más de 2,5 s de media) con la VRAM por debajo del 70 %: lote físico al doble (hasta 2048).
+  - Si llama-server metió el modelo entero en la GPU o la NPU (`offloaded N/N`), no se prueban hilos de la CPU (no
+    cambian la velocidad y cada prueba cambiaba la configuración).
+  - Con CPU/GPU/NPU elegido a mano (`hardware.accel`) el autoajuste también se aplica: antes se calculaba sobre el
+    perfil automático y se descartaba. Al cambiar el acelerador o la GPU sin reiniciar se conserva lo aprendido.
 
 ## Cómo se comprueba que acelera de verdad
 Tras arrancar llama-server, Agente IA lee su registro (`logs/llama-server.log`) y anota el dispositivo real: capas

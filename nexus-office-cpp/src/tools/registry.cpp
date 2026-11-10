@@ -359,9 +359,38 @@ void ToolRegistry::reload() {
     order_ = order;
     tools_ = found;
     this->missing = missing;
+    mezclar_externas();
   }
   L.info(order.size(), " herramientas cargadas (", community, " de comunidad)");
   if (!missing.empty()) L.info("Herramientas aun no portadas a la edicion C++: ", join(missing, ", "));
+}
+
+// quita las externas de antes y anade las actuales detras de las integradas y las de comunidad (con mu_ tomado)
+void ToolRegistry::mezclar_externas() {
+  std::vector<std::shared_ptr<ToolSpec>> order;
+  for (auto& s : order_)
+    if (!externas_.count(s->source)) order.push_back(s);
+    else tools_.erase(s->name);
+  for (auto& [origen, specs] : externas_)
+    for (auto& s : specs) {
+      if (!s || tools_.count(s->name)) continue;
+      s->enabled = !disabled_.count(s->name);
+      tools_[s->name] = s;
+      order.push_back(s);
+    }
+  order_ = std::move(order);
+}
+
+void ToolRegistry::set_externas(const std::string& origen, std::vector<std::shared_ptr<ToolSpec>> specs) {
+  std::lock_guard<std::recursive_mutex> lk(mu_);
+  for (auto& s : specs)
+    if (s) s->source = origen;
+  // las que ya no estan se quitan aunque la lista quede vacia
+  for (auto& s : order_)
+    if (s->source == origen) tools_.erase(s->name);
+  externas_[origen] = std::move(specs);
+  mezclar_externas();
+  if (externas_[origen].empty()) externas_.erase(origen);
 }
 
 std::shared_ptr<ToolSpec> ToolRegistry::get(const std::string& name) {
