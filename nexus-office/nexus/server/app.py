@@ -6,6 +6,7 @@ import json
 import re
 import secrets
 import shutil
+import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -310,6 +311,70 @@ def create_app(services: Services | None = None) -> FastAPI:
         s = S()
         return {"hardware": s.hw.to_dict(), "profile": s.profile, "tuning": s.tuning_reasons,
                 "tuning_state": hardware.load_state(), "history": hardware.load_history()[-15:]}
+
+    # ------------------------------------------------------------------ motores de inferencia por hardware
+    banco_estado: dict = {"en_marcha": False, "paso": "", "error": ""}
+
+    @app.get("/api/motores")
+    def motores_estado():
+        """Chip detectado, motores (instalados o por que no), modelos con su motor, el elegido y el banco medido."""
+        s = S()
+        est = s.llm.motor_estado()
+        est["activo"] = s.llm.status()
+        est["efectivo"] = {k: getattr(b, "efectivo", {}) for k, b in s.llm.backends.items() if getattr(b, "efectivo", None)}
+        est["banco_estado"] = dict(banco_estado)
+        est["config"] = {"motor": s.config.get("llm.motor", "auto"),
+                         "acelerador": s.config.get("llm.motor_acelerador", "")}
+        return est
+
+    @app.post("/api/motores/banco", dependencies=[Depends(require_admin)])
+    def motores_banco(solo: list[str] = Body(default=[], embed=True)):
+        """Mide en este equipo los tokens/s de cada motor instalado con sus modelos (en segundo plano)."""
+        from ..motores import banco
+        if banco_estado["en_marcha"]:
+            raise HTTPException(409, "El banco de motores ya esta midiendo")
+        s = S()
+
+        def trabajo():
+            banco_estado.update(en_marcha=True, error="", paso="empezando")
+            try:
+                banco.ejecutar(s.llm, s.models.catalog.list(), solo or None,
+                               progreso=lambda t: banco_estado.update(paso=t))
+                banco_estado["paso"] = "terminado"
+            except Exception as e:  # noqa: BLE001
+                banco_estado["error"] = str(e)
+            finally:
+                banco_estado["en_marcha"] = False
+                s.llm._avail_cache.clear()
+        threading.Thread(target=trabajo, daemon=True, name="banco-motores").start()
+        return {"ok": True}
+
+    @app.post("/api/motores/elegir", dependencies=[Depends(require_admin)])
+    def motores_elegir(motor: str = Body("auto", embed=True), acelerador: str = Body("", embed=True),
+                       modelo: str = Body("", embed=True)):
+        """Fija el motor (o «auto»), el acelerador (o automatico) y, si se da, el modelo activo."""
+        from .. import motores as mm
+        s = S()
+        if motor != "auto" and motor not in mm.MOTORES and motor != "llamaserver":
+            raise HTTPException(400, f"Motor desconocido: {motor}")
+        if modelo:
+            e = s.models.catalog.get(modelo)
+            if not e:
+                raise HTTPException(404, "Modelo no encontrado")
+            s.models.activate(modelo)
+        s.config.set("llm.motor", motor)
+        s.config.set("llm.motor_acelerador", acelerador)
+        for b in s.llm.backends.values():   # se vuelve a cargar con el acelerador nuevo
+            if hasattr(b, "efectivo") and hasattr(b, "stop"):
+                b.stop()
+        s.llm._avail_cache.clear()
+        return {"ok": True, "activo": s.llm.status()}
+
+    @app.post("/api/motores/caidas/olvidar", dependencies=[Depends(require_admin)])
+    def motores_olvidar():
+        from .. import motores as mm
+        mm.olvidar_caidas()
+        return {"ok": True}
 
     @app.get("/api/monitor")
     def monitor():

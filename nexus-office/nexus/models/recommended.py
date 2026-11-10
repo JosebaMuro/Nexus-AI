@@ -94,6 +94,58 @@ SECTOR: list[dict] = [
 ]
 RECOMMENDED += SECTOR
 
+# ---------------------------------------------------------------- modelos para los motores por hardware (nexus.motores)
+# Mismo uso que los GGUF pero en el formato del motor que mejor acelera cada chip. «carpeta» = solo esa subcarpeta del
+# repositorio (las exportaciones de ONNX traen una por proveedor); «repo_completo» = todo el repositorio.
+MOTOR_MODELS: list[dict] = [
+    {"id": "qwen2.5-1.5b-openvino", "kind": "llm", "name": "Qwen2.5 1.5B · OpenVINO int4 (NPU/GPU Intel)",
+     "params_b": 1.5, "repo": "OpenVINO/Qwen2.5-1.5B-Instruct-int4-ov", "repo_completo": True, "format": "openvino",
+     "motor": "openvino", "size_mb": 890, "min_ram_gb": 4,
+     "desc": "Para la NPU de los Intel Core Ultra (AI Boost) y las iGPU Xe/Arc con OpenVINO GenAI."},
+    {"id": "qwen3-8b-openvino", "kind": "llm", "name": "Qwen3 8B · OpenVINO int4 (GPU Intel Arc / NPU)",
+     "params_b": 8, "reasoning": True, "repo": "OpenVINO/Qwen3-8B-int4-ov", "repo_completo": True,
+     "format": "openvino", "motor": "openvino", "size_mb": 4700, "min_ram_gb": 16,
+     "desc": "Razonamiento hibrido; para Arc dedicada o Core Ultra con 16 GB o mas."},
+    {"id": "phi3.5-mini-openvino", "kind": "llm", "name": "Phi-3.5 mini · OpenVINO int4", "params_b": 3.8,
+     "repo": "OpenVINO/Phi-3.5-mini-instruct-int4-ov", "repo_completo": True, "format": "openvino",
+     "motor": "openvino", "size_mb": 2000, "min_ram_gb": 8,
+     "desc": "Probado por Intel en la NPU de Core Ultra: buen equilibrio de velocidad y calidad."},
+    {"id": "phi4-mini-onnx", "kind": "llm", "name": "Phi-4 mini · ONNX Runtime GenAI (CPU, QNN)", "params_b": 3.8,
+     "repo": "microsoft/Phi-4-mini-instruct-onnx", "carpeta": "cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4",
+     "format": "onnx-genai", "motor": "onnx", "size_mb": 2600, "min_ram_gb": 6,
+     "desc": "Exportacion int4 de Microsoft para CPU y NPU (QNN en Snapdragon X)."},
+    {"id": "phi4-mini-onnx-gpu", "kind": "llm", "name": "Phi-4 mini · ONNX Runtime GenAI (GPU: CUDA o DirectML)",
+     "params_b": 3.8, "repo": "microsoft/Phi-4-mini-instruct-onnx", "carpeta": "gpu/gpu-int4-rtn-block-32",
+     "format": "onnx-genai", "motor": "onnx", "size_mb": 2700, "min_ram_gb": 6, "min_vram_gb": 4,
+     "desc": "Exportacion int4 para GPU: CUDA en NVIDIA y DirectML en cualquier GPU de Windows (AMD, Intel)."},
+    {"id": "qwen2.5-1.5b-litert", "kind": "llm", "name": "Qwen2.5 1.5B · LiteRT-LM (movil: NPU, GPU o CPU)",
+     "params_b": 1.5, "repo": "litert-community/Qwen2.5-1.5B-Instruct",
+     "file": "Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.litertlm", "format": "litertlm", "motor": "litert",
+     "size_mb": 1600, "min_ram_gb": 4,
+     "desc": "LiteRT-LM de Google: GPU del movil y CPU con XNNPACK; contexto de 4096."},
+    {"id": "gemma4-e2b-litert", "kind": "llm", "name": "Gemma 4 E2B · LiteRT-LM (NPU de Tensor, Snapdragon, MediaTek)",
+     "params_b": 2, "repo": "litert-community/gemma-4-E2B-it-litert-lm", "file": "gemma-4-E2B-it.litertlm",
+     "format": "litertlm", "motor": "litert", "size_mb": 2700, "min_ram_gb": 4,
+     "desc": "Compilado para la NPU de los Pixel y de los moviles Snapdragon/Dimensity; GPU y CPU si no hay NPU."},
+    {"id": "qwen2.5-1.5b-mlc", "kind": "llm", "name": "Qwen2.5 1.5B · MLC LLM (GPU: CUDA, Vulkan, Metal, OpenCL)",
+     "params_b": 1.5, "repo": "mlc-ai/Qwen2.5-1.5B-Instruct-q4f16_1-MLC", "repo_completo": True, "format": "mlc",
+     "motor": "mlc", "size_mb": 830, "min_ram_gb": 4,
+     "desc": "q4f16 con kernels de TVM para la GPU de este equipo (Adreno y Mali por OpenCL, Radeon por Vulkan)."},
+    {"id": "qwen3-4b-mlc", "kind": "llm", "name": "Qwen3 4B · MLC LLM (GPU)", "params_b": 4, "reasoning": True,
+     "repo": "mlc-ai/Qwen3-4B-q4f16_1-MLC", "repo_completo": True, "format": "mlc", "motor": "mlc",
+     "size_mb": 2170, "min_ram_gb": 8, "min_vram_gb": 4, "desc": "Razonamiento hibrido en la GPU con MLC."},
+    {"id": "qwen3-4b-executorch", "kind": "llm", "name": "Qwen3 4B · ExecuTorch 8da4w (CPU ARM y x86, XNNPACK)",
+     "params_b": 4, "reasoning": True, "repo": "pytorch/Qwen3-4B-INT8-INT4", "file": "model.pte",
+     "extra": ["tokenizer.json", "tokenizer_config.json", "chat_template.jinja", "config.json"],
+     "format": "executorch", "motor": "executorch", "size_mb": 3300, "min_ram_gb": 8,
+     "desc": "PyTorch en el dispositivo: int8 dinamico + int4 en pesos con XNNPACK."},
+    {"id": "qwen2.5-1.5b-tensorrt", "kind": "llm", "name": "Qwen2.5 1.5B · TensorRT-LLM (NVIDIA)", "params_b": 1.5,
+     "repo": "Qwen/Qwen2.5-1.5B-Instruct", "repo_completo": True, "format": "tensorrt", "motor": "tensorrt",
+     "size_mb": 3100, "min_ram_gb": 8, "min_vram_gb": 6,
+     "desc": "Checkpoint de Hugging Face que TensorRT-LLM compila para tu GPU NVIDIA la primera vez (minutos)."},
+]
+RECOMMENDED += MOTOR_MODELS
+
 STT_MODELS = {"tiny": 75, "base": 145, "small": 465, "medium": 1500}   # faster-whisper (se descarga al usarse)
 
 
@@ -126,13 +178,24 @@ LEGACY_LLM = {"smolvlm-500m": "qwen3.5-0.8b", "qwen3-vl-2b": "qwen3.5-2b", "qwen
               "qwen3-vl-8b": "qwen3.5-9b"}
 
 
-def recommend(profile: dict, sector: dict[str, str] | None = None) -> list[dict]:
-    """Catalogo con su encaje en este hardware; ``sector`` = {id: motivo} sugeridos por el perfil de oficina."""
+def recommend(profile: dict, sector: dict[str, str] | None = None, motores_chip: list[str] | None = None) -> list[dict]:
+    """Catalogo con su encaje en este hardware; ``sector`` = {id: motivo} sugeridos por el perfil de oficina;
+    ``motores_chip`` = motores en el orden de la matriz para el chip de este equipo (nexus.motores.chips)."""
     from ..hardware.profiles import android
     sector = sector or {}
+    motores_chip = motores_chip or []
     out = []
     for r in RECOMMENDED:
         if android() and r["kind"] not in ANDROID_KINDS:
+            continue
+        if r.get("motor"):
+            # modelos de motor: solo los de motores que la matriz pone para este chip, por delante de llama.cpp
+            if r["motor"] not in motores_chip:
+                continue
+            item = {**r, "fit": fit(r, profile), "motor_rango": motores_chip.index(r["motor"])}
+            item["para_tu_chip"] = motores_chip.index(r["motor"]) < motores_chip.index("llamaserver") \
+                if "llamaserver" in motores_chip else True
+            out.append(item)
             continue
         if r.get("sector_only") and r["id"] not in sector:
             continue
@@ -140,7 +203,7 @@ def recommend(profile: dict, sector: dict[str, str] | None = None) -> list[dict]
         if r["id"] in sector:
             item["sector"] = sector[r["id"]]
         out.append(item)
-    general = [r for r in out if not r.get("sector_only") and not r.get("previous")]
+    general = [r for r in out if not r.get("sector_only") and not r.get("previous") and not r.get("motor")]
     # marcar el mejor "ideal" por tipo
     for kind in {r["kind"] for r in general}:
         ideal = [r for r in general if r["kind"] == kind and r["fit"] == "ideal"]
