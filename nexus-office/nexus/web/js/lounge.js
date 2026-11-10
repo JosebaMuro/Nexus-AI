@@ -1,4 +1,4 @@
-/* Nexus-Office — Salon virtual con estetica «Los Sims»: sala isometrica con suelo de madera, mesa de reuniones y
+/* Agente IA — Salon virtual con estetica «Los Sims»: sala isometrica con suelo de madera, mesa de reuniones y
  * personajes con su rombo verde encima. Llegan andando desde la puerta, respiran, parpadean, miran a quien
  * habla, asienten, gesticulan, teclean y beben cafe. Todo se anima por tiempo real con amortiguacion
  * (sin saltos de un estado a otro), asi que los movimientos son suaves aunque baje la tasa de fotogramas. */

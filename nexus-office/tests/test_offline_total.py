@@ -52,7 +52,8 @@ def test_optional_extras_install_when_their_wheels_are_bundled(tmp_path):
     assert wheelhouse.has_local(["torch-directml", "transformers", "scipy"], tmp_path)
     assert not wheelhouse.has_local(["torch"], tmp_path)
     assert "onnxruntime-qnn" in wheelhouse.extras_for("windows-x64")
-    assert "torch" in wheelhouse.extras_for("macos-arm64") and wheelhouse.extras_for("linux-x86_64") == wheelhouse.EXTRAS
+    assert "torch" in wheelhouse.extras_for("macos-arm64") and wheelhouse.extras_for("linux-x86_64")[:len(wheelhouse.EXTRAS)] == wheelhouse.EXTRAS
+    assert "onnxruntime-genai" in wheelhouse.extras_for("linux-x86_64")
 
 
 def test_cleanup_removes_unused_and_keeps_what_was_used(tmp_path, monkeypatch, bundled):

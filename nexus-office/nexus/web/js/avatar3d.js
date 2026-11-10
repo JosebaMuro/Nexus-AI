@@ -1,4 +1,4 @@
-/* Nexus-Office — avatares 3D (Three.js, sin dependencias externas en tiempo de ejecucion).
+/* Agente IA — avatares 3D (Three.js, sin dependencias externas en tiempo de ejecucion).
  *
  *  · "geisha": modelo procedural inspirado en una geisha gotica bajo un eclipse: maquillaje blanco con trazos
  *    negros y rojos, mono negro con kanzashi y cadenas de cuentas que se balancean, tatuajes tribales,

@@ -1,8 +1,9 @@
-# Nexus-Office
+# Agente IA (edición Python)
 
-> **Edición Python congelada (2026-10-28).** Todo el desarrollo sigue en C++, en [`nexus-office-cpp/`](../nexus-office-cpp/).
-> Este código se conserva tal cual como referencia y no recibe cambios; sus pruebas
-> (`.github/workflows/python.yml`) solo se lanzan a mano.
+> **Edición Python: la base nueva desde Agente IA 4.0.0 (2026-11-10).** Vuelve a ser la edición principal porque
+> elige el motor de inferencia que mejor acelera cada chip (ONNX Runtime GenAI, OpenVINO GenAI, LiteRT-LM, ExecuTorch,
+> MLC LLM, TensorRT-LLM, Qualcomm Genie y llama.cpp de respaldo): ver [docs/MOTORES.md](docs/MOTORES.md). La edición
+> C++ ([`nexus-office-cpp/`](../nexus-office-cpp/), 3.2.3) se conserva como referencia.
 
 **Agente de inteligencia artificial multimodal, portable y local**: conversa, ve imágenes, genera imágenes y música, habla y escucha, recuerda y aprende, coordina un equipo de agentes con herramientas supervisadas y se adapta automáticamente al hardware en el que se ejecuta. Todo en Python, con su propio intérprete completo dentro de la carpeta del proyecto.
 

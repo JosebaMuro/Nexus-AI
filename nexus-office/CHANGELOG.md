@@ -1,5 +1,24 @@
 # Cambios
 
+## Agente IA 4.0.0: motores de inferencia por hardware (2026-11-10)
+
+La edición Python vuelve a ser la base del proyecto (la C++ 3.2.3 queda como referencia).
+
+- **Capa de motores** (`nexus/motores/`): ONNX Runtime GenAI (CUDA, DirectML, QNN, OpenVINO, VitisAI, CPU), OpenVINO
+  GenAI (NPU Intel, iGPU, CPU), LiteRT-LM (NPU Tensor/Snapdragon/MediaTek, GPU, CPU), ExecuTorch, MLC LLM,
+  TensorRT-LLM, Qualcomm Genie (NPU Hexagon) y llama.cpp de respaldo. Cada motor prueba sus aceleradores en orden y
+  cae al siguiente si uno falla.
+- **Matriz por chip** (`chips.py`): Snapdragon, Tensor, MediaTek/Exynos, NVIDIA, AMD, Intel, Apple Silicon y solo CPU.
+- **Banco de motores**: `nexus motores banco` o *Sistema → Motores de inferencia → MEDIR* mide tokens/s y tiempo hasta
+  el primer token de cada modelo en su motor; desde entonces se usa el más rápido medido en el equipo.
+- **Caídas recordadas**: si un driver de NPU o GPU tumba el proceso, esa combinación no se vuelve a usar hasta
+  *OLVIDAR CAÍDAS*.
+- **Modelos recomendados por motor** (OpenVINO, ONNX, LiteRT-LM, MLC, ExecuTorch, TensorRT-LLM) e importación de
+  carpetas de cualquiera de esos formatos.
+- Ruedas offline de los motores en el paquete de cada plataforma y paso de setup según el chip.
+- Nombre visible «Agente IA» en toda la interfaz.
+- Prueba con modelos reales en Actions (`motores-python.yml`) y manual nuevo `docs/MOTORES.md`.
+
 ## Nexus-Office 2.2.0: la versión de referencia
 
 Une la 1.9, la 2.0 y lo hecho para la edición C++ 2.1 en Windows, Linux, macOS y Android, sin quitar nada de la

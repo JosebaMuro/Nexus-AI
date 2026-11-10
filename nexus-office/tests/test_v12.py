@@ -70,5 +70,8 @@ def test_requirements_reference_complete():
     for ref in ("python-build-standalone", "ggml-org/llama.cpp", "leejet/stable-diffusion.cpp", "faster-whisper", "piper-tts"):
         assert ref in text, ref
     for r in RECOMMENDED:
+        if not r.get("file"):   # modelos de carpeta (OpenVINO, ONNX, MLC...): se descargan con su repositorio
+            assert r["repo"] in text, r["id"]
+            continue
         assert r["file"] in text and r["repo"] in text, r["id"]
     assert text.count("# [") >= 10 and "NVIDIA" in text and "Apple Silicon" in text and "Termux" in text
