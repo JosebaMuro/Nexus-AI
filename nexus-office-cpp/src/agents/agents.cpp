@@ -354,9 +354,13 @@ json AgentManager::run(std::string agent_id, const std::string& text, const std:
       emit({{"type", "learned"}, {"items", items}});
     }
   }
-  json info = use_memory ? s.learner->build_context(text, spec.id, (int)s.config.num("memory.top_k", 6), user)
-                         : json{{"memories", json::array()}, {"examples", json::array()}, {"lessons", json::array()},
-                                {"facts", json::array()}, {"profile", json::object()}};
+  json info = json{{"memories", json::array()}, {"examples", json::array()}, {"lessons", json::array()},
+                   {"facts", json::array()}, {"profile", json::object()}};
+  if (use_memory) {   // la consulta al grafo queda grabada para que el avatar dibuje su recorrido
+    mem::Recorrido rec;
+    info = s.learner->build_context(text, spec.id, (int)s.config.num("memory.top_k", 6), user);
+    if (!rec.empty()) emit(rec.evento(spec.id, "contexto"));
+  }
   if (s.estilo && truthy(s.config.get("estilo.aplicar", true))) {
     try {
       info["estilo"] = s.estilo->prompt(user);

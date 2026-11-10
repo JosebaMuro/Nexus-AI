@@ -372,6 +372,7 @@ json knowledge_graph(const json& args, ToolContext& ctx) {
   auto& g = *ctx.services->graph;
   std::string entity = jstr(args, "entity");
   if (entity.empty()) return g.stats();
+  mem::Recorrido rec;   // el avatar ilumina lo que la herramienta va leyendo del grafo
   std::vector<std::string> own, own_notes;
   if (!ctx.agent.empty()) {
     own = g.for_agent(ctx.agent).facts_about({entity}, 12);
@@ -383,6 +384,7 @@ json knowledge_graph(const json& args, ToolContext& ctx) {
     for (auto& f : lst)
       if (seen.insert(f).second && facts.size() < 20) facts.push_back(f);
   for (auto& n : g.general().notes_about({entity}, 3)) own_notes.push_back(n);
+  if (!rec.empty() && ctx.emit) ctx.emit(rec.evento(ctx.agent, "herramienta"));
   return {{"facts", facts}, {"attributes", own_notes}};
 }
 

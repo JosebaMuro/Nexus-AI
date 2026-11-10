@@ -1,6 +1,7 @@
 /* Agente IA — avatar 3D construido a partir de su propio grafo de memoria y conocimiento.
  * Nucleo central = la propia IA; nodos = entidades aprendidas (color por tipo, tamano por peso);
- * aristas = relaciones. El nucleo late con la voz, los impulsos viajan por las aristas al pensar. */
+ * aristas = relaciones. El nucleo late con la voz, los impulsos viajan por las aristas al pensar y una luz
+ * recorre los nodos y aristas que lee cada consulta al grafo (trace). */
 (function () {
   const TYPE_COLORS = {
     self: "#00f0ff", persona: "#ff3df2", preferencia: "#ffb020", lugar: "#7cff6b", concepto: "#5ea8ff",
@@ -23,6 +24,7 @@
       this.nodes = []; this.links = []; this.byId = new Map();
       this.yaw = 0; this.pitch = -0.25; this.zoom = 1; this.state = "idle"; this.level = 0; this.levelS = 0;
       this.pulses = []; this.t = 0; this.hover = null; this.drag = null; this.accent = "#00f0ff";
+      this.trail = { nodes: new Map(), edges: new Map(), comets: [], ghosts: new Map(), flash: 0 };
       this.tip = document.createElement("div"); this.tip.className = "avatar-tip hidden";
       canvas.parentElement.appendChild(this.tip);
       this._bind(); this._resize();
@@ -98,6 +100,75 @@
         this.pulses.push({ l, p: 0, v: 0.008 + Math.random() * 0.02, back: Math.random() < 0.5 });
       }
     }
+    /* luz que recorre el grafo: cada consulta al grafo (contexto de la respuesta o herramienta) llega como
+     * {pasos: [{n: id} | {a, b, r}], nodos: {id: {name, type, weight, scope}}, agent}. Una luz sale del nucleo
+     * (o del ancla del agente) hacia los nodos que casan con la consulta, recorre sus aristas hasta el dato y
+     * una chispa vuelve al nucleo con lo recogido. Los nodos que no estan dibujados aparecen un momento. */
+    trace(ev) {
+      if (!ev || document.hidden || this.paused) return;
+      const pasos = (ev.pasos || []).slice(0, 120), info = ev.nodos || {}, tr = this.trail;
+      if (!pasos.length) return;
+      const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const core = this.nodes.find((n) => n.core);
+      const coreId = core ? core.id : "__core";
+      const anchor = ev.agent ? this.nodes.find((n) => n.type === "agente" && n.scope === ev.agent) : null;
+      const ensure = (id, near) => {   // nodo dibujado, o uno fugaz junto a su vecino
+        if (this.byId.has(id)) return this.byId.get(id);
+        if (tr.ghosts.has(id)) return tr.ghosts.get(id);
+        const d = info[id] || info[String(id)]; if (!d) return null;
+        const b = near && (this.byId.get(near) || tr.ghosts.get(near));
+        const u = { x: Math.random() - 0.5, y: Math.random() - 0.5, z: Math.random() - 0.5 }, m = Math.hypot(u.x, u.y, u.z) || 1;
+        const k = b ? 0.16 : 0.92, o = b || { x: 0, y: 0, z: 0 };
+        const g = { id, name: d.name || "?", type: d.type || "concepto", weight: d.weight || 1, scope: d.scope || "",
+          x: o.x + (u.x / m) * k, y: o.y + (u.y / m) * k, z: o.z + (u.z / m) * k, size: 3, ghost: true, born: this.t };
+        tr.ghosts.set(id, g); return g;
+      };
+      const lit = new Map();   // id -> frame en que la luz llega
+      let clock = this.t + 2;
+      const origin = anchor ? anchor.id : coreId;
+      if (anchor) { tr.comets.push({ from: coreId, to: anchor.id, start: clock, dur: 18, kind: "luz", node: anchor.id }); clock += 18; }
+      lit.set(origin, clock);
+      const reach = (id, near) => {   // la luz llega a una semilla desde el origen
+        if (lit.has(id)) return lit.get(id);
+        if (!ensure(id, near)) return null;
+        const at = clock; clock += 6;
+        tr.comets.push({ from: origin, to: id, start: at, dur: 26, kind: "luz", node: id });
+        lit.set(id, at + 26); return at + 26;
+      };
+      for (const p of pasos) {
+        if (tr.comets.length > 400) break;
+        if (p.n != null) { reach(p.n); continue; }
+        const a = reach(p.a); if (a == null) continue;
+        if (!ensure(p.b, p.a)) continue;
+        const start = Math.max(a, clock - 20); clock += 4;
+        tr.comets.push({ from: p.a, to: p.b, start, dur: 30, kind: "luz", node: p.b, edge: [p.a, p.b] });
+        if (!lit.has(p.b)) lit.set(p.b, start + 30);
+      }
+      if (reduce) {   // sin animaciones: se ilumina el recorrido de golpe
+        for (const c of tr.comets) { if (c.node != null) tr.nodes.set(c.node, 1); if (c.edge) tr.edges.set(c.edge.join(">"), { a: c.edge[0], b: c.edge[1], heat: 1 }); }
+        tr.comets = [];
+      }
+      this.coreId = coreId;
+    }
+    _trailStep() {   // llegadas, chispas de vuelta al nucleo y apagado lento
+      const tr = this.trail, t = this.t;
+      for (const c of tr.comets) {
+        if (c.done || t < c.start + c.dur) continue;
+        c.done = true;
+        if (c.kind === "chispa") { tr.flash = Math.min(1, tr.flash + 0.25); continue; }
+        if (c.node != null) {
+          tr.nodes.set(c.node, 1);
+          if (c.node !== this.coreId) tr.comets.push({ from: c.node, to: this.coreId, start: t, dur: 22, kind: "chispa" });
+        }
+        if (c.edge) tr.edges.set(c.edge.join(">"), { a: c.edge[0], b: c.edge[1], heat: 1 });
+      }
+      tr.comets = tr.comets.filter((c) => !c.done);
+      const busy = tr.comets.length > 0, fade = busy ? 0.0012 : 0.006;
+      for (const [k, h] of tr.nodes) { const v = h - fade; v <= 0 ? tr.nodes.delete(k) : tr.nodes.set(k, v); }
+      for (const [k, e] of tr.edges) { e.heat -= fade; if (e.heat <= 0) tr.edges.delete(k); }
+      for (const [k, g] of tr.ghosts) if (!busy && !tr.nodes.has(k) && t - g.born > 30) tr.ghosts.delete(k);
+      tr.flash *= 0.94;
+    }
     _project(n, cy, sy, cp, sp, R, cx0, cy0) {
       const x = n.x * cy - n.z * sy, z1 = n.x * sy + n.z * cy;
       const y = n.y * cp - z1 * sp, z = n.y * sp + z1 * cp;
@@ -116,9 +187,13 @@
       const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw), cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
       const P = new Map();
       for (const n of this.nodes) P.set(n.id, this._project(n, cy, sy, cp, sp, R, cx0, cy0));
+      const tr = this.trail;
+      this._trailStep();
+      for (const [id, g] of tr.ghosts) if (!P.has(id)) P.set(id, this._project(g, cy, sy, cp, sp, R, cx0, cy0));
+      if (!P.has("__core")) P.set("__core", { sx: cx0, sy: cy0, z: 0, s: 1 });
 
       // halo del nucleo
-      const coreR = R * (0.13 + 0.07 * this.levelS + 0.012 * Math.sin(this.t * 0.05));
+      const coreR = R * (0.13 + 0.07 * this.levelS + 0.012 * Math.sin(this.t * 0.05) + 0.05 * tr.flash);
       const g = ctx.createRadialGradient(cx0, cy0, 0, cx0, cy0, coreR * 4);
       g.addColorStop(0, rgba(st.color, 0.35)); g.addColorStop(1, rgba(st.color, 0));
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx0, cy0, coreR * 4, 0, 7); ctx.fill();
@@ -140,6 +215,30 @@
         ctx.fillStyle = rgba(st.color, 0.9); ctx.shadowColor = st.color; ctx.shadowBlur = 10;
         ctx.beginPath(); ctx.arc(x, y, 1.8, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
       }
+      // recorrido de la consulta: aristas iluminadas y luces en camino
+      const LUZ = "#ffe9a8";
+      for (const e of tr.edges.values()) {
+        const a = P.get(e.a), b = P.get(e.b); if (!a || !b) continue;
+        ctx.strokeStyle = rgba(LUZ, 0.15 + 0.7 * e.heat); ctx.lineWidth = 1 + 1.8 * e.heat;
+        ctx.shadowColor = LUZ; ctx.shadowBlur = 10 * e.heat;
+        ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      for (const c of tr.comets) {
+        if (this.t < c.start) continue;
+        const a = P.get(c.from), b = P.get(c.to); if (!a || !b) continue;
+        const k = Math.min(1, (this.t - c.start) / c.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+        const x = a.sx + (b.sx - a.sx) * e, y = a.sy + (b.sy - a.sy) * e;
+        const chispa = c.kind === "chispa", col = chispa ? "#ffcf4d" : LUZ, tail = Math.max(0, e - (chispa ? 0.18 : 0.35));
+        const tx = a.sx + (b.sx - a.sx) * tail, ty = a.sy + (b.sy - a.sy) * tail;
+        const grad = ctx.createLinearGradient(tx, ty, x, y);
+        grad.addColorStop(0, rgba(col, 0)); grad.addColorStop(1, rgba(col, chispa ? 0.7 : 0.95));
+        ctx.strokeStyle = grad; ctx.lineWidth = chispa ? 1.4 : 2.4; ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(x, y); ctx.stroke();
+        ctx.fillStyle = "#ffffff"; ctx.shadowColor = col; ctx.shadowBlur = chispa ? 8 : 18;
+        ctx.beginPath(); ctx.arc(x, y, chispa ? 1.6 : 2.8, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+      }
+      ctx.lineCap = "butt";
       // nodos (de atras hacia delante)
       const order = this.nodes.filter((n) => !n.core).sort((a, b) => P.get(b.id).z - P.get(a.id).z);
       let hover = null;
@@ -151,6 +250,19 @@
         ctx.fillStyle = rgba(col, Math.min(1, alpha)); ctx.shadowColor = col; ctx.shadowBlur = n.fresh && age < 120 ? 25 : 8;
         ctx.beginPath(); ctx.arc(p.sx, p.sy, Math.max(0.8, r), 0, 7); ctx.fill(); ctx.shadowBlur = 0;
         if (this.mouse && Math.hypot(this.mouse.x - p.sx, this.mouse.y - p.sy) < Math.max(6, r + 3)) hover = { n, p };
+      }
+      for (const g of tr.ghosts.values()) {   // nodos que no estaban dibujados: aparecen mientras la luz pasa
+        const p = P.get(g.id), col = TYPE_COLORS[g.type] || TYPE_COLORS.concepto, h = Math.max(0.35, tr.nodes.get(g.id) || 0);
+        ctx.fillStyle = rgba(col, 0.9 * h); ctx.shadowColor = col; ctx.shadowBlur = 10;
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, g.size * p.s, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+      }
+      const lits = [];
+      for (const [id, h] of tr.nodes) {
+        const p = P.get(id), n = this.byId.get(id) || tr.ghosts.get(id); if (!p || !n || n.core) continue;
+        const r = Math.max(3, (n.size || 3) * p.s) + 3 + 5 * (1 - h);
+        ctx.strokeStyle = rgba("#ffe9a8", 0.9 * h); ctx.lineWidth = 1.5; ctx.shadowColor = "#ffe9a8"; ctx.shadowBlur = 12 * h;
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, 7); ctx.stroke(); ctx.shadowBlur = 0;
+        lits.push({ n, p, h });
       }
       // anillos y nucleo
       ctx.save(); ctx.translate(cx0, cy0);
@@ -175,12 +287,15 @@
       }
       // etiquetas
       ctx.font = `600 ${this.opts.explore ? 12 : 10.5}px "JetBrains Mono", monospace`; ctx.textAlign = "center";
-      const labelled = order.filter((n) => P.get(n.id).z < 0.2).sort((a, b) => b.weight - a.weight).slice(0, this.opts.maxLabels);
+      const labelled = order.filter((n) => P.get(n.id).z < 0.2 && !tr.nodes.has(n.id)).sort((a, b) => b.weight - a.weight).slice(0, this.opts.maxLabels);
       for (const n of labelled) {
         const p = P.get(n.id);
         ctx.fillStyle = rgba("#d8f6ff", 0.25 + 0.6 * (1 - (p.z + 1) / 2));
         ctx.fillText(n.name.slice(0, 22), p.sx, p.sy - n.size * p.s - 6);
       }
+      lits.sort((a, b) => b.h - a.h).slice(0, this.opts.explore ? 24 : 8).forEach(({ n, p, h }) => {
+        ctx.fillStyle = rgba("#ffe9a8", Math.min(1, 0.2 + h)); ctx.fillText(String(n.name).slice(0, 22), p.sx, p.sy - (n.size || 3) * p.s - 8);
+      });
       if (hover !== this.hover) {
         this.hover = hover;
         if (hover) { this.tip.textContent = `${hover.n.name} · ${hover.n.type} · peso ${hover.n.weight.toFixed(1)}`; this.tip.classList.remove("hidden"); }

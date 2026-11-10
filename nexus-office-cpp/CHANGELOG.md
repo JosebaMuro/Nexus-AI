@@ -2,6 +2,16 @@
 
 ## Sin publicar
 
+### Una luz recorre el grafo del avatar
+- Cada consulta al grafo de conocimiento (el contexto de cada respuesta y la herramienta del grafo) se graba
+  (`mem::Recorrido`) y llega a la web como evento `graph_trace`: nodos semilla, aristas leídas y el dato recogido.
+- En el avatar de grafo y en el explorador del grafo, una luz sale del núcleo (o del ancla del agente), llega a los
+  nodos que casan con la consulta, recorre sus aristas hasta cada dato y una chispa vuelve al núcleo con lo recogido.
+  Los nodos y aristas recorridos quedan encendidos y con su nombre unos segundos; los que no estaban dibujados
+  aparecen un momento junto a su vecino.
+- En los avatares 3D, la luz salta entre las partículas de conocimiento que se han leído y las deja encendidas.
+- Con «reducir movimiento» del sistema se ilumina el recorrido sin animar la luz.
+
 ### Laboratorio de inversión: proyectos de bolsa con IA importados al agente
 - Etapas del dato a la inversión real (banco de datos, investigación, backtest, simulación y real asistida), con lo
   que hacen TradingAgents, ai-hedge-fund, FinRL, Qlib, freqtrade, QuantStats, PyPortfolioOpt y Lean, reescrito en

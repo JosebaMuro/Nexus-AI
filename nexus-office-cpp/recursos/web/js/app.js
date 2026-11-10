@@ -150,6 +150,7 @@
   const avatar = {
     setState: (s) => avatarImpl.setState(s), setLevel: (v) => { avatarImpl.setLevel(v); if (devSync.last === "speaking" || devSync.last === "listening") syncDevices(devSync.last, v); },
     update: (g) => { lastGraph = g; avatarImpl.update(g); }, setAccent: (c) => avatarImpl.setAccent(c),
+    trace: (e) => { try { avatarImpl.trace && avatarImpl.trace(e); } catch (err) { console.warn("trace", err); } },
     get level() { return avatarImpl.level || 0; },
   };
   window.NexusAvatarActual = () => avatarImpl;   // para diagnosticar el avatar desde la consola
@@ -302,6 +303,7 @@
       case "kg_job": if (window.NexusKG) NexusKG.onJob(e.job); break;
       case "done": if (current) { current.finish(e); current = null; } S.busy = false; setBusy(false); loadSessions(); if (Live.on) Live.done(e.text); break;
       case "error": if (current) { current.error(e.message); current = null; } S.busy = false; setBusy(false); setState("idle"); if (Live.on) Live.listen(); break;
+      case "graph_trace": avatar.trace(e); if (explorer) explorer.trace(e); break;   // luz que recorre lo consultado
       case "graph_update": loadGraph().catch(() => {}); if (explorer) loadScopes().catch(() => {}); break;
       case "approval_required": showApproval(e.approval); break;
       case "approval_resolved": $(`#ap-${e.id}`)?.remove(); break;

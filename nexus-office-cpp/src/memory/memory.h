@@ -9,6 +9,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -165,6 +166,32 @@ extern const json CATEGORIES;
 std::string gkey(const std::string& name);   // _key: tokens normalizados
 std::string clean_obj(const std::string& obj);
 bool is_stop(const std::string& key);
+
+// recorrido de una consulta por el grafo: que nodos y aristas se han leido y en que orden. Mientras un Recorrido
+// vive, las lecturas del grafo hechas en ese mismo hilo (facts_about, notes_about) se apuntan en el; el avatar lo
+// dibuja como una luz que recorre el grafo buscando y recogiendo la informacion.
+class Recorrido {
+ public:
+  explicit Recorrido(size_t max_pasos = 120);
+  ~Recorrido();
+  Recorrido(const Recorrido&) = delete;
+  Recorrido& operator=(const Recorrido&) = delete;
+  static Recorrido* actual();   // el del hilo actual (nullptr si no se esta grabando)
+  void nodo(const json& fila);  // fila con id y, si se tienen, name, type, weight, scope
+  void arista(long long desde, long long hasta, const std::string& rel, const json& destino = json());
+  bool empty() const { return pasos_.empty(); }
+  json to_json() const;          // {"pasos": [{"n": id} | {"a": desde, "b": hasta, "r": rel}], "nodos": {id: {...}}}
+  // evento para la web: {"type": "graph_trace", "agent", "origen", "pasos", "nodos"}
+  json evento(const std::string& agente, const std::string& origen) const;
+
+ private:
+  Recorrido* prev_;
+  size_t max_;
+  json pasos_ = json::array();
+  json nodos_ = json::object();
+  std::set<std::string> vistos_;
+  void conocer(const json& fila);
+};
 
 struct Triple {
   json t;   // {"s", "r", "o", "type", "category", "scope"?}

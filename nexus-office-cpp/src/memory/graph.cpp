@@ -374,21 +374,81 @@ static std::string marks(size_t n) {
   return m;
 }
 
+// ---------------------------------------------------------------- recorrido de las consultas
+static thread_local Recorrido* g_recorrido = nullptr;
+
+Recorrido::Recorrido(size_t max_pasos) : prev_(g_recorrido), max_(max_pasos) { g_recorrido = this; }
+Recorrido::~Recorrido() { g_recorrido = prev_; }
+Recorrido* Recorrido::actual() { return g_recorrido; }
+
+void Recorrido::conocer(const json& f) {
+  if (!f.contains("id") || f["id"].is_null()) return;
+  std::string id = f["id"].dump();
+  if (nodos_.contains(id)) return;
+  json n = json::object();
+  for (auto* k : {"name", "type", "weight", "scope"})
+    if (f.contains(k) && !f[k].is_null()) n[k] = f[k];
+  nodos_[id] = n;
+}
+
+void Recorrido::nodo(const json& f) {
+  if (!f.contains("id") || f["id"].is_null() || pasos_.size() >= max_) return;
+  conocer(f);
+  if (vistos_.insert("n" + f["id"].dump()).second) pasos_.push_back({{"n", f["id"]}});
+}
+
+void Recorrido::arista(long long desde, long long hasta, const std::string& rel, const json& destino) {
+  if (pasos_.size() >= max_) return;
+  if (destino.is_object()) conocer(destino);
+  std::string k = "a" + std::to_string(std::min(desde, hasta)) + ":" + std::to_string(std::max(desde, hasta)) + rel;
+  if (vistos_.insert(k).second) pasos_.push_back({{"a", desde}, {"b", hasta}, {"r", rel}});
+}
+
+json Recorrido::to_json() const { return {{"pasos", pasos_}, {"nodos", nodos_}}; }
+json Recorrido::evento(const std::string& agente, const std::string& origen) const {
+  json e = to_json();
+  e["type"] = "graph_trace";
+  e["agent"] = agente;
+  e["origen"] = origen;
+  return e;
+}
+
 std::vector<std::string> KnowledgeGraph::facts_about(const std::vector<std::string>& names, int limit) {
   auto keys = unique_keys(names);
   if (keys.empty()) return {};
+  Recorrido* rec = Recorrido::actual();
+  std::set<long long> semillas;
+  if (rec) {   // la luz parte de los nodos que casan con la consulta
+    Params q = {scope};
+    for (auto& k : keys) q.push_back(k);
+    for (auto& r : db.query("SELECT id, name, type, weight, scope FROM entities WHERE scope=? AND key IN (" +
+                                marks(keys.size()) + ") ORDER BY weight DESC",
+                            q)) {
+      semillas.insert(r["id"].get<long long>());
+      rec->nodo(r);
+    }
+  }
   Params p = {scope};
   for (auto& k : keys) p.push_back(k);
   p.push_back(scope);
   p.push_back(limit);
   auto rows = db.query(
       "WITH ids AS (SELECT id FROM entities WHERE scope=? AND key IN (" + marks(keys.size()) +
-          ")) SELECT a.name AS s, r.rel, b.name AS o, r.weight FROM relations r JOIN entities a ON a.id=r.src "
+          ")) SELECT a.name AS s, r.rel, b.name AS o, r.weight, a.id AS si, b.id AS oi, a.type AS st, b.type AS ot, "
+          "a.weight AS sw, b.weight AS ow, a.scope AS ss, b.scope AS os FROM relations r JOIN entities a ON a.id=r.src "
           "JOIN entities b ON b.id=r.dst WHERE (r.src IN ids OR r.dst IN ids) AND r.scope=? AND r.rel NOT IN "
           "('menciona','relacionado_con','conversa_con','delega_en','pide') ORDER BY r.weight DESC LIMIT ?",
       p);
   std::vector<std::string> out;
-  for (auto& r : rows) out.push_back(jstr(r, "s") + " " + replace_all(jstr(r, "rel"), "_", " ") + " " + jstr(r, "o"));
+  for (auto& r : rows) {
+    out.push_back(jstr(r, "s") + " " + replace_all(jstr(r, "rel"), "_", " ") + " " + jstr(r, "o"));
+    if (!rec) continue;
+    long long si = r["si"].get<long long>(), oi = r["oi"].get<long long>();
+    bool desde_s = semillas.count(si) > 0;   // de la semilla hacia el dato que se recoge
+    json otro = desde_s ? json{{"id", oi}, {"name", r["o"]}, {"type", r["ot"]}, {"weight", r["ow"]}, {"scope", r["os"]}}
+                        : json{{"id", si}, {"name", r["s"]}, {"type", r["st"]}, {"weight", r["sw"]}, {"scope", r["ss"]}};
+    rec->arista(desde_s ? si : oi, desde_s ? oi : si, jstr(r, "rel"), otro);
+  }
   return out;
 }
 
@@ -398,11 +458,15 @@ std::vector<std::string> KnowledgeGraph::notes_about(const std::vector<std::stri
   Params p = {scope};
   for (auto& k : keys) p.push_back(k);
   p.push_back(limit);
-  auto rows = db.query("SELECT name, note FROM entities WHERE scope=? AND key IN (" + marks(keys.size()) +
-                           ") AND note!='' ORDER BY weight DESC LIMIT ?",
+  auto rows = db.query("SELECT id, name, note, type, weight, scope FROM entities WHERE scope=? AND key IN (" +
+                           marks(keys.size()) + ") AND note!='' ORDER BY weight DESC LIMIT ?",
                        p);
   std::vector<std::string> out;
-  for (auto& r : rows) out.push_back(jstr(r, "name") + ": " + uleft(jstr(r, "note"), 300));
+  Recorrido* rec = Recorrido::actual();
+  for (auto& r : rows) {
+    out.push_back(jstr(r, "name") + ": " + uleft(jstr(r, "note"), 300));
+    if (rec) rec->nodo(r);
+  }
   return out;
 }
 
