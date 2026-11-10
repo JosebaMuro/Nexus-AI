@@ -1,4 +1,4 @@
-/* Nexus-Office — avatar 3D construido a partir de su propio grafo de memoria y conocimiento.
+/* Agente IA — avatar 3D construido a partir de su propio grafo de memoria y conocimiento.
  * Nucleo central = la propia IA; nodos = entidades aprendidas (color por tipo, tamano por peso);
  * aristas = relaciones. El nucleo late con la voz, los impulsos viajan por las aristas al pensar. */
 (function () {

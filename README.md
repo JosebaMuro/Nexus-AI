@@ -1,4 +1,4 @@
-# Nexus-Office 1.8.0
+# Agente IA 1.8.0
 
 Oficina para pymes con agentes por gremio, con mesa de bolsa e inversiones simulada. Instaladores 100 % portables (se instalan sin internet) para Windows, Linux (x86_64 y ARM64/Raspberry Pi), macOS y Android.
 

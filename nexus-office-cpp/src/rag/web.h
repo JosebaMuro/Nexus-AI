@@ -80,12 +80,13 @@ json replace_old(Services& s, const std::string& start, const std::string& prefi
 
 // ---------------------------------------------------------------- rastreos por lotes (crawl_jobs.py)
 namespace crawl_jobs {
-extern const char *RUNNING, *PAUSED, *DONE, *INTERRUPTED, *FAILED;
+extern const char *RUNNING, *PAUSED, *DONE, *INTERRUPTED, *FAILED, *QUEUED;
 std::pair<int, long long> auto_batch(const json& profile);
 json get(const std::string& id);   // null si no existe
 void save(json& job);
 json create(const std::string& url, long long max_pages, long long max_depth, const std::string& scope,
-            const std::string& agent, bool learn, int batch_pages, long long batch_chars);
+            const std::string& agent, bool learn, int batch_pages, long long batch_chars,
+            bool queued = false);
 json pub(const json& job);
 json list_jobs();
 bool remove(Services& s, const std::string& id, bool docs);
@@ -102,6 +103,14 @@ json run_batches(Services& s, json job, const Emit& emit, const std::function<bo
 json job_result(const json& job);
 std::shared_ptr<std::atomic<bool>> claim(const std::string& id);   // lanza std::runtime_error si ya esta en marcha
 void release(const std::string& id);
+// listas de URLs: una URL por linea (o separadas por espacios, comas o punto y coma); las lineas que empiezan por
+// # son comentarios y a un dominio sin esquema se le pone https://. Sin repetidas (crawler::normalize y sin la barra final); lo que
+// no es una URL va a invalid si se pasa
+std::vector<std::string> parse_url_list(const std::string& text, std::vector<std::string>* invalid = nullptr);
+// cola de rastreos: los trabajos creados con queued=true se rastrean en orden, de rag.crawl_parallel en
+// rag.crawl_parallel (1 por defecto, hasta 4), sin lanzarlos todos a la vez
+void enqueue(Services& s, const std::vector<std::string>& ids, const Emit& emit);
+size_t queued_count();
 }  // namespace crawl_jobs
 
 // ---------------------------------------------------------------- grafo multicapa del dominio (domain_kg.py)

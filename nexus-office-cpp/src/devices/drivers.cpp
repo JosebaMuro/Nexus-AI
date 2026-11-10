@@ -141,7 +141,7 @@ std::string script_linux(const std::set<std::string>& mods, bool brltty) {
     s += "systemctl stop brltty-udev.service brltty.service 2>/dev/null; "
          "systemctl mask brltty-udev.service 2>/dev/null; ln -sf /dev/null /etc/udev/rules.d/85-brltty.rules\n";
   s += "cat > /etc/udev/rules.d/60-nexus-office-serie.rules <<'EOF'\n"
-       "# Nexus-Office: puertos serie de las placas ESP y el Pico W para el usuario sin sudo\n";
+       "# Agente IA: puertos serie de las placas ESP y el Pico W para el usuario sin sudo\n";
   std::set<int> vids;
   for (auto& p : PUENTES) vids.insert(p.vid);
   for (int v : vids) s += "SUBSYSTEM==\"tty\", ATTRS{idVendor}==\"" + hex4(v) + "\", MODE=\"0666\"\n";

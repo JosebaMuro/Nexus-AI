@@ -16,6 +16,360 @@
   operaciones en tu cartera real, por confirmar con `CONFIRMO`. Bróker opcional Alpaca (empieza en papel).
 - Agente nuevo de la oficina de bolsa: **Laboratorio cuantitativo**, y 8 herramientas `bolsa_*` nuevas.
 
+## Agente IA 3.2.3-cpp
+
+Ubicación en tiempo real para los agentes. Incluye todo lo de la 3.2.2.
+
+### Ubicación en tiempo real
+- Herramienta **`ubicacion_actual`** para los agentes: coordenadas, precisión, altitud, velocidad y rumbo, lugar
+  guardado o ciudad de referencia cercana (tabla propia, sin internet) y distancia en línea recta hasta un lugar.
+- Fuentes: GPS del móvil en la app Android (permiso de ubicación, solo GPS y proveedor pasivo), gpsd, receptor GPS
+  USB/serie NMEA, servicio de ubicación de Windows (`Windows.Devices.Geolocation`), GeoClue2 en Linux (libdbus cargada
+  al ejecutar), navegador y posición fija. La posición no sale del equipo; no se comparte con la red COOP ni con
+  usuarios que no son el titular salvo que se active.
+- *Ajustes > Ubicación*: fuentes del equipo, consultar ahora, posición fija, receptor GPS y lugares guardados.
+- API `GET /api/ubicacion`, `POST /api/ubicacion/consultar` y `POST /api/ubicacion`; paquete «Ubicación» en el
+  asistente de agentes; el coordinador de la oficina la tiene; tarea dorada en el banco de evaluación.
+
+## Agente IA 3.2.2-cpp
+
+Revision del rendimiento de punta a punta (llama-server, embeddings, monitor y autoajuste) y la lista de URLs del
+rastreador web. Incluye todo lo de la 3.2.1.
+
+### Rendimiento
+- **Lote fisico de la GPU** (`-ub`): con una grafica dedicada de 12 GB o mas, el prompt se procesa en trozos de 1024
+  tokens en vez de 512 (el prompt de los agentes es lo que mas tarda en la GPU).
+- **Cache de prompts en la RAM** (`--cache-ram`): llama-server reservaba hasta 8 GB por defecto; ahora el 10 % de la
+  RAM (5 % en el movil), entre 256 MB y 8 GB. En moviles y PC de 8-16 GB llenaba la memoria.
+- **Atencion rapida** en los llama-server antiguos cuando la cache KV va en 8 bits o en CUDA/Metal (los recientes ya
+  la ponen en «auto»).
+- **Embeddings** con 4 secuencias a la vez (2 en el movil): indexar la Biblioteca RAG y la memoria ya no calcula los
+  fragmentos de uno en uno.
+- **Monitor**: VRAM de AMD en Linux desde sysfs (el autoajuste no la veia); nvidia-smi solo en cada muestra mientras
+  el modelo trabaja y cada 10 s en reposo (antes cada 2 s siempre, lanzando un proceso y despertando la grafica).
+
+### Autoajuste adaptativo
+- VRAM llena: primero la cache KV en 8 bits, luego el lote fisico a la mitad y solo entonces menos capas.
+- RAM llena con el modelo en la CPU: cache KV en 8 bits antes de recortar el contexto; la cache de prompts se reduce
+  con la RAM justa y se recupera con holgura.
+- Primera palabra lenta con VRAM libre: lote fisico al doble (hasta 2048).
+- Con el modelo entero en la GPU o la NPU (`offloaded N/N`) no se prueban hilos de la CPU.
+- Con CPU/GPU/NPU elegido a mano (`hardware.accel`) el autoajuste por fin se aplica (antes se descartaba), y al
+  cambiar el acelerador o la GPU sin reiniciar se conserva lo aprendido.
+- *Sistema* muestra el lote fisico, la cache KV y la cache de prompts del perfil.
+
+### Rastreador web: lista de URLs
+- **LISTA…** junto a **RASTREAR** en la *Biblioteca RAG*: pega varias URLs (una por línea, o separadas por comas) o
+  sube un `.txt`/CSV, y **RASTREAR LISTA** crea un rastreo por URL con el máximo de páginas, el ámbito y el destino de
+  arriba. Se quitan repetidas y comentarios (`#`), y a un dominio sin esquema se le pone `https://`.
+- **Cola de rastreos** (`src/rag/crawl_jobs.cpp`): los trabajos de la lista se rastrean en orden, de uno en uno
+  (`rag.crawl_parallel`, 1 a 4), en vez de arrancar todos a la vez. Estado nuevo *en cola*, con **SACAR DE LA COLA** y
+  **EMPEZAR YA** en el panel; la cola se recupera al reiniciar Agente IA.
+- API: `POST /api/rag/crawl` acepta `urls` (lista o texto) en lugar de `url` y devuelve `{list, jobs, invalid, parallel}`.
+
+## Agente IA 3.2.1-cpp
+
+Arreglos de velocidad con NPU y con graficas dedicadas (NVIDIA, AMD, Intel Arc). Se revisaron la eleccion del motor,
+las capas en la GPU, el autoajuste, las tareas de fondo y los runtimes que van en los instaladores.
+
+### Movil (NPU Hexagon y GPU)
+- El autoajuste ya no da **tres respuestas en la CPU a proposito** para comparar: si la NPU o la GPU van a 8 tokens/s
+  o mas (contando el prompt), se quedan sin probar la CPU. Antes cada comparacion recargaba el modelo dos veces.
+- La comparacion GPU/CPU mide la **respuesta entera** (prompt incluido) y la CPU solo gana si es un 15 % mas rapida.
+  Midiendo solo la generacion, la CPU podia ganar y el modelo se quedaba en la CPU para siempre, aunque la NPU
+  procese el prompt (lo que mas pesa con los agentes) muchas veces mas rapido.
+- Con el modelo en la NPU o la GPU **no se exploran los hilos**: cada cambio de hilos reiniciaba llama-server
+  (recarga del modelo y cache del prompt perdida) para una diferencia que con el modelo en el acelerador no existe.
+
+### Escritorio (NVIDIA, AMD, Intel)
+- Si la GPU falla al arrancar o llama-server se cae, se usa la CPU **solo 10 minutos** y despues se vuelve a probar
+  la GPU. Antes un fallo pasajero (VRAM ocupada por la imagen, un modelo grande que tardaba en cargar) dejaba todo
+  en la CPU hasta reiniciar Agente IA, y una caida con dos GPU marcaba la grafica como rota con la logica del movil.
+- Con una sola GPU, un fallo al arrancar en la GPU tambien pasa a la CPU (antes la peticion acababa en error).
+- La carga del modelo espera hasta 15 minutos mientras llama-server siga avanzando (antes cortaba a los 5 y pasaba a
+  la CPU con modelos grandes en discos lentos o al compilar por primera vez los kernels de la GPU).
+
+### Tareas de fondo
+- La **reunion automatica** de agentes (cada 8 tareas) espera a que el modelo este libre y cede el turno si llega una
+  peticion del usuario. Antes sus frases ocupaban la GPU o la NPU mientras el usuario esperaba.
+- El aprendizaje en segundo plano no razona (hasta 768 tokens menos por llamada).
+
+### Generador de video
+- **Mejorar imagenes**: niveles automaticos, color, nitidez y ampliacion hasta x2 de las imagenes mas pequenas que el
+  video (✨ en cada una, o todas a la vez; se puede deshacer y activar al anadir).
+- **Hojas con varias diapositivas**: al anadir una imagen con varias diapositivas en cuadricula se recortan y se ordenan
+  en orden de lectura (con Deshacer); ✂ en una imagen pide filas x columnas si no ve las separaciones.
+- El movimiento lento ya no deja una banda negra en el borde al empezar cada imagen.
+
+### Runtimes de la entrega
+- Windows x64: llama.cpp **CUDA 12** y **Vulkan** de la misma build oficial que el resto (los de la entrega anterior
+  eran una build de llama.cpp miles de versiones por detras, con un Vulkan mucho mas lento en AMD e Intel).
+- Linux x86_64: llama.cpp **Vulkan** oficial reciente (AMD sin el paquete ROCm, Intel Arc).
+- Paquete ONNX CUDA de Windows: faltaba `cublas64_12.dll` (la ultima nvidia-cublas-cu12 ya no publica wheel de
+  Windows) y el proveedor CUDA no cargaba: los modelos ONNX iban en la CPU. Se fija la 12.9.2.10.
+
+## Agente IA 3.2.0-cpp
+
+Motores del dossier de arquitectura y todo lo que mejora el rendimiento, en una sola version (incluye la 3.1.0, que
+no se publico aparte). Tambien MCP y un codificador de video en el navegador.
+
+### Motor de difusion propio sobre ONNX Runtime
+- Si el modelo de imagen es una carpeta ONNX (diffusers/optimum, como SD-Turbo), Agente IA ya no usa
+  stable-diffusion.cpp: genera **dentro del proceso** con ONNX Runtime (tokenizador CLIP, codificador de texto, bucle
+  UNet con el planificador Euler y VAE). Cada paso publica su vista previa directamente en el buffer de pantalla.
+- Cada red va en el proveedor del chip: **QNN** (NPU Hexagon de Snapdragon, con cache del contexto compilado),
+  **TensorRT/CUDA** (NVIDIA), **ROCm** o **DirectML** (AMD), **OpenVINO** (Intel NPU/GPU), **DirectML** (cualquier GPU
+  en Windows), **CoreML** (Apple), **NNAPI** o **XNNPACK** (Android sin QNN) y CPU. Si uno falla se prueba el siguiente.
+- Modelo nuevo en el catalogo: **SD-Turbo ONNX** (una imagen en 1 a 4 pasos).
+
+### Memoria del acelerador y nucleos grandes
+- El asignador zero-copy pide la memoria que mejor ve el acelerador: **dma-buf** (rpcmem de Qualcomm o
+  `/dev/dma_heap`), **CUDA pinned** o **memoria registrada de HIP**; si no hay, memoria compartida y, al final, normal.
+- Los hilos de calculo (difusion, percepcion, llama-server con `--cpu-mask`) se fijan a los **nucleos grandes** de
+  CPUs big.LITTLE, Intel con nucleos P/E y Apple (cpufreq, CPU sets de Windows y QoS de macOS).
+
+### Motores LLM dentro del proceso
+- LiteRT-LM, ONNX Runtime GenAI y Qualcomm Genie corren **dentro de Agente IA** (sin HTTP ni copias entre procesos).
+  Si uno se cae, queda marcado y la siguiente vez se usa en su proceso aparte, como antes (`motores.en_proceso`;
+  `POST /api/hal/caidas/olvidar` lo reintenta).
+- **Matriz de motores por chip** (Snapdragon, Tensor, Exynos, Dimensity, Apple, NVIDIA, AMD, Intel...): que motor y
+  proveedor va primero para el LLM, la difusion y la vision. En Modelos, la etiqueta «para tu chip».
+
+### Percepcion con CLIP y SigLIP
+- Codificador de vision en ONNX Runtime (**CLIP** o **SigLIP**, modelos nuevos en el catalogo): cada frame se guarda
+  tambien como vector de imagen y, con CLIP, la busqueda en lo percibido compara el texto directamente con las imagenes.
+
+### MCP (Model Context Protocol)
+- **Servidor**: las herramientas de Agente IA para otros programas (asistentes de escritorio, editores, otros agentes)
+  por `POST /mcp` o por stdio con `nexus-office mcp`. Cada llamada pasa por el supervisor: misma politica por riesgo,
+  aprobaciones y auditoria. Fuera del equipo, clave de red o token `mcp.token`.
+- **Cliente**: los agentes usan herramientas de servidores MCP externos (`mcp.servidores`, por stdio o HTTP), que
+  aparecen como `mcp_<servidor>_<nombre>` con su riesgo. Panel **MCP** en Herramientas.
+
+### Voces de los agentes
+- **Editor de voces** en Ajustes (la voz general) y en la configuracion de cada agente (su voz propia): motor (Piper,
+  voz del sistema o del navegador), modelo Piper y hablante, voz del sistema (y variante en espeak), voz del navegador,
+  velocidad, tono y volumen, con boton para probarla.
+- Para **reconocer quien habla**, cada agente sin voz propia usa la general con un tono distinto (y otro hablante si el
+  modelo Piper tiene varios); se puede desactivar. Funciona igual con Piper, la voz del sistema, el navegador y la app
+  de Android. `POST /api/voice/tts` acepta `agente` o `voz`; `GET /api/voice/voces` lista las voces del equipo.
+
+### Video con imagenes
+- En el Estudio, **Video con imagenes**: una serie de imagenes (o de la galeria) a un video WebM con fundidos, Ken
+  Burns o cortes, codificado en el navegador con WebCodecs (VP9/VP8 con aceleracion por hardware) y sin conexion.
+  Se descarga o se guarda en Agente IA (`POST /api/media/video/subir`).
+
+### Notas
+- La APK va firmada con la clave de siempre (Nexus): si tienes instalada la 3.0.0, desinstalala antes de instalar esta.
+
+## Agente IA 3.1.0-cpp
+
+Adapta el runtime al **dossier de arquitectura** (agente de IA unificado para dispositivos moviles): tres capas,
+compilacion cruzada con CMake 3.28, memoria zero-copy con colas lock-free y pipelines desacoplados de percepcion,
+razonamiento y difusion.
+
+### Tres capas
+- **Orquestacion multiagente** (`agents/`, `tools/`, `office/`), **motor core multiplataforma** (`llm/`, `memory/`,
+  `rag/`, `media/`, `pipeline/`, `server/`) y **abstraccion de hardware** (`hal/` nueva y `hardware/`). Las capas de
+  arriba piden memoria y colas a `hal/` y el dispositivo al perfil; ningun modulo de arriba conoce un SDK de acelerador.
+
+### Capa de abstraccion de hardware (`src/hal/`)
+- **Asignador zero-copy**: bloques alineados a pagina (lo que piden Vulkan, OpenCL, CUDA y el DMA de las NPU para usar
+  memoria de la CPU sin copiarla), respaldados por memoria compartida (memfd en Linux y Android, CreateFileMapping en
+  Windows) con su descriptor para pasarlos a un proceso hijo, referencias contadas y pools que reciclan bloques con una
+  lista libre lock-free. El ultimo frame de la pantalla sale por HTTP directamente del bloque, sin copiarlo.
+- **Buffers circulares lock-free** con atomicos: SPSC (un productor, un consumidor), MPMC (cola de Vyukov) y triple
+  buffer para el ultimo frame. Paso entre hilos medido: **~0,3 µs** de ida (`GET /api/hal/latencia`).
+
+### Pipelines desacoplados (`src/pipeline/`)
+- **Percepcion**: los frames (camara del Estudio o `POST /api/pipeline/frame`) entran por un ring y un hilo propio los
+  describe con la red de vision en la GPU/NPU (llama-server con mmproj) o, sin ella, con estadisticas y una huella
+  visual; descarta los repetidos y guarda descripcion, embedding y huella en la **base vectorial local** (`percepcion`).
+  El orquestador la consulta con la herramienta nueva `percepcion_buscar`.
+- **Orquestador -> difusion**: `generate_image` ya no genera dentro del agente: envia un **descriptor de trabajo** a la
+  cola del motor de difusion (con `asincrona: true` ni siquiera espera). El LLM sigue con su cuantizacion mixta (pesos
+  GGUF Q4_K y cache KV en q8_0).
+- **Difusion asincrona al buffer de pantalla**: un hilo propio ejecuta sd.cpp en la NPU/GPU; con sd-cli reciente publica
+  la vista previa de cada paso, y al final la imagen, en el buffer de pantalla (triple buffer). Un presentador avisa por
+  WebSocket y la interfaz lo pinta en un `OffscreenCanvas` dentro de un Web Worker, fuera del hilo principal.
+- En el Estudio: paneles **Pantalla de difusion** (encargar sin esperar, ver cada paso) y **Percepcion** (camara,
+  busqueda en lo percibido).
+
+### Compilacion cruzada
+- CMake 3.28 y `CMakePresets.json` con presets por plataforma: `linux` (ELF autocontenido), `windows` y `windows-dll`
+  (exe + `nexus_core.dll`, con el runtime de MSVC al lado), `android` y `android-so` (`libnexus_core.so` para la APK,
+  con `c++_shared`), y variantes con SDK.
+- Opciones `NEXUS_CORE_SHARED` y `NEXUS_SDK_CUDA|VULKAN|OPENCL|QNN|NNAPI|DIRECTML|OPENVINO`, que activan cada SDK de
+  hardware solo si se pide (por defecto ninguno: los motores se cargan en tiempo de ejecucion y el binario vale para
+  cualquier equipo). `GET /api/hal` dice que SDK lleva la compilacion y que artefacto es.
+- La entrega no cambia de forma: los paquetes siguen siendo el ejecutable autocontenido de siempre.
+
+## Agente IA 3.0.0-cpp
+
+Version mayor de **Agente IA** (antes Nexus-Office), con el nombre nuevo en todo lo que ve el usuario (interfaz, instaladores, manuales, web de
+descarga y app de Android, con identificador `ai.agente.ia`). Reune en una sola version estable todo lo de la 2.10.0 y la
+2.10.0-beta.1 (mas abajo): Laboratorio BETA de rendimiento y aspecto, imagenes con sd.cpp dentro de la APK, modelos
+GGUF ligeros, generador de video y un asistente de agentes nuevo, mas sencillo.
+
+### Asistente de configuración de agentes
+- **✨ Asistente de agentes** en *Agentes*: crea o ajusta un agente («empleado») en cuatro pasos sencillos (sustituye al de siete pasos de la 2.10.0): puesto
+  (más de 70 plantillas con buscador, o desde cero), forma de ser (trato, extensión, creatividad, iniciativa, idioma y
+  reglas propias con un clic), qué sabe y qué hace (especialidad, palabras clave, paquetes de herramientas en lenguaje
+  sencillo, equipo, modelo y memoria) y revisar (ficha, avisos e instrucciones redactadas, que se pueden retocar).
+- Al guardar recibe el conocimiento de su oficio en su grafo y se abre el chat para probarlo. Lo elegido se guarda
+  con el agente (`perfil`) para volver a abrir el asistente igual. El editor avanzado sigue disponible.
+- Nueva API `GET/POST /api/agents/asistente`; la ficha y el prompt se redactan en C++ (`src/agents/asistente.cpp`).
+
+## Agente IA 2.10.0-cpp
+
+Version estable de la 2.10 (incluye todo lo de la 2.10.0-beta.1, mas abajo). La APK (versionCode 21001) va firmada con
+la clave de Nexus, no con la de la beta.1: si tienes la beta.1 instalada, desinstalala antes de instalar esta.
+
+### Imagenes en el movil: sd.cpp viene dentro de la APK
+- **Arreglado: «no se puede instalar sd.cpp» en Snapdragon 8 (y en cualquier Android).** El instalador descargaba los
+  binarios de Linux de escritorio, que Android no deja ejecutar, y la generacion de imagenes caia siempre al compositor
+  de escenas. Ahora stable-diffusion.cpp se compila con el NDK y viaja en la APK en dos variantes: **GPU Vulkan**
+  (Adreno, Mali, Xclipse) y **CPU** (ARMv8.2 con dotprod). «Instalar» en el movil ya no descarga nada.
+- Si la GPU falla al generar (driver Vulkan inestable), se recuerda y la siguiente imagen va a la CPU sola.
+- Windows en ARM usa la version x64 de sd.cpp (emulada), que si existe.
+- Se usa `sd-server` junto a `sd-cli` en todas las plataformas (el modelo queda cargado entre imagenes).
+
+### Texto a imagen con modelos GGUF ligeros
+- Nuevos recomendados: **LCM SSD-1B Q4_K** (≈1 GB, 4 pasos, apto para movil) y **FLUX.2 klein 4B Q4_0** (calidad alta
+  con 12 GB de RAM o 6 GB de VRAM).
+- **TAESD**: decodificador diminuto que se usa solo cuando la VAE completa seria lenta (CPU, movil o poca VRAM);
+  la imagen sale varias veces mas rapido. SDXS, SD-Turbo y SDXL-Turbo lo traen como componente.
+- En el movil la pestaña *Recomendados* ya muestra los modelos de imagen marcados como aptos.
+
+### Generador de video
+- **Editor de video en HTML** (*Estudio → Generador de video* o `/static/video.html`): secuencia de imagenes con orden
+  por arrastre, duracion por imagen, transiciones (fundido, a negro, deslizar, zoom, cortinilla, corte), movimiento
+  Ken Burns, rotulos, tarjeta de titulo y musica. Exporta a MP4 o WebM en el propio navegador, sin conexion, y lo
+  guarda en la galeria.
+- **Herramienta `crear_video` para los agentes** (artista, diseñador grafico y comercial): monta un AVI (Motion JPEG)
+  con las ultimas imagenes generadas o las que se le indiquen, en 16:9, 9:16, 1:1 o 4:5, y deja el proyecto listo para
+  retocarlo en el editor. Tambien desde el boton *Video rapido con las ultimas* del Estudio (`POST /api/video/rapido`).
+
+### Asistente visual de agentes
+- **✨ Asistente de agentes** en la vista *Agentes*: siete pasos (plantilla, identidad, personalidad, conocimiento,
+  herramientas, equipo y revision) con diez plantillas de oficina, iconos y colores, controles de tono, creatividad e
+  iniciativa, rasgos, reglas, palabras clave, herramientas agrupadas por riesgo, modelo y delegacion. Una tarjeta
+  en vivo con un radar de personalidad muestra el resultado, y el prompt se genera solo (editable).
+- Cada agente tiene boton *Configurar* para abrirlo en el asistente; el editor avanzado sigue disponible.
+
+### APK
+- **Compartir con Agente IA** desde cualquier app (galeria, navegador, correo...): el texto va al chat y los ficheros a
+  la carpeta de trabajo de los agentes (`compartido/`), listos para leerlos, retocarlos o montar un video.
+
+## Agente IA 2.10.0-beta.1-cpp
+
+**Nuevo nombre: Agente IA** (antes Nexus-Office). Cambia el nombre visible en la interfaz, los instaladores, los manuales, la web
+de descarga y la app de Android. La APK tiene identificador nuevo (`ai.agente.ia`) y se firma con la clave «Agente IA», asi
+que se instala junto a la anterior y no encima. El codigo interno,
+los nombres de fichero y las rutas de instalacion no cambian, y los datos de las instalaciones de escritorio siguen sirviendo.
+
+Incluye todo lo de la 2.9.0 y la 2.8.0 (más abajo).
+
+Versión beta para probar el rendimiento y el aspecto. Detalles en [docs/BETA.md](docs/BETA.md).
+
+### Agentes más seguros, que aprenden tu estilo y se miden (ver docs/AGENTES.md)
+- **Contenido no fiable delimitado:** lo que traen la web, los documentos, los ficheros y la memoria entra al modelo
+  marcado como datos de terceros, con las etiquetas del protocolo neutralizadas y un detector de frases de inyección
+  (aviso en la interfaz).
+- **Contaminación por turno:** tras leer contenido externo, guardar en memoria, escribir ficheros, ejecutar código u
+  operar piden permiso, con el motivo en la tarjeta. `memory_save` en ese turno guarda con menos peso y sin crear pautas.
+- **Mínimo privilegio:** el agente generalista ya no tiene herramientas de alto riesgo (delega en el especialista);
+  las listas de herramientas admiten exclusiones (`"!web_fetch"`, `"!riesgo:high"`).
+- **Aprobaciones que se reanudan:** si nadie responde (10 minutos), la acción queda pendiente, sobrevive a un reinicio
+  y, al aprobarla, el agente termina la tarea.
+- **Estilo de cada usuario:** tono, formalidad, longitud, formato, nivel técnico, emojis y rutinas de trabajo
+  aprendidos de las correcciones, las valoraciones y la forma de escribir de cada persona (cada móvil emparejado o
+  nombre de perfil), visibles y ajustables en *Herramientas → Mi estilo*.
+- **Métricas clave por tarea:** tasa de éxito, latencia y coste, escalado humano, precisión de las herramientas y
+  adaptación al estilo, en *Herramientas → Métricas clave* y `GET /api/metricas`.
+- **Banco de evaluación:** `nexus-office evaluar` (rápido sin modelo, o `--completo` con el modelo activo y `--juez`).
+- **Privacidad con el Profesor online:** DNI/NIE, CIF, IBAN, tarjetas, correos y teléfonos se ocultan antes de enviar
+  y se restauran en la respuesta.
+
+### Medir el rendimiento
+- **Laboratorio BETA** en la interfaz: banco de pruebas de CPU (un hilo y todos), memoria, disco y la IA activa
+  (primer token y tokens/s), con historial y diferencia con la medición anterior; exportación a JSON e informe en
+  Markdown.
+- Cada petición a la API se cronometra por ruta (p50, p95, máximo y errores) y lleva la cabecera `Server-Timing`; la
+  interfaz compara el tiempo del núcleo con el que ve el navegador.
+- Métricas del navegador (FCP, LCP, CLS, INP aproximado, tareas largas, memoria JS) y prueba de fluidez con los
+  efectos completos y ligeros. HUD de rendimiento flotante con Alt+Mayús+P.
+- Nueva orden `nexus-office bench` (`--rondas`, `--tokens`, `--sin-llm`, `--solo-llm`, `--json`, `--informe`).
+
+### Evaluar el aspecto
+- Vista previa de los temas sin guardarlos (y recorrido automático), efectos visuales completos, ligeros o
+  automáticos por dispositivo, y disposición escritorio, tablet o móvil.
+- Galería de componentes y comprobación de contraste WCAG 2.1 (AA/AAA) del tema.
+- Opiniones de los probadores con nota por zona, guardadas con el tema, la pantalla y las métricas; resumen para el
+  administrador.
+- Etiqueta **BETA** junto al logo.
+## Nexus-Office 2.9.0-cpp
+
+### Igual que la edición Python, con todas las mejoras
+Se ha comparado la edición C++ con la edición Python en marcha, las dos a la vez en el mismo equipo: las 201 rutas
+de la API (mismas claves y tipos en las respuestas), las 12 vistas de la interfaz en capturas y los flujos de chat,
+imagen, música, memoria y dispositivos. La C++ tenía ya todo lo de la Python salvo dos cosas, que llegan ahora:
+- **Imagen sin modelo que sigue el prompt** (compositor de escenas, `src/media/scene.cpp`): sin modelo de imagen la
+  edición C++ dibujaba siempre un campo de flujo abstracto que solo cambiaba de color. Ahora, como en la Python, lee
+  el prompt en español o inglés y dibuja la hora (día, noche, atardecer, amanecer), el clima (lluvia, nieve, niebla,
+  tormenta), el lugar (mar, playa, montaña, bosque, ciudad, espacio, desierto, lago, jardín, campo) y los sujetos
+  (gato, perro, casa, castillo, árbol, flor, coche, barco, persona, astronauta, robot, faro...) con su color y
+  cuántos hay. El arte abstracto queda para cuando se pide («abstracto», «fractal», «patrón»), y si no reconoce nada
+  del prompt lo dice en la nota.
+- **APK con Snapdragon cuyo backend Hexagon se cae**: si la sonda de llama-server con la NPU no devuelve nada, se
+  repite sin la NPU (`GGML_HEXAGON_DEVICES=0`) para seguir usando la GPU, y la NPU queda marcada como no usable.
+  La GPU ya no abre sesión en el DSP cuando el modelo no va en la NPU.
+
+## Nexus-Office 2.8.0-cpp
+
+### Todos los motores por hardware, elegibles a mano
+- **NPU de Google Tensor (Pixel 6 a 10), Qualcomm Hexagon y MediaTek APU en Android**: LiteRT-LM se compila ahora
+  desde el código fuente junto con sus *dispatch* de NPU (antes la APK traía el de PyPI, que no los tiene y solo
+  usaba GPU y CPU), con las bibliotecas QNN HTP del QAIRT de Qualcomm y las de GPU de LiteRT-LM.
+- **Qualcomm Genie** (motor nuevo, `genie`): modelos de Qualcomm AI Hub (carpeta con `genie_config.json` y binarios
+  QNN) en la NPU Hexagon. Android, Windows ARM (Snapdragon X) y Linux ARM.
+- **NVIDIA en Linux ARM** (DGX Spark, GH200, Jetson Thor y Orin con JetPack 7): llama.cpp con CUDA 13 compilado para
+  ARM64, en el paquete aparte `Nexus-Office-runtime-cuda-…-linux-aarch64.zip`.
+- **ONNX Runtime GenAI con CUDA** (Windows x64 y Linux x64, paquete aparte `runtime-onnx-cuda`) y con **OpenVINO**
+  (NPU, GPU y CPU de Intel). Cada proveedor va en su carpeta y se carga el del acelerador elegido.
+- **Intel NPU con LiteRT-LM** (Windows x64, modelos `.litertlm` de Lunar Lake y Panther Lake) si el *dispatch* de
+  OpenVINO compila; **Huawei Ascend (CANN)**, **WebGPU** y **llama.cpp Hexagon en Windows ARM** cuando ggml-org
+  publica esas builds.
+- **Selector MOTOR Y ACELERADOR**: se elige el motor (llama-server, LiteRT-LM, ONNX Runtime GenAI, Genie) y, además
+  de CPU/GPU/NPU, el **runtime concreto**: CUDA 12/13, ROCm, Vulkan, SYCL, OpenVINO, Metal, OpenCL Adreno, Hexagon,
+  NPU de LiteRT-LM, CUDA/DirectML/QNN/OpenVINO/VitisAI de ONNX. Lo que no va en el paquete de ese sistema sale
+  desactivado con el motivo. Terminal: `nexus-office run --motor onnx --runtime cuda`.
+- Con un motor elegido a mano se usa su modelo activo aunque el modelo por defecto sea un GGUF.
+
+### Modelos: filtro por formato
+- En **Modelos**, filtro **Formato** (GGUF, ONNX, LiteRT-LM/Tensor, Genie, safetensors): filtra los instalados, la
+  búsqueda en Hugging Face (etiquetas `gguf`, `onnx`, `litert-lm`; Genie = repositorios de Qualcomm) y los ficheros
+  de cada repositorio, y dice con qué motor se ejecuta ese formato.
+- Las carpetas con `genie_config.json` se reconocen como modelos Genie al importarlas o descargarlas.
+- **Descarga en el formato que acelera en tu equipo**: nuevos recomendados Gemma 4 E2B en LiteRT-LM (baja el
+  `.litertlm` compilado para la NPU de tu chip: Tensor G5, SM8750, Dimensity, Intel; si no hay, el general para GPU
+  y CPU) y Phi-4 mini en ONNX (baja solo la carpeta de tu acelerador: CUDA, DirectML, QNN o CPU). Cada tarjeta dice
+  con qué motor va y si ese motor está en el paquete.
+- **Listo para usar al descargar**: un modelo de LiteRT-LM, ONNX o Genie se activa al terminar y deja configurado su
+  motor (`llm.engine`) con el acelerador automático (NPU, GPU, CPU). Al volver a un GGUF, el motor vuelve a
+  Automático. Los modelos de Genie salen de Qualcomm AI Hub (con cuenta): se descargan allí y se importan.
+- **Importar modelo con explorador de archivos**: *Modelos > Importar modelo local* tiene **Buscar archivo…** y
+  **Carpeta…**. En el escritorio abre el selector de archivos del sistema (Windows, macOS, Linux con zenity o kdialog);
+  desde el móvil, el acceso remoto o un servicio sin escritorio, un explorador propio que recorre las carpetas del
+  equipo de Nexus-Office (unidades, Descargas, almacenamiento y tarjetas SD de Android), marca los ficheros y carpetas
+  de modelo (GGUF, ONNX, LiteRT-LM, safetensors, ONNX GenAI, Genie) e importa al elegir.
+
+### Lo que no se puede incluir
+- NVIDIA TensorRT-LLM (motor compilado por modelo y tarjeta), AMD Ryzen AI NPU (su SDK no es redistribuible),
+  Apple Neural Engine (no hay motor de LLM abierto), Samsung Exynos NPU (SDK solo para socios), Hailo (driver del
+  kernel y modelos con cuenta) y Google Coral (8 MB de memoria).
+- Nada de esto se ha probado en NPU ni en GPU reales: solo en la CI y en el emulador de Android.
+
 ## Nexus-Office 2.7.0-cpp
 
 ### IA especializada para la bolsa

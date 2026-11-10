@@ -11,7 +11,7 @@ namespace nx::agents {
 namespace {
 const std::map<std::string, std::string> TOOL_SCENES = {   // herramienta -> escena del despacho
     {"web_search", "browsing"},  {"web_fetch", "browsing"},     {"rag_search", "reading"}, {"rag_import_url", "reading"},
-    {"generate_image", "drawing"}, {"imagen_editar", "drawing"}, {"gimp_script", "drawing"}, {"compose_music", "music"},
+    {"generate_image", "drawing"}, {"imagen_editar", "drawing"}, {"gimp_script", "drawing"}, {"compose_music", "music"}, {"crear_video", "drawing"},
     {"calculator", "calculating"}, {"python", "coding"},        {"run_code", "coding"},     {"delegate", "delegating"},
     {"graph_import", "reading"}, {"consultar_profesor", "phone"}};
 }  // namespace

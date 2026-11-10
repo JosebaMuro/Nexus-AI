@@ -131,3 +131,115 @@ TEST("rendimiento: los nucleos de ARM se cuentan todos") {
   CHECK(sys::cores_physical() >= 1 && sys::cores_physical() <= sys::cores_logical());
 #endif
 }
+
+// ---- 3.2.2: autoajuste de la cache KV, lote fisico, cache de prompts e hilos con el modelo entero en la GPU
+namespace {
+json estado_vacio() {
+  return json{{"overrides", json::object()}, {"thread_trials", json::object()}, {"log", json::array()}};
+}
+}  // namespace
+
+TEST("rendimiento 3.2.2: con la VRAM llena, cache KV en 8 bits antes de tocar capas o lote") {
+  json profile = {{"llm", {{"n_ctx", 8192}, {"max_ctx", 32768}, {"n_batch", 1024}, {"n_ubatch", 1024},
+                           {"gpu_layers", -1}, {"n_threads", 8}, {"kv_quant", ""}, {"cache_ram_mb", 2048}}},
+                  {"vram_gb", 12}};
+  json hist = json::array({{{"llm_calls", 5}, {"avg_tps", 30}, {"peak_ram_pct", 50}, {"peak_vram_pct", 96},
+                            {"clean_exit", true}, {"settings", {{"n_threads", 8}}}}});
+  auto t = hw::tune(profile, hist, false, 16, estado_vacio());
+  CHECK_EQ(jstr(t.profile["llm"], "kv_quant"), std::string("q8_0"));
+  CHECK_EQ((int)jnum(t.profile["llm"]["n_ubatch"]), 1024);
+  CHECK_EQ((int)jnum(t.profile["llm"]["gpu_layers"]), -1);
+  CHECK_EQ(jstr(t.state["overrides"], "kv_quant"), std::string("q8_0"));
+  // la sesion siguiente sigue llena: ahora baja el lote fisico
+  auto t2 = hw::tune(profile, hist, false, 16, t.state);
+  CHECK_EQ(jstr(t2.profile["llm"], "kv_quant"), std::string("q8_0"));
+  CHECK_EQ((int)jnum(t2.profile["llm"]["n_ubatch"]), 512);
+}
+
+TEST("rendimiento 3.2.2: primera palabra lenta con VRAM libre agranda el lote fisico") {
+  json profile = {{"llm", {{"n_ctx", 8192}, {"max_ctx", 32768}, {"n_batch", 512}, {"n_ubatch", 0}, {"gpu_layers", -1},
+                           {"n_threads", 8}, {"cache_ram_mb", 2048}}},
+                  {"vram_gb", 16}};
+  json hist = json::array({{{"llm_calls", 6}, {"avg_tps", 40}, {"avg_ttft", 4.0}, {"peak_ram_pct", 70},
+                            {"peak_vram_pct", 55}, {"clean_exit", true}, {"settings", {{"n_threads", 8}}}}});
+  auto t = hw::tune(profile, hist, false, 16, estado_vacio());
+  CHECK_EQ((int)jnum(t.profile["llm"]["n_ubatch"]), 1024);
+  CHECK((int)jnum(t.profile["llm"]["n_batch"]) >= 1024);
+  // en la CPU no
+  json cpu = profile;
+  cpu["llm"]["gpu_layers"] = 0;
+  auto t2 = hw::tune(cpu, hist, false, 16, estado_vacio());
+  CHECK_EQ((int)jnum(t2.profile["llm"]["n_ubatch"]), 0);
+}
+
+TEST("rendimiento 3.2.2: cache de prompts segun la RAM y el autoajuste la reduce y la recupera") {
+  CHECK(hw::cache_ram_for(16, false) >= 1536 && hw::cache_ram_for(16, false) <= 1664);
+  CHECK_EQ(hw::cache_ram_for(4, true), 256);
+  CHECK_EQ(hw::cache_ram_for(256, false), 8192);
+  json profile = {{"llm", {{"n_ctx", 4096}, {"max_ctx", 16384}, {"n_batch", 256}, {"gpu_layers", 0}, {"n_threads", 4},
+                           {"kv_quant", "q8_0"}, {"cache_ram_mb", 1024}}}};
+  json lleno = json::array({{{"llm_calls", 2}, {"avg_tps", 8}, {"peak_ram_pct", 91}, {"clean_exit", true},
+                             {"settings", {{"n_threads", 4}}}}});
+  auto t = hw::tune(profile, lleno, false, 4, estado_vacio());
+  CHECK_EQ((int)jnum(t.profile["llm"]["cache_ram_mb"]), 512);
+  json holgado = lleno;
+  holgado[0]["peak_ram_pct"] = 60;
+  auto t2 = hw::tune(profile, holgado, false, 4, t.state);
+  CHECK_EQ((int)jnum(t2.profile["llm"]["cache_ram_mb"]), 1024);
+}
+
+TEST("rendimiento 3.2.2: RAM llena en la CPU usa cache KV en 8 bits antes de recortar el contexto") {
+  json profile = {{"llm", {{"n_ctx", 8192}, {"max_ctx", 16384}, {"n_batch", 512}, {"gpu_layers", 0}, {"n_threads", 4},
+                           {"kv_quant", ""}}}};
+  json hist = json::array({{{"llm_calls", 2}, {"avg_tps", 8}, {"peak_ram_pct", 94}, {"clean_exit", true},
+                            {"settings", {{"n_threads", 4}}}}});
+  auto t = hw::tune(profile, hist, false, 4, estado_vacio());
+  CHECK_EQ(jstr(t.profile["llm"], "kv_quant"), std::string("q8_0"));
+  CHECK_EQ((int)jnum(t.profile["llm"]["n_ctx"]), 8192);
+  auto t2 = hw::tune(profile, hist, false, 4, t.state);   // sigue llena: ahora si se recorta
+  CHECK((int)jnum(t2.profile["llm"]["n_ctx"]) < 8192);
+}
+
+TEST("rendimiento 3.2.2: con el modelo entero en la GPU no se exploran hilos") {
+  json profile = {{"llm", {{"n_ctx", 8192}, {"max_ctx", 32768}, {"n_batch", 512}, {"gpu_layers", -1}, {"n_threads", 8}}},
+                  {"vram_gb", 12}};
+  json hist = json::array({{{"llm_calls", 5}, {"avg_tps", 50}, {"peak_ram_pct", 50}, {"peak_vram_pct", 80},
+                            {"clean_exit", true}, {"settings", {{"n_threads", 8}, {"offloaded", "33/33"}}}}});
+  json st = estado_vacio();
+  st["thread_trials"] = {{"8", {40}}};
+  auto t = hw::tune(profile, hist, false, 16, st);
+  CHECK_EQ((int)jnum(t.profile["llm"]["n_threads"]), 8);
+  CHECK(t.state["thread_trials"]["8"].size() == 1);   // no se apunta otra medida
+  // con capas en la CPU (20/33) si se exploran
+  hist[0]["settings"]["offloaded"] = "20/33";
+  auto t2 = hw::tune(profile, hist, false, 16, st);
+  CHECK((int)jnum(t2.profile["llm"]["n_threads"]) != 8);
+}
+
+TEST("rendimiento 3.2.2: opciones de llama-server segun su --help") {
+  std::string nuevo = "-ub, --ubatch-size N\n--cache-ram, -cram N\n-fa, --flash-attn [on|off|auto]\n";
+  auto a = llm::flags_rendimiento_para(nuevo, 1024, 512, true);
+  CHECK((a == std::vector<std::string>{"-ub", "1024", "--cache-ram", "512"}));
+  std::string viejo = "-ub, --ubatch-size N\n-fa, --flash-attn  enable Flash Attention (default: disabled)\n";
+  auto b = llm::flags_rendimiento_para(viejo, 0, 512, true);
+  CHECK((b == std::vector<std::string>{"-fa"}));
+  CHECK(llm::flags_rendimiento_para(viejo, 0, -1, false).empty());
+}
+
+TEST("rendimiento 3.2.2: VRAM de AMD en Linux desde sysfs") {
+  auto d = tmpdir("drm");
+  std::filesystem::create_directories(d / "card0" / "device");
+  std::filesystem::create_directories(d / "card1" / "device");
+  std::filesystem::create_directories(d / "card1-DP-1");
+  write_file(d / "card0" / "device" / "mem_info_vram_used", "268435456\n");
+  write_file(d / "card0" / "device" / "mem_info_vram_total", "536870912\n");   // integrada de 512 MB
+  write_file(d / "card1" / "device" / "mem_info_vram_used", "4294967296\n");
+  write_file(d / "card1" / "device" / "mem_info_vram_total", "17179869184\n");
+  write_file(d / "card1" / "device" / "gpu_busy_percent", "37\n");
+  json g = hw::amd_sysfs_vram(d);
+  CHECK_EQ(jnum(g["vram_pct"]), 25.0);
+  CHECK_EQ(jnum(g["vram_used_gb"]), 4.0);
+  CHECK_EQ(jnum(g["gpu_util"]), 37.0);
+  CHECK(hw::amd_sysfs_vram(d / "no-existe").empty());
+  std::filesystem::remove_all(d);
+}

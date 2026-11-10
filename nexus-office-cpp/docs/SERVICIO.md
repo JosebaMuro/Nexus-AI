@@ -1,33 +1,33 @@
-# Nexus-Office como servicio: arranque automático
+# Agente IA como servicio: arranque automático
 
-Instalado como **servicio**, Nexus-Office arranca solo al encender el equipo, sin ventana, y se reinicia si falla. Es lo
+Instalado como **servicio**, Agente IA arranca solo al encender el equipo, sin ventana, y se reinicia si falla. Es lo
 normal en el PC de la oficina: los móviles y los otros equipos lo encuentran siempre en marcha, aunque nadie haya
 abierto la aplicación.
 
-- Funciona en Windows, Linux (también Raspberry Pi), macOS y la app **Nexus-Office autónomo** (y en Termux si compilas
-  Nexus-Office allí desde el código fuente).
-- El servicio apunta a la carpeta donde está instalado Nexus-Office. La carpeta sigue siendo portable, pero si la mueves,
+- Funciona en Windows, Linux (también Raspberry Pi), macOS y la app **Agente IA autónomo** (y en Termux si compilas
+  Agente IA allí desde el código fuente).
+- El servicio apunta a la carpeta donde está instalado Agente IA. La carpeta sigue siendo portable, pero si la mueves,
   vuelve a instalar el servicio.
-- Con el servicio en marcha, el acceso directo, `start.bat` o `./start.sh` **no arrancan un segundo Nexus-Office**: ven que
+- Con el servicio en marcha, el acceso directo, `start.bat` o `./start.sh` **no arrancan un segundo Agente IA**: ven que
   ya responde y solo abren el navegador en `http://127.0.0.1:8775`.
 
 ## Cómo se activa
 
 | Desde | Cómo |
 |---|---|
-| Instalador de Windows (`.exe`) | Página *Opciones* → **Arrancar Nexus-Office como servicio al encender el equipo** y, si quieres, **Accesible desde la red local**. Solo ese paso pide permiso de administrador (UAC). Silencioso: `/S /SERVICIO /RED`. |
+| Instalador de Windows (`.exe`) | Página *Opciones* → **Arrancar Agente IA como servicio al encender el equipo** y, si quieres, **Accesible desde la red local**. Solo ese paso pide permiso de administrador (UAC). Silencioso: `/S /SERVICIO /RED`. |
 | Instalador de Linux (`.run`) o `install.sh` | `--servicio`, y `--red` para la red local. Crea un servicio de usuario. Ejecuta el `.run` sin `sudo` (con `sudo` se instalaría en la carpeta de root) y, si quieres el servicio del sistema, después `sudo <carpeta>/nexus-office servicio instalar`. |
 | Paquete `.deb` | `sudo nexus-office-c servicio instalar [--red]` |
 | macOS | `./install.sh --servicio [--red]`, o el comando de la terminal (abajo). |
 | `install.bat` | `--servicio`, y `--red` para la red local. |
 | Interfaz web | *Sistema → Arranque automático* → **INSTALAR SERVICIO** (modo administrador). Marca *accesible desde la red local* si lo vas a usar desde móviles u otros PC. |
-| App Nexus-Office autónomo | *Sistema → Arranque automático* → **ARRANCAR AL ENCENDER**. |
+| App Agente IA autónomo | *Sistema → Arranque automático* → **ARRANCAR AL ENCENDER**. |
 
 También con la variable de entorno `NEXUS_SERVICIO=1` en `install.sh` e `install.bat`.
 
 ## Comandos
 
-Desde la carpeta de Nexus-Office (`nexus-office.exe` en Windows, `./nexus-office` en Linux y macOS); con el `.deb`,
+Desde la carpeta de Agente IA (`nexus-office.exe` en Windows, `./nexus-office` en Linux y macOS); con el `.deb`,
 `nexus-office-c`; con AppImage o Flatpak, el propio paquete seguido de la orden.
 
 ```bash
@@ -35,7 +35,7 @@ nexus-office servicio instalar              # arranque automático, escuchando s
 nexus-office servicio instalar --red        # escucha en la red local (0.0.0.0): móviles y otros PC
 nexus-office servicio instalar --puerto 9000
 nexus-office servicio estado                # tipo, dónde está registrado y si responde
-nexus-office servicio quitar                # lo quita (Nexus-Office sigue instalado)
+nexus-office servicio quitar                # lo quita (Agente IA sigue instalado)
 ```
 
 Sin `--red` se usa la dirección de `server.host` de `data/config.yaml` (por defecto `127.0.0.1`), y sin `--puerto`,
@@ -48,12 +48,12 @@ dispositivos*). Ver [Acceso desde otros dispositivos](PLATAFORMAS.md#acceso-desd
 
 | Sistema | Con permisos de administrador | Sin permisos |
 |---|---|---|
-| **Windows** | Tarea programada «Nexus-Office» que arranca **con el equipo** (30 s después), con la cuenta SYSTEM. Con `--red`, abre el puerto en el Firewall de Windows (regla «Nexus-Office»). | Tarea programada que arranca **al iniciar sesión** tu usuario. Sin regla de firewall: con `--red`, Windows puede preguntar la primera vez si permite el acceso. |
+| **Windows** | Tarea programada «Agente IA» que arranca **con el equipo** (30 s después), con la cuenta SYSTEM. Con `--red`, abre el puerto en el Firewall de Windows (regla «Agente IA»). | Tarea programada que arranca **al iniciar sesión** tu usuario. Sin regla de firewall: con `--red`, Windows puede preguntar la primera vez si permite el acceso. |
 | **Linux con systemd** | Servicio del sistema `/etc/systemd/system/nexus-office.service`, que corre como el usuario dueño de la carpeta (o el que hizo `sudo`). Arranca con el equipo. | Servicio de usuario `~/.config/systemd/user/nexus-office.service` y `loginctl enable-linger`, para que arranque al encender sin iniciar sesión. Si *linger* no se puede activar, arranca al iniciar sesión. |
 | **Linux sin systemd** | Línea `@reboot` en el crontab. | Igual. |
 | **macOS** | LaunchDaemon `/Library/LaunchDaemons/ai.nexus.office.server.plist`: arranca con el equipo. | LaunchAgent `~/Library/LaunchAgents/ai.nexus.office.server.plist`: arranca al iniciar sesión. |
 | **Android (Termux)** | — | `termux-services` (`$PREFIX/var/service/nexus-office`) y, con la app **Termux:Boot**, arranque al encender el móvil (`~/.termux/boot/nexus-office.sh`, con *wake lock*). |
-| **App Nexus-Office autónomo** | — | El servicio en primer plano de la app se lanza al encender el móvil y tras actualizar la app. |
+| **App Agente IA autónomo** | — | El servicio en primer plano de la app se lanza al encender el móvil y tras actualizar la app. |
 
 En todos los casos:
 
@@ -65,19 +65,19 @@ En todos los casos:
 
 Para que el arranque sea **con el equipo** y no al iniciar sesión, instálalo con permisos de administrador: desde el
 instalador de Windows (pide UAC), con `sudo` en Linux y macOS, o desde una consola de administrador en Windows. Si lo
-instalas desde la interfaz web, se instala con los permisos de Nexus-Office (normalmente, los de tu usuario).
+instalas desde la interfaz web, se instala con los permisos de Agente IA (normalmente, los de tu usuario).
 
 Con el `.deb`, `sudo nexus-office-c servicio instalar` crea el servicio del sistema, que corre como tu usuario y usa tus
 datos de `~/.local/share/nexus-office`.
 
-## App Nexus-Office autónomo (Android)
+## App Agente IA autónomo (Android)
 
 En *Sistema → Arranque automático*, pulsa **ARRANCAR AL ENCENDER**. Desde entonces, al encender el móvil (después del
-primer desbloqueo) se inicia el servicio en primer plano de Nexus-Office, con su notificación, sin abrir la app. **DESACTIVAR**
-lo deja como antes: Nexus-Office arranca al abrir la app.
+primer desbloqueo) se inicia el servicio en primer plano de Agente IA, con su notificación, sin abrir la app. **DESACTIVAR**
+lo deja como antes: Agente IA arranca al abrir la app.
 
 Algunos fabricantes bloquean el arranque de las apps con el ahorro de batería extremo. Si no arranca solo, quita a
-Nexus-Office del ahorro de batería en los ajustes de Android. Si el sistema lo impide, Nexus-Office arranca igualmente al abrir la app.
+Agente IA del ahorro de batería en los ajustes de Android. Si el sistema lo impide, Agente IA arranca igualmente al abrir la app.
 
 ## Quitar el servicio
 
@@ -86,27 +86,27 @@ Nexus-Office del ahorro de batería en los ajustes de Android. Si el sistema lo 
   con ellos: `sudo` en Linux y macOS (`sudo nexus-office servicio quitar` con el `.deb`), o una consola de administrador
   en Windows.
 - **Desinstalar**: el desinstalador de Windows y la desinstalación del `.deb` (`sudo apt remove nexus-office`) quitan el
-  servicio antes de borrar Nexus-Office. En Windows, si la tarea era del sistema, pide permiso de administrador.
-- **App Nexus-Office autónomo**: **DESACTIVAR** en *Sistema → Arranque automático*.
+  servicio antes de borrar Agente IA. En Windows, si la tarea era del sistema, pide permiso de administrador.
+- **App Agente IA autónomo**: **DESACTIVAR** en *Sistema → Arranque automático*.
 
-Quitar el servicio no borra nada: Nexus-Office sigue instalado con sus datos y se abre como siempre.
+Quitar el servicio no borra nada: Agente IA sigue instalado con sus datos y se abre como siempre.
 
 ## Registro (logs)
 
 | Sistema | Dónde |
 |---|---|
-| Windows | `data\logs\servicio.log` (con `nexus-office-w.exe` no hay consola: la salida va a ese fichero, también al abrir Nexus-Office desde el acceso directo). |
+| Windows | `data\logs\servicio.log` (con `nexus-office-w.exe` no hay consola: la salida va a ese fichero, también al abrir Agente IA desde el acceso directo). |
 | macOS | `data/logs/servicio.log` |
 | Linux con systemd | `journalctl -u nexus-office` (del sistema) o `journalctl --user -u nexus-office` (de usuario). |
 | Linux con cron | `data/logs/servicio.log` |
 | Termux | `data/logs/current` (svlogd) |
 
-Con el `.deb`, `data/` es `~/.local/share/nexus-office-c`. El registro general de Nexus-Office (`data/logs/`) se ve también en
+Con el `.deb`, `data/` es `~/.local/share/nexus-office-c`. El registro general de Agente IA (`data/logs/`) se ve también en
 *Sistema → Registro* (modo administrador).
 
 ## Problemas frecuentes
 
-- **`servicio estado` dice «en marcha: no»**: mira el registro. Si Nexus-Office se acaba de instalar, el primer arranque
+- **`servicio estado` dice «en marcha: no»**: mira el registro. Si Agente IA se acaba de instalar, el primer arranque
   tarda más; en Windows, además, la tarea del sistema espera 30 s tras encender.
 - **Solo arranca al iniciar sesión**: se instaló sin permisos de administrador. Quítalo y vuelve a instalarlo con
   `sudo` (Linux, macOS) o desde una consola de administrador (Windows). En Linux, el aviso de `loginctl enable-linger`
@@ -114,14 +114,14 @@ Con el `.deb`, `data/` es `~/.local/share/nexus-office-c`. El registro general d
 - **«el servicio del sistema se quita con sudo»** o **«no se pudo borrar la tarea»**: el servicio se instaló con
   permisos de administrador; quítalo con ellos.
 - **Los móviles no conectan**: instálalo con `--red` (o marca *accesible desde la red local*), comprueba que usan la
-  clave de red y, en Windows sin permisos de administrador, permite Nexus-Office en el firewall.
-- **El puerto 8775 está ocupado**: otro programa (o un Nexus-Office abierto a mano antes de instalar el servicio) lo usa.
-  Cierra Nexus-Office desde *Sistema → Apagar Nexus-Office* o instala el servicio con `--puerto`.
+  clave de red y, en Windows sin permisos de administrador, permite Agente IA en el firewall.
+- **El puerto 8775 está ocupado**: otro programa (o un Agente IA abierto a mano antes de instalar el servicio) lo usa.
+  Cierra Agente IA desde *Sistema → Apagar Agente IA* o instala el servicio con `--puerto`.
 - **Has movido la carpeta**: el servicio sigue apuntando a la ruta antigua. `servicio quitar` y `servicio instalar`
   desde la carpeta nueva.
-- **Linux sin systemd ni cron** (algunos contenedores): no hay servicio posible; arranca Nexus-Office con
+- **Linux sin systemd ni cron** (algunos contenedores): no hay servicio posible; arranca Agente IA con
   `./start.sh --no-browser`.
 - **Termux dice que falta termux-services**: `pkg install termux-services`, reinicia Termux y `sv-enable nexus-office`.
   Para arrancar al encender el móvil, instala también la app Termux:Boot desde F‑Droid y ábrela una vez.
-- **Parar Nexus-Office sin quitar el servicio**: *Sistema → Apagar Nexus-Office* lo para hasta el siguiente arranque. Con el
+- **Parar Agente IA sin quitar el servicio**: *Sistema → Apagar Agente IA* lo para hasta el siguiente arranque. Con el
   servicio de Windows o de Linux, si se cierra con error se vuelve a lanzar solo.

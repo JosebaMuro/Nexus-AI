@@ -1,7 +1,7 @@
 // Multimedia (nexus/media y nexus/prompt_enhancer.py): imagen, musica, voz y mejorador de prompts.
 //
 // Edicion C++: la imagen neuronal usa stable-diffusion.cpp (sd-cli) igual que la version Python; sin modelo se
-// genera arte procedural. La voz usa Piper (ejecutable) o la voz del sistema, y el dictado whisper.cpp
+// el compositor de escenas dibuja lo que dice el prompt (media/scene.h). La voz usa Piper (ejecutable) o la voz del sistema, y el dictado whisper.cpp
 // (whisper-cli). La musica procedural es la misma teoria musical sintetizada en C++.
 #pragma once
 #include <atomic>
@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "core/config.h"
+#include "hal/zerocopy.h"
 #include "util/proc.h"
 #include "util/fs.h"
 #include "util/json.h"
@@ -29,6 +30,9 @@ class RuntimeManager;
 }
 namespace nx::llm {
 class LLMManager;
+}
+namespace nx::difusion {
+class Motor;
 }
 
 namespace nx::prompt {
@@ -82,9 +86,13 @@ class ImageEngine {
   ~ImageEngine();
   json model();
   json status();
+  // preview: vista previa de cada paso (PNG en un bloque del asignador, paso). Con el motor ONNX llega desde el bucle
+  // de la UNet; con sd-cli (--preview-path), desde un hilo que lo vigila. En los dos casos termina antes de que
+  // generate vuelva
+  using Preview = std::function<void(const hal::Buffer& png, int paso)>;
   json generate(const std::string& prompt, const std::string& negative = "", std::optional<int> size = std::nullopt,
                 std::optional<int> steps = std::nullopt, std::optional<long long> seed = std::nullopt,
-                const std::string& idea = "");
+                const std::string& idea = "", const Preview& preview = nullptr);
   std::string english(const std::string& prompt);
   static Canvas procedural(const std::string& prompt, long long seed, int size = 512);
   json analyze(const std::string& data, const std::string& question = "");
@@ -100,6 +108,15 @@ class ImageEngine {
              const std::string& negative, std::optional<int> size, std::optional<int> steps, long long seed,
              const fs::path& out);
   // sd-server con el modelo cargado: las imagenes siguientes no esperan a cargarlo (Flux o Z-Image tardan minutos)
+  // motor de difusion propio sobre ONNX Runtime para las carpetas ONNX (formato onnx-sd)
+  json onnx(const json& model, const std::string& prompt, const std::string& negative, std::optional<int> size,
+            std::optional<int> steps, long long seed, const fs::path& out);
+  std::unique_ptr<difusion::Motor> onnx_;
+  std::string onnx_key_;
+  std::set<std::string> onnx_fallidos_;   // proveedores que no cargaron este modelo
+  std::mutex onnx_mu_;
+  double onnx_used_ = 0;
+  json onnx_estado();
   bool via_server(const fs::path& exe, const SdPlan& plan, const json& req, const fs::path& out, std::string& why);
   void stop_server();
   const std::set<std::string>& flags_of(const fs::path& exe);
@@ -144,6 +161,9 @@ class MusicEngine {
 };
 
 // ---------------------------------------------------------------- voz
+// tono (cambia la frecuencia de muestreo de la cabecera) y volumen de un WAV de 16 bits
+void tono_volumen(std::string& wav, double tono, double volumen);
+
 class VoiceEngine {
  public:
   VoiceEngine(Config& config, models::Catalog& catalog, ProfileGetter profile, runtimes::RuntimeManager* rt = nullptr);
@@ -151,7 +171,13 @@ class VoiceEngine {
   std::vector<std::string> stt_engines();
   json info();
   // (wav, motor) o nullopt (la interfaz usa la voz del navegador)
-  std::optional<std::pair<std::string, std::string>> tts(const std::string& text, double rate = 1.0);
+  // voz: {motor, modelo, hablante, nombre, velocidad, tono, volumen}; vacia = la general (user.voz)
+  std::optional<std::pair<std::string, std::string>> tts(const std::string& text, double rate = 1.0, const json& voz = json::object());
+  // voz con la que habla un agente: la general con lo que cambie la suya; si no tiene voz propia y user.voz_distinta
+  // esta activo (por defecto), un tono y un hablante (o variante) derivados de su id para reconocer quien habla
+  // indice: su puesto entre los agentes (asi dos agentes nunca comparten tono); -1 = segun su id
+  json voz_de(const std::string& agente, const json& voz_agente, int indice = -1);
+  json voces();   // voces que hay en este equipo por motor (modelos Piper con sus hablantes y voces del sistema)
   json stt(const std::string& audio, const std::string& suffix = ".webm");
 
  private:
@@ -164,8 +190,9 @@ class VoiceEngine {
   std::optional<fs::path> piper_exe();
   std::optional<fs::path> whisper_exe();
   std::vector<std::string> system_tts_cmd();
-  std::string tts_piper(const std::string& text, double rate);
-  std::string tts_system(const std::string& text, double rate);
+  std::string tts_piper(const std::string& text, double rate, const json& voz);
+  std::string tts_system(const std::string& text, double rate, const json& voz);
+  json piper_hablantes(const json& modelo);
 };
 
 }  // namespace nx::media

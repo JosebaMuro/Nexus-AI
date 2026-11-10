@@ -112,7 +112,7 @@
     "params_b": 0.3,
     "repo": "concedo/sdxs-512-tinySDdistilled-GGUF",
     "file": "sdxs-512-tinySDdistilled_Q8_0.gguf",
-    "size_mb": 651,
+    "size_mb": 661,
     "min_ram_gb": 4,
     "baseline": true,
     "gen": {
@@ -120,7 +120,15 @@
       "cfg": 1.0,
       "size": 512
     },
-    "desc": "Destilado de un paso: segundos por imagen en CPU."
+    "desc": "Destilado de un paso: segundos por imagen en CPU y en el movil. Con TAESD (decodificador ligero) para que el movil no se atasque en la VAE.",
+    "componentes": {
+      "taesd": {
+        "repo": "madebyollin/taesd",
+        "file": "diffusion_pytorch_model.safetensors",
+        "size_mb": 10
+      }
+    },
+    "movil": true
   },
   {
     "id": "sd-turbo",
@@ -129,14 +137,71 @@
     "params_b": 0.9,
     "repo": "Green-Sky/SD-Turbo-GGUF",
     "file": "sd_turbo-f16-q8_0.gguf",
-    "size_mb": 1930,
+    "size_mb": 1940,
     "min_ram_gb": 8,
     "gen": {
       "steps": 2,
       "cfg": 1.0,
       "size": 512
     },
-    "desc": "Mas detalle; ~4x mas lento que SDXS en CPU."
+    "desc": "Mas detalle; ~4x mas lento que SDXS en CPU. Con TAESD en CPU y movil.",
+    "componentes": {
+      "taesd": {
+        "repo": "madebyollin/taesd",
+        "file": "diffusion_pytorch_model.safetensors",
+        "size_mb": 10
+      }
+    },
+    "movil": true
+  },
+  {
+    "id": "sd-turbo-onnx",
+    "kind": "image",
+    "name": "SD-Turbo ONNX · motor propio en NPU o GPU",
+    "params_b": 0.9,
+    "repo": "onnxruntime/sd-turbo",
+    "file": "model_index.json",
+    "formato": "onnx-sd",
+    "motor": "difusion-onnx",
+    "size_mb": 2600,
+    "min_ram_gb": 8,
+    "movil": true,
+    "gen": {
+      "steps": 2,
+      "cfg": 1.0,
+      "size": 512
+    },
+    "desc": "Carpeta ONNX (fp16) que corre dentro de Agente IA con ONNX Runtime: TensorRT o CUDA en NVIDIA, DirectML en Windows, ROCm en AMD, OpenVINO en Intel y QNN en la NPU Snapdragon. Cada paso se ve en la pantalla de difusión. Pensado para GPU o NPU; en un equipo solo con CPU va mejor SD-Turbo GGUF."
+  },
+  {
+    "id": "clip-vision-onnx",
+    "kind": "vision-embed",
+    "name": "CLIP ViT-B/32 · percepción (buscar por lo que se ve)",
+    "params_b": 0.15,
+    "repo": "Xenova/clip-vit-base-patch32",
+    "file": "preprocessor_config.json",
+    "formato": "onnx-vision",
+    "motor": "difusion-onnx",
+    "size_mb": 160,
+    "min_ram_gb": 2,
+    "movil": true,
+    "ficheros": ["config.json", "preprocessor_config.json", "special_tokens_map.json", "tokenizer_config.json", "vocab.json", "merges.txt", "onnx/vision_model_quantized.onnx", "onnx/text_model_quantized.onnx"],
+    "desc": "Codificador de imagen y texto para la percepción: cada frame de la cámara se guarda como vector y se busca escribiendo lo que se quiere encontrar («una persona con casco»). Corre con ONNX Runtime en la NPU, la GPU o la CPU."
+  },
+  {
+    "id": "siglip-vision-onnx",
+    "kind": "vision-embed",
+    "name": "SigLIP base · percepción (solo imagen)",
+    "params_b": 0.2,
+    "repo": "Xenova/siglip-base-patch16-224",
+    "file": "preprocessor_config.json",
+    "formato": "onnx-vision",
+    "motor": "difusion-onnx",
+    "size_mb": 100,
+    "min_ram_gb": 2,
+    "movil": true,
+    "ficheros": ["config.json", "preprocessor_config.json", "onnx/vision_model_quantized.onnx"],
+    "desc": "Codificador de imagen SigLIP (el del dossier) para la base vectorial de la percepción: agrupa y encuentra frames parecidos. La búsqueda por texto sigue por la descripción; para buscar escribiendo lo que se ve, usa CLIP."
   },
   {
     "id": "sdxl-turbo",
@@ -145,7 +210,7 @@
     "params_b": 3.5,
     "repo": "OlegSkutte/sdxl-turbo-GGUF",
     "file": "sd_xl_turbo_1.0.q8_0.gguf",
-    "size_mb": 3909,
+    "size_mb": 3919,
     "min_ram_gb": 16,
     "min_vram_gb": 6,
     "gen": {
@@ -153,7 +218,69 @@
       "cfg": 1.0,
       "size": 512
     },
-    "desc": "Para GPU de 6 GB o mas."
+    "desc": "Para GPU de 6 GB o mas.",
+    "componentes": {
+      "taesd": {
+        "repo": "madebyollin/taesdxl",
+        "file": "diffusion_pytorch_model.safetensors",
+        "size_mb": 10
+      }
+    }
+  },
+  {
+    "id": "lcm-ssd-1b",
+    "kind": "image",
+    "name": "LCM SSD-1B · calidad SDXL ligera (GGUF Q4)",
+    "params_b": 1.3,
+    "repo": "OlegSkutte/LCM-SSD-1B-GGUF",
+    "file": "lcm-ssd-1b.q4_k.gguf",
+    "size_mb": 2140,
+    "min_ram_gb": 6,
+    "movil": true,
+    "componentes": {
+      "taesd": {
+        "repo": "madebyollin/taesdxl",
+        "file": "diffusion_pytorch_model.safetensors",
+        "size_mb": 10
+      }
+    },
+    "gen": {
+      "steps": 4,
+      "cfg": 1.0,
+      "size": 768,
+      "sampler": "lcm"
+    },
+    "desc": "SDXL destilado (SSD-1B) con LCM: 4 pasos, VAE y CLIP dentro del GGUF. Mucho mas ligero que SDXL-Turbo; va en moviles de 8 GB y en CPU."
+  },
+  {
+    "id": "flux2-klein-4b",
+    "kind": "image",
+    "name": "FLUX.2-klein 4B · 4 pasos (GGUF Q4)",
+    "params_b": 4,
+    "repo": "leejet/FLUX.2-klein-4B-GGUF",
+    "file": "flux-2-klein-4b-Q4_0.gguf",
+    "size_mb": 5306,
+    "min_ram_gb": 12,
+    "min_vram_gb": 6,
+    "componentes": {
+      "vae": {
+        "repo": "Comfy-Org/Flux-2-Klein-4B",
+        "file": "split_files/vae/flux2-vae.safetensors",
+        "size_mb": 321
+      },
+      "llm": {
+        "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+        "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+        "size_mb": 2500
+      }
+    },
+    "gen": {
+      "steps": 4,
+      "cfg": 1.0,
+      "size": 1024,
+      "sampler": "euler"
+    },
+    "desc": "La familia Flux en ligero (licencia Apache 2.0): 4B en Q4 con su VAE y el codificador Qwen3-4B (el mismo de Z-Image). Calidad Flux en GPU de 6 GB o en CPU con 12 GB."
   },
   {
     "id": "z-image-turbo",
@@ -321,5 +448,31 @@
     "sector_only": true,
     "especialidad": "finanzas",
     "desc": "Qwen3.8 27B ajustado para finanzas, con visión: lee gráficos de cotización, informes y cuentas. Para GPU de 24 GB o equipos con 32 GB de RAM. Es apoyo al análisis, nunca asesoramiento."
+  },
+  {
+    "id": "gemma4-e2b-litert",
+    "kind": "llm",
+    "name": "Gemma 4 E2B · LiteRT-LM (NPU de Tensor, Snapdragon, MediaTek e Intel)",
+    "params_b": 2,
+    "repo": "litert-community/gemma-4-E2B-it-litert-lm",
+    "file": "gemma-4-E2B-it.litertlm",
+    "formato": "litertlm",
+    "motor": "litert",
+    "size_mb": 2700,
+    "min_ram_gb": 4,
+    "desc": "Formato .litertlm: se descarga la versión compilada para la NPU de tu chip (Pixel con Tensor, Snapdragon, Dimensity, Intel Lunar/Panther Lake) o, si no hay, la general para GPU y CPU."
+  },
+  {
+    "id": "phi4-mini-onnx",
+    "kind": "llm",
+    "name": "Phi-4 mini · ONNX Runtime GenAI (CUDA, DirectML, NPU o CPU)",
+    "params_b": 3.8,
+    "repo": "microsoft/Phi-4-mini-instruct-onnx",
+    "file": "cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4/genai_config.json",
+    "formato": "onnx-genai",
+    "motor": "onnx",
+    "size_mb": 2600,
+    "min_ram_gb": 6,
+    "desc": "Formato ONNX: se descarga la carpeta para tu acelerador (GPU con CUDA o DirectML, NPU QNN si la hay, o CPU)."
   }
 ]

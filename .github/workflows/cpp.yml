@@ -1,4 +1,4 @@
-name: Nexus-Office C++ (compilar y probar)
+name: Agente IA (compilar y probar)
 
 # Edicion C++ de Nexus-Office (nexus-office-cpp/): compila y pasa las pruebas en cada sistema nativo y prueba la
 # interfaz web en Chromium. Cada compilacion deja la carpeta instalada (ejecutable + nexus/) como artefacto
@@ -48,6 +48,19 @@ jobs:
         env:
           NEXUS_ONLINE_TESTS: "1"   # cotizaciones reales de la bolsa con la pila TLS de cada sistema
         run: ctest --test-dir build -C Release --output-on-failure --timeout 900
+      - name: Nucleo como biblioteca compartida (dossier de arquitectura)
+        if: matrix.target == 'linux-x86_64' || matrix.target == 'windows-x64'
+        shell: bash
+        run: |
+          # libnexus_core.so / nexus_core.dll junto al ejecutable: tiene que compilar, enlazar y arrancar
+          cmake -S nexus-office-cpp -B build-so -DCMAKE_BUILD_TYPE=Release -DNEXUS_CORE_SHARED=ON -DNEXUS_LTO=OFF \
+                -DNEXUS_BUILD_TESTS=OFF -DNEXUS_BUILD_TOOLS=OFF
+          # todos los objetivos (sin pruebas ni herramientas): en Windows tambien nexus-office-w, que instala el install
+          cmake --build build-so --config Release --parallel 4
+          cmake --install build-so --config Release --prefix out-so
+          ls -la out-so
+          EXE=out-so/nexus-office; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
+          "$EXE" --version
       - name: Instalar en una carpeta
         shell: bash
         run: |
@@ -89,6 +102,12 @@ jobs:
           for f in "$(dirname "$OG")"/libonnxruntime.*.dylib; do [ -e "$f" ] && cp "$f" "$(dirname "$OG")/libonnxruntime.dylib"; done
           export ORT_LIB_PATH=$(ls "$(dirname "$OG")"/libonnxruntime.so.1 "$(dirname "$OG")"/libonnxruntime.dylib 2>/dev/null | head -1)
           probar onnx "$OG" mot/m
+          # motor de difusion propio y codificador de vision con el ONNX Runtime real (redes pequenas de prueba)
+          ORT=$(find mot/ox -path '*capi*' -type f \( -name 'libonnxruntime.so*' -o -name 'onnxruntime.dll' -o -name 'libonnxruntime*.dylib' \) | grep -v providers | head -1)
+          T=build/nexus-tests; [ -f build/Release/nexus-tests.exe ] && T=build/Release/nexus-tests.exe; [ -f "$T.exe" ] && T="$T.exe"
+          ORT="$PWD/$ORT"; command -v cygpath >/dev/null && ORT=$(cygpath -m "$ORT")
+          { NEXUS_ORT_LIB="$ORT" "$T" "difusion" && NEXUS_ORT_LIB="$ORT" "$T" "vision:"; } 2>&1 | tee mot/difusion.txt
+          if grep -q "sin ONNX Runtime" mot/difusion.txt; then echo "::error::el motor de difusion no cargo ONNX Runtime"; exit 1; fi
       - name: Herramienta de construccion
         shell: bash
         run: |
@@ -118,6 +137,7 @@ jobs:
 
   interfaz:
     needs: compilar
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -134,6 +154,8 @@ jobs:
         run: |
           npm i --no-save playwright@1.48.2 >/dev/null && npx playwright install --with-deps chromium >/dev/null
           mkdir -p capturas && node nexus-office-cpp/tests/ui_smoke.js http://127.0.0.1:8790 capturas
+      - name: Generador de video (separar diapositivas y mejorar imagenes)
+        run: node nexus-office-cpp/tests/video_imagen.js
       - name: Registros
         if: always()
         run: tail -50 cpp.log

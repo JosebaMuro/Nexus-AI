@@ -1,6 +1,7 @@
 // Herramientas (nexus/tools): registro modular (integradas y de la comunidad), supervision con politica por riesgo,
 // aprobaciones humanas, limites de tiempo, auditoria y propuestas de herramientas hechas por los agentes.
 #pragma once
+#include <algorithm>
 #include <condition_variable>
 #include <functional>
 #include <map>
@@ -28,6 +29,25 @@ extern const std::vector<std::string> PERMISSIONS;
 
 using Emit = std::function<void(const json&)>;
 
+// lo que pasa en un turno (compartido con las subtareas delegadas): metricas y contaminacion por contenido no fiable
+struct TurnStats {
+  std::mutex mu;
+  bool tainted = false;            // el turno ya leyo contenido de terceros (web, documentos, ficheros, memoria)
+  std::vector<std::string> taint_sources;
+  int calls = 0, errors = 0, repaired = 0, invalid = 0, unknown = 0;
+  int approvals = 0, approvals_denied = 0, escalated_by_taint = 0, injection_flags = 0;
+  std::set<std::string> preapproved;   // llamadas ya aprobadas (reanudacion de una aprobacion pendiente)
+  void taint(const std::string& tool) {
+    std::lock_guard<std::mutex> lk(mu);
+    tainted = true;
+    if (std::find(taint_sources.begin(), taint_sources.end(), tool) == taint_sources.end()) taint_sources.push_back(tool);
+  }
+  bool is_tainted() {
+    std::lock_guard<std::mutex> lk(mu);
+    return tainted;
+  }
+};
+
 struct ToolContext {
   Services* services = nullptr;
   std::string agent;
@@ -35,6 +55,8 @@ struct ToolContext {
   Emit emit;
   bool remote = false;   // peticion originada por otro nodo cooperativo
   int depth = 0;         // profundidad de delegacion entre agentes
+  std::string user;      // usuario final (dispositivo emparejado o perfil elegido; "" = el titular)
+  std::shared_ptr<TurnStats> stats;
 };
 
 // error de una herramienta: el supervisor lo devuelve como {"error": "Tipo: mensaje"}
@@ -68,6 +90,8 @@ struct Register {
 
 // ruta dentro de data/sandbox (ToolError si se sale)
 fs::path sandbox_safe(const std::string& rel);
+// video a partir de imagenes (herramienta crear_video; tambien la usa el Estudio)
+json crear_video(const json& args, ToolContext& ctx);
 
 // Python del sistema para las herramientas de la comunidad y python_exec ("" si no hay)
 std::vector<std::string> python_cmd();
@@ -83,6 +107,8 @@ class ToolRegistry {
   std::vector<std::shared_ptr<ToolSpec>> for_agent(const std::vector<std::string>& allowed);
   std::vector<std::shared_ptr<ToolSpec>> all();
   json list();
+  // herramientas que vienen de fuera (servidores MCP): se conservan al recargar y nunca sustituyen a una integrada
+  void set_externas(const std::string& origen, std::vector<std::shared_ptr<ToolSpec>> specs);
   std::vector<std::string> missing;   // manifiestos de la version Python sin funcion portada
 
  private:
@@ -91,6 +117,8 @@ class ToolRegistry {
   std::vector<std::shared_ptr<ToolSpec>> order_;
   std::map<std::string, std::shared_ptr<ToolSpec>> tools_;
   std::set<std::string> disabled_;
+  std::map<std::string, std::vector<std::shared_ptr<ToolSpec>>> externas_;
+  void mezclar_externas();
   fs::path disabled_file() const;
   std::shared_ptr<ToolSpec> spec(const json& m, const std::string& source, const std::string& path, ToolFn func);
 };
@@ -100,12 +128,16 @@ json read_manifest(const fs::path& path);   // TOOL = {...} sin ejecutar el codi
 class Supervisor {
  public:
   Supervisor(ToolRegistry& registry, DB& db, Config& config);
-  std::string decision_for(const std::string& risk, bool remote);
+  std::string decision_for(const std::string& risk, bool remote, bool tainted = false);
   bool resolve(const std::string& pid, bool approve, bool is_admin);
   json list_pending();
   json execute(std::string name, json args, ToolContext& ctx);
   json run_sandboxed(const fs::path& path, const json& args, double timeout);
   json audit_log(int limit = 100);
+  // aprobaciones que caducaron o sobrevivieron a un reinicio: se reanudan al aprobarlas (ver agents.cpp)
+  json deferred(const std::string& status = "pendiente", int limit = 50);
+  std::function<void(const json& row, bool approved, const std::string& approver)> on_deferred;
+  static std::string call_key(const std::string& tool, const json& args);
   std::vector<std::function<void(const json&)>> listeners;
   mem::SemanticAssist* assist = nullptr;
   ToolRegistry& registry;

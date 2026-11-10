@@ -23,7 +23,7 @@ flowchart LR
 
 ## Estructura
 
-Nexus-Office es un único ejecutable en C++20 (`nexus-office`). Al lado lleva `nexus/` con la interfaz web y los
+Agente IA es un único ejecutable en C++20 (`nexus-office`). Al lado lleva `nexus/` con la interfaz web y los
 recursos (perfiles, agentes, paquetes de conocimiento, certificados raíz) y `bundled/runtimes/` con llama-server,
 sd-cli, Piper y Whisper. El código está en `nexus-office-cpp/`:
 
@@ -38,15 +38,83 @@ sd-cli, Piper y Whisper. El código está en `nexus-office-cpp/`:
 | `src/agents/` | Gestor de agentes (enrutado, prompt, bucle de herramientas, delegación), actividad y salón virtual. |
 | `src/tools/` | Registro modular, supervisor, herramientas integradas y propuestas con análisis estático. |
 | `src/rag/` | Lectores de documentos, PDF, archivos comprimidos, extracción y rastreo web, guardar una URL como PDF. |
-| `src/media/` | Imagen (stable-diffusion.cpp o arte procedural), música procedural, voz (Piper, voz del sistema, Whisper), avatares y GIMP. |
+| `src/media/` | Imagen (stable-diffusion.cpp o el compositor de escenas que dibuja lo que dice el prompt), música procedural, voz (Piper, voz del sistema, Whisper), avatares y GIMP. |
 | `src/office/` | Perfiles de oficina, mesa de bolsa y agente de bolsa autónomo. |
 | `src/coop/` | Cifrado, invitaciones y nodo de la LAN virtual. |
 | `src/remote/` | Acceso remoto: certificado propio y TLS, dispositivos y códigos de emparejamiento, UPnP y VPN WireGuard. |
 | `src/devices/` | Luces NexusLED, reloj NexusWatch, Pico W, drivers USB-serie y grabador de firmware nexus-flash. |
 | `src/server/` | Servidor HTTP y WebSocket (cpp-httplib) y todas las rutas de la API. |
-| `src/util/` | Ficheros, procesos (ligados a la vida de Nexus-Office: Job Object en Windows, PDEATHSIG en Linux), HTTP, expresiones regulares (PCRE2), YAML, XML, CSV, cifrado, archivos tar/zip. |
+| `src/util/` | Ficheros, procesos (ligados a la vida de Agente IA: Job Object en Windows, PDEATHSIG en Linux), HTTP, expresiones regulares (PCRE2), YAML, XML, CSV, cifrado, archivos tar/zip. |
 | `recursos/web/` | Interfaz (HTML/CSS/JS sin dependencias de compilación), avatar 3D y salón en canvas, PWA. `js/device.js` detecta el cliente (app Android, PWA o navegador) y el dispositivo antes del primer pintado y marca `<html>` con `data-layout` (phone/tablet/desktop), `data-orient`, `data-input` y `data-lowpower`; el CSS adapta el diseño con esos atributos. |
 | `tools/construir/` | `nexus-construir`: instaladores, APK, manuales en PDF, prueba de humo y datos (ver [CPP.md](CPP.md#nexus-construir)). |
+
+## Tres capas (dossier de arquitectura, 3.1)
+
+```mermaid
+flowchart TB
+  subgraph O[Orquestacion multiagente]
+    AG[agents · tools · office]
+  end
+  subgraph C[Motor core multiplataforma]
+    LLM[llm: LLM con cuantizacion mixta] --- MEMV[(memory · base vectorial)]
+    PER[pipeline: percepcion] --> MEMV
+    DIF[pipeline: difusion asincrona] --> PAN[[buffer de pantalla]]
+  end
+  subgraph H[Abstraccion de hardware]
+    HAL[hal: asignador zero-copy · rings lock-free · SDK] --- HW[hardware: deteccion · perfil · CPU/GPU/NPU]
+  end
+  CAM[frames: camara / API] -- MpmcRing --> PER
+  AG --> LLM
+  AG -- DescriptorTrabajo · MpmcRing --> DIF
+  PAN -- TripleBuffer + WebSocket --> UI[interfaz: OffscreenCanvas en un Worker]
+  C --> H
+```
+
+| Capa | Carpetas | Qué hace |
+|---|---|---|
+| Orquestación multiagente | `agents/`, `tools/`, `office/` | Decide: elige agente, razona con el LLM, llama herramientas. Ante una instrucción multimodal (`generate_image`) envía un `DescriptorTrabajo` a la difusión. |
+| Motor core multiplataforma | `llm/`, `memory/`, `rag/`, `media/`, `pipeline/`, `server/` | Ejecuta: motores de LLM (llama.cpp, LiteRT-LM, ONNX GenAI, Genie), embeddings y base vectorial, percepción y difusión. |
+| Abstracción de hardware | `hal/`, `hardware/` | Memoria zero-copy, colas lock-free, SDK compilados (`NEXUS_SDK_*`), detección y elección de CPU/GPU/NPU. |
+
+### Memoria zero-copy y colas lock-free (`src/hal/`)
+- `zerocopy.h`: `Buffer` (referencia contada a un bloque alineado a 4096 bytes), `Pool` (reciclado con lista libre
+  lock-free) y memoria `Compartida` (memfd en Linux/Android, `CreateFileMapping` en Windows) con `descriptor()` para
+  que un proceso hijo la mapee. Un dato grande se escribe una vez y después solo viajan referencias: ring → percepción,
+  difusión → buffer de pantalla → respuesta HTTP (`Raw::vista`, sin copiar).
+- `ring.h`: `SpscRing` (índices en líneas de caché separadas), `MpmcRing` (cola acotada de Vyukov), `TripleBuffer`
+  (último frame, el escritor nunca espera) y `Senal` (`std::atomic::wait`/`notify`, un futex). `nexus-tests hal` y
+  `GET /api/hal/latencia` miden la ida entre hilos: unos 300 ns en un equipo de 4 hilos.
+- Hoy llama-server y sd.cpp son procesos aparte que reciben las peticiones por HTTP; los bloques compartidos ya llevan
+  su descriptor para que un motor en proceso (o un hijo que lo mapee) use la misma memoria sin copiarla.
+
+### Pipelines (`src/pipeline/`)
+- **Percepción**: `POST /api/pipeline/frame` (cuerpo `image/*` o multipart `frame`) o la cámara del Estudio. Un hilo
+  propio decodifica, calcula la huella visual (rejilla 8×8 de color), descarta repetidos, describe con la red de visión
+  en el acelerador (llama-server con mmproj, como mucho cada `pipeline.vision_cada_s` segundos) y guarda descripción,
+  embedding y huella en la tabla `percepcion`. Búsqueda: `GET /api/pipeline/percepcion?q=` y la herramienta
+  `percepcion_buscar`. Si la cola está llena el frame se descarta (429): la cámara nunca espera.
+- **Difusión**: `POST /api/pipeline/difusion` o `generate_image`. Un hilo propio ejecuta sd.cpp (sd-server con el
+  modelo cargado o sd-cli con `--preview` paso a paso) y publica cada paso en el buffer de pantalla. El presentador
+  avisa por WebSocket (`pantalla`, `difusion`, `percepcion`) y `GET /api/pipeline/pantalla` sirve el último frame.
+- Configuración: `pipeline.vision_cada_s` (10) y `pipeline.guardar_frames` (true, en `outputs/percepcion/`).
+
+### Compilación cruzada (CMake 3.28)
+`CMakePresets.json`: `linux` (ELF autocontenido), `windows`, `windows-dll` (`nexus-office.exe` + `nexus_core.dll`),
+`android` (lo que usa la entrega) y `android-so` (`libnexus_core.so` con `c++_shared`), más variantes con SDK
+(`linux-vulkan`, `linux-cuda`, `windows-directml`, `android-npu`). Opciones: `NEXUS_CORE_SHARED` y
+`NEXUS_SDK_CUDA|VULKAN|OPENCL|QNN|NNAPI|DIRECTML|OPENVINO` (definen `NEXUS_SDK_<X>` y enlazan el SDK). Por defecto no
+se compila ningún SDK dentro: los motores se cargan en tiempo de ejecución y el mismo binario sirve en cualquier equipo.
+
+## Motores del dossier (3.2)
+
+| Pieza | Dónde | Qué hace |
+|---|---|---|
+| Difusión ONNX | `src/media/difusion_onnx.*` | ONNX Runtime cargado con `dlopen` (API C): tokenizador CLIP, codificador de texto, UNet con Euler y VAE dentro del proceso; tensores en bloques del asignador y salida de la UNet preasignada. También el codificador de visión CLIP/SigLIP de la percepción. |
+| Memoria del acelerador | `src/hal/zerocopy.*` | `Memoria::DmaBuf` (rpcmem o `/dev/dma_heap`), `CudaPinned`, `HipRegistrada`, `Compartida` y `Host`, elegida por el perfil (`memoria_para`). |
+| Núcleos grandes | `src/hal/cpu.*` | Detecta núcleos de rendimiento y fija a ellos los hilos de cálculo. |
+| Matriz por chip | `src/hal/matriz.*` | Orden de motores y proveedores para LLM, difusión y visión según el chip. |
+| Motores en proceso | `src/llm/motores.*` | LiteRT-LM, ONNX GenAI y Genie dentro del proceso; marca de caída y vuelta al proceso aparte. |
+| MCP | `src/mcp/` | Servidor (`POST /mcp`, `nexus-office mcp`) y cliente (`mcp.servidores` → herramientas `mcp_*` en el registro). |
 
 ## Flujo de un mensaje
 

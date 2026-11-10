@@ -491,7 +491,7 @@ void guardar(Grafo& g, const fs::path& salida, const json& meta) {
       "# Grafo multicapa de la Wikipedia en español", "",
       "Generado el " + jstr(meta, "fecha") +
           " con `nexus-construir grafo-wikipedia` desde la API pública de es.wikipedia.org y wikidata.org. Es un "
-          "ejemplo de grafo de conocimiento para importar en Nexus-Office (**Ajustes > Gestor de conocimiento > "
+          "ejemplo de grafo de conocimiento para importar en Agente IA (**Ajustes > Gestor de conocimiento > "
           "Importar / exportar**, o `graph_import` desde el chat).",
       "",
       cat("- **", g.orden.size(), " nodos** y **", g.orden_a.size(), " relaciones**."),
@@ -508,7 +508,7 @@ void guardar(Grafo& g, const fs::path& salida, const json& meta) {
   for (std::string s : {std::string(""), "Relaciones más frecuentes: " + join(top, ", ") + ".", std::string(""),
                         std::string("## Ficheros"),
                         std::string("- `grafo.graphml`: GraphML con los atributos `capa`, `type`, `resumen`, `url`, "
-                                    "`wikidata`... Se abre en Gephi o yEd y se importa en Nexus-Office."),
+                                    "`wikidata`... Se abre en Gephi o yEd y se importa en Agente IA."),
                         std::string("- `grafo.json`: el mismo grafo en JSON node-link (D3, NetworkX, sigma.js)."),
                         std::string(""), std::string("## Cómo importarlo"), std::string("```"),
                         std::string("nexus-office grafo importar grafo.graphml --en auto"), std::string("```"),

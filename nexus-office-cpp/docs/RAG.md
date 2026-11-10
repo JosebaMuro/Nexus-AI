@@ -23,13 +23,13 @@
 Muchas webs (tiendas, documentación hecha con React, Vue o Angular, paneles) llegan casi vacías y se pintan después con
 JavaScript. Para que la Biblioteca, *URL a PDF*, el rastreador y la herramienta web de los agentes lean lo mismo que tú:
 
-- Nexus-Office busca un **Chrome, Edge, Chromium o Brave** en el equipo (Windows, macOS y Linux, también el
+- Agente IA busca un **Chrome, Edge, Chromium o Brave** en el equipo (Windows, macOS y Linux, también el
   `chrome-headless-shell` de Playwright) y lo abre **sin ventana** (`--headless --dump-dom`), dejando unos segundos
   para que la página ejecute su JavaScript. Se queda con el DOM final y lo procesa como cualquier HTML.
 - **Cuándo**: en *Automático* solo si la página lo necesita (un `<div id="root">` o `__next` vacío, `<noscript>` que
   pide JavaScript, muchos scripts y poco texto). *Siempre como navegador* lo hace con todas; *Nunca* lo apaga.
   Se cambia en el menú **MEMORIA** de la barra superior o con `rag.browser` (`auto`, `siempre`, `nunca`).
-- **Seguridad**: el navegador usa un perfil propio de Nexus-Office (no el tuyo), que se vacía de cookies y
+- **Seguridad**: el navegador usa un perfil propio de Agente IA (no el tuyo), que se vacía de cookies y
   almacenamiento antes de cada lectura, y sale a internet por un proxy propio que **solo deja llegar a direcciones
   públicas** (nada de `localhost`, la red local ni los metadatos de la nube), salvo que se active
   `rag.allow_private_urls`. Como mucho hay dos navegadores a la vez.
@@ -49,7 +49,7 @@ El grafo de conocimiento tiene un **grafo general**, común a todos los agentes,
 - *Ajustes → Gestor de conocimiento → Leer un ZIP* hace más que importarlo: inserta los grafos que traiga, agrupa los documentos por temas y los razona con el LLM. Ver [MEMORIA.md](MEMORIA.md#leer-un-zip-también-rar-7z-y-tar).
 
 ## Archivos ZIP, RAR, 7z y TAR con proyectos o documentación
-Un archivo comprimido se puede adjuntar en el **chat** (botón 📎) o soltar en la **Biblioteca RAG**. Nexus-Office:
+Un archivo comprimido se puede adjuntar en el **chat** (botón 📎) o soltar en la **Biblioteca RAG**. Agente IA:
 
 1. **Descomprime** el archivo de forma segura en `data/sandbox/proyectos/<nombre>/`. Si todo cuelga de una única carpeta raíz, se aplana. Si el nombre ya existe, se usa `<nombre>_2`, `<nombre>_3`…
 2. **Indexa** en la biblioteca los documentos (PDF, DOCX, HTML, MD, TXT…) y el código y la configuración (más de 80 extensiones, además de `Dockerfile`, `Makefile`, `README`…) como **un único documento** del tipo `zip`, `rar`, `7z` o `tar`. Cada fragmento lleva delante la ruta del fichero (`[proyectos/x/src/main.py]`), así que las citas dicen de qué fichero sale. La primera página es la **estructura** del proyecto.
@@ -59,17 +59,17 @@ Herramientas de descompresión:
 
 | Formato | Cómo se descomprime |
 |---|---|
-| ZIP y TAR (.tar, .tar.gz) | Dentro de Nexus-Office, sin instalar nada; `.tar.bz2` y `.tar.xz`, con el `tar` del sistema |
+| ZIP y TAR (.tar, .tar.gz) | Dentro de Agente IA, sin instalar nada; `.tar.bz2` y `.tar.xz`, con el `tar` del sistema |
 | RAR | Con el primer programa disponible: `unrar`, `7z` (con el códec RAR), `bsdtar` o `unar` |
 | 7z | Con `7zz`/`7z`/`7za`, `bsdtar` o `unar` |
 
-Si no hay ninguno, Nexus-Office dice qué instalar:
+Si no hay ninguno, Agente IA dice qué instalar:
 
 - Windows: 7-Zip o WinRAR. En Windows 10/11 también vale el `tar` del sistema.
 - Ubuntu y WSL: `sudo apt install unrar 7zip`. El paquete `7zip` de Debian/Ubuntu no trae el códec RAR, así que para RAR instala `unrar` (o `unar`).
 - macOS: `brew install sevenzip` o `brew install unar`.
 
-Los programas externos descomprimen primero en una carpeta de cuarentena. Nexus-Office lee antes el listado del archivo para aplicar los mismos límites que al ZIP. Después revisa cada fichero, como con el ZIP, antes de moverlo a su carpeta. Los ficheros cifrados o dañados se descartan y se informa de ellos.
+Los programas externos descomprimen primero en una carpeta de cuarentena. Agente IA lee antes el listado del archivo para aplicar los mismos límites que al ZIP. Después revisa cada fichero, como con el ZIP, antes de moverlo a su carpeta. Los ficheros cifrados o dañados se descartan y se informa de ellos.
 
 Seguridad y límites:
 - Rechaza rutas absolutas, con `..` o con unidad de Windows (*zip slip*), enlaces simbólicos y entradas cifradas.
@@ -85,7 +85,7 @@ Seguridad y límites:
   - `crawl_connections`: descargas simultáneas al rastrear. 0 = automático, entre 4 y 8.
 
 ## Rastreo (crawling) de un sitio de documentación
-Para que Nexus-Office aprenda una documentación entera (un manual, la API de una librería, la guía de un producto), dale la página inicial:
+Para que Agente IA aprenda una documentación entera (un manual, la API de una librería, la guía de un producto), dale la página inicial:
 
 - **Interfaz**: *Núcleo → Biblioteca RAG*, fila **RASTREAR**: URL, máximo de páginas (40 por defecto, hasta 100 000) y ámbito (*esta sección* o *todo el dominio + grafo*). Con *todo el dominio* el máximo no se aplica. Se ejecuta en segundo plano y aparece en el panel de rastreos.
 - **Chat**: *«Rastrea la documentación de https://docs.python.org/3/tutorial/ y apréndela»*. Con *«todo el dominio»* recorre el sitio entero. Sin LLM, el núcleo integrado lo reconoce y lanza la herramienta.
@@ -95,7 +95,7 @@ Cómo recorre el sitio:
 1. **Ámbito**: por defecto, la carpeta de la URL inicial (`https://docs.x.org/3/tutorial/` → solo `/3/tutorial/…`); con `scope=domain`, todo el dominio registrable con todos sus subdominios (ver *Todo el dominio, sin excepciones* más abajo). Si la portada redirige (`/docs` → `/docs/es/latest/`), el ámbito se toma del destino.
 2. **Recorrido en anchura** hasta `max_depth` saltos (3 por defecto). Sigue también los enlaces del menú lateral, aunque ese menú no se indexa.
 3. **robots.txt**: respeta `Disallow` y `Crawl-delay` (como máximo 5 s).
-   - Si el sitio declara `Crawl-delay`, Nexus-Office va de una en una página.
+   - Si el sitio declara `Crawl-delay`, Agente IA va de una en una página.
    - Si no, descarga varias páginas a la vez (`performance.crawl_connections`, de 4 a 8 por defecto) por conexiones reutilizadas (keep-alive), con al menos 0,1 s entre peticiones.
    - El análisis de cada página (extracción y deduplicación) se reparte entre los núcleos.
    - Los resultados se aplican en el orden de descubrimiento, así que el resultado es idéntico al de un rastreo secuencial, pero varias veces más rápido.
@@ -110,13 +110,13 @@ Qué guarda:
 - **Volver a rastrear** la misma URL y ámbito **actualiza** el documento: el anterior se borra al terminar el nuevo.
 
 ### Todo el dominio, sin excepciones (2.0)
-Con el ámbito **todo el dominio** Nexus-Office lee el sitio entero, tenga las páginas que tenga:
+Con el ámbito **todo el dominio** Agente IA lee el sitio entero, tenga las páginas que tenga:
 - **Sin límite** de páginas ni de profundidad. `max_pages` y `max_depth` se ignoran.
 - **Todos los subdominios** del dominio registrable (`www.`, `blog.`, `docs.`…; también `.co.uk`, `.com.es` y similares), cada uno con su propio `robots.txt`.
 - **Documentos enlazados**: PDF, Word, LibreOffice (odt, ods, odp), PowerPoint, Excel, EPUB, RTF, texto, CSV y Markdown, hasta 60 MB cada uno, con los mismos lectores de la biblioteca RAG. Las URL que aparecen dentro del texto de un documento también se siguen.
 - **Páginas cortas** (desde 5 palabras): glosarios, fichas y avisos también entran.
 - **Sitemaps**: hasta 2000 ficheros de sitemap (índices incluidos).
-- Siempre en **segundo plano y por lotes**; si se cierra Nexus-Office, el trabajo **se reanuda solo** al volver a arrancar.
+- Siempre en **segundo plano y por lotes**; si se cierra Agente IA, el trabajo **se reanuda solo** al volver a arrancar.
 - Solo quedan fuera lo que el sitio prohíbe en `robots.txt`, otros dominios, imágenes, CSS/JS, binarios y el contenido duplicado.
 
 #### Grafo de conocimiento multicapa del dominio
@@ -131,7 +131,7 @@ En el panel de rastreos, cada trabajo de dominio muestra páginas, afirmaciones 
 - **CREAR GRAFO / REHACER GRAFO**: lo construye o lo vuelve a construir (por ejemplo, tras activar un modelo con razonamiento).
 - **⬇ ZIP**: descarga el **paquete de conocimiento** (`graph.json` en formato nexus-kg, `conocimiento.md` legible y `manifest.json`).
 - **DAR A AGENTE**: importa el grafo en el subgrafo de un agente (o en el general) y añade el texto de conocimiento a su biblioteca, así que el agente **adquiere ese conocimiento** y lo cita.
-- El ZIP se puede importar en otro Nexus-Office con **IMPORTAR CONOCIMIENTO DE DOMINIO (.zip)** en la *Biblioteca RAG* (va al grafo elegido en *Importar en*) (o `POST /api/rag/domain-knowledge/import`, con el fichero y el campo `agent`).
+- El ZIP se puede importar en otro Agente IA con **IMPORTAR CONOCIMIENTO DE DOMINIO (.zip)** en la *Biblioteca RAG* (va al grafo elegido en *Importar en*) (o `POST /api/rag/domain-knowledge/import`, con el fichero y el campo `agent`).
 
 API: `POST /api/rag/crawls/{id}/knowledge` (construir), `GET /api/rag/crawls/{id}/knowledge` (ZIP), `POST /api/rag/crawls/{id}/knowledge/import` `{agent}`.
 
@@ -141,11 +141,18 @@ Rendimiento medido: 5000 páginas se añaden al grafo en unos 13 s y el grafo se
 Un dominio grande no cabe de una vez, así que se procesa en **lotes correlativos** que se guardan según terminan:
 - Si `max_pages` supera el tamaño de lote, el rastreo se convierte en un **trabajo por lotes**. El lote depende de la RAM: 50 páginas con menos de 4 GB, 100 en móviles o con menos de 8 GB, 200 con menos de 16 GB y 300 a partir de ahí. `rag.crawl_batch_pages` lo fija a mano.
 - Cada lote es un documento propio, ordenado: «Documentación: X · lote 003 (págs. 401-600)». El resumen y los puntos clave se hacen con el primero.
-- Tras cada lote se guarda el trabajo en `data/rag/crawls/<id>.json`: la cola de URLs pendientes en orden de descubrimiento, las visitadas y las huellas del contenido. Al **reanudar** (después de pausar, de reiniciar Nexus-Office o de un corte) sigue por la página siguiente, sin repetir ninguna y en el mismo orden.
-- **Panel de rastreos** en la Biblioteca RAG: progreso, lotes y cola pendiente de cada trabajo, con **PAUSAR**, **REANUDAR** y **✕** (borra el trabajo y, si quieres, sus documentos). Un trabajo en curso cuando Nexus-Office se cerró aparece como *interrumpido* y se reanuda igual.
+- Tras cada lote se guarda el trabajo en `data/rag/crawls/<id>.json`: la cola de URLs pendientes en orden de descubrimiento, las visitadas y las huellas del contenido. Al **reanudar** (después de pausar, de reiniciar Agente IA o de un corte) sigue por la página siguiente, sin repetir ninguna y en el mismo orden.
+- **Panel de rastreos** en la Biblioteca RAG: progreso, lotes y cola pendiente de cada trabajo, con **PAUSAR**, **REANUDAR** y **✕** (borra el trabajo y, si quieres, sus documentos). Un trabajo en curso cuando Agente IA se cerró aparece como *interrumpido* y se reanuda igual.
 - **Chat**: «aprende todo el dominio https://docs.x.org» lanza el trabajo en segundo plano (hasta 100 000 páginas); «sigue rastreando https://docs.x.org» reanuda el último sin terminar. Desde la herramienta, `crawl_docs` con `job=<id>` o `continue=true`.
 - Volver a rastrear la misma URL sustituye todos los lotes antiguos al terminar el primer lote nuevo.
 - API: `GET /api/rag/crawls`, `POST /api/rag/crawls/{id}/pause`, `POST /api/rag/crawls/{id}/resume` y `DELETE /api/rag/crawls/{id}?docs=true`.
+
+### Lista de URLs: varios rastreos en cola
+Para rastrear muchas webs de una vez, pulsa **LISTA…** junto a **RASTREAR** en la *Biblioteca RAG*:
+- Pega las URLs, una por línea (también valen separadas por comas, espacios o punto y coma), o pulsa **SUBIR .txt** para leerlas de un fichero de texto o CSV. Las líneas que empiezan por `#` se ignoran, a un dominio sin `https://` se le pone y las repetidas se quitan.
+- **RASTREAR LISTA** crea un trabajo por URL con el máximo de páginas, el ámbito y el destino (*Importar en*) elegidos arriba, y los pone en la **cola de rastreos**: se rastrean en orden, de uno en uno, para no ahogar el equipo. `rag.crawl_parallel` (1 a 4) deja rastrear varios a la vez.
+- En el panel de rastreos los que esperan aparecen *en cola* con su posición en la lista (3/20), y tienen **SACAR DE LA COLA** (queda en pausa) y **EMPEZAR YA**. Si Agente IA se cierra, al volver a abrirlo la cola sigue por donde iba.
+- API: `POST /api/rag/crawl` con `urls` en lugar de `url`, por ejemplo `{"urls": ["https://docs.a.com/", "https://b.org/manual"], "max_pages": 40, "scope": "path"}` o `{"urls": "https://docs.a.com/\nhttps://b.org/manual"}`. Devuelve `{list, jobs, invalid, parallel}`; como mucho 1000 URLs por lista. Desde la terminal, con una lista en `lista.txt`: `jq -Rs "{urls: .}" lista.txt | curl -X POST -H "Content-Type: application/json" -d 17746 http://127.0.0.1:8775/api/rag/crawl`.
 
 Seguridad y límites: solo direcciones públicas (se comprueba en cada petición y tras cada redirección; `rag.allow_private_urls: true` permite la red local), 3 MB por página, 6 millones de caracteres por documento o lote y 15 minutos por tanda (un trabajo por lotes sigue en la siguiente tanda). Las páginas que solo muestran contenido con JavaScript se omiten por tener poco texto. La herramienta tiene **riesgo medio** (accede a internet): con la política por defecto el usuario la aprueba en una tarjeta.
 

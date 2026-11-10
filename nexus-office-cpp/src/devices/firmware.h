@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "util/exporta.h"
 #include "util/fs.h"
 #include "util/json.h"
 
@@ -19,7 +20,7 @@ namespace nx::devices::firmware {
 
 extern const std::vector<std::string> MODELOS_LUCES;
 extern const json VARIANTES_ESP8266;   // [{modelo, nombre}] imagenes del ESP8266 por tamano de flash
-extern const json FAMILIA;   // toda la familia ESP: [{chip, nombre, wifi, usb_nativo, placas, nota?}]
+extern NX_DATOS const json FAMILIA;   // toda la familia ESP: [{chip, nombre, wifi, usb_nativo, placas, nota?}]
 std::string chip_de_texto(const std::string& salida_esptool);   // "esp32c3", "esp8266"...; "" si no se reconoce
 using Log = std::function<void(const std::string&)>;
 

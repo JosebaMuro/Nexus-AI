@@ -30,6 +30,30 @@ const { chromium } = require("playwright");
     await page.waitForTimeout(1200);
     await page.screenshot({ path: `${out}/${String(n++).padStart(2, "0")}-${view}.png` });
   }
+  // laboratorio BETA: sus tres pestañas, una medición rápida (sin IA) y el HUD de rendimiento
+  const beta = page.locator('[data-view="beta"]').first();
+  if (await beta.isVisible().catch(() => false)) {
+    await beta.click();
+    await page.waitForSelector("#beta-info:not(:empty)", { timeout: 15000 });
+    await page.selectOption("#beta-opt-rondas", "1");
+    await page.uncheck("#beta-opt-llm");
+    await page.click("#beta-run");
+    await page.waitForFunction(() => document.querySelector("#beta-run").textContent.includes("MEDIR AHORA") &&
+      document.querySelector("#beta-hist table"), null, { timeout: 120000 });
+    await page.click("#beta-hud-btn");
+    await page.screenshot({ path: `${out}/${String(n++).padStart(2, "0")}-beta-rendimiento.png` });
+    for (const tab of ["aspecto", "opinion"]) {
+      await page.click(`[data-btab="${tab}"]`);
+      await page.waitForTimeout(800);
+      await page.screenshot({ path: `${out}/${String(n++).padStart(2, "0")}-beta-${tab}.png`, fullPage: true });
+    }
+    await page.click('[data-star="4"]');
+    await page.fill("#beta-op-text", "Prueba automática de la interfaz");
+    await page.click("#beta-op-send");
+    await page.waitForFunction(() => document.body.innerText.includes("Opinión guardada"), null, { timeout: 15000 });
+    await page.click("#beta-hud-btn");
+    await page.click('[data-btab="rend"]');
+  }
   await browser.close();
   if (problems.length) {
     console.log("PROBLEMAS:\n" + problems.join("\n"));

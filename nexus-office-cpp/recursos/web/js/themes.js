@@ -1,4 +1,4 @@
-/* Nexus-Office — temas: plantillas y aplicacion de un tema completo (colores, tipografias, forma, efectos). */
+/* Agente IA — temas: plantillas y aplicacion de un tema completo (colores, tipografias, forma, efectos). */
 (function () {
   const F = {
     rajdhani: '"Rajdhani", "Segoe UI", system-ui, sans-serif', orbitron: '"Orbitron", "Rajdhani", "Segoe UI", sans-serif',

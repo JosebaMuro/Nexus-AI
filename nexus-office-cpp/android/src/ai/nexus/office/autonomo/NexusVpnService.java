@@ -138,7 +138,7 @@ public class NexusVpnService extends VpnService {
     /** Crea la interfaz tun y arranca wireguard-go. -9999 si el usuario retiro el permiso de VPN. */
     private int start(WgConfig cfg, String resolvedEndpoint) {
         Builder b = new Builder();
-        b.setSession("Nexus-Office VPN");
+        b.setSession("Agente IA VPN");
         b.addAddress(cfg.addressIp(), cfg.addressPrefix());
         b.addRoute(cfg.routeIp(), cfg.routePrefix());
         b.setMtu(1280);

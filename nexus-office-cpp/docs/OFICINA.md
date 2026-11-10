@@ -1,6 +1,6 @@
 # Oficina para pymes: perfiles por gremio
 
-Nexus-Office se puede instalar como **la oficina de una pyme**. Eliges el tipo de empresa (un *perfil*) y Nexus-Office monta su
+Agente IA se puede instalar como **la oficina de una pyme**. Eliges el tipo de empresa (un *perfil*) y Agente IA monta su
 equipo de agentes:
 
 - **Agentes de oficina**: Recepción, Administración, Presupuestos, Compras y almacén, Prevención de riesgos,
@@ -94,7 +94,7 @@ comparten entre perfiles; los del sector traen el conocimiento y la normativa de
 
 ### Modelos de IA sugeridos para cada sector
 
-Al instalar, Nexus-Office elige el modelo general según el hardware (`nexus-office modelos`). Si además hay un modelo
+Al instalar, Agente IA elige el modelo general según el hardware (`nexus-office modelos`). Si además hay un modelo
 específico que encaja con la oficina, lo **sugiere** una vez instalada: aparece primero en **Modelos > Recomendados**
 con la etiqueta «◆ para tu oficina» y el motivo, y también al aplicar el perfil (`nexus-office oficina <id>`)
 y en `nexus-office modelos`. No se descarga solo: lo decides tú, viendo si cabe en tu equipo.
@@ -113,13 +113,13 @@ Un perfil puede fijar los suyos con la clave `modelos: [{id: ..., motivo: ...}]`
 
 **Desde la interfaz** (modo administrador): *Agentes → Perfil de oficina*, elige la empresa y pulsa **APLICAR**.
 
-**Desde la terminal**, en la carpeta de Nexus-Office (`nexus-office.exe` en Windows; con el `.deb`, `nexus-office-c`):
+**Desde la terminal**, en la carpeta de Agente IA (`nexus-office.exe` en Windows; con el `.deb`, `nexus-office-c`):
 
 ```
 nexus-office oficina                     # lista los perfiles y marca el activo
 nexus-office oficina herreria            # aplica el perfil
 nexus-office oficina herreria --reset-agentes   # y reescribe también los agentes que hayas personalizado
-nexus-office oficina --quitar            # vuelve a los agentes por defecto de Nexus-Office
+nexus-office oficina --quitar            # vuelve a los agentes por defecto de Agente IA
 ```
 
 **Al instalar**: en el instalador de Windows, el desplegable *Perfil de oficina* de la página *Opciones* (o
@@ -130,10 +130,10 @@ carpeta portable), o la variable de entorno
 [Instalación](USUARIO.md#instalación).
 
 **En Android**:
-- **App Nexus-Office autónomo (APK)**: no tiene terminal; el perfil se elige en la propia app: *Más → Agentes*, botón
+- **App Agente IA autónomo (APK)**: no tiene terminal; el perfil se elige en la propia app: *Más → Agentes*, botón
   **ADMIN** (PIN), *Perfil de oficina* → **APLICAR**. La APK lleva dentro todo `nexus/`, también los perfiles y
   agentes de la oficina, y cada agente estrena su grafo en el móvil.
-- **App Nexus-Office VPN** (cliente del PC): usa la oficina que tenga configurada el PC.
+- **App Agente IA VPN** (cliente del PC): usa la oficina que tenga configurada el PC.
 
 **Por API**: `GET /api/office/profiles` y `POST /api/office/profile {"id": "herreria"}` (administrador;
 `{"id": ""}` quita el perfil).
@@ -153,7 +153,7 @@ descargados, ver [Plataformas](PLATAFORMAS.md)). Si quieres que un agente busque
 
 ## Crear o ampliar perfiles
 
-- **Agentes**: `nexus/office/agentes/<id>.yaml` en la carpeta instalada (`recursos/office/agentes/` en el código). Mismo formato que los agentes de Nexus-Office (`name`, `description`,
+- **Agentes**: `nexus/office/agentes/<id>.yaml` en la carpeta instalada (`recursos/office/agentes/` en el código). Mismo formato que los agentes de Agente IA (`name`, `description`,
   `system_prompt`, `tools`, `keywords`, `specialty`, `can_delegate_to`…) más la clave `grafo`: tripletas
   `"sujeto | relación | objeto"` con una cuarta parte opcional para la categoría (`especialidad`,
   `procedimiento`, `documento`, `experiencia`).

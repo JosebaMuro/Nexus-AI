@@ -1,5 +1,5 @@
 #!/bin/sh
-# Nexus-Office (edicion C++) - preparacion en Linux y macOS. No instala nada mas: el programa es un unico
+# Agente IA (edicion C++) - preparacion en Linux y macOS. No instala nada mas: el programa es un unico
 # ejecutable (nexus-office) con la interfaz web y los motores de IA al lado. Funciona sin internet.
 # Uso: ./install.sh [--oficina=<perfil>] [--servicio [--red]] [--modelos=auto|todos|no]
 #   --oficina=ID    configura la oficina de una pyme (herreria, reformas...; lista: ./nexus-office oficina)
@@ -13,7 +13,7 @@ cd "$(dirname "$0")"
 OFICINA="${NEXUS_OFICINA:-}"; SERVICIO="${NEXUS_SERVICIO:-0}"; RED=0; MODELOS="${NEXUS_MODELOS:-auto}"
 for a in "$@"; do case "$a" in --oficina=*) OFICINA="${a#--oficina=}";; --servicio) SERVICIO=1;; --red) RED=1;;
   --modelos=*) MODELOS="${a#--modelos=}";; esac; done
-say() { printf '\033[36m[Nexus-Office]\033[0m %s\n' "$*"; }
+say() { printf '\033[36m[Agente IA]\033[0m %s\n' "$*"; }
 # macOS: si se descomprimio con el Finder, Gatekeeper bloquearia los ejecutables (no firmados por Apple)
 if [ "$(uname -s)" = Darwin ]; then xattr -dr com.apple.quarantine . 2>/dev/null || true; fi
 chmod +x nexus-office start.sh 2>/dev/null || true

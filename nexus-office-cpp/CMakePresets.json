@@ -1,0 +1,87 @@
+{
+  "version": 8,
+  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "linux",
+      "displayName": "Linux: ELF autocontenido (x86_64 o aarch64/Raspberry Pi)",
+      "inherits": "base",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
+      "cacheVariables": { "NEXUS_STATIC_RUNTIME": "ON", "NEXUS_CORE_SHARED": "OFF" }
+    },
+    {
+      "name": "linux-vulkan",
+      "displayName": "Linux con el SDK de Vulkan dentro",
+      "inherits": "linux",
+      "cacheVariables": { "NEXUS_SDK_VULKAN": "ON" }
+    },
+    {
+      "name": "linux-cuda",
+      "displayName": "Linux con el CUDA Toolkit dentro",
+      "inherits": "linux",
+      "cacheVariables": { "NEXUS_SDK_CUDA": "ON" }
+    },
+    {
+      "name": "windows",
+      "displayName": "Windows: ejecutable autocontenido (x64 o ARM64)",
+      "inherits": "base",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "cacheVariables": { "NEXUS_STATIC_RUNTIME": "ON", "NEXUS_CORE_SHARED": "OFF" }
+    },
+    {
+      "name": "windows-dll",
+      "displayName": "Windows: nexus-office.exe + nexus_core.dll",
+      "inherits": "windows",
+      "cacheVariables": { "NEXUS_CORE_SHARED": "ON" }
+    },
+    {
+      "name": "windows-directml",
+      "displayName": "Windows: DLL con DirectML (GPU y NPU)",
+      "inherits": "windows-dll",
+      "cacheVariables": { "NEXUS_SDK_DIRECTML": "ON" }
+    },
+    {
+      "name": "android",
+      "displayName": "Android ARM64: ejecutable dentro de la APK (lo que usa la entrega)",
+      "inherits": "base",
+      "generator": "Ninja",
+      "toolchainFile": "$env{ANDROID_NDK}/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "ANDROID_ABI": "arm64-v8a",
+        "ANDROID_PLATFORM": "android-28",
+        "NEXUS_BUILD_TESTS": "OFF",
+        "NEXUS_BUILD_TOOLS": "OFF",
+        "NEXUS_TLS": "mbedtls"
+      }
+    },
+    {
+      "name": "android-so",
+      "displayName": "Android ARM64: libnexus_core.so para la APK (con libc++ compartida)",
+      "inherits": "android",
+      "cacheVariables": { "NEXUS_CORE_SHARED": "ON", "ANDROID_STL": "c++_shared" }
+    },
+    {
+      "name": "android-npu",
+      "displayName": "Android ARM64: .so con NNAPI y QNN (NPU)",
+      "inherits": "android-so",
+      "cacheVariables": { "NEXUS_SDK_NNAPI": "ON", "NEXUS_SDK_QNN": "ON", "NEXUS_SDK_OPENCL": "OFF" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "linux", "configurePreset": "linux" },
+    { "name": "windows", "configurePreset": "windows", "configuration": "Release" },
+    { "name": "windows-dll", "configurePreset": "windows-dll", "configuration": "Release" },
+    { "name": "android", "configurePreset": "android" },
+    { "name": "android-so", "configurePreset": "android-so" }
+  ],
+  "testPresets": [
+    { "name": "linux", "configurePreset": "linux", "output": { "outputOnFailure": true } },
+    { "name": "windows", "configurePreset": "windows", "configuration": "Release", "output": { "outputOnFailure": true } }
+  ]
+}

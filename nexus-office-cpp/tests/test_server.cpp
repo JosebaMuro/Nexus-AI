@@ -10,6 +10,7 @@
 #include "tools/tools.h"
 #include "util/fs.h"
 #include "util/net.h"
+#include "util/text.h"
 
 using namespace nx;
 
@@ -61,7 +62,7 @@ TEST("servidor: API, administrador, memoria, biblioteca y chat por WebSocket") {
   for (auto* k : {"profile", "llm", "memory", "graph", "rag", "voice", "image"}) CHECK(status.contains(k));
 
   auto index = c.Get("/");
-  CHECK(index && index->status == 200 && index->body.find("Nexus-Office") != std::string::npos);
+  CHECK(index && index->status == 200 && index->body.find("Agente IA") != std::string::npos);
   auto js = c.Get("/static/js/app.js");
   CHECK(js && js->status == 200);
 
@@ -83,6 +84,29 @@ TEST("servidor: API, administrador, memoria, biblioteca y chat por WebSocket") {
   auto agent = c.Put("/api/agents", adm, R"({"id":"probador","name":"Probador","keywords":["prueba"]})", "application/json");
   CHECK(agent && agent->status == 200 && jstr(body(agent), "id") == "probador");
 
+  // asistente de agentes: catalogo, vista previa (sin guardar) y guardado con el conocimiento del oficio
+  auto wz = c.Get("/api/agents/asistente");
+  CHECK(wz && wz->status == 200 && body(wz)["plantillas"].size() > 50 && !body(wz)["paquetes"].empty());
+  for (auto& p : body(wz)["paquetes"]) {   // permiso segun tools.policy: escribir ficheros nunca es automatico
+    if (jstr(p, "id") == "basico") CHECK_EQ(jstr(p, "permiso"), std::string("auto"));
+    if (jstr(p, "id") == "escribir") CHECK(jstr(p, "permiso") != "auto");
+  }
+  auto wz_anon = c.Post("/api/agents/asistente", R"({"respuestas":{"nombre":"Ana"}})", "application/json");
+  CHECK(wz_anon && wz_anon->status == 403);
+  auto wz_vista = c.Post("/api/agents/asistente", adm, R"({"respuestas":{"plantilla":"fontanero","nombre":"Fontanera"}})", "application/json");
+  CHECK(wz_vista && wz_vista->status == 200 && !truthy(body(wz_vista)["guardado"]));
+  CHECK(contains(jstr(body(wz_vista)["agente"], "system_prompt"), "Te llamas Fontanera."));
+  auto wz_mal = c.Post("/api/agents/asistente", adm, R"({"respuestas":{"nombre":""}})", "application/json");
+  CHECK(wz_mal && wz_mal->status == 400);
+  auto wz_ok = c.Post("/api/agents/asistente", adm, R"({"respuestas":{"plantilla":"fontanero","nombre":"Fontanera"},"guardar":true})", "application/json");
+  CHECK(wz_ok && wz_ok->status == 200 && truthy(body(wz_ok)["guardado"]));
+  CHECK_EQ(jstr(body(wz_ok)["agente"], "id"), std::string("fontanera"));
+  CHECK(body(wz_ok)["sembradas"].get<int>() > 0);
+  CHECK_EQ(jstr(body(wz_ok)["agente"]["perfil"], "plantilla"), std::string("fontanero"));
+  auto wz_edit = c.Post("/api/agents/asistente", adm, R"({"respuestas":{"plantilla":"fontanero","nombre":"Fontanera","longitud":"breves"},"editar":"fontanera","guardar":true})", "application/json");
+  CHECK(wz_edit && wz_edit->status == 200 && jstr(body(wz_edit)["agente"], "id") == "fontanera");
+  CHECK_EQ(jstr(body(wz_edit)["agente"]["perfil"], "longitud"), std::string("breves"));
+
   // memoria y grafo
   auto mem = c.Post("/api/memory", R"({"content":"Me llamo Ana y trabajo en una carpinteria de Bilbao"})", "application/json");
   CHECK(mem && mem->status == 200 && body(mem).contains("id"));
@@ -98,9 +122,15 @@ TEST("servidor: API, administrador, memoria, biblioteca y chat por WebSocket") {
   auto rs = c.Get("/api/rag/search?q=IVA");
   CHECK(rs && rs->status == 200 && !body(rs).empty());
 
-  // multimedia sin modelos: imagen procedimental y musica compuesta
+  // multimedia sin modelos: la escena del prompt (o arte abstracto si se pide) y musica compuesta
   auto img = c.Post("/api/image/generate", R"({"prompt":"un faro al atardecer","seed":3})", "application/json");
   CHECK(img && img->status == 200 && !jstr(body(img), "url").empty());
+  CHECK_EQ(jstr(body(img), "engine"), std::string("escena"));
+  CHECK(contains(jstr(body(img), "note"), "modelo de imagen"));
+  auto abs = c.Post("/api/image/generate", R"({"prompt":"un fractal abstracto morado"})", "application/json");
+  CHECK(abs && jstr(body(abs), "engine") == "procedural");
+  auto raro = c.Post("/api/image/generate", R"({"prompt":"xyzzy qwerty"})", "application/json");
+  CHECK(raro && contains(jstr(body(raro), "note"), "No he reconocido"));
   auto mus = c.Post("/api/music/generate", R"({"prompt":"musica tranquila","seconds":3})", "application/json");
   CHECK(mus && mus->status == 200 && !body(mus).contains("path"));
 
@@ -126,4 +156,36 @@ TEST("servidor: API, administrador, memoria, biblioteca y chat por WebSocket") {
   CHECK_EQ(last, std::string("done"));
   CHECK(answer.find("84") != std::string::npos);
   ws.close();
+}
+
+TEST("servidor: rastrear una lista de URLs en cola") {
+  Server srv;
+  httplib::Client c("127.0.0.1", srv.port);
+  c.set_read_timeout(60);
+  // direcciones privadas: el rastreador las rechaza enseguida, sin salir a la red
+  auto r = c.Post("/api/rag/crawl",
+                  R"({"urls":"# lista\nhttp://127.0.0.1:9/a\nhttp://127.0.0.1:9/b, esto-no\nhttp://127.0.0.1:9/a","max_pages":5})",
+                  "application/json");
+  CHECK(r && r->status == 200);
+  json b = body(r);
+  CHECK_EQ(b["jobs"].size(), (size_t)2);
+  CHECK_EQ(b["invalid"].size(), (size_t)1);
+  CHECK_EQ(b["parallel"].get<int>(), 1);
+  if (b["jobs"].size() == 2) {
+    CHECK_EQ(jstr(b["jobs"][0], "list"), jstr(b, "list"));
+    CHECK_EQ(b["jobs"][1]["list_pos"].get<int>(), 2);
+    CHECK_EQ(b["jobs"][1]["list_total"].get<int>(), 2);
+  }
+  bool idle = false;   // la cola los rastrea de uno en uno hasta vaciarse
+  for (int i = 0; i < 300 && !idle; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    idle = true;
+    for (auto& j : body(c.Get("/api/rag/crawls")))
+      if (jstr(j, "list") == jstr(b, "list") && (j.value("running", false) || jstr(j, "status") == "en cola")) idle = false;
+  }
+  CHECK(idle);
+  auto vacia = c.Post("/api/rag/crawl", R"({"urls":["esto no es una url"]})", "application/json");
+  CHECK(vacia && vacia->status == 400);
+  auto mala = c.Post("/api/rag/crawl", R"({"urls":42})", "application/json");
+  CHECK(mala && mala->status == 400);
 }

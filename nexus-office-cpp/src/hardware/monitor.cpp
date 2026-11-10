@@ -58,7 +58,31 @@ json Monitor::stop() {
   return s;
 }
 
+json amd_sysfs_vram(const fs::path& drm) {
+  // Linux con AMD (amdgpu): uso y total de VRAM en sysfs, sin lanzar ningun proceso. Se toma la tarjeta con mas VRAM
+  json best = json::object();
+  double best_total = 0;
+  std::error_code ec;
+  if (!fs::is_directory(drm, ec)) return best;
+  for (auto& e : fs::directory_iterator(drm, ec)) {
+    std::string n = S(e.path().filename());
+    if (!starts_with(n, "card") || n.find('-') != std::string::npos) continue;
+    fs::path d = e.path() / "device";
+    auto used = read_file(d / "mem_info_vram_used"), total = read_file(d / "mem_info_vram_total");
+    if (!used || !total) continue;
+    double u = std::atof(trim(*used).c_str()), t = std::atof(trim(*total).c_str());
+    if (t <= best_total) continue;
+    best_total = t;
+    best = {{"vram_used_gb", round_to(u / 1073741824.0, 2)}, {"vram_pct", round_to(100 * u / t, 1)}};
+    if (auto busy = read_file(d / "gpu_busy_percent")) best["gpu_util"] = std::atof(trim(*busy).c_str());
+  }
+  return best;
+}
+
 json Monitor::gpu_sample() {
+#ifdef __linux__
+  if (nvsmi_.empty()) return amd_sysfs_vram("/sys/class/drm");
+#endif
   if (nvsmi_.empty()) return json::object();
   auto r = proc::run({nvsmi_, "--query-gpu=utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"},
                      3);
@@ -85,8 +109,14 @@ void Monitor::loop() {
                 {"ram_pct", vm.percent},
                 {"ram_used_gb", round_to(vm.used / 1073741824.0, 2)},
                 {"proc_rss_gb", round_to(sys::process_rss() / 1073741824.0, 3)}};
-      json g = gpu_sample();
-      for (auto it = g.begin(); it != g.end(); ++it) s[it.key()] = it.value();
+      // la GPU se mira en cada vuelta mientras el modelo trabaja (o hasta 60 s despues); en reposo, una de cada 5:
+      // lanzar nvidia-smi cada 2 s gasta CPU y no deja a la grafica bajar a su estado de reposo
+      bool active = (busy && busy()) || now() - last_llm_ < 60;
+      if (active || ++idle_ticks_ >= 5) {
+        idle_ticks_ = 0;
+        last_gpu_ = gpu_sample();
+      }
+      for (auto it = last_gpu_.begin(); it != last_gpu_.end(); ++it) s[it.key()] = it.value();
       bool beat;
       {
         std::lock_guard<std::mutex> lk(mu_);
@@ -120,6 +150,7 @@ void Monitor::heartbeat() {
 
 void Monitor::record_llm(const std::string& backend, const std::string& model, int tokens, double seconds, double ttft) {
   double tps = seconds > 0 ? tokens / seconds : 0.0;
+  last_llm_ = now();
   std::lock_guard<std::mutex> lk(mu_);
   llm_calls_.push_back({{"backend", backend},
                         {"model", model},
@@ -133,6 +164,11 @@ void Monitor::record_llm(const std::string& backend, const std::string& model, i
 std::vector<json> Monitor::llm_calls() {
   std::lock_guard<std::mutex> lk(mu_);
   return llm_calls_;
+}
+
+void Monitor::set_setting(const std::string& key, const json& value) {
+  std::lock_guard<std::mutex> lk(mu_);
+  settings[key] = value;
 }
 
 void Monitor::record_error(const std::string& kind, const std::string& message) {

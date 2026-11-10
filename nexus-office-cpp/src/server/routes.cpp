@@ -4,15 +4,18 @@
 
 #include <algorithm>
 #include <csignal>
+#include <set>
 #include <thread>
 
 #include "agents/agents.h"
+#include "agents/asistente.h"
 #include "coop/coop.h"
 #include "remote/remote.h"
 #include "core/service.h"
 #include "core/android_tune.h"
 #include "core/services.h"
 #include "core/system.h"
+#include "core/explorador.h"
 #include "gen/data.h"
 #include "hardware/hardware.h"
 #include "llm/llm.h"
@@ -33,6 +36,7 @@
 #include "core/salud.h"
 #include "devices/drivers.h"
 #include "devices/firmware.h"
+#include "devices/ubicacion.h"
 #include "agents/activity.h"
 #include "memory/kg.h"
 #include "memory/kg_jobs.h"
@@ -41,6 +45,7 @@
 #include "office/office.h"
 #include "rag/rag.h"
 #include "server/app.h"
+#include "server/beta.h"
 #include "tools/tools.h"
 #include "util/archive.h"
 #include "util/crypto.h"
@@ -222,7 +227,7 @@ void register_routes(App& app) {
   };
 
   app.get("/api/ping", [](Ctx& c) -> Out {
-    std::string name = c.app.ready() ? c.app.S().config.str("user.assistant_name") : "Nexus-Office";
+    std::string name = c.app.ready() ? c.app.S().config.str("user.assistant_name") : "Agente IA";
     return json{{"nexus", true}, {"version", NEXUS_VERSION}, {"name", name}, {"edition", "cpp"}};
   });
 
@@ -257,7 +262,7 @@ void register_routes(App& app) {
       if (is_file(f) && !contains(S(f), "__pycache__"))
         files.push_back({"Nexus-Office/nexus/" + S(fs::relative(f, paths::package()).generic_u8string()), read_text(f)});
     files.push_back({"Nexus-Office/install-termux.sh",
-                     "#!/data/data/com.termux/files/usr/bin/sh\n# Nexus-Office (edicion C++) en Termux\nset -e\n"
+                     "#!/data/data/com.termux/files/usr/bin/sh\n# Agente IA (edicion C++) en Termux\nset -e\n"
                      "cd \"$(dirname \"$0\")\"\nchmod +x nexus-office\n"
                      "printf '#!/data/data/com.termux/files/usr/bin/sh\\ncd \"%s\"\\nLD_LIBRARY_PATH=\"%s:$LD_LIBRARY_PATH\" exec ./nexus-office \"$@\"\\n' "
                      "\"$(pwd)\" \"$(pwd)\" > start.sh\nchmod +x start.sh\n"
@@ -267,7 +272,7 @@ void register_routes(App& app) {
                {{"Content-Disposition", std::string("attachment; filename=Nexus-Office-") + NEXUS_VERSION + "-termux.tar.gz"}}};
 #else
     throw HttpErr(501, "Este equipo no lleva el binario de Android: en Termux descarga el paquete de Android "
-                       "(Nexus-Office-...-android-arm64) de la pagina de descargas o instala la APK de Nexus-Office.");
+                       "(Nexus-Office-...-android-arm64) de la pagina de descargas o instala la APK de Agente IA.");
 #endif
   });
 
@@ -428,6 +433,33 @@ void register_routes(App& app) {
 
   app.get("/api/monitor", [](Ctx& c) -> Out { return c.app.S().monitor->live(); });
 
+  // ------------------------------------------------------------------ ubicacion en tiempo real (devices/ubicacion.h)
+  // solo desde el propio equipo o con el PIN de administrador: la posicion es un dato personal
+  auto ubic_ok = [](Ctx& c) {
+    if (!c.admin && (c.remote || !c.local()))
+      throw HttpErr(403, "La ubicación solo se consulta desde el propio equipo o en modo administrador");
+  };
+  app.get("/api/ubicacion", [ubic_ok](Ctx& c) -> Out {
+    ubic_ok(c);
+    return ubicacion::estado();
+  });
+  app.post("/api/ubicacion/consultar", [ubic_ok](Ctx& c) -> Out {
+    ubic_ok(c);
+    return ubicacion::consultar(c.body.is_object() ? c.body : json::object());
+  });
+  // la interfaz manda la posicion del navegador (ubicacion.navegador activado)
+  app.post("/api/ubicacion", [ubic_ok](Ctx& c) -> Out {
+    ubic_ok(c);
+    if (!truthy(c.app.S().config.get("ubicacion.navegador", false)))
+      throw HttpErr(409, "La ubicación del navegador está desactivada en Ajustes > Ubicación");
+    try {
+      ubicacion::recibir(c.body, "navegador");
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(422, e.what());
+    }
+    return json{{"ok", true}};
+  });
+
   // app Android autonoma: nucleos, hilos medidos, limites por temperatura o bateria y consejo de modelo
   auto tuner = [](Ctx& c) -> android_tune::LiveTuner& {
     auto& t = c.app.S().android_tuner;
@@ -468,7 +500,7 @@ void register_routes(App& app) {
     json res;
     try {
       res = sys2::accel_apply(c.app.S(), c.bs("engine", "auto"), c.bs("accel", "auto"), c.bb("remember", true),
-                              c.b("capas", nullptr));
+                              c.b("capas", nullptr), c.bs("runtime", "auto"));
     } catch (const std::invalid_argument& e) {
       throw HttpErr(400, e.what());
     }
@@ -682,6 +714,12 @@ void register_routes(App& app) {
     long long mid = (long long)jnum(c.b("message_id"));
     int score = (int)jnum(c.b("score"));
     json res = s.learner->feedback(mid, score, c.bs("comment", ""));
+    try {   // el estilo se ajusta para quien hizo la tarea (o, si no consta, para quien valora)
+      auto t = s.db->one("SELECT user_id FROM tasks WHERE message_id=? ORDER BY id DESC LIMIT 1", {mid});
+      auto m = s.db->one("SELECT content FROM messages WHERE id=?", {mid});
+      if (m && s.estilo) s.estilo->on_feedback(t ? jstr(*t, "user_id") : user_of(c), jstr(*m, "content"), score);
+    } catch (const std::exception&) {
+    }
     if (auto msg = s.db->one("SELECT session_id, agent FROM messages WHERE id=?", {mid})) {
       auto q = s.db->one(
           "SELECT content FROM messages WHERE session_id=? AND id<? AND role='user' ORDER BY id DESC LIMIT 1",
@@ -1157,12 +1195,47 @@ void register_routes(App& app) {
     return res;
   });
 
-  // rastreo de un sitio de documentacion; background=true (o todo el dominio): por lotes reanudables
+  // rastreo de un sitio de documentacion; background=true (o todo el dominio): por lotes reanudables.
+  // urls (lista o texto con una URL por linea): cada URL es un trabajo y van todos a la cola, que los rastrea en orden
   app.post("/api/rag/crawl", [rag_target](Ctx& c) -> Out {
-    std::string url = c.bs("url"), scope = c.bs("scope", "path");
+    std::string scope = c.bs("scope", "path");
     int max_pages = (int)c.bn("max_pages", 40), max_depth = (int)c.bn("max_depth", 3), batch_pages = (int)c.bn("batch_pages", 0);
     bool background = c.bb("background", false);
     if (scope != "path" && scope != "domain") throw HttpErr(400, "scope debe ser 'path' o 'domain'");
+    json list = c.b("urls", nullptr);
+    if (!list.is_null()) {
+      std::string text;
+      if (list.is_array())
+        for (auto& u : list) text += Ctx::as_str(u) + "\n";
+      else if (list.is_string())
+        text = list.get<std::string>();
+      else
+        throw HttpErr(400, "urls debe ser una lista o un texto con una URL por linea");
+      std::vector<std::string> invalid;
+      std::vector<std::string> urls = rag::crawl_jobs::parse_url_list(text, &invalid);
+      if (urls.empty()) throw HttpErr(400, "la lista no tiene ninguna URL http(s)");
+      if (urls.size() > 1000) throw HttpErr(400, "como mucho 1000 URLs por lista");
+      std::string target = rag_target(c.bs("agent", ""));
+      auto [pages, chars] = rag::crawl_jobs::auto_batch(c.app.S().profile);
+      std::string lid = strftime_local("%Y%m%d%H%M%S-") + token_hex(3);
+      json jobs = json::array();
+      std::vector<std::string> ids;
+      for (size_t i = 0; i < urls.size(); ++i) {
+        json job = rag::crawl_jobs::create(urls[i], max_pages, max_depth, scope, target, true,
+                                           std::clamp(batch_pages ? batch_pages : pages, 1, 500), chars, true);
+        job["list"] = lid;
+        job["list_pos"] = i + 1;
+        job["list_total"] = urls.size();
+        rag::crawl_jobs::save(job);
+        ids.push_back(job["id"]);
+        jobs.push_back(rag::crawl_jobs::pub(job));
+      }
+      App* a = &c.app;
+      rag::crawl_jobs::enqueue(c.app.S(), ids, [a](const json& e) { a->broadcast(e); });
+      return json{{"list", lid}, {"jobs", jobs}, {"invalid", invalid},
+                  {"parallel", std::clamp((int)c.app.S().config.num("rag.crawl_parallel", 1), 1, 4)}};
+    }
+    std::string url = c.bs("url");
     if (!re_search(R"(^https?://)", url, Rx::I)) throw HttpErr(400, "la URL debe empezar por http:// o https://");
     std::string target = rag_target(c.bs("agent", ""));
     App* a = &c.app;
@@ -1326,19 +1399,46 @@ void register_routes(App& app) {
   app.get("/api/outputs", [](Ctx& c) -> Out {
     long long limit = c.qi("limit", 60);
     json out = json::object();
-    for (auto* kind : {"images", "music", "docs"}) {
+    for (auto* kind : {"images", "music", "docs", "videos"}) {
       auto files = glob(paths::sub({"outputs", kind}), "*.*");
       std::stable_sort(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) { return mtime(a) > mtime(b); });
       json list = json::array();
       for (auto& f : files) {
         std::string ext = f.extension().string();
-        if (ext != ".png" && ext != ".jpg" && ext != ".wav" && ext != ".mid" && ext != ".pdf") continue;
+        if (ext != ".png" && ext != ".jpg" && ext != ".wav" && ext != ".mid" && ext != ".pdf" && ext != ".webm" &&
+            ext != ".mp4" && ext != ".avi")
+          continue;
         if ((long long)list.size() >= limit) break;
         list.push_back(std::string("/outputs/") + kind + "/" + S(f.filename()));
       }
       out[kind] = list;
     }
     return out;
+  });
+
+  // editor de video (video.html): el WebM/MP4 que monta el navegador se guarda en outputs/videos
+  app.post("/api/video/guardar", [](Ctx& c) -> Out {
+    auto f = c.file("video");
+    if (!f) throw missing_field("body", "video");
+    std::string ext = lower(P(f->filename).extension().string());
+    if (ext != ".webm" && ext != ".mp4") ext = contains(f->content_type, "mp4") ? ".mp4" : ".webm";
+    if (f->content.size() > (size_t)2 << 30) throw HttpErr(413, "Video demasiado grande");
+    std::string name = std::to_string((long long)now()) + "_" + media::slug_name(c.form("titulo", "video"), 40, "video") + ext;
+    fs::path out = paths::sub({"outputs", "videos"}) / P(name);
+    if (!write_file(out, f->content)) throw HttpErr(500, "No se pudo guardar el video");
+    return json{{"url", "/outputs/videos/" + name}, {"bytes", f->content.size()}};
+  });
+
+  // video rapido desde el Estudio: la misma herramienta que usan los agentes (crear_video)
+  app.post("/api/video/rapido", [](Ctx& c) -> Out {
+    tools::ToolContext tc;
+    tc.services = &c.app.S();
+    tc.agent = "estudio";
+    try {
+      return tools::crear_video(c.body.is_object() ? c.body : json::object(), tc);
+    } catch (const std::exception& e) {
+      throw HttpErr(400, e.what());
+    }
   });
 
   app.post("/api/prompt/enhance", [](Ctx& c) -> Out {
@@ -1403,10 +1503,44 @@ void register_routes(App& app) {
     return json{{"ok", true}};
   });
 
-  app.get("/api/voice", [](Ctx& c) -> Out { return c.app.S().voice->info(); });
+  // voz de cada agente ya resuelta (la general con la suya, o una distinta derivada de su id)
+  auto voces_agentes = [](Services& s) {
+    json out = json::object();
+    out["nexus"] = s.voice->voz_de("nexus", json::object());
+    int i = 0;
+    for (auto& a : s.agents->all()) out[a.id] = s.voice->voz_de(a.id, a.voz, a.id == "nexus" ? -1 : i++);
+    return out;
+  };
+  app.get("/api/voice", [voces_agentes](Ctx& c) -> Out {
+    json j = c.app.S().voice->info();
+    j["general"] = c.app.S().config.get("user.voz", json::object());
+    j["distinta"] = c.app.S().config.flag("user.voz_distinta", true);
+    j["agentes"] = voces_agentes(c.app.S());
+    return j;
+  });
+  app.get("/api/voice/voces", [](Ctx& c) -> Out { return c.app.S().voice->voces(); });
 
+  // texto a voz con la voz del agente que habla (agente) o una voz concreta para probarla en el editor (voz)
   app.post("/api/voice/tts", [](Ctx& c) -> Out {
-    auto res = c.app.S().voice->tts(c.bs("text"), c.bn("rate", 1.0));
+    auto& s = c.app.S();
+    json voz = json::object();
+    std::string ag = c.bs("agente", "");
+    if (c.has_b("voz") && c.b("voz").is_object()) {
+      voz = s.config.get("user.voz", json::object());
+      if (!voz.is_object()) voz = json::object();
+      for (auto& [k, x] : c.b("voz").items())
+        if (!x.is_null() && !(x.is_string() && x.get<std::string>().empty())) voz[k] = x;
+    } else if (!ag.empty()) {
+      auto a = s.agents->get(ag);
+      int i = 0, indice = -1;
+      for (auto& x : s.agents->all()) {   // mismo puesto que en GET /api/voice
+        if (x.id == ag) indice = ag == "nexus" ? -1 : i;
+        if (x.id != "nexus") ++i;
+      }
+      voz = s.voice->voz_de(ag, a ? a->voz : json::object(), indice);
+    } else
+      voz = s.voice->voz_de("", json::object());
+    auto res = s.voice->tts(c.bs("text"), c.bn("rate", 1.0), voz);
     if (!res) return Raw{204, "", "", {{"X-TTS-Engine", "browser"}}};   // sin motor local: la voz del navegador
     return Raw{200, res->first, "audio/wav", {{"X-TTS-Engine", res->second}}};
   });
@@ -1440,6 +1574,74 @@ void register_routes(App& app) {
       throw HttpErr(400, e.what());
     }
     return json{{"ok", true}};
+  }, true);
+
+  // ------------------------------------------------------------------ asistente de configuracion de agentes
+  // plantillas de puesto, paquetes de herramientas (solo los instalados), agentes para el equipo y modelos
+  app.get("/api/agents/asistente", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    std::map<std::string, std::string> riesgo;   // herramienta instalada -> riesgo
+    for (auto& t : s.tools->list()) riesgo[jstr(t, "name")] = jstr(t, "risk", "low");
+    // permiso que pedira cada paquete segun tools.policy (lo mas estricto de sus herramientas)
+    json pol = s.config.get("tools.policy", json::object());
+    static const std::vector<std::string> ORDEN = {"auto", "ask", "admin", "deny"};
+    json paq = json::array();
+    for (auto p : agents::asistente::paquetes()) {
+      json tl = json::array();
+      size_t nivel = 0;
+      for (auto& t : p["tools"]) {
+        auto it = riesgo.find(t.get<std::string>());
+        if (it == riesgo.end()) continue;
+        tl.push_back(t);
+        std::string d = pol.is_object() && pol.contains(it->second) ? jstr(pol, it->second) : "admin";
+        size_t i = std::find(ORDEN.begin(), ORDEN.end(), d) - ORDEN.begin();
+        nivel = std::max(nivel, std::min(i, ORDEN.size() - 1));
+      }
+      if (tl.empty()) continue;
+      p["tools"] = tl;
+      p["permiso"] = ORDEN[nivel];
+      paq.push_back(p);
+    }
+    json equipo = json::array();
+    for (auto& a : s.agents->all())
+      equipo.push_back({{"id", a.id}, {"name", a.name}, {"icon", a.icon}, {"color", a.color},
+                        {"description", a.description}, {"enabled", a.enabled}});
+    json modelos = json::array({{{"id", "default"}, {"nombre", "Automático: el modelo general del equipo"}},
+                                {{"id", "especialidad:finanzas"}, {"nombre", "IA de finanzas (si está instalada)"}},
+                                {{"id", "nube:"}, {"nombre", "IA online con tu clave (si no hay, la local)"}}});
+    return json{{"plantillas", agents::asistente::plantillas()}, {"paquetes", paq}, {"agentes", equipo},
+                {"modelos", modelos}, {"vacio", agents::asistente::perfil_de(nullptr)}};
+  });
+
+  // respuestas -> ficha y prompt (vista previa); con "guardar": true la guarda y siembra el conocimiento del puesto
+  app.post("/api/agents/asistente", [](Ctx& c) -> Out {
+    Services& s = c.app.S();
+    std::vector<std::string> herramientas, ids;
+    for (auto& t : s.tools->list()) herramientas.push_back(jstr(t, "name"));
+    std::map<std::string, std::vector<std::string>> palabras;
+    for (auto& a : s.agents->all()) {
+      ids.push_back(a.id);
+      if (a.enabled) palabras[a.id] = a.keywords;
+    }
+    std::string editando = c.bs("editar", "");
+    if (!editando.empty() && std::find(ids.begin(), ids.end(), editando) == ids.end())
+      throw HttpErr(404, "no existe el agente " + editando);
+    json out;
+    try {
+      out = agents::asistente::construir(c.b("respuestas"), herramientas, ids, editando, palabras);
+    } catch (const std::invalid_argument& e) {
+      throw HttpErr(400, e.what());
+    }
+    out["guardado"] = false;
+    if (truthy(c.b("guardar", false))) {
+      auto spec = s.agents->save(out["agente"]);
+      out["agente"] = spec.to_json();
+      out["guardado"] = true;
+      out["sembradas"] = s.graph ? agents::asistente::sembrar(*s.graph, spec.id,
+                                                              agents::asistente::plantilla(jstr(spec.perfil, "plantilla")))
+                                 : 0;
+    }
+    return out;
   }, true);
 
   // ------------------------------------------------------------------ oficina (perfiles de pyme)
@@ -1970,6 +2172,10 @@ void register_routes(App& app) {
     return j;
   });
 
+  // ------------------------------------------------------------------ metricas, estilo y aprobaciones diferidas
+  register_agent_routes(app);
+  register_pipeline_routes(app);
+
   // ------------------------------------------------------------------ herramientas
   app.get("/api/tools", [](Ctx& c) -> Out {
     Services& s = c.app.S();
@@ -2066,7 +2272,8 @@ void register_routes(App& app) {
     for (auto* k : {"source", "q"})
       if (!c.has_q(k)) throw missing_field("query", k);
     try {
-      return c.app.S().models->search(source, c.q("q"), c.q("kind"));
+      std::string fmt = c.has_q("formato") ? c.q("formato") : "";
+      return c.app.S().models->search(source, c.q("q"), fmt.empty() ? c.q("kind") : "fmt:" + fmt);
     } catch (const std::out_of_range& e) {
       throw HttpErr(502, source + ": " + key_msg(e));
     } catch (const std::exception& e) {
@@ -2108,6 +2315,24 @@ void register_routes(App& app) {
     c.app.S().models->cancel(c.p("jid"));
     return json{{"ok", true}};
   });
+
+  // explorador de archivos para importar modelos: el selector del sistema solo si la interfaz se abre en el mismo
+  // equipo (no por el puerto remoto: el dialogo saldria en el PC y no en el movil que lo pide)
+  app.get("/api/fs/listar", [](Ctx& c) -> Out {
+    try {
+      json r = explorador::listar(c.q("ruta"), c.qb("todos", false));
+      r["dialogo"] = !c.remote && c.local() && explorador::dialogo_disponible();
+      return r;
+    } catch (const std::runtime_error& e) {
+      throw HttpErr(404, e.what());
+    }
+  }, true);
+
+  app.post("/api/fs/dialogo", [](Ctx& c) -> Out {
+    if (c.remote || !c.local())
+      return json{{"unavailable", true}, {"detail", "el selector del sistema solo se abre en el equipo de Agente IA"}};
+    return explorador::dialogo(c.bb("carpeta", false));
+  }, true);
 
   app.post("/api/models/import", [](Ctx& c) -> Out {
     std::string path = c.bs("path");
@@ -2235,7 +2460,7 @@ void register_routes(App& app) {
     if (!res) {
       r.limiter.fail("pair:" + c.host);
       L.warning("Emparejamiento remoto rechazado desde ", c.host);
-      throw HttpErr(401, "Codigo incorrecto o caducado (pide uno nuevo en tu Nexus-Office)");
+      throw HttpErr(401, "Codigo incorrecto o caducado (pide uno nuevo en tu Agente IA)");
     }
     auto& [token, dev] = *res;
     r.limiter.reset("pair:" + c.host);
@@ -2416,6 +2641,9 @@ void register_routes(App& app) {
     r.cert(true);
     return merged(r.status(), {{"restart_required", true}});
   }, true);
+
+  // ------------------------------------------------------------------ beta: rendimiento y aspecto (server/beta.cpp)
+  beta::register_routes(app);
 }
 
 }  // namespace nx::server

@@ -14,7 +14,7 @@ namespace nx::tools {
 
 namespace {
 
-const http::Headers UA = {{"User-Agent", "Mozilla/5.0 (Nexus-Office agent)"}};
+const http::Headers UA = {{"User-Agent", "Mozilla/5.0 (Agente IA agent)"}};
 constexpr size_t MAX_FETCH_BYTES = 5000000;
 
 bool allow_private() { return truthy(get_config().get("rag.allow_private_urls", false)); }

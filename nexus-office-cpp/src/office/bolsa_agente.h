@@ -16,6 +16,7 @@
 #include <thread>
 #include <vector>
 
+#include "util/exporta.h"
 #include "office/bolsa.h"
 
 namespace nx::bolsa {
@@ -98,7 +99,7 @@ class AgenteBolsa {
 
 AgenteBolsa& agente();    // el de la mesa actual (ajustes en config bolsa.agente)
 // se llama con cada agente nuevo (tambien tras reset_agentes): main.cpp conecta ahi la IA financiera
-extern std::function<void(AgenteBolsa&)> al_crear_agente;
+extern NX_DATOS std::function<void(AgenteBolsa&)> al_crear_agente;
 void reset_agentes();
 
 }  // namespace nx::bolsa

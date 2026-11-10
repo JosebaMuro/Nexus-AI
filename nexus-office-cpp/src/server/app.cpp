@@ -3,6 +3,7 @@
 
 #include <httplib.h>
 
+#include <chrono>
 #include <fstream>
 #include <regex>
 #include <thread>
@@ -11,6 +12,7 @@
 #include "core/services.h"
 #include "memory/memory.h"
 #include "remote/remote.h"
+#include "server/beta.h"
 #include "tools/tools.h"
 #include "util/crypto.h"
 #include "util/log.h"
@@ -181,7 +183,7 @@ bool App::valid() const { return srv_ && srv_->is_valid(); }
 App::~App() = default;
 
 Services& App::S() {
-  if (!services_) throw HttpErr(503, "Nexus-Office aun esta arrancando");
+  if (!services_) throw HttpErr(503, "Agente IA aun esta arrancando");
   return *services_;
 }
 
@@ -255,8 +257,17 @@ void App::route(const std::string& method, const std::string& pattern, Handler h
     last = it->position() + it->length();
   }
   rx += replace_all(pattern.substr(last), ".", "\\.");
-  auto fn = [this, h = std::move(h), admin_required, names](const httplib::Request& req, httplib::Response& res) {
+  // beta: cada peticion se cronometra por su patron (/api/x/{id}) y la duracion va en la cabecera Server-Timing,
+  // que las herramientas de desarrollo del navegador muestran junto a la peticion
+  auto fn = [this, h = std::move(h), admin_required, names, method, pattern](const httplib::Request& req,
+                                                                            httplib::Response& res) {
+    auto t0 = std::chrono::steady_clock::now();
     dispatch(h, admin_required, names, req, res);
+    double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    char st[48];
+    std::snprintf(st, sizeof st, "app;dur=%.2f", ms);
+    res.set_header("Server-Timing", st);
+    beta::record(method, pattern, ms, res.status);
   };
   if (method == "GET")
     srv_->Get(rx, fn);
@@ -328,7 +339,8 @@ void App::dispatch(const Handler& h, bool admin_required, const std::vector<std:
     if (admin_required && !c.admin) throw HttpErr(403, "Requiere modo administrador");
     std::string ctype = req.get_header_value("Content-Type");
     if (!req.body.empty() && !starts_with(ctype, "multipart/form-data") &&
-        !starts_with(ctype, "application/x-www-form-urlencoded")) {
+        !starts_with(ctype, "application/x-www-form-urlencoded") && !starts_with(ctype, "image/") &&
+        !starts_with(ctype, "application/octet-stream") && !starts_with(ctype, "video/")) {   // binarios (frames de la camara): el cuerpo tal cual
       c.body = jparse(req.body);
       if (c.body.is_discarded()) throw HttpErr(422, unprocessable("body", "", "JSON decode error"));
     }
@@ -339,7 +351,16 @@ void App::dispatch(const Handler& h, bool admin_required, const std::vector<std:
     } else if (auto* r = std::get_if<Raw>(&out)) {
       res.status = r->status;
       for (auto& [k, v] : r->headers) res.set_header(k, v);
-      if (r->status != 204) res.set_content(r->body, r->mime);
+      if (r->status != 204 && r->vista) {
+        const char* p = r->vista;
+        const size_t n = r->vista_len;
+        res.set_content_provider(n, r->mime, [p, n, keep = r->retener](size_t off, size_t len, httplib::DataSink& sink) {
+          if (off < n) sink.write(p + off, std::min(len, n - off));
+          return true;
+        });
+      } else if (r->status != 204) {
+        res.set_content(r->body, r->mime);
+      }
     } else if (auto* f = std::get_if<FileOut>(&out)) {
       res.status = 200;
       send_file(res, *f);
@@ -376,7 +397,7 @@ void App::setup() {
         res.set_content(body, mime);
         return httplib::Server::HandlerResponse::Handled;
       };
-      if (!services_) return deny(503, json{{"detail", "Nexus-Office esta arrancando"}}.dump(), "application/json");
+      if (!services_) return deny(503, json{{"detail", "Agente IA esta arrancando"}}.dump(), "application/json");
       std::string host = req.remote_addr.empty() ? "127.0.0.1" : req.remote_addr;
       std::string token = cookie(req, remote::COOKIE);
       if (token.empty()) token = req.get_header_value("X-Nexus-Device");
@@ -395,6 +416,12 @@ void App::setup() {
     std::string host = req.remote_addr.empty() ? "127.0.0.1" : req.remote_addr;
     bool open = false;
     for (auto& p : OPEN_PATHS) open |= starts_with(req.path, p);
+    // MCP desde otro equipo: vale el token mcp.token (Authorization: Bearer) en lugar de la clave de red
+    if (!open && services_ && req.path == "/mcp") {
+      std::string tok = services_->config.str("mcp.token", "");
+      std::string auth = req.get_header_value("Authorization");
+      open = !tok.empty() && starts_with(auth, "Bearer ") && consteq(auth.substr(7), tok);
+    }
     if (!services_ || open || lan_ok(req, host)) {
       if (req.has_param("key") && !LOCAL.count(host))
         res.set_header("Set-Cookie", "nexus_key=" + req.get_param_value("key") +
@@ -405,7 +432,7 @@ void App::setup() {
     if (req.path == "/") {
       res.set_content(
           "<!doctype html><meta name=viewport content='width=device-width'><body style='background:#04060c;color:#d8f6ff;"
-          "font-family:sans-serif;padding:24px'><h2 style='color:#00f0ff'>Nexus-Office</h2><p>Introduce la clave de red "
+          "font-family:sans-serif;padding:24px'><h2 style='color:#00f0ff'>Agente IA</h2><p>Introduce la clave de red "
           "(en el PC: Red COOP &gt; Conectar dispositivos).</p><form><input name=key autofocus style='font-size:18px;padding:8px'>"
           " <button style='font-size:18px;padding:8px'>Entrar</button></form>",
           "text/html; charset=utf-8");
@@ -507,7 +534,9 @@ void App::websocket(const httplib::Request& req, httplib::ws::WebSocket& ws) {
     if (type == "ping") {
       link->send({{"type", "pong"}});
     } else if (type == "chat") {
-      std::thread([&s, link, data] {
+      // usuario final: el dispositivo emparejado o el perfil elegido en la interfaz ("" = el titular)
+      std::string user = !device.empty() ? "dispositivo:" + device : sanitize_user(jstr(data, "usuario"));
+      std::thread([&s, link, data, user] {
         tools::Emit emit = [link](const json& e) { link->send(e); };
         try {
           std::string text = jstr(data, "text");
@@ -521,7 +550,7 @@ void App::websocket(const httplib::Request& req, httplib::ws::WebSocket& ws) {
             images.push_back(comma == std::string::npos ? v : v.substr(comma + 1));
           }
           std::string agent = data.contains("agent") && data["agent"].is_string() ? data["agent"].get<std::string>() : "auto";
-          s.agents->run(agent, text, sid, images, emit, false, 0, true, truthy(data.value("live", json(false))));
+          s.agents->run(agent, text, sid, images, emit, false, 0, true, truthy(data.value("live", json(false))), user);
         } catch (const std::exception& e) {
           L.error("Error en el chat: ", e.what());
           emit({{"type", "error"}, {"message", e.what()}});
