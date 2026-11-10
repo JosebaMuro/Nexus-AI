@@ -105,6 +105,48 @@ def test_selector_matriz_y_banco(monkeypatch):
     assert selector.orden_aceleradores("genie", {}, hw, {}) == ["npu"]
 
 
+def test_selector_prefiere_el_modelo_mayor_si_va_comodo(monkeypatch):
+    """Elegir solo por tokens/s dejaria siempre el modelo mas pequeno: entre los que van comodos gana el mayor."""
+    monkeypatch.setattr(selector, "disponible", lambda m: (True, ""))
+    monkeypatch.setattr(selector, "plataforma", lambda: "linux-x86_64")
+    cat = [{"id": "peq", "kind": "llm", "format": "gguf", "size_mb": 1000},
+           {"id": "grande", "kind": "llm", "format": "gguf", "size_mb": 5000},
+           {"id": "enorme", "kind": "llm", "format": "gguf", "size_mb": 20000},
+           {"id": "peq-ov", "kind": "llm", "format": "openvino", "size_mb": 1100}]
+    medido = {"resultados": {"llamaserver:peq": {"tps": 40}, "llamaserver:grande": {"tps": 12},
+                             "llamaserver:enorme": {"tps": 2}, "openvino:peq-ov": {"tps": 55}}}
+    orden = [c["id"] for c in selector.candidatos(cat, _hw(), {}, banco=medido)]
+    # grande va comodo (12 >= 8); los dos pequenos compiten por velocidad; el enorme (2 tok/s) al final
+    assert orden == ["grande", "peq-ov", "peq", "enorme"]
+    lentos = {"resultados": {"llamaserver:peq": {"tps": 6}, "llamaserver:grande": {"tps": 3}}}
+    assert selector.candidatos(cat[:2], _hw(), {}, banco=lentos)[0]["id"] == "peq"   # ninguno comodo: el mas rapido
+
+
+def test_llamaserver_lote_cache_y_reintento_de_gpu(monkeypatch):
+    from nexus.llm import llamaserver as ls
+    assert ls.cache_ram_mb(8, False) == 819 and ls.cache_ram_mb(8, True) == 409
+    assert ls.cache_ram_mb(2, True) == 256 and ls.cache_ram_mb(256, False) == 8192
+    assert ls.lote_fisico(512, -1, 24) == 1024 and ls.lote_fisico(2048, -1, 16) == 2048
+    assert ls.lote_fisico(512, -1, 8) == 512 and ls.lote_fisico(256, 0, 0) == 256 and ls.lote_fisico(512, 0, 24) == 512
+    # escritorio: si la GPU no arranca, CPU durante GPU_RETRY_S sin volver a intentarla en cada peticion
+    monkeypatch.delenv("NEXUS_RUNTIME_LLAMA_CPU", raising=False)
+    b = ls.LlamaServerBackend(None, lambda m: None, lambda: {})
+    vistos = []
+
+    def falso(model, opts):
+        vistos.append(opts.get("gpu_layers"))
+        if opts.get("gpu_layers"):
+            raise ls._GpuFailed("la GPU no arranca")
+    monkeypatch.setattr(b, "_ensure", falso)
+    b.ensure("m", {"gpu_layers": -1})
+    assert vistos == [-1, 0] and b.gpu_retry_at > 0
+    b.ensure("m", {"gpu_layers": -1})
+    assert vistos == [-1, 0, 0]                      # dentro del plazo: directo a la CPU
+    b.gpu_retry_at = 1.0                             # plazo vencido: se vuelve a probar la GPU
+    b.ensure("m", {"gpu_layers": -1})
+    assert vistos[-2:] == [-1, 0]
+
+
 # ------------------------------------------------------------------ backend con un motor falso
 class Falso(motores.Motor):
     id = "onnx"

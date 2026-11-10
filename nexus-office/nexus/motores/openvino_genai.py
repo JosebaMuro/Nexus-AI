@@ -25,6 +25,11 @@ class OpenVinoGenAI(Motor):
         self.carpeta = self.modelo if self.modelo.is_dir() else self.modelo.parent
         cache = paths.sub("motores", "cache-openvino")
         props = {"CACHE_DIR": str(cache)}
+        if self.acelerador in ("CPU", "GPU"):
+            props["PERFORMANCE_HINT"] = "LATENCY"   # una respuesta cada vez: prioridad al primer token, no al caudal
+        if self.acelerador == "CPU" and params.hilos > 0:
+            # los nucleos fisicos (o los rapidos) del perfil: con los eficientes mezclados la generacion va mas lenta
+            props["INFERENCE_NUM_THREADS"] = params.hilos
         if self.acelerador == "NPU":
             # la NPU necesita un tamano de prompt fijo: se reserva lo que cabe en el contexto
             props["MAX_PROMPT_LEN"] = max(1024, min(params.n_ctx - 512, 4096))

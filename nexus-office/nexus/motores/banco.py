@@ -35,6 +35,13 @@ def guardar(data: dict) -> None:
 
 
 def medir(backend, model_id: str, max_tokens: int = 96, n_ctx: int = 2048) -> dict:
+    # una respuesta minima antes de medir: carga el modelo (y compila en la NPU o la GPU) para que el tiempo hasta el
+    # primer token sea el de un chat ya abierto y no el de la carga, que se apunta aparte
+    t_carga = time.time()
+    for _ in backend.stream_chat([{"role": "user", "content": "hola"}], model=model_id, max_tokens=1, temperature=0.0,
+                                 n_ctx=n_ctx):
+        pass   # hasta el final: cortar a medias dejaria el motor ocupado
+    carga = time.time() - t_carga
     t0 = time.time()
     ttft, piezas, texto = None, 0, ""
     for piece in backend.stream_chat(PROMPT, model=model_id, max_tokens=max_tokens, temperature=0.0, n_ctx=n_ctx):
@@ -46,7 +53,7 @@ def medir(backend, model_id: str, max_tokens: int = 96, n_ctx: int = 2048) -> di
     st = getattr(backend, "last_stats", {}) or {}
     tokens = st.get("tokens") or piezas
     gen_s = max(1e-3, total - (ttft or 0))
-    return {"tps": round(tokens / gen_s, 2), "ttft_s": round(ttft or total, 3), "total_s": round(total, 2),
+    return {"tps": round(tokens / gen_s, 2), "ttft_s": round(ttft or total, 3), "total_s": round(total, 2), "carga_s": round(carga, 2),
             "tokens": tokens, "acelerador": getattr(backend, "efectivo", {}).get("acelerador", ""),
             "muestra": texto[:160], "cuando": time.time()}
 

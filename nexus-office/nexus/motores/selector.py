@@ -10,9 +10,32 @@ Con ``llm.motor`` distinto de «auto» se usa ese motor (si esta) y con ``llm.mo
 from __future__ import annotations
 
 import sys
+from functools import lru_cache
+from pathlib import Path
 
 from . import MOTORES, caidas, chips, disponible, motor_de_formato, plataforma
 from . import banco as banco_mod
+
+
+TPS_UTIL = 8.0   # tokens/s a partir de los que un modelo se considera comodo de usar en este equipo
+
+
+@lru_cache(maxsize=256)
+def _peso_ruta(ruta: str) -> int:
+    p = Path(ruta)
+    try:
+        if p.is_dir():
+            return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+        return p.stat().st_size
+    except OSError:
+        return 0
+
+
+def peso_mb(entry: dict) -> int:
+    """Tamano del modelo en disco (MB): entre dos modelos que van comodos, el mayor suele responder mejor."""
+    if entry.get("size_mb"):
+        return int(entry["size_mb"])
+    return _peso_ruta(str(entry.get("path") or "")) // (1024 * 1024)
 
 
 def contexto(hw: dict, profile: dict) -> dict:
@@ -69,10 +92,18 @@ def candidatos(catalog_items: list[dict], hw: dict, profile: dict, banco: dict |
         med = medidas.get(f"{motor}:{e['id']}")
         out.append({"id": e["id"], "nombre": e.get("name", e["id"]), "motor": motor, "formato": e.get("format"),
                     "instalado": ok, "motivo": motivo, "rango": rank, "tps": (med or {}).get("tps"),
+                    "peso_mb": peso_mb(e),
                     "acelerador_medido": (med or {}).get("acelerador"),
                     "caido": any(k.startswith(motor + "-") for k in caidos)})
-    # medido primero (mas tokens/s), luego el orden de la matriz; lo no instalado al final
-    out.sort(key=lambda c: (not c["instalado"], c["tps"] is None, -(c["tps"] or 0), c["rango"]))
+    # Medido primero. Entre los medidos que van comodos (TPS_UTIL o mas) gana el modelo mayor y, a igual tamano, el
+    # motor mas rapido: elegir solo por tokens/s dejaria siempre el modelo mas pequeno. Si ninguno llega, el mas
+    # rapido. Despues, lo no medido en el orden de la matriz; lo no instalado al final.
+    def clave(c: dict):
+        tps = c["tps"] or 0
+        comodo = tps >= TPS_UTIL
+        # tamano en escalones de 256 MB: el mismo modelo en dos formatos (GGUF, OpenVINO...) compite por velocidad
+        return (not c["instalado"], c["tps"] is None, not comodo, -(c["peso_mb"] // 256) if comodo else 0, -tps, c["rango"])
+    out.sort(key=clave)
     return out
 
 

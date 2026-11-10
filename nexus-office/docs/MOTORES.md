@@ -47,6 +47,11 @@ motor y mide los **tokens por segundo** y el **tiempo hasta el primer token**. D
 rápido medido en tu equipo, aunque la tabla diga otra cosa (por ejemplo, si en tu portátil llama.cpp en la iGPU
 supera a OpenVINO en la NPU). El resultado queda en `data/motores/banco.json`.
 
+Entre los modelos medidos que van cómodos (8 tokens/s o más) se elige **el mayor**, que suele responder mejor, y a
+igual tamaño el motor más rápido. Si ninguno llega a esa velocidad, el más rápido. Antes de medir se pide una
+respuesta mínima para que la carga del modelo (que se apunta aparte) no cuente en el tiempo hasta el primer token.
+Al cambiar de motor se descarga el modelo del anterior para no tener dos en memoria.
+
 ```bash
 python -m nexus motores          # chip, orden, motores instalados y modelos con su motor
 python -m nexus motores banco    # mide todos y muestra la tabla de tokens/s

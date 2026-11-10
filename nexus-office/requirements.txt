@@ -1,4 +1,4 @@
-# Nexus-Office 4.0.0 - dependencias y referencias
+# Nexus-Office 4.0.1 - dependencias y referencias
 # Generado por packaging/requirements_ref.py (no editar a mano: regeneralo tras cambiar dependencias o el catalogo).
 # pip solo lee las lineas sin '#'. El resto es la referencia del software nativo y de los pesos de IA.
 #

@@ -36,6 +36,24 @@ class _GpuFailed(RuntimeError):
     pass
 
 
+GPU_RETRY_S = 600      # tras un fallo de la GPU en el escritorio, la CPU durante 10 minutos y se vuelve a probar
+LOAD_S, LOAD_MAX_S = 300, 900   # espera de la carga: 300 s, y hasta 900 s mientras el registro siga creciendo
+
+
+def cache_ram_mb(ram_gb: float, movil: bool) -> int:
+    """Cache de prompts de llama-server en la RAM: el 10 % (5 % en el movil), entre 256 MB y 8 GB. Por defecto
+    reserva hasta 8 GB, que en equipos de 8-16 GB llena la memoria."""
+    return int(max(256, min(8192, ram_gb * 1024 * (0.05 if movil else 0.10))))
+
+
+def lote_fisico(n_batch: int, ngl, vram_gb: float) -> int:
+    """Lote fisico (-ub): con una grafica dedicada de 12 GB o mas el prompt se procesa en trozos de 1024 tokens (el
+    prompt de los agentes es lo que mas tarda); en el resto, el de llama.cpp (512) o el lote logico si es menor."""
+    if ngl and vram_gb >= 12:
+        return max(1024, min(n_batch, 2048))
+    return min(n_batch, 512)
+
+
 class LlamaServerBackend(OpenAICompatBackend):
     name = "llamaserver"
 
@@ -50,6 +68,7 @@ class LlamaServerBackend(OpenAICompatBackend):
         self.port = 0
         self.gpu: dict = {}            # GPU de llama.cpp elegida (cuando hay varias)
         self.gpu_error = ""
+        self.gpu_retry_at = 0.0        # escritorio: tras un fallo de la GPU se sigue en la CPU hasta esta hora
 
     def available(self) -> bool:
         return self.runtimes.exe("llama", self.profile_getter(), self.variant_getter()) is not None and self.resolve("") is not None
@@ -64,13 +83,19 @@ class LlamaServerBackend(OpenAICompatBackend):
 
     def ensure(self, model: str, opts: dict) -> None:
         # Android: si la NPU o la GPU no arrancan con este driver, se apunta y se pasa a la siguiente (NPU -> GPU -> CPU)
+        if self.gpu_retry_at and opts.get("gpu_layers"):
+            if time.time() < self.gpu_retry_at:
+                opts = {**opts, "gpu_layers": 0, "device": ""}
+            else:   # ha pasado el plazo: se vuelve a probar la GPU (un driver recien actualizado, VRAM ya libre...)
+                self.gpu_retry_at, self.gpu_error = 0.0, ""
         for _ in range(3):
             try:
                 return self._ensure(model, opts)
             except _GpuFailed as e:
                 if not os.environ.get("NEXUS_RUNTIME_LLAMA_CPU"):   # escritorio: la GPU elegida no arranca -> CPU
-                    L.warning("%s: se sigue en la CPU", e)
+                    L.warning("%s: se sigue en la CPU y se reintenta la GPU en %d min", e, GPU_RETRY_S // 60)
                     self.gpu_error = str(e)[:300]
+                    self.gpu_retry_at = time.time() + GPU_RETRY_S
                     opts = {**opts, "gpu_layers": 0, "device": ""}
                     continue
                 opts = {**opts, **self._gpu_failed(str(e), opts.get("device") or "")}
@@ -125,9 +150,13 @@ class LlamaServerBackend(OpenAICompatBackend):
                 return
             self.stop()
             self.port = _free_port(8181)
+            prof = self.profile_getter()
+            vram = float(prof.get("vram_gb") or 0) if not (self.gpu or {}).get("integrated") else 0.0
+            ub = lote_fisico(int(opts.get("n_batch", 256)), ngl, vram)
             cmd = [str(exe), "-m", path, "--host", "127.0.0.1", "--port", str(self.port),
-                   "-c", str(opts.get("n_ctx", 4096)), "-b", str(opts.get("n_batch", 256)),
-                   "-ngl", str(999 if ngl == -1 else ngl), "--jinja", "--no-webui"]
+                   "-c", str(opts.get("n_ctx", 4096)), "-b", str(max(ub, int(opts.get("n_batch", 256)))), "-ub", str(ub),
+                   "-ngl", str(999 if ngl == -1 else ngl), "--jinja", "--no-webui",
+                   "--cache-ram", str(cache_ram_mb(float(prof.get("ram_gb") or 8), variant == "embedded"))]
             if opts.get("n_threads"):
                 cmd += ["-t", str(opts["n_threads"])]
             if device:
@@ -153,11 +182,23 @@ class LlamaServerBackend(OpenAICompatBackend):
             self.base_url = f"http://127.0.0.1:{self.port}/v1"
             self.key, self.variant = key, variant
             t0 = time.time()
-            while time.time() - t0 < 300:
+            visto, crecio = log_from, t0
+            while True:
+                ahora = time.time()
+                tam = log_path.stat().st_size if log_path.exists() else 0
+                if tam != visto:
+                    visto, crecio = tam, ahora
+                # un modelo grande en un disco lento tarda: se espera mas mientras llama-server siga escribiendo
+                if ahora - t0 >= LOAD_MAX_S or (ahora - t0 >= LOAD_S and ahora - crecio > 30):
+                    break
                 if self.proc.poll() is not None:
                     tail = (paths.logs_dir() / "llama-server.log").read_bytes()[-1500:].decode(errors="replace")
-                    if "--no-webui" in tail or "invalid argument" in tail:
-                        cmd.remove("--no-webui")  # versiones antiguas no conocen la opcion
+                    viejo = next((o for o in ("--cache-ram", "--no-webui") if o in cmd and o in tail), None)
+                    if viejo is None and "invalid argument" in tail and "--no-webui" in cmd:
+                        viejo = "--no-webui"
+                    if viejo:   # versiones antiguas no conocen la opcion: se quita (con su valor) y se arranca otra vez
+                        i = cmd.index(viejo)
+                        del cmd[i:i + (2 if viejo == "--cache-ram" else 1)]
                         self.proc = popen(cmd, stdout=logf, stderr=subprocess.STDOUT, cwd=str(exe.parent), env=env)
                         continue
                     self.proc = None
@@ -227,8 +268,13 @@ class LlamaServerBackend(OpenAICompatBackend):
             if produced or (self.proc and self.proc.poll() is None):
                 raise
             L.warning("llama-server se detuvo durante la peticion; reiniciando y reintentando")
-            if self.key and self.key[-1]:   # se cayo usando la GPU: driver inestable, se sigue en CPU
-                self._gpu_failed(f"llama-server con GPU ({self.key[-1]}) se detuvo durante una respuesta")
+            ngl, dev = (self.key[6], self.key[7]) if self.key else (0, "")
+            if os.environ.get("NEXUS_RUNTIME_LLAMA_CPU"):
+                if dev:   # Android, se cayo usando la GPU o la NPU: driver inestable, se apunta y se sigue
+                    opts = {**opts, **self._gpu_failed(f"llama-server con GPU ({dev}) se detuvo durante una respuesta", dev)}
+            elif ngl:     # escritorio: CPU durante unos minutos y se vuelve a probar la GPU
+                self.gpu_error = "llama-server se detuvo durante una respuesta con la GPU"
+                self.gpu_retry_at = time.time() + GPU_RETRY_S
                 opts = {**opts, "gpu_layers": 0, "device": ""}
             self.key = None
             self.ensure(model, opts)
