@@ -55,7 +55,7 @@ MOTORES: dict[str, Info] = {i.id: i for i in (
     Info("onnx", "ONNX Runtime GenAI", "onnx-genai", paquete="onnxruntime_genai",
          aceleradores=("modelo", "cuda", "dml", "qnn", "openvino", "vitisai", "cpu")),
     Info("openvino", "OpenVINO GenAI", "openvino", paquete="openvino_genai", aceleradores=("NPU", "GPU", "CPU")),
-    Info("litert", "LiteRT-LM", "litertlm", lib="litert_lm_c", aceleradores=("npu", "gpu", "cpu")),
+    Info("litert", "LiteRT-LM", "litertlm", lib="litert-lm", aceleradores=("npu", "gpu", "cpu")),
     Info("executorch", "ExecuTorch", "executorch", paquete="executorch", aceleradores=("xnnpack", "qnn", "vulkan", "coreml", "mps")),
     Info("mlc", "MLC LLM", "mlc", paquete="mlc_llm", aceleradores=("cuda", "rocm", "vulkan", "metal", "opencl", "cpu")),
     Info("tensorrt", "TensorRT-LLM", "tensorrt", paquete="tensorrt_llm", aceleradores=("cuda",)),

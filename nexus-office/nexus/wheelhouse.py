@@ -38,10 +38,21 @@ ACCEL = {
     "windows-x64": ["onnxruntime-qnn", "torch-directml", "transformers", "scipy"],
     "macos-arm64": ["torch", "transformers", "scipy"],
 }
+# motores de inferencia por hardware (nexus/motores) con rueda binaria en PyPI para CPython 3.11, por plataforma.
+# DirectML en Windows x64 sirve para cualquier GPU (y CPU); MLC y TensorRT-LLM no tienen rueda en PyPI para todas:
+# van como paquete aparte («motores extra»), igual que LiteRT-LM y Genie, que son bibliotecas nativas.
+MOTORES = {
+    "windows-x64": ["onnxruntime-genai-directml", "openvino-genai", "executorch", "jinja2"],
+    "windows-arm64": ["onnxruntime-genai", "jinja2"],
+    "linux-x86_64": ["onnxruntime-genai", "openvino-genai", "executorch", "jinja2"],
+    "linux-aarch64": ["onnxruntime-genai", "executorch", "jinja2"],
+    "macos-arm64": ["onnxruntime-genai", "openvino-genai", "executorch", "jinja2"],
+    "macos-x86_64": ["onnxruntime-genai", "openvino-genai", "jinja2"],
+}
 
 
 def extras_for(target: str) -> list[str]:
-    return EXTRAS + ACCEL.get(target, [])
+    return EXTRAS + ACCEL.get(target, []) + MOTORES.get(target, [])
 PBS_FALLBACK = "https://github.com/astral-sh/python-build-standalone/releases/download/20261009/cpython-3.11.17+20261009-{triple}-install_only_stripped.tar.gz"
 
 

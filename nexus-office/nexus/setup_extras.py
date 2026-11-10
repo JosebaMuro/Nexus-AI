@@ -21,6 +21,7 @@ def plan(profile: dict, hw) -> list[dict]:
         pkg = {"intel": ["openvino"], "qualcomm": ["onnxruntime-qnn"], "amd": ["onnxruntime"]}.get(npu["vendor"])
         if pkg:
             steps.append({"name": f"Runtime NPU ({npu['vendor']})", "pip": pkg, "reason": npu["hint"]})
+    steps += motor_steps(profile, hw)
     acc = profile["accelerator"]
     if profile["music"]["neural"]:
         idx = {"cuda": "https://download.pytorch.org/whl/cu124", "rocm": "https://download.pytorch.org/whl/rocm6.2",
@@ -30,6 +31,30 @@ def plan(profile: dict, hw) -> list[dict]:
             steps.append({"name": "PyTorch acelerado + MusicGen", "pip": torch + ["transformers", "scipy"],
                           "index": idx, "reason": "musica neuronal en GPU", "optional": True})
     return steps
+
+
+def motor_steps(profile: dict, hw) -> list[dict]:
+    """Motores de inferencia que la matriz pone por delante de llama.cpp para el chip de este equipo (nexus/motores)."""
+    from .motores import MOTORES, chips, disponible, plataforma
+    plat = plataforma()
+    pkgs = {"onnx": "onnxruntime-genai-directml" if plat == "windows-x86_64" else "onnxruntime-genai",
+            "openvino": "openvino-genai", "executorch": "executorch", "mlc": "mlc-llm", "tensorrt": "tensorrt-llm"}
+    try:
+        hwd = hw.to_dict()
+    except Exception:  # noqa: BLE001
+        hwd = {}
+    orden = [p["motor"] for p in chips.matriz(chips.chip(hwd, profile), plat)["orden"]]
+    out, vistos = [], set()
+    for m in orden:
+        if m == "llamaserver":
+            break
+        if m in vistos or m not in pkgs or disponible(m)[0]:
+            continue
+        vistos.add(m)
+        # MLC y TensorRT-LLM no estan en el paquete offline: solo si hay internet o rueda local
+        out.append({"name": f"Motor {MOTORES[m].nombre}", "pip": [pkgs[m], "jinja2"],
+                    "reason": f"el mas rapido para este chip segun la matriz ({m})", "optional": m in ("mlc", "tensorrt")})
+    return out
 
 
 def run(auto: bool = True, include_optional: bool = False) -> None:

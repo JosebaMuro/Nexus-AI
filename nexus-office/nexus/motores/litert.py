@@ -1,7 +1,7 @@
 """LiteRT-LM (Google) por su API C (``c/engine.h`` y ``c/conversation.h``, version 1.x), cargada con ctypes.
 
 Es el motor que mejor va en los Pixel (TPU de Tensor) y en los moviles con NPU de Qualcomm o MediaTek, y tambien en
-la NPU de Intel. La biblioteca (``liblitert_lm_c.so``, ``litert_lm_c.dll``) y las de «dispatch» de cada NPU las
+la NPU de Intel. La biblioteca (``liblitert-lm.so``, ``litert-lm.dll``) y las de «dispatch» de cada NPU las
 compila ``motores-npu.yml`` y van en ``bundled/runtimes/litert/<variante>/``.
 
 Una conversacion guarda su cache KV: si la peticion nueva es la anterior mas la respuesta y un mensaje nuevo (lo

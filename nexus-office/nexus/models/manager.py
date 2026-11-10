@@ -464,6 +464,8 @@ class ModelManager:
         for f in paths.models_dir().rglob("*"):
             if f.suffix.lower() not in (".gguf", ".safetensors", ".onnx") or str(f) in known or "mmproj" in f.name.lower():
                 continue
+            if any(motores.detectar_formato(d) for d in (f.parent, f.parent.parent)):
+                continue   # pieza de un modelo de carpeta (ONNX GenAI, OpenVINO, MLC...): se registra la carpeta
             rec = recs.get((f.parent.name, f.name))
             try:
                 if rec:
