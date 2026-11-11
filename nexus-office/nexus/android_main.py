@@ -85,7 +85,8 @@ def prepare(data_dir: str, native_lib_dir: str = "") -> dict:
     if gpu and gpu.is_file():   # llama.cpp con Vulkan/OpenCL: lo usa si la sonda de hardware encuentra GPU
         os.environ["NEXUS_RUNTIME_LLAMA_GPU"] = str(gpu)
     if native_lib_dir:
-        os.environ["NEXUS_ANDROID_LIBS"] = native_lib_dir
+        # NEXUS_NATIVE_LIB_DIR: ahi buscan los motores (LiteRT-LM, Genie, ONNX GenAI) y su proceso auxiliar
+        os.environ["NEXUS_ANDROID_LIBS"] = os.environ["NEXUS_NATIVE_LIB_DIR"] = native_lib_dir
     from . import android_dns
     dns = android_dns.install()
     _certificates()

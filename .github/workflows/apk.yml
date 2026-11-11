@@ -13,9 +13,19 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 env:
   BASE: v2.0.0
+  # Motores por hardware de la APK (4.0.2): proceso auxiliar nativo de la edicion C++ (orden «motor»), LiteRT-LM y
+  # QAIRT/Genie de motores-npu.yml, ONNX Runtime con QNN y ONNX Runtime GenAI, y ExecuTorch con el delegado QNN
+  MOTOR_CPP: v3.2.3-cpp
+  ORT: "1.29.0"            # onnxruntime-android-qnn (QNN 2.42, el mismo QAIRT que motores-npu.yml)
+  ORT_GENAI: "0.19.0"      # paquete NuGet Microsoft.ML.OnnxRuntimeGenAI (trae el .aar de Android)
+  EXECUTORCH: "1.5.1"      # org.pytorch:executorch-android-qnn
+  FBJNI: "0.7.0"
+  NATIVELOADER: "0.10.5"
+  KOTLIN: "1.9.23"
   GH_TOKEN: ${{ github.token }}
 
 jobs:
@@ -38,6 +48,53 @@ jobs:
           chmod +x "$R/py/bin/python3.12"
           ls "$R/lib"; du -sh "$R/py"
           rm -rf x old
+      - name: Motores por hardware (LiteRT-LM, Genie/QNN, ONNX Runtime GenAI, ExecuTorch)
+        run: |
+          set -e
+          M=nexus-office/.cache/android-runtime/motores
+          mkdir -p "$M/java" w
+          MAVEN=https://repo1.maven.org/maven2
+          aar() {  # aar <url> : bibliotecas ARM64 y classes.jar
+            rm -rf w/a && mkdir -p w/a && curl -fsSL --retry 3 -o w/a.aar "$1" && unzip -q -o w/a.aar -d w/a
+            cp -n w/a/jni/arm64-v8a/*.so "$M/" 2>/dev/null || true
+            [ -f w/a/classes.jar ] && cp w/a/classes.jar "$M/java/$(basename "$1" .aar).jar" || true
+          }
+          npu_art() {  # npu_art <artefacto>: de la ultima ejecucion correcta de motores-npu.yml que lo tenga
+            local id
+            for id in $(gh run list -R "$GITHUB_REPOSITORY" -w motores-npu.yml -L 15 --json databaseId,conclusion -q '.[] | select(.conclusion=="success") | .databaseId'); do
+              rm -rf w/n && if gh run download "$id" -R "$GITHUB_REPOSITORY" -n "$1" -D w/n 2>/dev/null; then
+                cp -n w/n/*.so "$M/" && for f in w/n/LICENSE* w/n/VERSIONS*; do [ -f "$f" ] && cp "$f" "$M/$1-$(basename "$f")"; done
+                echo "$1 <- motores-npu $id"; return 0
+              fi
+            done
+            echo "::error::no hay artefacto $1: lanza motores-npu.yml"; return 1
+          }
+          # 1) proceso auxiliar: el ejecutable Android de la edicion C++ (bionic) con «motor litert|genie|onnx»
+          gh release download "$MOTOR_CPP" -R "$GITHUB_REPOSITORY" -p "Nexus-Office-${MOTOR_CPP#v}-android-autonomo.apk" -D w/cpp
+          unzip -q -j -o w/cpp/*.apk lib/arm64-v8a/libnexusoffice.so -d w/cpp && cp w/cpp/libnexusoffice.so "$M/libnexusmotor.so"
+          rm -rf w/cpp
+          # 2) LiteRT-LM (+ dispatch de NPU y GPU) y QAIRT (Genie, QNN HTP v68-v81)
+          npu_art litert-android
+          npu_art qairt-android
+          # 3) ONNX Runtime con QNN y ONNX Runtime GenAI
+          aar "$MAVEN/com/microsoft/onnxruntime/onnxruntime-android-qnn/$ORT/onnxruntime-android-qnn-$ORT.aar"
+          rm -f "$M/libonnxruntime4j_jni.so" "$M/java/onnxruntime-android-qnn-$ORT.jar"
+          curl -fsSL --retry 3 -o w/g.nupkg "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntimegenai/$ORT_GENAI/microsoft.ml.onnxruntimegenai.$ORT_GENAI.nupkg"
+          unzip -q -o w/g.nupkg runtimes/android/native/onnxruntime-genai.aar -d w/g
+          rm -rf w/a && mkdir -p w/a && unzip -q -o w/g/runtimes/android/native/onnxruntime-genai.aar -d w/a
+          cp w/a/jni/arm64-v8a/libonnxruntime-genai.so w/a/jni/arm64-v8a/libmat.so "$M/"
+          # 4) ExecuTorch (XNNPACK + delegado QNN) con fbjni, NativeLoader y Kotlin (sus clases van en la APK)
+          aar "$MAVEN/org/pytorch/executorch-android-qnn/$EXECUTORCH/executorch-android-qnn-$EXECUTORCH.aar"
+          aar "$MAVEN/com/facebook/fbjni/fbjni/$FBJNI/fbjni-$FBJNI.aar"
+          rm -f "$M/libc++_shared.so"   # la APK ya trae la del NDK de llama.cpp
+          curl -fsSL --retry 3 -o "$M/java/nativeloader-$NATIVELOADER.jar" "$MAVEN/com/facebook/soloader/nativeloader/$NATIVELOADER/nativeloader-$NATIVELOADER.jar"
+          curl -fsSL --retry 3 -o "$M/java/kotlin-stdlib-$KOTLIN.jar" "$MAVEN/org/jetbrains/kotlin/kotlin-stdlib/$KOTLIN/kotlin-stdlib-$KOTLIN.jar"
+          rm -rf w
+          for f in libnexusmotor.so liblitert-lm.so libGenie.so libQnnHtp.so libQnnSystem.so libonnxruntime.so libonnxruntime-genai.so libexecutorch.so libfbjni.so; do
+            test -f "$M/$f" || { echo "::error::falta $f"; exit 1; }
+          done
+          for f in "$M"/*.so; do echo "$(basename "$f") $(stat -c %s "$f") $(readelf -d "$f" | grep NEEDED | sed 's/.*\[\(.*\)\]/\1/' | tr '\n' ' ')"; done
+          ls -la "$M/java"; du -sh "$M"
       - name: Compilar
         run: |
           set -e

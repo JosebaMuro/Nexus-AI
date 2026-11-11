@@ -9,11 +9,12 @@ Con ``llm.motor`` distinto de «auto» se usa ese motor (si esta) y con ``llm.mo
 """
 from __future__ import annotations
 
+import re
 import sys
 from functools import lru_cache
 from pathlib import Path
 
-from . import MOTORES, caidas, chips, disponible, motor_de_formato, plataforma
+from . import MOTORES, aplica, caidas, chips, disponible, motor_de_formato, plataforma
 from . import banco as banco_mod
 
 
@@ -43,6 +44,14 @@ def contexto(hw: dict, profile: dict) -> dict:
     return {"chip": fam, "plataforma": plataforma(), "matriz": chips.matriz(fam, plataforma())}
 
 
+NPU_RX = re.compile(r"(sm\d{4}|mt\d{4}|qcs\d{4}|tensor[_-]?g\d|gs\d{3}|zuma|laguna|intel|_npu)", re.I)
+
+
+def modelo_npu(entry: dict) -> bool:
+    """Si un modelo .litertlm esta compilado para la NPU de un SoC concreto (lo lleva en el nombre)."""
+    return bool(NPU_RX.search(Path(str(entry.get("path", ""))).name + " " + str(entry.get("name", ""))))
+
+
 def orden_aceleradores(motor: str, entry: dict, hw: dict, profile: dict, forzado: str = "") -> list[str]:
     """Aceleradores a probar, en orden, para un motor y un modelo en este equipo."""
     m = contexto(hw, profile)["matriz"]
@@ -56,6 +65,9 @@ def orden_aceleradores(motor: str, entry: dict, hw: dict, profile: dict, forzado
         android = plataforma().startswith("android")
         npu = bool((profile.get("npu") or {}).get("present"))
         out += (["npu"] if npu else []) + (["gpu"] if android or profile.get("accelerator") not in ("cpu", "") else []) + ["cpu"]
+        # un .litertlm general no lleva programa de NPU: probar la NPU solo con los compilados para un SoC
+        if not modelo_npu(entry):
+            out = [a for a in out if a != "npu" or a == forzado]
     elif motor == "mlc":
         acc = profile.get("accelerator", "cpu")
         gpu = {"cuda": "cuda", "rocm": "rocm", "metal": "metal", "vulkan": "vulkan"}.get(acc)
@@ -121,10 +133,12 @@ def estado(catalog_items: list[dict], hw: dict, profile: dict, config=None) -> d
     motores = []
     for mid, info in MOTORES.items():
         ok, motivo = disponible(mid)
-        motores.append({"id": mid, "nombre": info.nombre, "formato": info.formato, "instalado": ok, "motivo": motivo,
+        sirve, por_que = aplica(mid)
+        motores.append({"id": mid, "nombre": info.nombre, "formato": info.formato, "instalado": ok and sirve,
+                        "motivo": motivo if sirve else por_que, "aplica": sirve,
                         "aceleradores": list(info.aceleradores)})
     motores.append({"id": "llamaserver", "nombre": "llama.cpp (llama-server)", "formato": "gguf", "instalado": True,
-                    "motivo": "", "aceleradores": ["cpu", "cuda", "rocm", "vulkan", "metal", "sycl"]})
+                    "motivo": "", "aplica": True, "aceleradores": ["cpu", "cuda", "rocm", "vulkan", "metal", "sycl"]})
     elegido = elegir(catalog_items, hw, profile, config.get("llm.motor", "auto") if config else "auto")
     return {**ctx, "motores": motores, "modelos": candidatos(catalog_items, hw, profile), "elegido": elegido,
             "banco": banco_mod.cargar(), "caidas": caidas()}

@@ -322,6 +322,8 @@ class ModelManager:
     def resolve_recommended(self, rec: dict) -> dict:
         """Comprueba en Hugging Face que los ficheros del catalogo existen; si el repositorio los ha renombrado,
         elige el equivalente (GGUF Q4_K_M y proyector Q8_0/F16). Sin red, deja los nombres del catalogo."""
+        if rec.get("file", "").endswith(".litertlm"):
+            return self._litert_por_chip(rec)
         if rec["kind"] not in ("llm", "embed") or not rec.get("file", "").endswith(".gguf"):
             return rec
         try:
@@ -349,6 +351,23 @@ class ModelManager:
             out["mmproj"] = pick(projs, ("Q8_0", "F16", "BF16", "F32")) or rec["mmproj"]
         L.info("Catalogo %s: ficheros resueltos en el repositorio -> %s / %s", rec["id"], out["file"], out.get("mmproj"))
         return out
+
+    def _litert_por_chip(self, rec: dict) -> dict:
+        """.litertlm compilado para la NPU de este movil (``..._sm8750.litertlm``, ``..._mt6991...``, Tensor) si el
+        repositorio lo tiene; si no, el general (GPU y CPU)."""
+        codigos = soc_codigos()
+        if not codigos:
+            return rec
+        try:
+            names = [f["path"] for f in self.sources["huggingface"].files(rec["repo"])]
+        except Exception as e:  # noqa: BLE001
+            L.info("No se pudo listar %s (%s): se usa el .litertlm general", rec["repo"], e)
+            return rec
+        hit = elegir_litert(names, codigos)
+        if not hit or hit == rec["file"]:
+            return rec
+        L.info("Catalogo %s: version para la NPU de este movil -> %s", rec["id"], hit)
+        return {**rec, "file": hit, "acelera": "NPU"}
 
     def download_recommended(self, rec_id: str) -> str:
         base_rec = next(r for r in RECOMMENDED if r["id"] == rec_id)
@@ -515,3 +534,39 @@ class ModelManager:
     def active(self) -> dict:
         return {"llm": self.config.get("llm.default_model"), "image": self.config.get("media.image_model"),
                 "tts": self.config.get("media.tts_model", ""), "embed": self.config.get("memory.embed_model", "")}
+
+
+TENSOR_SOC = {"gs101": "tensorg1", "gs201": "tensorg2", "zuma": "tensorg3", "zumapro": "tensorg4", "laguna": "tensorg5"}
+
+
+def _alnum(s: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def soc_codigos() -> list[str]:
+    """Codigos del SoC de este movil tal como aparecen en los nombres de los modelos de NPU (sm8750, mt6991,
+    tensorg4...). Vacio fuera de Android o si no se sabe."""
+    try:
+        from ..hardware.profiles import android   # noqa: PLC0415
+        if not android():
+            return []
+        from ..hardware import android_accel   # noqa: PLC0415
+        s = android_accel.detect().get("soc") or {}
+    except Exception:  # noqa: BLE001
+        return []
+    out = []
+    for k in ("model", "platform", "hardware"):
+        c = _alnum(str(s.get(k, "")))
+        if len(c) >= 5 and c not in out:
+            out.append(c)
+        if c in TENSOR_SOC and TENSOR_SOC[c] not in out:
+            out.append(TENSOR_SOC[c])
+    return out
+
+
+def elegir_litert(names: list[str], codigos: list[str]) -> str | None:
+    """El .litertlm cuyo nombre lleva el codigo del SoC (el compilado para su NPU), o None."""
+    for n in sorted(names, key=len):
+        if n.lower().endswith(".litertlm") and any(c in _alnum(Path(n).name) for c in codigos):
+            return n
+    return None

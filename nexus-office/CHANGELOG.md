@@ -1,5 +1,17 @@
 # Cambios
 
+## Agente IA 4.0.2: motores por hardware en el móvil (2026-11-11)
+
+- **App Android**: la APK trae Qualcomm Genie (QNN), LiteRT-LM y ONNX Runtime GenAI, que corren en un proceso nativo
+  aparte (el Python de la app no puede cargar bibliotecas de Android), y ExecuTorch por un puente Java de la propia
+  app. En un Snapdragon (p. ej. 8 Elite) el modelo puede ir en la NPU Hexagon; en Tensor y Dimensity, en su NPU por
+  LiteRT-LM. Antes en el móvil solo estaba llama.cpp.
+- **Sistema → Motores**: TensorRT-LLM (solo NVIDIA), OpenVINO GenAI (solo Intel) y MLC LLM ya no salen como «faltan»
+  en Android: se muestran aparte como «no aplican a este equipo», con el motivo. Debajo se explica por qué falta cada
+  motor que sí aplica.
+- **LiteRT-LM**: el catálogo descarga el `.litertlm` compilado para la NPU del SoC del móvil si existe; la NPU solo se
+  prueba con esos modelos (con uno general iba directo a fallar antes de pasar a la GPU).
+
 ## Agente IA 4.0.1: revisión de configuración, motores, flujos y rendimiento (2026-11-10)
 
 - **llama.cpp con GPU que falla**: si la gráfica no arrancaba, cada mensaje volvía a intentarla, esperaba el fallo y
