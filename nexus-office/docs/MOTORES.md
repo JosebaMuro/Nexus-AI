@@ -20,9 +20,29 @@ Qualcomm, LiteRT-LM para la TPU de los Pixel... llama.cpp sigue de respaldo en t
 
 Si falta el paquete o la biblioteca de un motor, Agente IA dice por qué y usa el siguiente.
 
-> **Android (APK autónoma) en la 4.0.0:** el Python de la app usa su propio cargador (musl) y no puede cargar las
-> bibliotecas de Android de LiteRT-LM ni de Genie dentro del proceso. En el móvil sigue llama.cpp con CPU y GPU; la NPU
-> del móvil por LiteRT-LM y Genie llegará con un proceso auxiliar nativo (como el de la edición C++).
+## Android (APK autónoma), desde la 4.0.2
+
+El Python de la app usa su propio cargador (musl) y no puede cargar con ctypes las bibliotecas de Android (bionic).
+Por eso en el móvil cada motor corre fuera del proceso de Python (`nexus/motores/auxiliar.py`):
+
+| Motor | Cómo va en el móvil | Aceleradores |
+|---|---|---|
+| Qualcomm Genie (QNN) | proceso nativo `libnexusmotor.so motor genie` (el ejecutable Android de la edición C++) | NPU Hexagon v68 a v81 (Snapdragon 8 Gen 1 a 8 Elite Gen 5) |
+| LiteRT-LM | proceso nativo `libnexusmotor.so motor litert`, con el dispatch de NPU de Qualcomm, MediaTek y Google Tensor | NPU, GPU (OpenCL/WebGPU), CPU |
+| ONNX Runtime GenAI | proceso nativo `libnexusmotor.so motor onnx`, ONNX Runtime con el proveedor QNN | NPU (QNN), CPU |
+| ExecuTorch | puente Java de la app (`MotorExecuTorch.java`, `LlmModule`) en 127.0.0.1 con clave | CPU (XNNPACK), NPU (delegado QNN, si el `.pte` lo lleva) |
+| llama.cpp | `llama-server` (como antes) | CPU, GPU (OpenCL/Vulkan), NPU Hexagon |
+| TensorRT-LLM, OpenVINO GenAI, MLC LLM | **no aplican** en Android: se muestran aparte en *Sistema → Motores* con el motivo | — |
+
+Todas las bibliotecas van en `lib/arm64-v8a` de la APK (Android solo deja ejecutar código nativo desde ahí) y las
+recoge `apk.yml`: LiteRT-LM y QAIRT 2.42 (Genie, QNN HTP) de `motores-npu.yml`, ONNX Runtime 1.29 con QNN y
+ONNX Runtime GenAI 0.19 de Maven y NuGet, ExecuTorch 1.5.1 con QNN de Maven, y el proceso auxiliar de la Release
+v3.2.3-cpp. La NPU busca sus programas (skel) en `ADSP_LIBRARY_PATH`, que apunta a esa carpeta.
+
+Modelos para la NPU del móvil: los `.litertlm` del catálogo se descargan en la versión compilada para el SoC del móvil
+si el repositorio la tiene (`..._sm8750.litertlm` en un Snapdragon 8 Elite); si no, la general (GPU y CPU). LiteRT-LM
+solo prueba la NPU con modelos compilados para un SoC. Genie usa carpetas de Qualcomm AI Hub (`genie_config.json` y
+los `.bin` del Snapdragon concreto): se importan desde *Modelos → Importar*.
 
 ## Qué motor va con cada chip
 

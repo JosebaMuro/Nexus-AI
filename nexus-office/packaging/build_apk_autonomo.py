@@ -59,6 +59,26 @@ def gpu_native() -> list[str]:
                  "vuelve a ejecutar packaging/build_android_runtime.sh")
     return names
 
+# Motores de inferencia por hardware (Agente IA 4.0.2): los deja apk.yml en .cache/android-runtime/motores
+#   libnexusmotor.so          proceso auxiliar nativo (orden «motor» de la edicion C++): LiteRT-LM, Genie y ONNX GenAI
+#   liblitert-lm.so ...       LiteRT-LM con su dispatch de NPU (Qualcomm, MediaTek, Google Tensor) y GPU
+#   libGenie.so libQnn*.so    Qualcomm AI Runtime: Genie y QNN HTP (NPU Hexagon v68 a v81)
+#   libonnxruntime*.so        ONNX Runtime (con el proveedor QNN) y ONNX Runtime GenAI
+#   libexecutorch.so ...      ExecuTorch (XNNPACK y delegado QNN) con fbjni; sus clases Java en motores/java/*.jar
+MOTORES = RUNTIME / "motores"
+
+
+def motores_native(ya: set[str]) -> list[Path]:
+    """Bibliotecas de los motores presentes (sin pisar las de llama.cpp)."""
+    if not MOTORES.is_dir():
+        return []
+    return [f for f in sorted(MOTORES.glob("*.so")) if f.name not in ya]
+
+
+def motores_jars() -> list[Path]:
+    return sorted((MOTORES / "java").glob("*.jar")) if (MOTORES / "java").is_dir() else []
+
+
 # lo que no hace falta en el movil: pruebas, IDLE/tkinter, cabeceras, la biblioteca estatica, pip...
 SKIP_DIR = re.compile(r"^(test|tests|idlelib|tkinter|turtledemo|ensurepip|lib2to3|pydoc_data|__pycache__|config-3\.12-.*)$")
 SKIP_FILE = re.compile(r"\.(a|pyi|c|h|pxd|pyx)$|^(2to3|idle3|pydoc3|python3-config|python3\.12-config)")
@@ -129,16 +149,29 @@ def build() -> Path:
     base.run([javac, "-encoding", "UTF-8", "--release", "8", "-Xlint:-options", "-nowarn", "-cp", api_jar,
               "-d", OUT / "classes", *sources])
     classes = [str(p) for p in (OUT / "classes").rglob("*.class")]
+    jars = motores_jars()
+    if jars:
+        print(f"[apk] clases Java de los motores: {', '.join(j.name for j in jars)}")
     if d8:
-        base.run([d8, "--release", "--min-api", str(MIN_SDK), "--lib", api_jar, "--output", OUT / "dex", *classes])
+        # varias clases.dex si hace falta (ExecuTorch trae Kotlin): d8 las numera y Android las carga todas
+        base.run([d8, "--release", "--min-api", str(MIN_SDK), "--lib", api_jar, "--output", OUT / "dex", *classes,
+                  *[str(j) for j in jars]])
     else:
         base.run([dx, "--dex", f"--min-sdk-version={MIN_SDK}", f"--output={OUT / 'dex' / 'classes.dex'}", OUT / "classes"])
     with zipfile.ZipFile(OUT / "base.apk", "a", zipfile.ZIP_DEFLATED) as z:
-        z.write(OUT / "dex" / "classes.dex", "classes.dex")
+        for dex in sorted((OUT / "dex").glob("classes*.dex")):
+            z.write(dex, dex.name)
         gpu = gpu_native()
         print(f"[apk] llama.cpp con GPU (Vulkan/OpenCL): {'si, ' + str(len(gpu)) + ' bibliotecas' if gpu else 'no (sin NDK)'}")
         for n in list(NATIVE) + gpu:
             z.write(RUNTIME / "lib" / n, f"lib/arm64-v8a/{n}")
+        mot = motores_native(set(NATIVE) | set(gpu))
+        print(f"[apk] motores por hardware: {len(mot)} bibliotecas ({sum(f.stat().st_size for f in mot) / 1e6:.0f} MB)"
+              if mot else "[apk] motores por hardware: no (solo llama.cpp)")
+        for f in mot:
+            z.write(f, f"lib/arm64-v8a/{f.name}")
+        for lic in sorted(MOTORES.glob("LICENSE*")) + sorted(MOTORES.glob("VERSIONS*")) if MOTORES.is_dir() else []:
+            z.write(lic, f"assets/LICENSES/motores/{lic.name}")
         # VPN WireGuard para «Conectar a mi ordenador» (la misma de la app VPN): solo ARM64, como el resto
         wg = base.wireguard_libs()["arm64-v8a"]
         z.writestr("lib/arm64-v8a/libwg-go.so", wg)

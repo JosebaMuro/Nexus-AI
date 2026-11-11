@@ -167,6 +167,28 @@ def variantes(motor: str) -> list[str]:
     return out
 
 
+# Motores que no existen para un movil Android, y por que (se muestran como «no aplica», no como que faltan)
+NO_ANDROID = {
+    "tensorrt": "solo para GPU NVIDIA (no hay TensorRT-LLM para moviles)",
+    "openvino": "solo para procesadores Intel (NPU Core Ultra, iGPU Arc)",
+    "mlc": "en Android cada modelo de MLC necesita su biblioteca compilada aparte; la NPU (Genie, LiteRT-LM, "
+           "ONNX Runtime QNN) va mas rapida y la GPU la usa llama.cpp con OpenCL",
+}
+
+
+def en_android() -> bool:
+    return bool(os.environ.get("NEXUS_ANDROID")) or hasattr(sys, "getandroidapilevel")
+
+
+def aplica(motor: str) -> tuple[bool, str]:
+    """(si el motor tiene sentido en esta plataforma, por que no). Distinto de «instalado»."""
+    if en_android() and motor in NO_ANDROID:
+        return False, NO_ANDROID[motor]
+    if sys.platform == "darwin" and motor in ("tensorrt", "genie"):
+        return False, "no existe para macOS"
+    return True, ""
+
+
 def _modulo(nombre: str) -> bool:
     try:
         return importlib.util.find_spec(nombre) is not None
@@ -181,6 +203,12 @@ def disponible(motor: str) -> tuple[bool, str]:
     info = MOTORES.get(motor)
     if not info:
         return False, f"motor desconocido: {motor}"
+    if en_android():
+        # el Python de la APK no carga bibliotecas de Android: cada motor va en su proceso nativo (auxiliar.py)
+        if motor in NO_ANDROID:
+            return False, NO_ANDROID[motor]
+        from . import auxiliar   # noqa: PLC0415
+        return auxiliar.disponible(motor)
     if info.paquete:
         if _modulo(info.paquete):
             return True, ""
@@ -235,6 +263,13 @@ def mensajes_simples(messages: list[dict]) -> list[dict]:
 
 def abrir(motor: str, modelo: Path, acelerador: str, params: Params) -> Motor:
     """Carga un modelo en un motor. RuntimeError con el motivo si no se puede."""
+    if en_android():
+        from . import auxiliar   # noqa: PLC0415
+        if motor == "executorch":
+            return auxiliar.PuenteJava(modelo, acelerador, params)
+        if motor in auxiliar.LIBS:
+            return auxiliar.Auxiliar(motor, modelo, acelerador, params)
+        raise RuntimeError(NO_ANDROID.get(motor, f"{motor} no esta disponible en Android"))
     if motor == "onnx":
         from .onnx_genai import OnnxGenAI as C
     elif motor == "openvino":

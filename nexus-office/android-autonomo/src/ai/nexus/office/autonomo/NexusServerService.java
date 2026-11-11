@@ -71,6 +71,7 @@ import java.util.zip.ZipFile;
  */
 public class NexusServerService extends Service {
     public static final int PORT = 8775;
+    private MotorExecuTorch puente;
     public static final String ACTION_STOP = "ai.nexus.office.autonomo.STOP";
     public static final String ACTION_REPAIR = "ai.nexus.office.autonomo.REPAIR";
     public static final String ACTION_RETRY = "ai.nexus.office.autonomo.RETRY";
@@ -317,6 +318,16 @@ public class NexusServerService extends Service {
         env.put("NEXUS_PY_LIBRARY_PATH", libPath);
         env.put("NEXUS_PY_PRELOAD", sigsys);
         env.put("NEXUS_DNS", dnsServers());
+        // ExecuTorch solo tiene API Java: lo sirve el puente de la app (MotorExecuTorch) a Agente IA
+        if (MotorExecuTorch.incluido()) {
+            try {
+                if (puente == null) puente = new MotorExecuTorch();
+                env.put("NEXUS_PUENTE_URL", puente.arrancar());
+                env.put("NEXUS_PUENTE_CLAVE", puente.clave());
+            } catch (Exception e) {
+                android.util.Log.w("NexusServer", "puente de ExecuTorch", e);
+            }
+        }
         env.put("NEXUS_DEVICE_STATE", new File(data, "device_state.json").getAbsolutePath());
         File info = new File(data, "device_info.json");
         writeDeviceInfo(info);
@@ -533,6 +544,7 @@ public class NexusServerService extends Service {
     @Override
     public void onDestroy() {
         stopServer();
+        if (puente != null) puente.parar();
         super.onDestroy();
     }
 
