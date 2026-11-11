@@ -60,7 +60,7 @@ jobs:
           awk -v v="## Agente IA $V" -v w="## Nexus-Office $V" '$0 ~ "^## " {p = (index($0, v) == 1 || index($0, w) == 1)} p' nexus-office/CHANGELOG.md > notas.md
           printf '\nInstaladores 100 %% offline para Windows (x64 y ARM64), Linux (x86_64 y ARM64: .run, .deb, AppImage y Flatpak), macOS (Apple Silicon e Intel) y Android (autónoma y VPN). Instrucciones en LEEME.txt; integridad en SHA256SUMS.txt.\n' >> notas.md
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target main -t "Agente IA $V (edición Python)" -F notas.md
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" -t "Agente IA $V (edición Python)" -F notas.md
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber release/*
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets -q '.assets[] | "\(.name) \(.size)"'
       - name: Borrar la rama temporal
