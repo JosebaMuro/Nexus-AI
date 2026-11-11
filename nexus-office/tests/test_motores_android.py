@@ -37,6 +37,10 @@ HTTPServer(("127.0.0.1", int(op["puerto"])), H).serve_forever()
 '''
 
 
+# el proceso auxiliar solo existe en Android (POSIX): en Windows no se puede ejecutar el script que lo simula
+solo_posix = pytest.mark.skipif(sys.platform == "win32", reason="el proceso auxiliar es de Android (POSIX)")
+
+
 @pytest.fixture
 def libs(tmp_path, monkeypatch):
     d = tmp_path / "lib"
@@ -76,6 +80,7 @@ def test_sin_android_no_cambia(monkeypatch):
     assert motores.aplica("tensorrt")[0] is True or sys.platform == "darwin"
 
 
+@solo_posix
 def test_auxiliar_genera_y_cierra(libs, tmp_path):
     m = motores.abrir("genie", tmp_path, "npu", motores.Params(n_ctx=2048))
     try:
@@ -90,11 +95,13 @@ def test_auxiliar_genera_y_cierra(libs, tmp_path):
     assert m.proc.poll() is not None
 
 
+@solo_posix
 def test_auxiliar_falla_con_su_registro(libs, tmp_path):
     with pytest.raises(RuntimeError, match="sin NPU"):
         motores.abrir("litert", tmp_path / "m_sm8750.litertlm", "npu", motores.Params())
 
 
+@solo_posix
 def test_entorno_npu(libs):
     env = auxiliar.entorno(libs)
     assert env["LD_LIBRARY_PATH"].split(":")[0] == str(libs)
