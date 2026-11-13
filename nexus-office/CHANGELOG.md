@@ -1,6 +1,6 @@
 # Cambios
 
-## Pendiente de publicar: herramientas y agentes sin sandbox (2026-11-13)
+## Agente IA 4.0.3: herramientas y agentes sin sandbox (2026-11-13)
 
 - Se quita el **sandbox** en el que se ejecutaban las herramientas y los agentes (lo pidió Joseba):
   - `file_list`, `file_read`, `file_write` y `graph_import` ya no están confinadas a `data/sandbox`: las rutas

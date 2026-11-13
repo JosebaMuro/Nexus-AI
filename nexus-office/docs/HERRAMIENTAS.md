@@ -22,7 +22,7 @@ def run(args, ctx):
 - **Comunidad**: `data/tools/community/*.py`, solo tras aprobación. Su manifiesto se lee por AST (sin ejecutar el código) y, una vez aprobadas, se cargan y se ejecutan **en el mismo proceso** que las integradas, sin aislamiento (con el límite de tiempo del supervisor).
 
 ## Sin sandbox
-Desde esta versión las herramientas y los agentes **no se ejecutan en un sandbox**:
+Desde la 4.0.3 las herramientas y los agentes **no se ejecutan en un sandbox**:
 - `file_list`, `file_read`, `file_write` y `graph_import` aceptan rutas relativas a la **carpeta de trabajo** (`data/sandbox`, que conserva el nombre para no romper los proyectos ya importados) y también **rutas absolutas** o con `..` a cualquier carpeta del equipo.
 - `python_exec` lanza el intérprete normal (sin `-I`), con el entorno completo del servicio y acceso a todo el equipo; empieza en la carpeta de trabajo.
 - Las herramientas de la comunidad y la prueba de propuestas se ejecutan dentro del proceso de Agente IA.
