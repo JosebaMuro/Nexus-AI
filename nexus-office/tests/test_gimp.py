@@ -178,12 +178,19 @@ def test_tools_on_workspace(services, data_dir):
     assert third["ruta"] == "imagenes/tarta_editada_2.jpg"   # nunca pisa un fichero
     info = services.supervisor.execute("imagen_info", {"imagen": "imagenes/tarta_editada.jpg"}, ctx)
     assert info["ancho"] == 1080 and info["formato"] == "JPEG" and "analisis" in info
-    for bad in ("../../config.yaml", "/etc/passwd", "adjuntos/no-existe.jpg"):
+    for bad in ("../../config.yaml", "/etc/passwd", "adjuntos/no-existe.jpg"):   # no son imagenes o no existen
         out = services.supervisor.execute("imagen_editar", {"imagen": bad, "operaciones": ["invertir"]}, ctx)
         assert "error" in out
+    # sin sandbox: la salida puede ir a cualquier carpeta del equipo, y la entrada venir de ella
+    fuera = (data_dir / "fuera.png").resolve()
     out = services.supervisor.execute("imagen_editar", {"imagen": "adjuntos/tarta.jpg", "operaciones": ["invertir"],
-                                                        "salida": "../../fuera.png"}, ctx)
-    assert "error" in out and not (data_dir / "fuera.png").exists()
+                                                        "salida": str(fuera)}, ctx)
+    assert "error" not in out and fuera.exists() and out["ruta"] == fuera.as_posix()
+    out = services.supervisor.execute("imagen_info", {"imagen": str(fuera)}, ctx)
+    assert out["ancho"] == 1200
+    out = services.supervisor.execute("imagen_editar", {"imagen": "adjuntos/tarta.jpg", "operaciones": ["invertir"],
+                                                        "salida": "../fuera2.png"}, ctx)
+    assert "error" not in out and (data_dir / "fuera2.png").exists()
     assert gimp_tools.TOOLS[-1][0]["risk"] == "high"   # gimp_script: codigo libre, lo aprueba un administrador
     st = services.supervisor.execute("gimp_estado", {}, ctx)
     assert st["motor"] == "pillow"

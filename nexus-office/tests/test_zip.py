@@ -38,8 +38,8 @@ def test_zip_ingest_extracts_and_indexes(services, tmp_path):
     hits = services.rag.search("altura del Teide en metros", k=3)
     assert hits and hits[0]["doc_id"] == doc["id"] and "proyectos/calculadora/src/volcan.py" in hits[0]["text"]
     assert not any("API_KEY" in h["text"] for h in services.rag.search("API_KEY secreto", k=10, min_score=0))
-    # los agentes lo exploran con las herramientas del sandbox
-    from nexus.tools.builtin.sandbox_tools import file_list, file_read
+    # los agentes lo exploran con las herramientas de ficheros (carpeta de trabajo)
+    from nexus.tools.builtin.file_tools import file_list, file_read
     listed = file_list({"path": meta["sandbox"]}, None)
     assert "proyectos/calculadora/src/volcan.py" in listed["files"]
     assert "3718" in file_read({"path": "proyectos/calculadora/src/volcan.py"}, None)["content"]

@@ -270,7 +270,6 @@ def create_app(services: Services | None = None) -> FastAPI:
         if any(k.startswith(("llm.", "hardware.")) for k in applied):
             s.llm.rebuild()
         if any(k.startswith("tools.") for k in applied):
-            s.tools.sandbox_community = s.config.get("tools.sandbox_community_tools", True)
             s.tools.reload()
         return {"applied": applied}
 

@@ -80,7 +80,7 @@ NOISE_RE = re.compile(r"\.min\.(js|css)$|\.map$|(^|/)(package-lock\.json|yarn\.l
 
 def _indexable(rel: PurePosixPath) -> bool:
     if SECRET_RE.search(str(rel)):
-        return False   # no metemos claves ni .env en la biblioteca (siguen en el sandbox)
+        return False   # no metemos claves ni .env en la biblioteca (siguen en la carpeta de trabajo)
     if NOISE_RE.search(str(rel)):
         return False   # minificados, mapas, lockfiles y codigo de terceros: ruido para la busqueda
     return rel.suffix.lower() in DOC_EXT | CODE_EXT or rel.name.lower() in PLAIN_NAMES
@@ -480,7 +480,7 @@ def ingest_archive(rag, src: Path, title: str = "", source: str = "", meta: dict
     tree = tree_text(files)
 
     pages = [f"Proyecto «{title}» importado desde {source or src.name}: {len(files)} ficheros. "
-             f"Esta en el sandbox en {rel_dest}/ (usa file_list/file_read con esa ruta).\n\n"
+             f"Esta en la carpeta de trabajo en {rel_dest}/ (usa file_list/file_read con esa ruta).\n\n"
              f"Estructura:\n{tree}"]
     labels = [f"[{title} · estructura]"]
     # lectura en paralelo (PDF, Office, EPUB... en todos los nucleos) por grupos, aplicada en orden. Si el proyecto
@@ -504,7 +504,7 @@ def ingest_archive(rag, src: Path, title: str = "", source: str = "", meta: dict
         if n > 1 or not final:
             part_title = f"{title} · parte {n} (ficheros {first_file}-{last_file})"
             info.update(part=n, file_from=first_file, file_to=last_file)
-        if n > 1:   # solo la primera parte es duena del sandbox (al borrarla se borran las demas)
+        if n > 1:   # solo la primera parte es duena de la carpeta (al borrarla se borran las demas)
             info.pop("sandbox", None)
             info["archive_root"] = parts_out[0]["id"]
         if pages:

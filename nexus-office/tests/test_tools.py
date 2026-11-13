@@ -1,5 +1,7 @@
+import os
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -101,7 +103,7 @@ def test_static_analysis_flags_danger():
     assert not analyze("def run(:")["ok"]
 
 
-def test_proposal_lifecycle_installs_sandboxed_tool():
+def test_proposal_lifecycle_installs_tool_in_process():
     reg, sup = make_supervisor()
     pm = ProposalManager(reg, sup)
     prop = pm.create("word_count", "Cuenta palabras", GOOD, author="agente:forjador")
@@ -110,7 +112,7 @@ def test_proposal_lifecycle_installs_sandboxed_tool():
     pm.approve(prop["id"])
     assert (paths.community_tools_dir() / "word_count.py").exists()
     spec = reg.get("word_count")
-    assert spec and spec.source == "community" and spec.func is None  # se ejecuta aislado
+    assert spec and spec.source == "community" and spec.func is not None  # se carga en el proceso, sin aislar
     assert sup.execute("word_count", {"text": "a b"}, ToolContext(agent="t")) == {"words": 2}
 
 
@@ -120,3 +122,40 @@ def test_risk_is_raised_on_approval():
     prop = pm.create("evil", "x", BAD)
     pm.approve(prop["id"])
     assert reg.get("evil").risk == "high"
+
+
+def test_file_tools_are_not_confined(tmp_path):
+    """Sin sandbox: las rutas absolutas y las que salen con .. llegan a cualquier carpeta del equipo."""
+    from nexus.tools.builtin.file_tools import file_list, file_read, file_write
+    fuera = tmp_path / "fuera" / "nota.txt"
+    assert file_write({"path": str(fuera), "content": "hola"}, None)["bytes"] == 4
+    assert file_read({"path": str(fuera)}, None)["content"] == "hola"
+    assert str(fuera.resolve().as_posix()) in file_list({"path": str(fuera.parent)}, None)["files"]
+    rel = Path(os.path.relpath(fuera, paths.sandbox_dir()))
+    assert file_read({"path": rel.as_posix()}, None)["content"] == "hola"
+    file_write({"path": "dentro.txt", "content": "x"}, None)   # las relativas siguen en la carpeta de trabajo
+    assert (paths.sandbox_dir() / "dentro.txt").exists() and "dentro.txt" in file_list({}, None)["files"]
+
+
+def test_python_exec_is_not_isolated(monkeypatch):
+    """python_exec hereda el entorno completo y no usa el modo aislado de Python (-I)."""
+    from nexus.tools.builtin.file_tools import python_exec
+    monkeypatch.setenv("NEXUS_PRUEBA_ENTORNO", "visible")
+    r = python_exec({"code": "import os, sys; print(os.environ.get('NEXUS_PRUEBA_ENTORNO'), sys.flags.isolated)"},
+                    None)
+    assert r["returncode"] == 0 and r["stdout"].split() == ["visible", "0"]
+
+
+def test_proposal_test_runs_in_process():
+    reg, sup = make_supervisor()
+    pm = ProposalManager(reg, sup)
+    prop = pm.create("pid_tool", "Devuelve el pid", PID_TOOL)
+    assert pm.test(prop["id"], {})["result"] == {"pid": os.getpid()}
+
+
+PID_TOOL = '''
+import os
+TOOL = {"name": "pid_tool", "description": "Devuelve el pid", "risk": "low"}
+def run(args, ctx=None):
+    return {"pid": os.getpid()}
+'''

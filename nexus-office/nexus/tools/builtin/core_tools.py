@@ -83,21 +83,21 @@ def knowledge_graph(args, ctx):
 
 
 def graph_import(args, ctx):
-    """Incorpora al conocimiento un grafo de cualquier formato: un fichero del sandbox o un texto que trae el agente."""
+    """Incorpora al conocimiento un grafo de cualquier formato: un fichero (de la carpeta de trabajo o con ruta absoluta) o un texto que trae el agente."""
     from ...memory import kg_io
-    from .sandbox_tools import _safe
+    from .file_tools import _ruta
     s = ctx.services
     if args.get("path"):
-        p = _safe(args["path"])
+        p = _ruta(args["path"])
         if not p.is_file():
-            raise ValueError(f"no existe {args['path']} en el sandbox")
+            raise ValueError(f"no existe {args['path']}")
         if p.stat().st_size > 300 * 1024 * 1024:
             raise ValueError("el grafo supera 300 MB")
         data, name = p.read_bytes(), p.name
     elif args.get("content"):
         data, name = args["content"].encode("utf-8"), args.get("name") or "grafo.txt"
     else:
-        raise ValueError("indica path (fichero del sandbox) o content (el grafo en texto)")
+        raise ValueError("indica path (fichero de la carpeta de trabajo o ruta absoluta) o content (el grafo en texto)")
     target = args.get("target", "general")
     target = (ctx.agent or "") if target == "agente" else "auto" if target == "auto" else ""
     parsed = kg_io.parse_bytes(data, name)
@@ -134,7 +134,7 @@ TOOLS = [
                       "Cypher de Neo4j, Mermaid, Excel, SQLite, ZIP...): se detecta solo, se fusiona con lo que ya se "
                       "sabe y queda disponible para todos los agentes o solo para ti"),
       "parameters": {"type": "object", "properties": {
-          "path": {"type": "string", "description": "fichero dentro del sandbox"},
+          "path": {"type": "string", "description": "fichero de la carpeta de trabajo o ruta absoluta"},
           "content": {"type": "string", "description": "o el grafo en texto (p. ej. 'A -> B : relacion' por linea)"},
           "name": {"type": "string", "description": "nombre con extension para orientar el formato del texto"},
           "target": {"type": "string", "enum": ["general", "agente", "auto"], "default": "general",
