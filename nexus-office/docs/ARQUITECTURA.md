@@ -13,7 +13,7 @@ flowchart LR
   LLM --> BI[núcleo integrado sin modelo]
   LLM -. peer:nodo .-> COOP[coop · CoopNode]
   SUP --> TB[herramientas integradas]
-  SUP --> TC[herramientas de la comunidad · sandbox]
+  SUP --> TC[herramientas de la comunidad]
   LRN --> MEM[(SQLite: memoria, grafo, auditoría, salón)]
   HW[hardware · detección/perfil/monitor/tuner] --> LLM
   HW --> MED[media · imagen/música/voz]
@@ -35,7 +35,7 @@ flowchart LR
 | `nexus/llm/` | Backends (`llamaserver`, `llamacpp`, `ollama`, `openai`, `transformers`, `builtin`), protocolo de herramientas, recorte de contexto. |
 | `nexus/memory/` | Embeddings (sentence-transformers › Ollama › hashing), `MemoryStore`, `KnowledgeGraph`, `Learner`. |
 | `nexus/agents/` | `AgentManager` (enrutado, prompt, bucle de herramientas, delegación) y `Lounge` (salón virtual). |
-| `nexus/tools/` | Registro modular, supervisor, ejecutor aislado y propuestas con análisis AST. |
+| `nexus/tools/` | Registro modular, supervisor y propuestas con análisis AST (todas se ejecutan en el proceso, sin aislamiento). |
 | `nexus/models/` | Catálogo, lector GGUF, 5 fuentes, recomendaciones por hardware. |
 | `nexus/media/` | Imagen, música y voz con degradación elegante. |
 | `nexus/coop/` | Cifrado, invitaciones y nodo de la LAN virtual. |
@@ -49,7 +49,7 @@ flowchart LR
 2. `AgentManager.run` elige agente (palabras clave + habilidades aprendidas en el salón), el `Learner` extrae hechos del mensaje y construye el contexto (recuerdos, hechos del grafo, ejemplos valorados, lecciones).
 3. **Vía rápida**: intenciones inequívocas (crear imagen/música, calcular, hora) se ejecutan directamente con su herramienta.
 4. Si no, el LLM responde en streaming. Con `llama-server`/OpenAI se usan **llamadas nativas a herramientas**; con otros backends, un protocolo de texto `<tool>{…}</tool>` compatible con cualquier modelo.
-5. Cada herramienta pasa por el **Supervisor** (validación, política por riesgo, aprobación, límite de tiempo, sandbox, auditoría).
+5. Cada herramienta pasa por el **Supervisor** (validación, política por riesgo, aprobación, límite de tiempo, auditoría).
 6. La respuesta se guarda, el grafo se actualiza (el avatar lo refleja) y el salón registra la tarea.
 
 ## Perfiles de hardware

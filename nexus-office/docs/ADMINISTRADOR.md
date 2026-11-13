@@ -32,7 +32,6 @@ rag:
   allow_private_urls: false # permitir rastrear la red local / localhost
 tools:
   policy: {low: auto, medium: ask, high: admin}   # auto | ask | admin | deny
-  sandbox_community_tools: true
 hardware:
   profile_override: ""      # cuda | rocm | vulkan | xpu | openvino | metal | cpu
   llama_variant: ""         # forzar variante del runtime llama.cpp

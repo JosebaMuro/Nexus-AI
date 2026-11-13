@@ -69,7 +69,7 @@ class Services:
         self.images = ImageEngine(cfg, self.models.catalog, self.runtimes, lambda: self.profile, self.llm)
         self.music = MusicEngine(cfg, lambda: self.profile)
         self.voice = VoiceEngine(cfg, self.models.catalog, lambda: self.profile)
-        self.tools = ToolRegistry(cfg.get("tools.sandbox_community_tools", True))
+        self.tools = ToolRegistry()
         self.supervisor = Supervisor(self.tools, self.db, cfg)
         # IA de apoyo: el embed multilingue ayuda a todas las herramientas (nexus/memory/assist.py)
         from .memory.assist import SemanticAssist

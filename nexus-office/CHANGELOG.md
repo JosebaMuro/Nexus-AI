@@ -1,5 +1,18 @@
 # Cambios
 
+## Agente IA 4.0.3: herramientas y agentes sin sandbox (2026-11-13)
+
+- Se quita el **sandbox** en el que se ejecutaban las herramientas y los agentes (lo pidió Joseba):
+  - `file_list`, `file_read`, `file_write` y `graph_import` ya no están confinadas a `data/sandbox`: las rutas
+    relativas siguen partiendo de esa carpeta de trabajo, pero se aceptan rutas absolutas y con `..`.
+  - `python_exec` usa el intérprete normal (sin `-I`) con el entorno completo del servicio.
+  - Las herramientas de la comunidad y la prueba de propuestas se cargan y ejecutan en el propio proceso; desaparecen
+    `nexus/tools/runner.py` y la opción `tools.sandbox_community_tools`.
+  - Las herramientas de GIMP leen y guardan imágenes en cualquier ruta del equipo.
+- Se mantiene todo lo demás: políticas por riesgo, aprobaciones, límite de tiempo, auditoría, análisis de propuestas,
+  bloqueo de la red local en `web_fetch` y descompresión segura de archivos. La carpeta `data/sandbox` conserva el
+  nombre para no romper los proyectos importados. Detalles en [HERRAMIENTAS](docs/HERRAMIENTAS.md#sin-sandbox).
+
 ## Agente IA 4.0.2: motores por hardware en el móvil (2026-11-11)
 
 - **App Android**: la APK trae Qualcomm Genie (QNN), LiteRT-LM y ONNX Runtime GenAI, que corren en un proceso nativo

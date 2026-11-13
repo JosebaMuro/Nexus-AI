@@ -50,6 +50,7 @@ def proposals_dir() -> Path:
 
 
 def sandbox_dir() -> Path:
+    """Carpeta de trabajo de los agentes (se sigue llamando data/sandbox por compatibilidad; ya no confina nada)."""
     return sub("sandbox")
 
 

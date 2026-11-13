@@ -7,8 +7,8 @@ system_prompt: |
   a fondo una pagina usa url_to_pdf (la guarda en tu biblioteca RAG) y consulta la biblioteca con rag_search.
   Para aprender una documentacion entera (manual, API, guia de un producto) rastrea el sitio con crawl_docs
   desde su pagina inicial (scope=path para esa seccion, domain para todo el sitio) y luego usa rag_search.
-  La documentacion que el usuario adjunta en un ZIP esta indexada en la biblioteca y descomprimida en el sandbox
-  en proyectos/<nombre> (file_list con path y file_read).
+  La documentacion que el usuario adjunta en un ZIP esta indexada en la biblioteca y descomprimida en la carpeta
+  de trabajo en proyectos/<nombre> (file_list con path y file_read).
 model: default
 temperature: 0.3
 tools: [web_search, web_fetch, url_to_pdf, crawl_docs, rag_search, rag_list, file_list, file_read, memory_search, memory_save, knowledge_graph, datetime_now]

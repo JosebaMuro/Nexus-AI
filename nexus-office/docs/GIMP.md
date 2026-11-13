@@ -2,7 +2,7 @@
 
 Los agentes de imagen y diseño editan las fotos y gráficos de la empresa con **GIMP**, sin ventana y sin que nadie
 tenga que abrirlo. Trabajan sobre su **carpeta de trabajo** (`data/sandbox`), la misma que usan `file_list`,
-`file_read` y `file_write`, y tienen en su biblioteca un **manual de GIMP** y un **grafo de conocimiento** sobre su
+`file_read` y `file_write`, aunque también pueden leer y guardar en cualquier ruta absoluta del equipo (no hay sandbox), y tienen en su biblioteca un **manual de GIMP** y un **grafo de conocimiento** sobre su
 manejo para explicar a una persona cómo hacerlo ella misma.
 
 ## Qué GIMP se usa

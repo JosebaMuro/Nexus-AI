@@ -222,7 +222,7 @@ class KnowledgeJobs:
                 report["graphs"].append({"file": "notas [[enlazadas]]", **r})
                 self._step(job, f"Notas enlazadas: {r['nodes']} notas, {r['relations']} enlaces")
 
-            # 4) biblioteca RAG (el archivo entero, con su arbol, en el sandbox de los agentes)
+            # 4) biblioteca RAG (el archivo entero, con su arbol, en la carpeta de trabajo de los agentes)
             if rag and docs:
                 self._step(job, "Indexando en la biblioteca RAG")
                 doc = s.rag.ingest_file(path, "", name, agent=scope)

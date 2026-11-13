@@ -79,7 +79,6 @@ DEFAULTS: dict[str, Any] = {
         "policy": {"low": "auto", "medium": "ask", "high": "admin"},
         "timeout_s": 30,
         "allow_agent_proposals": True,
-        "sandbox_community_tools": True,
     },
     "hardware": {
         "profile_override": "",         # forzar un acelerador: cuda | rocm | directml | xpu | openvino | mps | cpu

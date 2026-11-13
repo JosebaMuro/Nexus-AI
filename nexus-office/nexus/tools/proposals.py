@@ -1,19 +1,21 @@
 """Propuestas de herramientas hechas por los agentes, con supervision humana.
 
 Flujo: agente propone -> analisis estatico (AST) -> cola de revision -> el administrador
-revisa/edita el codigo, puede probarlo en el sandbox -> aprueba (se instala en
+revisa/edita el codigo, puede probarlo -> aprueba (se instala en
 data/tools/community y se recarga el registro) o rechaza (el motivo se guarda como leccion).
 """
 from __future__ import annotations
 
 import ast
+import concurrent.futures
 import json
 import re
 import time
 import uuid
 
 from .. import log, paths
-from .base import RISKS
+from .base import RISKS, ToolContext
+from .registry import load_run
 
 L = log.get("proposals")
 DANGEROUS_IMPORTS = {"subprocess": "high", "os": "medium", "shutil": "high", "socket": "medium", "ctypes": "high",
@@ -137,14 +139,17 @@ class ProposalManager:
         return self._save(prop)
 
     def test(self, pid: str, args: dict) -> dict:
-        """Ejecuta la propuesta en el sandbox aislado sin instalarla."""
+        """Ejecuta la propuesta en este proceso, sin instalarla ni aislarla."""
         prop = self.get(pid)
         if not prop["analysis"]["ok"]:
             return {"error": "la propuesta tiene errores: " + "; ".join(prop["analysis"]["errors"])}
         try:
-            return {"result": self.supervisor._run_sandboxed(self._dir(pid) / "tool.py", args, 20)}
+            func = load_run(self._dir(pid) / "tool.py", f"nexus_propuesta_{pid}")
+            return {"result": self.supervisor.run_in_process(func, args, ToolContext(agent="prueba"), 20)}
+        except concurrent.futures.TimeoutError:
+            return {"error": "tiempo agotado (20s)"}
         except Exception as e:  # noqa: BLE001
-            return {"error": str(e)}
+            return {"error": f"{type(e).__name__}: {e}"}
 
     def approve(self, pid: str, reviewer: str = "admin", note: str = "") -> dict:
         prop = self.get(pid)

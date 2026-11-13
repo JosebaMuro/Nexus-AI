@@ -399,8 +399,8 @@
     if (S.projects.some((p) => !p.doc && !p.error)) return toast("Espera a que termine de importarse el archivo", true);
     if (!ws || ws.readyState !== 1) return toast("Sin conexión con el núcleo", true);
     const images = S.attachments.slice(); S.attachments = []; S.projects = []; renderAttachments();
-    // los ZIP ya estan en la biblioteca y en el sandbox: el agente recibe donde encontrarlos
-    const note = ready.map((p) => p.doc.meta.sandbox ? `[Archivo ${(p.doc.meta.format || "zip").toUpperCase()} adjunto «${p.doc.title}»: ${p.doc.meta.files} ficheros descomprimidos en el sandbox en ` +
+    // los ZIP ya estan en la biblioteca y en la carpeta de trabajo: el agente recibe donde encontrarlos
+    const note = ready.map((p) => p.doc.meta.sandbox ? `[Archivo ${(p.doc.meta.format || "zip").toUpperCase()} adjunto «${p.doc.title}»: ${p.doc.meta.files} ficheros descomprimidos en la carpeta de trabajo en ` +
       `${p.doc.meta.sandbox}/ (file_list/file_read) e indexados en la biblioteca RAG (rag_search)]`
       : `[Documento adjunto «${p.doc.title}» (${p.name}): ${p.doc.pages} páginas indexadas en la biblioteca RAG (rag_search)]`).join("\n");
     const body = text || (ready.length ? "Revisa el contenido de lo que te adjunto y resúmeme qué contiene." : "Describe esta imagen.");
@@ -878,7 +878,7 @@
     d.documents.forEach((doc) => { const g = grp(doc); if (!g) return docs.push(doc); if (seen.has(g)) return; seen.add(g);
       docs.push(...d.documents.filter((x) => grp(x) === g).sort((a, b) => a.id - b.id)); });
     $("#rag-list").innerHTML = docs.map((doc) => `<div class="item row"><span class="tag accent">${esc(doc.kind)}</span><div style="flex:1"><div class="t">${esc(doc.title)} <span class="tag ${doc.agent ? "warn" : ""}" title="Grafo en el que está">${doc.agent ? esc(scopeLabel(doc.agent)) : "general"}</span></div>
-      <div class="d mono">${esc(doc.source).slice(0, 90)} · ${doc.kind === "zip" ? `${doc.meta.files} ficheros (${doc.meta.indexed} indexados) en sandbox/${esc(doc.meta.sandbox)}` : doc.kind === "web" ? `${doc.pages} páginas web rastreadas` : `${doc.pages} pág.`} · ${doc.chunks} fragmentos · ${ago(doc.added)}</div>${doc.meta?.summary ? `<div class="d">${esc(doc.meta.summary).slice(0, 220)}…</div>` : ""}</div>
+      <div class="d mono">${esc(doc.source).slice(0, 90)} · ${doc.kind === "zip" ? `${doc.meta.files} ficheros (${doc.meta.indexed} indexados) en la carpeta de trabajo, ${esc(doc.meta.sandbox)}` : doc.kind === "web" ? `${doc.pages} páginas web rastreadas` : `${doc.pages} pág.`} · ${doc.chunks} fragmentos · ${ago(doc.added)}</div>${doc.meta?.summary ? `<div class="d">${esc(doc.meta.summary).slice(0, 220)}…</div>` : ""}</div>
       ${graphScopes.length > 1 ? `<select class="input" data-ragmv="${doc.id}" title="Mover a otro grafo" style="width:auto">${moveOpts(doc.agent)}</select>` : ""}<a class="btn sm" href="/api/rag/${doc.id}/file" target="_blank">ABRIR</a><button class="btn danger sm" data-ragdel="${doc.id}">✕</button></div>`).join("") || `<span class="muted">Biblioteca vacía: procesa una URL o añade documentos.</span>`;
     $$("[data-ragmv]").forEach((sel) => (sel.onchange = guard(async () => { await api(`/api/rag/${sel.dataset.ragmv}`, { method: "PATCH", body: { agent: sel.value } }); toast(`Documento movido al grafo ${sel.value ? "de " + scopeLabel(sel.value) : "general"}`); await loadScopes(); loadRag(); })));
     $$("[data-ragdel]").forEach((b) => (b.onclick = guard(async () => { if (!confirm("¿Quitar el documento de la biblioteca?")) return; await api(`/api/rag/${b.dataset.ragdel}`, { method: "DELETE" }); loadRag(); })));
@@ -1429,7 +1429,7 @@
       ${p.analysis.errors.map((e) => `<div class="tag bad">✕ ${esc(e)}</div>`).join(" ")} ${p.analysis.warnings.map((w) => `<div class="tag warn">⚠ ${esc(w)}</div>`).join(" ")}
       <textarea class="input" data-code="${p.id}" rows="12" style="margin-top:8px">${esc(p.code)}</textarea>
       <div class="row" style="margin-top:6px;justify-content:flex-end"><button class="btn sm ghost" data-pcopy="${p.id}">⧉ COPIAR CÓDIGO</button><button class="btn sm ghost" data-pdl="${p.id}" data-pname="${esc(p.name)}">⤓ DESCARGAR .py</button></div>
-      ${p.status === "pendiente" ? `<div class="row" style="margin-top:8px"><input class="input mono" data-targs="${p.id}" value="{}" style="flex:1" title="Argumentos de prueba (JSON)"><button class="btn sm" data-psave="${p.id}">GUARDAR CÓDIGO</button><button class="btn sm" data-ptest="${p.id}">PROBAR EN SANDBOX</button>
+      ${p.status === "pendiente" ? `<div class="row" style="margin-top:8px"><input class="input mono" data-targs="${p.id}" value="{}" style="flex:1" title="Argumentos de prueba (JSON)"><button class="btn sm" data-psave="${p.id}">GUARDAR CÓDIGO</button><button class="btn sm" data-ptest="${p.id}">PROBAR</button>
         <button class="btn sm" data-pshare="${p.id}">COMPARTIR EN LAN</button><button class="btn danger sm" data-prej="${p.id}">RECHAZAR</button><button class="btn ok sm" data-papp="${p.id}">APROBAR E INSTALAR</button></div><pre class="code hidden" data-tout="${p.id}"></pre>` : `<div class="muted">Revisión: ${esc(p.review || "-")}</div>`}</details>`).join("") || `<span class="muted">Los agentes aún no han propuesto herramientas.</span>`;
     const id = (b, k) => b.dataset[k];
     $$("[data-pcopy]").forEach((b) => (b.onclick = () => copyText($(`[data-code="${b.dataset.pcopy}"]`).value)));

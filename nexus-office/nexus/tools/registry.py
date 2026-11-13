@@ -1,6 +1,6 @@
 """Descubrimiento modular de herramientas: integradas (nexus/tools/builtin) y de la comunidad
 (data/tools/community, aprobadas por un administrador). Los manifiestos de la comunidad se leen
-por AST sin ejecutar su codigo; con sandbox activo se ejecutan en un subproceso aislado.
+por AST y se cargan en el mismo proceso que el resto (sin aislamiento).
 """
 from __future__ import annotations
 
@@ -34,9 +34,16 @@ def read_manifest(path: Path) -> dict | None:
     return None
 
 
+def load_run(path: Path, modname: str):
+    """Carga un fichero de herramienta en este proceso y devuelve su funcion run(args, ctx)."""
+    spec = importlib.util.spec_from_file_location(modname, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.run
+
+
 class ToolRegistry:
-    def __init__(self, sandbox_community: bool = True) -> None:
-        self.sandbox_community = sandbox_community
+    def __init__(self) -> None:
         self.tools: dict[str, ToolSpec] = {}
         self._lock = threading.RLock()
         self._disabled: set[str] = set(self._load_disabled())
@@ -77,16 +84,11 @@ class ToolRegistry:
             if not manifest:
                 L.warning("Herramienta de comunidad sin manifiesto valido: %s", path.name)
                 continue
-            func = None
-            if not self.sandbox_community:
-                spec_ = importlib.util.spec_from_file_location(f"nexus_community_{path.stem}", path)
-                mod = importlib.util.module_from_spec(spec_)
-                try:
-                    spec_.loader.exec_module(mod)
-                    func = mod.run
-                except Exception as e:  # noqa: BLE001
-                    L.error("Fallo cargando %s: %s", path.name, e)
-                    continue
+            try:
+                func = load_run(path, f"nexus_community_{path.stem}")
+            except Exception as e:  # noqa: BLE001
+                L.error("Fallo cargando %s: %s", path.name, e)
+                continue
             spec = self._spec(manifest, "community", str(path), func)
             if spec and spec.name not in found:  # una de comunidad nunca sustituye a una integrada
                 found[spec.name] = spec

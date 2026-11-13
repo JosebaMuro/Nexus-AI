@@ -42,7 +42,7 @@ def latest_image() -> Path | None:
 
 
 def resolve_input(ref: str) -> Path:
-    """Ruta de la carpeta de trabajo, URL /outputs/... de una imagen generada, o «ultima»."""
+    """Ruta de la carpeta de trabajo, ruta absoluta del equipo, URL /outputs/... de una imagen generada, o «ultima»."""
     ref = (ref or "").strip().strip('"').replace("\\", "/")
     if ref.lower() in LAST:
         p = latest_image()
@@ -50,13 +50,11 @@ def resolve_input(ref: str) -> Path:
             raise gimp.EditError("no hay ninguna imagen en la carpeta de trabajo")
         return p
     if ref.startswith("/outputs/") or ref.startswith("outputs/"):
-        root = paths.outputs_dir()
-        p = (root / ref.split("outputs/", 1)[1]).resolve()
+        p = (paths.outputs_dir() / ref.split("outputs/", 1)[1]).resolve()
+    elif Path(ref).is_absolute() and Path(ref).is_file():   # sin confinar: cualquier imagen del equipo
+        p = Path(ref).resolve()
     else:
-        root = paths.sandbox_dir()
-        p = (root / ref.lstrip("/")).resolve()
-    if not _inside(p, root):
-        raise gimp.EditError("la imagen tiene que estar en la carpeta de trabajo")
+        p = (paths.sandbox_dir() / ref.lstrip("/")).resolve()
     if not p.is_file():
         raise gimp.EditError(f"no existe la imagen {ref} (usa file_list para ver la carpeta de trabajo)")
     if p.suffix.lower() not in IMAGE_EXT:
@@ -65,23 +63,27 @@ def resolve_input(ref: str) -> Path:
 
 
 def workspace_path(p: Path) -> str:
-    try:
-        return p.resolve().relative_to(paths.sandbox_dir().resolve()).as_posix()
-    except ValueError:
-        return "/outputs/" + p.resolve().relative_to(paths.outputs_dir().resolve()).as_posix()
+    p = p.resolve()
+    if _inside(p, paths.sandbox_dir()):
+        return p.relative_to(paths.sandbox_dir().resolve()).as_posix()
+    if _inside(p, paths.outputs_dir()):
+        return "/outputs/" + p.relative_to(paths.outputs_dir().resolve()).as_posix()
+    return p.as_posix()   # fuera de la carpeta de trabajo: ruta absoluta
 
 
 def output_path(src: Path, salida: str, fmt: str) -> Path:
     root = paths.sandbox_dir()
-    salida = (salida or "").strip().replace("\\", "/").lstrip("/")
-    if salida:
-        rel = salida if "/" in salida else f"imagenes/{salida}"
+    salida = (salida or "").strip().replace("\\", "/")
+    if salida and Path(salida).is_absolute():   # sin confinar: se puede guardar en cualquier carpeta del equipo
+        p = Path(salida).resolve()
     else:
-        rel = f"imagenes/{src.stem}_editada"
-    rel = re.sub(r"[^\w./ -]+", "_", rel)
-    p = (root / rel).resolve()
-    if not _inside(p, root):
-        raise gimp.EditError("la salida tiene que quedar en la carpeta de trabajo")
+        salida = salida.lstrip("/")
+        if salida:
+            rel = salida if "/" in salida else f"imagenes/{salida}"
+        else:
+            rel = f"imagenes/{src.stem}_editada"
+        rel = re.sub(r"[^\w./ -]+", "_", rel)
+        p = (root / rel).resolve()
     ext = gimp.FORMATS.get(p.suffix.lower().lstrip("."))
     if fmt in gimp.FORMATS:
         p = p.with_suffix("." + gimp.FORMATS[fmt]) if ext else p.with_name(f"{p.name}.{gimp.FORMATS[fmt]}")
@@ -177,7 +179,7 @@ def gimp_script(args, ctx):
 
 
 _IMG = {"type": "string", "description": "imagen de la carpeta de trabajo (p. ej. adjuntos/foto.jpg, "
-        "imagenes/logo.png), una URL /outputs/images/... o «ultima»"}
+        "imagenes/logo.png), una ruta absoluta del equipo, una URL /outputs/images/... o «ultima»"}
 _OPS_DOC = "; ".join(f"{k} ({v})" if v else k for k, v in gimp.OP_HELP.items())
 TOOLS = [
     ({"name": "imagen_editar",
@@ -193,7 +195,7 @@ TOOLS = [
           "formato": {"type": "string", "enum": ["", "jpg", "png", "webp", "tif", "xcf", "bmp"], "default": "",
                       "description": "vacío = el de la receta o el del original; xcf = proyecto de GIMP"},
           "calidad": {"type": "integer", "description": "calidad JPEG/WebP 10-100 (90 por defecto)"},
-          "salida": {"type": "string", "description": "nombre o ruta del resultado en la carpeta de trabajo"}},
+          "salida": {"type": "string", "description": "nombre o ruta del resultado (en la carpeta de trabajo o absoluta)"}},
           "required": ["imagen"]},
       "risk": "low", "permissions": ["media", "filesystem"], "timeout": 600}, imagen_editar),
     ({"name": "imagen_info",

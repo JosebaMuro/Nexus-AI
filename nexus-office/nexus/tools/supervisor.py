@@ -1,5 +1,5 @@
-"""Supervision de herramientas: politica por riesgo, aprobaciones humanas, limites de tiempo,
-aislamiento y registro de auditoria.
+"""Supervision de herramientas: politica por riesgo, aprobaciones humanas, limites de tiempo y registro de
+auditoria. Todas las herramientas (integradas y de la comunidad) se ejecutan en este proceso, sin aislamiento.
 
 Politicas por nivel de riesgo: ``auto`` (se ejecuta), ``ask`` (el usuario aprueba en la UI),
 ``admin`` (solo un administrador puede aprobar) y ``deny`` (bloqueada).
@@ -8,15 +8,10 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
-import os
-import subprocess
 import threading
 import time
 import uuid
-from pathlib import Path
-
-from .. import log, paths
-from ..proc import python_cmd
+from .. import log
 from .base import ToolContext, validate_args
 from .registry import ToolRegistry
 
@@ -116,10 +111,9 @@ class Supervisor:
                 return {"error": f"El uso de '{name}' no fue aprobado ({approver or 'rechazado'})"}
         timeout = spec.timeout or float(self.config.get("tools.timeout_s", 30))
         try:
-            if spec.func is not None:
-                result = _POOL.submit(spec.func, clean, ctx).result(timeout=timeout)
-            else:
-                result = self._run_sandboxed(Path(spec.path), clean, timeout)
+            if spec.func is None:
+                raise RuntimeError(f"la herramienta {name} no tiene funcion run")
+            result = self.run_in_process(spec.func, clean, ctx, timeout)
             status = "ok"
         except concurrent.futures.TimeoutError:
             result, status = {"error": f"tiempo agotado ({timeout:.0f}s)"}, "timeout"
@@ -134,20 +128,10 @@ class Supervisor:
             result = {**result, "_corregido": "; ".join(fixed_note)}
         return result
 
-    def _run_sandboxed(self, path: Path, args: dict, timeout: float):
-        runner = Path(__file__).with_name("runner.py")
-        env = {k: v for k, v in os.environ.items() if k.upper() in ("PATH", "SYSTEMROOT", "TEMP", "TMP", "HOME",
-                                                                      "USERPROFILE", "LANG")}
-        env["PYTHONIOENCODING"] = "utf-8"
-        proc = subprocess.run([*python_cmd(), "-I", "-X", "utf8", str(runner)],
-                              input=json.dumps({"path": str(path), "args": args}), capture_output=True, text=True,
-                              timeout=timeout, cwd=str(paths.sandbox_dir()), env=env, encoding="utf-8",
-                              creationflags=0x08000000 if os.name == "nt" else 0)
-        marker = proc.stdout.rfind("@@NEXUS_RESULT@@")
-        if marker < 0:
-            return {"error": f"la herramienta no devolvio resultado. stderr: {proc.stderr[-500:]}"}
-        out = json.loads(proc.stdout[marker + len("@@NEXUS_RESULT@@"):])
-        return out["result"] if out.get("ok") else {"error": out.get("error")}
+    @staticmethod
+    def run_in_process(func, args: dict, ctx, timeout: float):
+        """Ejecuta una funcion de herramienta en el grupo de hilos con limite de tiempo."""
+        return _POOL.submit(func, args, ctx).result(timeout=timeout)
 
     def _audit(self, ctx: ToolContext, call: dict, decision: str, approver: str, status: str, result, dur: float):
         preview = json.dumps(result, ensure_ascii=False, default=str)[:500] if result else ""
