@@ -53,6 +53,8 @@ class AgentSpec:
     icon: str = "◆"
     enabled: bool = True
     sexo: str = ""   # aspecto en el salon y los despachos: mujer | hombre | "" (al azar segun su id)
+    voz: str = ""    # voz propia al leer sus respuestas (nombre de una voz del equipo; "" = la del usuario)
+    voz_ritmo: float = 0.0   # velocidad de su voz (0 = la general)
 
     @staticmethod
     def from_dict(d: dict) -> "AgentSpec":
@@ -248,8 +250,13 @@ class AgentManager:
             learned = s.learner.on_user_message(text, session_id, spec.id, s.config.get("memory.llm_graph_extraction", False))
             if learned:
                 emit({"type": "learned", "items": learned[:8]})
-        info = s.learner.build_context(text, spec.id, s.config.get("memory.top_k", 6)) if use_memory else \
-            {"memories": [], "examples": [], "lessons": [], "facts": [], "profile": {}}
+        from ..memory.graph import Recorrido
+        with Recorrido() as recorrido:   # lo que se consulta del grafo para esta respuesta: la luz del avatar
+            info = s.learner.build_context(text, spec.id, s.config.get("memory.top_k", 6)) if use_memory else \
+                {"memories": [], "examples": [], "lessons": [], "facts": [], "profile": {}}
+        traza = recorrido.evento(spec.id)
+        if traza and not remote:
+            emit(traza)
         rag = getattr(s, "rag", None)
         if rag is not None and use_memory:
             try:
@@ -269,10 +276,21 @@ class AgentManager:
             msgs[0]["content"] += ("\n\nConversacion EN VIVO por voz: lo que digas se leera en voz alta. Responde como al "
                                    "hablar: 1-3 frases cortas y naturales, sin Markdown, listas, tablas, enlaces ni emojis. "
                                    "Si hace falta mas detalle, ofrece ampliarlo.")
-        if save:
+        hilo = getattr(s, "hilo", None)
+        hilo_n_ctx = int((s.profile.get("llm") or {}).get("n_ctx") or 4096)
+        if save and hilo is not None and s.config.get("hilo.activo", True):
+            # conversaciones largas: notas fijas + resumen progresivo + trozos antiguos que vienen al caso + lo ultimo
+            plan = hilo.plan(session_id, text, max(512, hilo_n_ctx * int(s.config.get("hilo.pct_contexto", 45)) // 100))
+            if plan.texto():
+                msgs[0]["content"] += "\n\n" + plan.texto()
+            msgs += plan.recientes
+            if plan.omitidos:
+                emit({"type": "hilo", "plegados": plan.plegados, "omitidos": plan.omitidos, "tokens": plan.tokens})
+        elif save:
             for m in s.memory.history(session_id, 12):
                 if m["role"] in ("user", "assistant") and m["content"]:
                     msgs.append({"role": m["role"], "content": m["content"][:3000]})
+        if save:
             s.memory.add_message(session_id, "user", text + (f"\n[{len(images)} imagen(es) adjunta(s)]" if images else ""),
                                  spec.id)
         stored = store_images(images) if images else []
@@ -351,6 +369,9 @@ class AgentManager:
         if save:
             meta = json.dumps({"memories": [m["id"] for m in info["memories"]], "tools": tool_log})
             mid = s.memory.add_message(session_id, "assistant", answer, spec.id, meta)
+            if hilo is not None and s.config.get("hilo.activo", True):   # plegar lo antiguo sin retrasar la respuesta
+                presupuesto = max(512, hilo_n_ctx * int(s.config.get("hilo.pct_contexto", 45)) // 100)
+                hilo.encolar(session_id, presupuesto // 2, presupuesto * 3 // 10)
             if use_memory and not remote:
                 s.learner.on_exchange(session_id, text, answer, spec.id, s.config.get("memory.consolidate_every", 12))
                 emit({"type": "graph_update"})
@@ -359,7 +380,8 @@ class AgentManager:
                 s.lounge.record_task(spec.id, text, tool_log, routed_by)
             except Exception as e:  # noqa: BLE001
                 L.warning("No se pudo registrar la tarea en el salon: %s", e)
-        emit({"type": "done", "message_id": mid, "agent": spec.id, "text": answer, "session_id": session_id})
+        emit({"type": "done", "message_id": mid, "agent": spec.id, "text": answer, "session_id": session_id,
+              "voz": spec.voz, "voz_ritmo": spec.voz_ritmo})
         emit({"type": "state", "state": "idle"})
         return {"answer": answer, "message_id": mid, "agent": spec.id}
 

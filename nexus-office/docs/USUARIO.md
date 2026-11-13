@@ -224,6 +224,9 @@ Las cuatro píldoras de arriba son menús que se abren con un toque y muestran l
 En el móvil el menú se abre a pantalla completa con pestañas.
 
 ### Chat
+
+El botón **HILO** guarda notas fijas y el resumen de las conversaciones largas (ver [Novedades de la 4.1](NOVEDADES-4.1.md),
+donde también están la ubicación, MCP, el laboratorio de bolsa, el vídeo y el laboratorio beta).
 - Escribe y pulsa **Enter** (Shift+Enter = nueva línea). El selector de la izquierda elige agente; *Automático* deja que Nexus-Office decida.
 - **📎** adjunta imágenes (también puedes pegarlas): Nexus-Office las describe, lee texto (OCR) y responde preguntas sobre ellas.
 - **🎤** habla; **🔊** activa la lectura en voz alta de las respuestas.

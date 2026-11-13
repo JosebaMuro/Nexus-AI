@@ -1,5 +1,24 @@
 # Cambios
 
+## Agente IA 4.1.0: lo que faltaba de la edición C++ 3.x (2026-11-13)
+
+Detalle en [docs/NOVEDADES-4.1.md](docs/NOVEDADES-4.1.md).
+
+- **Conversaciones largas**: resumen progresivo, notas fijas y presupuesto por `n_ctx` (botón HILO del chat).
+- **Ubicación en tiempo real**: herramienta `ubicacion_actual` y panel en Ajustes (gpsd, GPS por puerto serie,
+  Windows, GeoClue, navegador o posición fija); la posición no sale del equipo.
+- **MCP**: servidor (`POST /mcp` y `nexus mcp`) y cliente de servidores externos (`mcp_<servidor>_<herramienta>`).
+- **Rastreador web**: lista de URLs pegada o en un `.txt`, en cola de dos en dos (`rag.crawl_parallel`).
+- **Luz del grafo**: lo que se consulta del grafo para responder se ve recorrer el avatar (evento `graph_trace`).
+- **Voces por agente**: voz y velocidad propias de cada agente.
+- **Laboratorio de bolsa**: señales, backtest frente a comprar y mantener, mesa de analistas, Montecarlo y reparto
+  de cartera; herramientas `bolsa_senales`, `bolsa_backtest` y `bolsa_analistas`.
+- **Vídeo**: AVI con las imágenes generadas (zoom lento y fundidos), sin ffmpeg; herramienta `crear_video`.
+- **Laboratorio beta**: banco de pruebas (`nexus bench`), tiempos por ruta con `Server-Timing`, opiniones e informe.
+- Arreglo: la mesa de bolsa leía su base de datos desde varios hilos sin cerrojo y a veces fallaba con error 500.
+- No portado: GPS nativo de Android en segundo plano, bróker en papel y noticias RSS de la mesa, editor de vídeo en
+  el navegador, y la capa `hal/` con los pipelines y la difusión ONNX (son piezas nativas de la C++).
+
 ## Agente IA 4.0.3: herramientas y agentes sin sandbox (2026-11-13)
 
 - Se quita el **sandbox** en el que se ejecutaban las herramientas y los agentes (lo pidió Joseba):

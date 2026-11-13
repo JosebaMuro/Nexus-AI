@@ -87,7 +87,8 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     # ------------------------------------------------------------------ acceso desde la red local
     LOCAL = {"127.0.0.1", "::1", "localhost", "testclient"}
-    OPEN_PATHS = ("/api/ping", "/sw.js", "/static/manifest.webmanifest", "/static/icon.svg", "/connect")
+    OPEN_PATHS = ("/api/ping", "/sw.js", "/static/manifest.webmanifest", "/static/icon.svg", "/connect",
+                  "/mcp")   # /mcp pide su propio token fuera del equipo
 
     def lan_key() -> str:
         cfg = S().config
@@ -589,6 +590,7 @@ def create_app(services: Services | None = None) -> FastAPI:
     @app.delete("/api/sessions/{sid}")
     def delete_session(sid: str):
         S().memory.delete_session(sid)
+        S().hilo.olvidar(sid)
         return {"ok": True}
 
     @app.post("/api/feedback")
@@ -977,9 +979,9 @@ def create_app(services: Services | None = None) -> FastAPI:
         return res
 
     @app.post("/api/rag/crawl")
-    async def rag_crawl(url: str = Body(...), max_pages: int = Body(40), max_depth: int = Body(3),
+    async def rag_crawl(url: str = Body(""), max_pages: int = Body(40), max_depth: int = Body(3),
                         scope: str = Body("path"), agent: str = Body(""), background: bool = Body(False),
-                        batch_pages: int = Body(0)):
+                        batch_pages: int = Body(0), urls: list[str] | str = Body(default=[])):
         """Rastreo de un sitio de documentacion -> biblioteca RAG -> conocimiento (general o de un agente).
 
         background=true: lo hace en segundo plano por lotes reanudables (GET /api/rag/crawls para el progreso).
@@ -988,6 +990,19 @@ def create_app(services: Services | None = None) -> FastAPI:
         from ..rag.crawler import crawl_site
         if scope not in ("path", "domain"):
             raise HTTPException(400, "scope debe ser 'path' o 'domain'")
+        if urls:   # lista de URLs (pegada o subida en un .txt): un rastreo por URL, en cola
+            lista = crawl_jobs.leer_lista(urls if isinstance(urls, str) else "\n".join(str(u) for u in urls))
+            if url and url not in lista:
+                lista.insert(0, url)
+            if not lista:
+                raise HTTPException(400, "La lista no tiene ninguna URL http(s) válida")
+            if len(lista) > 500:
+                raise HTTPException(400, "Demasiadas URLs: como mucho 500 por lista")
+            pages, chars = crawl_jobs.auto_batch(S().profile)
+            jobs = crawl_jobs.encolar(S(), lista, max_pages, max_depth, scope, rag_target(agent),
+                                      max(1, min(batch_pages or pages, 500)), chars,
+                                      int(S().config.get("rag.crawl_parallel", 2) or 2), emit=hub.broadcast)
+            return {"jobs": [crawl_jobs.public(j) for j in jobs], "en_cola": crawl_jobs.en_cola(), "urls": len(lista)}
         if not re.match(r"^https?://", url or "", re.I):
             raise HTTPException(400, "la URL debe empezar por http:// o https://")
         target = rag_target(agent)
@@ -1226,8 +1241,8 @@ def create_app(services: Services | None = None) -> FastAPI:
         return S().voice.info()
 
     @app.post("/api/voice/tts")
-    async def tts(text: str = Body(...), rate: float = Body(1.0)):
-        res = await asyncio.to_thread(S().voice.tts, text, rate)
+    async def tts(text: str = Body(...), rate: float = Body(1.0), voice: str = Body("")):
+        res = await asyncio.to_thread(S().voice.tts, text, rate, voice)
         if not res:  # sin motor local: la UI usa la voz del navegador
             return Response(status_code=204, headers={"X-TTS-Engine": "browser"})
         return Response(res[0], media_type="audio/wav", headers={"X-TTS-Engine": res[1]})
@@ -2036,4 +2051,6 @@ def create_app(services: Services | None = None) -> FastAPI:
         finally:
             hub.sockets.discard(ws)
 
+    from . import rutas_extra
+    rutas_extra.registrar(app, S, hub, require_admin, admin_flag, LOCAL)
     return app

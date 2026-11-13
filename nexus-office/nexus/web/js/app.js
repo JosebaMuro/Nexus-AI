@@ -299,6 +299,7 @@
       case "kg_job": if (window.NexusKG) NexusKG.onJob(e.job); break;
       case "done": if (current) { current.finish(e); current = null; } S.busy = false; setBusy(false); loadSessions(); if (Live.on) Live.done(e.text); break;
       case "error": if (current) { current.error(e.message); current = null; } S.busy = false; setBusy(false); setState("idle"); if (Live.on) Live.listen(); break;
+      case "graph_trace": avatar.trace && avatar.trace(e); explorer && explorer.trace && explorer.trace(e); break;
       case "graph_update": loadGraph().catch(() => {}); if (explorer) loadScopes().catch(() => {}); break;
       case "approval_required": showApproval(e.approval); break;
       case "approval_resolved": $(`#ap-${e.id}`)?.remove(); break;
@@ -369,7 +370,7 @@
       progress(t) { const c = [...chips.querySelectorAll(".chip:not(.done)")].pop(); if (c) { c.innerHTML = `<span class="spin"></span>${esc(c.dataset.tool)} › ${esc(t)}`; } },
       toolDone(e) { const c = [...chips.querySelectorAll(".chip:not(.done)")].reverse().find((x) => x.dataset.tool === e.name);
         if (c) { const err = /"error"/.test(e.result); c.className = "chip " + (err ? "err" : "done"); c.querySelector(".spin")?.remove(); c.insertAdjacentText("afterbegin", err ? "✕ " : "✓ "); c.title = e.result; } },
-      finish(e) { raw = e.text; render(); text.classList.remove("cursor"); actions(e.message_id, e.text); if (S.speak && !Live.on) speak(e.text); },
+      finish(e) { raw = e.text; render(); text.classList.remove("cursor"); actions(e.message_id, e.text); if (S.speak && !Live.on) speak(e.text, e); },
       error(m) { raw += `\n\n**Error:** ${m}`; render(); text.classList.remove("cursor"); },
     };
     function actions(id, content) {
@@ -472,10 +473,11 @@
       let s = 0; for (const v of data) s += ((v - 128) / 128) ** 2; avatar.setLevel(Math.sqrt(s / data.length) * 5); requestAnimationFrame(f); })();
   }
   const plain = (t) => t.replace(/<tool>[\s\S]*?<\/tool>/g, "").replace(/!\[[^\]]*\]\([^)]*\)|\[audio\]\([^)]*\)/g, "").replace(/```[\s\S]*?```/g, " código ").replace(/[*_#`>|]/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").trim();
-  async function speak(text) {
+  async function speak(text, voz) {   // voz: {voz, voz_ritmo} del agente que responde (voces por agente)
     const t = plain(text); if (!t) return;
+    const vname = (voz && voz.voz) || "", vrate = (voz && voz.voz_ritmo) || S.cfg.speech_rate || 1;
     try {
-      const res = await api("/api/voice/tts", { body: { text: t, rate: S.cfg.speech_rate || 1 }, raw: true });
+      const res = await api("/api/voice/tts", { body: { text: t, rate: vrate, voice: vname }, raw: true });
       if (res.status === 200) {
         const audio = new Audio(URL.createObjectURL(await res.blob()));
         actx = actx || new (window.AudioContext || window.webkitAudioContext)();
@@ -489,8 +491,8 @@
       setTimeout(() => { clearInterval(iv); avatar.setLevel(0); setState("idle"); }, Math.min(30000, 300 + t.length * 65)); return;
     }
     if (!("speechSynthesis" in window)) return;
-    const u = new SpeechSynthesisUtterance(t); u.lang = (S.cfg.language || "es") + "-" + ((S.cfg.language || "es") === "en" ? "US" : "ES"); u.rate = S.cfg.speech_rate || 1;
-    const v = speechSynthesis.getVoices().find((v) => v.lang.startsWith(S.cfg.language || "es") && (!S.cfg.voice_name || v.name.includes(S.cfg.voice_name))); if (v) u.voice = v;
+    const u = new SpeechSynthesisUtterance(t); u.lang = (S.cfg.language || "es") + "-" + ((S.cfg.language || "es") === "en" ? "US" : "ES"); u.rate = vrate;
+    const v = (vname && speechSynthesis.getVoices().find((v) => v.name.toLowerCase().includes(vname.toLowerCase()))) || speechSynthesis.getVoices().find((v) => v.lang.startsWith(S.cfg.language || "es") && (!S.cfg.voice_name || v.name.includes(S.cfg.voice_name))); if (v) u.voice = v;
     let on = true; u.onend = u.onerror = () => { on = false; avatar.setLevel(0); setState("idle"); };
     u.onboundary = () => avatar.setLevel(0.5 + Math.random() * 0.5);
     setState("speaking"); speechSynthesis.cancel(); speechSynthesis.speak(u);
@@ -1329,6 +1331,8 @@
       <label class="field">Temperatura<input class="input" name="temperature" type="number" step="0.1" min="0" max="2" value="${a.temperature ?? ""}"></label>
       <label class="field">Máx. tokens<input class="input" name="max_tokens" type="number" value="${a.max_tokens ?? ""}"></label>
       <label class="field">Icono / color<div class="row"><input class="input" name="icon" value="${esc(a.icon)}" style="width:70px"><input type="color" name="color" value="${esc(a.color)}"></div></label>
+      <label class="field">Voz propia (nombre de una voz del equipo o del navegador; vacío = la general)<input class="input" name="voz" list="voces-equipo" value="${esc(a.voz || "")}" placeholder="p. ej. Helena, Pablo, Google español"></label>
+      <label class="field">Velocidad de su voz (0 = la general)<input class="input" name="voz_ritmo" type="number" min="0" max="2" step="0.1" value="${a.voz_ritmo || 0}"></label>
       <label class="field">Aspecto en el salón y su despacho<select class="input" name="sexo">${[["", "Al azar"], ["mujer", "Mujer"], ["hombre", "Hombre"]].map(([v, l]) => `<option value="${v}" ${(a.sexo || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
     </div>
     <label class="field" style="margin-top:10px">Descripción<input class="input" name="description" value="${esc(a.description)}"></label>
@@ -1347,7 +1351,7 @@
       await api("/api/agents", { method: "PUT", body: { id: v("id").value, name: v("name").value, description: v("description").value, system_prompt: v("system_prompt").value,
         model: v("model").value || "default", temperature: v("temperature").value === "" ? null : +v("temperature").value, max_tokens: v("max_tokens").value === "" ? null : +v("max_tokens").value,
         tools: $$("[name=tool]:checked", ed).map((c) => c.value), memory: v("memory").checked, enabled: v("enabled").checked,
-        keywords: list(v("keywords").value), specialty: v("specialty").value.trim(), can_delegate_to: list(v("can_delegate_to").value), color: v("color").value, icon: v("icon").value || "◆", sexo: v("sexo").value } });
+        keywords: list(v("keywords").value), specialty: v("specialty").value.trim(), can_delegate_to: list(v("can_delegate_to").value), color: v("color").value, icon: v("icon").value || "◆", sexo: v("sexo").value, voz: v("voz").value.trim(), voz_ritmo: parseFloat(v("voz_ritmo").value) || 0 } });
       toast("Agente guardado"); ed.classList.add("hidden"); loaders.agents();
     });
     $("#ag-del") && ($("#ag-del").onclick = guard(async () => { if (!confirm("¿Borrar agente?")) return; await api(`/api/agents/${a.id}`, { method: "DELETE" }); ed.classList.add("hidden"); loaders.agents(); }));

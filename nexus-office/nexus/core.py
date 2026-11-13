@@ -53,6 +53,8 @@ class Services:
         self.embedder = self._make_embedder()
         self.memory = MemoryStore(self.db, self.embedder, cfg.get("memory.decay_days", 30))
         self.graph = KnowledgeGraph(self.db)
+        from .memory.hilo import Hilo
+        self.hilo = Hilo(self.db)   # conversaciones largas: resumen progresivo y notas fijas
         # que es comun (grafo general) y que es saber hacer de cada agente (su subgrafo): ver nexus/memory/organizer.py
         self.organizer = Organizer(self.graph, lambda: self.embedder, lambda: self.agents.list(), cfg)
         self.learner = Learner(self.db, self.memory, self.graph, self.organizer)
@@ -91,6 +93,10 @@ class Services:
         self.remote = RemoteAccess(cfg)
         self.vpn = VPN(cfg)
         self.llm.remote = lambda node, messages, opts: self.coop.remote_llm(node, messages, opts)
+        self.hilo.llm_complete = lambda p, n: self.llm.complete(p, max_tokens=n, temperature=0.1)
+        self.hilo.llm_real = self.llm.has_real_llm
+        from .mcp import Gestor
+        self.mcp = Gestor(self)     # herramientas de servidores MCP externos (mcp.servidores)
 
     # ------------------------------------------------------------ embeddings
     def _make_embedder(self):
@@ -134,6 +140,8 @@ class Services:
             from .android_tune import after_start
             threading.Thread(target=after_start, args=(self, self.android_tuner), name="nexus-tras-arranque",
                              daemon=True).start()
+        if self.config.get("mcp.servidores"):
+            self.mcp.conectar()
         if self.config.get("coop.enabled", False):
             try:
                 self.coop.start()
@@ -142,6 +150,10 @@ class Services:
 
     def shutdown(self) -> None:
         L.info("Apagando Nexus-Office...")
+        try:
+            self.mcp.cerrar()
+        except Exception:  # noqa: BLE001
+            pass
         try:
             self.coop.stop()
         except Exception:  # noqa: BLE001

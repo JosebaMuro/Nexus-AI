@@ -50,7 +50,31 @@ class VoiceEngine:
                 "stt_model": self.profile_getter()["stt"]["model"]}
 
     # ------------------------------------------------------------------ TTS
-    def tts(self, text: str, rate: float = 1.0) -> tuple[bytes, str] | None:
+    def voces(self) -> list[dict]:
+        """Voces del equipo que puede usar cada agente (las de pyttsx3: SAPI en Windows, espeak en Linux, macOS)."""
+        if "pyttsx3" not in self.tts_engines():
+            return []
+        try:
+            import pyttsx3
+            with self._lock:
+                if os.name == "nt":
+                    import comtypes
+                    comtypes.CoInitialize()
+                try:
+                    eng = pyttsx3.init()
+                    out = [{"id": v.id, "nombre": v.name, "idiomas": [str(x) for x in (getattr(v, "languages", []) or [])]}
+                           for v in eng.getProperty("voices")]
+                    eng.stop()
+                    return out
+                finally:
+                    if os.name == "nt":
+                        comtypes.CoUninitialize()
+        except Exception as e:  # noqa: BLE001
+            L.info("No se pudieron listar las voces: %s", e)
+            return []
+
+    def tts(self, text: str, rate: float = 1.0, voice: str = "") -> tuple[bytes, str] | None:
+        """voice: voz propia de un agente (nombre o parte del nombre); vacio = la del usuario."""
         engine = self.info()["tts_active"]
         text = text.strip()[:2000]
         if not text or engine == "browser":
@@ -59,7 +83,7 @@ class VoiceEngine:
             if engine == "piper":
                 return self._tts_piper(text, rate), "piper"
             if engine == "pyttsx3":
-                return self._tts_pyttsx3(text, rate), "pyttsx3"
+                return self._tts_pyttsx3(text, rate, voice), "pyttsx3"
         except Exception as e:  # noqa: BLE001
             L.warning("TTS %s fallo: %s", engine, e)
         return None
@@ -80,7 +104,7 @@ class VoiceEngine:
                     self._piper.synthesize(text, wf, length_scale=1.0 / max(0.5, rate))
             return buf.getvalue()
 
-    def _tts_pyttsx3(self, text: str, rate: float) -> bytes:
+    def _tts_pyttsx3(self, text: str, rate: float, voice: str = "") -> bytes:
         import pyttsx3
         with self._lock:
             if os.name == "nt":
@@ -90,7 +114,7 @@ class VoiceEngine:
                 eng = pyttsx3.init()
                 eng.setProperty("rate", int(180 * rate))
                 lang = self.config.get("user.language", "es")
-                wanted = self.config.get("user.voice_name", "")
+                wanted = voice or self.config.get("user.voice_name", "")
                 for v in eng.getProperty("voices"):
                     label = f"{v.name} {v.id} {getattr(v, 'languages', '')}".lower()
                     if (wanted and wanted.lower() in label) or (not wanted and (lang in label or "spanish" in label
