@@ -425,6 +425,32 @@ def cmd_bolsa(args) -> None:
         raise SystemExit(str(e)) from e
 
 
+def cmd_mcp(args) -> None:
+    from . import mcp
+    raise SystemExit(mcp.main_stdio(args.url, args.token))
+
+
+def cmd_bench(args) -> None:
+    import json as _json
+    from . import beta
+    from .core import Services
+    s = Services(detect_hardware=False)
+    try:
+        res = beta.banco(s, con_llm=not args.sin_llm)
+    finally:
+        s.shutdown()
+    if args.json:
+        print(_json.dumps(res, ensure_ascii=False, indent=1))
+        return
+    print(f"Agente IA {res['version']} · {res['sistema']}")
+    for p in res["pruebas"]:
+        if p["ok"]:
+            extra = f" · primer token {p['primer_token_ms']} ms" if "primer_token_ms" in p else ""
+            print(f"  {p['prueba']:32s} {p['valor']:>12} {p['unidad']:20s} ({p['ms']} ms){extra}")
+        else:
+            print(f"  {p['prueba']:32s} no se pudo medir: {p.get('error', '')}")
+
+
 def main(argv=None) -> None:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["wheels"]:                # CLI propia (nexus/wheelhouse.py): no importa nada pesado
@@ -487,11 +513,18 @@ def main(argv=None) -> None:
     mo.add_argument("--solo", action="append", help="solo motor:modelo (se puede repetir)")
     mo.add_argument("--json", action="store_true", help="banco: muestra tambien el resultado en JSON")
     mo.add_argument("--detectar", action="store_true", help="vuelve a detectar el hardware")
+    mc = sub.add_parser("mcp", help="servidor MCP por stdio: ofrece las herramientas de Agente IA a otros programas")
+    mc.add_argument("--url", default="", help="direccion de Agente IA (por defecto http://127.0.0.1:8775)")
+    mc.add_argument("--token", default="", help="token de MCP si Agente IA esta en otro equipo")
+    be = sub.add_parser("bench", help="banco de pruebas del equipo: base de datos, embeddings, memoria, RAG y LLM")
+    be.add_argument("--sin-llm", action="store_true", help="no medir el modelo de lenguaje")
+    be.add_argument("--json", action="store_true", help="muestra el resultado en JSON")
     sub.add_parser("wheels", help="prepara wheelhouse/ para instalar sin internet (ver --help)")
     sub.add_parser("cleanup", help="quita del paquete offline lo que este equipo no usa (ver --help)")
     args = p.parse_args(argv)
     {"run": cmd_run, "detect": cmd_detect, "setup": cmd_setup, "pull": cmd_pull, "chat": cmd_chat,
-     "oficina": cmd_office, "bolsa": cmd_bolsa, "grafo": cmd_graph, "modelos": cmd_models, "servicio": cmd_service, "motores": cmd_motores}.get(
+     "oficina": cmd_office, "bolsa": cmd_bolsa, "grafo": cmd_graph, "modelos": cmd_models, "servicio": cmd_service, "motores": cmd_motores,
+     "mcp": cmd_mcp, "bench": cmd_bench}.get(
         args.cmd or "run", cmd_run)(args if args.cmd else p.parse_args(["run"]))
 
 

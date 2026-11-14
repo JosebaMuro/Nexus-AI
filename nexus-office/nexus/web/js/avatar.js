@@ -98,6 +98,12 @@
         this.pulses.push({ l, p: 0, v: 0.008 + Math.random() * 0.02, back: Math.random() < 0.5 });
       }
     }
+    // luz que recorre lo consultado en el grafo para responder (evento graph_trace): arista a arista, en orden
+    trace(ev) {
+      const links = (ev.links || []).map(([a, b]) => this.links.find((l) => (l.source === a && l.target === b) || (l.source === b && l.target === a)) || (this.byId.has(a) && this.byId.has(b) ? { source: a, target: b, weight: 1 } : null)).filter(Boolean);
+      links.slice(0, 24).forEach((l, i) => setTimeout(() => this.pulses.push({ l, p: 0, v: 0.03, back: false, luz: true }), i * 140));
+      const now = this.t; (ev.nodes || []).forEach((id, i) => { const n = this.byId.get(id); if (n) n.lit = now + i * 8; });
+    }
     _project(n, cy, sy, cp, sp, R, cx0, cy0) {
       const x = n.x * cy - n.z * sy, z1 = n.x * sy + n.z * cy;
       const y = n.y * cp - z1 * sp, z = n.y * sp + z1 * cp;
@@ -137,8 +143,9 @@
         p.p += p.v * (this.state === "idle" ? 1 : 2.2);
         const a = P.get(p.back ? p.l.target : p.l.source), b = P.get(p.back ? p.l.source : p.l.target); if (!a || !b) continue;
         const x = a.sx + (b.sx - a.sx) * p.p, y = a.sy + (b.sy - a.sy) * p.p;
-        ctx.fillStyle = rgba(st.color, 0.9); ctx.shadowColor = st.color; ctx.shadowBlur = 10;
-        ctx.beginPath(); ctx.arc(x, y, 1.8, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+        ctx.fillStyle = p.luz ? "rgba(255,255,255,0.95)" : rgba(st.color, 0.9); ctx.shadowColor = p.luz ? "#ffffff" : st.color; ctx.shadowBlur = p.luz ? 18 : 10;
+        if (p.luz) { ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(x, y); ctx.stroke(); ctx.lineWidth = 1; }
+        ctx.beginPath(); ctx.arc(x, y, p.luz ? 3 : 1.8, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
       }
       // nodos (de atras hacia delante)
       const order = this.nodes.filter((n) => !n.core).sort((a, b) => P.get(b.id).z - P.get(a.id).z);
@@ -148,8 +155,9 @@
         const age = this.t - n.born, grow = n.fresh ? Math.min(1, age / 40) : 1;
         const r = n.size * p.s * grow * (this.opts.explore ? 1.3 : 1);
         const alpha = 0.35 + 0.65 * ((1 - p.z) / 2 + 0.25);
-        ctx.fillStyle = rgba(col, Math.min(1, alpha)); ctx.shadowColor = col; ctx.shadowBlur = n.fresh && age < 120 ? 25 : 8;
-        ctx.beginPath(); ctx.arc(p.sx, p.sy, Math.max(0.8, r), 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+        const lit = n.lit && this.t >= n.lit && this.t - n.lit < 110;
+        ctx.fillStyle = lit ? "#ffffff" : rgba(col, Math.min(1, alpha)); ctx.shadowColor = lit ? "#ffffff" : col; ctx.shadowBlur = lit ? 30 : n.fresh && age < 120 ? 25 : 8;
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, Math.max(0.8, r * (lit ? 1.6 : 1)), 0, 7); ctx.fill(); ctx.shadowBlur = 0;
         if (this.mouse && Math.hypot(this.mouse.x - p.sx, this.mouse.y - p.sy) < Math.max(6, r + 3)) hover = { n, p };
       }
       // anillos y nucleo

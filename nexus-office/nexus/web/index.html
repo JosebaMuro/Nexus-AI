@@ -61,6 +61,7 @@
             <select class="input" id="agent-select" title="Agente"></select>
             <select class="input" id="session-select" title="Conversación"></select>
             <button class="btn ghost sm" id="new-chat" title="Nueva conversación">+<span class="lbl"> NUEVA</span></button>
+            <button class="btn ghost sm" id="hilo-open" title="Hilo de la conversación: notas fijas que el agente tiene siempre presentes y resumen de lo hablado">HILO</button>
             <button class="icon-btn sm" id="avatar-toggle" title="Mostrar u ocultar el avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></button>
             <span class="muted mono" id="chat-model" style="margin-left:auto"></span>
           </div>
@@ -172,6 +173,7 @@
         <input class="input" id="rag-search" placeholder="Buscar en los documentos…">
         <div class="list" id="rag-list"></div>
       </div>
+      <div class="row" style="margin-top:-6px"><button class="btn sm" id="rag-lista-open" title="Pega una lista de direcciones o sube un .txt con una por línea: se rastrean en cola, de dos en dos">LISTA DE URLS…</button><button class="btn sm ghost" id="rag-lista-subir">SUBIR .TXT</button><input type="file" id="rag-lista-file" accept=".txt,.csv,.md,text/plain" hidden><span class="muted" id="rag-lista-info"></span></div>
     </section>
 
     <!-- ================= ESTUDIO ================= -->
@@ -200,6 +202,14 @@
           <div id="ana-result"></div>
         </div>
         <div class="panel"><h3>Galería</h3><div class="gallery" id="gallery"></div></div>
+      </div>
+      <div class="panel col" style="margin-top:16px"><h3>Vídeo con tus imágenes <span class="sub">zoom lento y fundido entre imágenes · AVI que abre cualquier reproductor</span></h3>
+        <div class="muted">Elige imágenes en la galería con Ctrl + clic (quedan marcadas) o deja que use las últimas generadas.</div>
+        <div class="row"><label class="field" style="flex-direction:row;align-items:center;gap:8px">ÚLTIMAS <input class="input" id="vid-n" type="number" value="6" min="2" max="60" style="width:80px"></label>
+          <label class="field" style="flex-direction:row;align-items:center;gap:8px">SEG. POR IMAGEN <input class="input" id="vid-seg" type="number" value="3" min="0.5" max="20" step="0.5" style="width:80px"></label>
+          <select class="input" id="vid-formato" style="width:auto"><option value="16:9">16:9 (720p)</option><option value="1080p">16:9 (1080p)</option><option value="9:16">9:16 vertical</option><option value="1:1">1:1 cuadrado</option><option value="4:3">4:3</option></select>
+          <input class="input" id="vid-titulo" placeholder="Título (opcional)" style="flex:1"><button class="btn primary" id="vid-go">CREAR VÍDEO</button></div>
+        <div id="vid-result"></div><div class="list" id="vid-list"></div>
       </div>
     </section>
 
@@ -265,6 +275,13 @@
           <div class="row" style="margin-top:10px"><input class="input" id="bn-sym" placeholder="Nuevo valor" style="flex:1 1 100px;min-width:0"><input class="input" id="bn-name" placeholder="Nombre" style="flex:1 1 120px;min-width:0">
             <select class="input" id="bn-mkt" style="flex:1 1 120px;min-width:0"></select><input class="input" id="bn-px" type="number" step="any" placeholder="Precio" style="flex:1 1 90px;min-width:0"><button class="btn" id="bn-add">AÑADIR</button></div>
         </div>
+      </div>
+      <div class="panel col" style="margin-top:16px" id="lab-panel"><h3>Laboratorio <span class="sub">prueba una estrategia con el histórico antes de arriesgar nada · solo informa, nunca da órdenes</span></h3>
+        <div class="row"><input class="input" id="lab-syms" list="bo-syms" placeholder="Valores separados por comas (SAN.MC, AAPL…)" style="flex:1 1 220px;min-width:0">
+          <select class="input" id="lab-estrategia" style="width:auto"><option value="senales">Cinco señales técnicas</option><option value="cruce_medias">Cruce de medias 20/50</option><option value="comprar_mantener">Comprar y mantener</option></select>
+          <select class="input" id="lab-rango" style="width:auto"><option value="1y">1 año</option><option value="6mo">6 meses</option><option value="5y">5 años</option></select></div>
+        <div class="row"><button class="btn primary" id="lab-backtest">BACKTEST</button><button class="btn" id="lab-senales">SEÑALES</button><button class="btn" id="lab-mesa">MESA DE ANALISTAS</button><button class="btn" id="lab-mc">MONTECARLO</button><button class="btn" id="lab-opt" title="Reparto del capital entre los valores indicados (hacen falta dos o más)">REPARTO DE CARTERA</button></div>
+        <div id="lab-result" class="col"></div>
       </div>
     </section>
 
@@ -394,6 +411,11 @@
       <div class="panel" style="margin-top:16px"><h3>Drivers de la tarjeta gráfica <span class="sub">actualización oficial, siempre confirmada por ti</span></h3><div id="drivers-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel admin-only" style="margin-top:16px"><h3>Historial de sesiones</h3><div id="history-table"></div></div>
       <div class="panel admin-only" style="margin-top:16px"><h3>Registro <span class="sub"><button class="btn sm" id="accel-open">MOTOR Y CPU/GPU/NPU</button> <button class="btn sm" id="redetect">RE-DETECTAR HARDWARE</button> <button class="btn danger sm" id="shutdown">APAGAR NEXUS-OFFICE</button></span></h3><pre class="code" id="logs"></pre></div>
+      <div class="panel col" style="margin-top:16px" id="beta-panel"><h3>Laboratorio beta <span class="sub">banco de pruebas del equipo, tiempos de la API y opiniones</span></h3>
+        <div class="row"><button class="btn primary" id="beta-bench">MEDIR ESTE EQUIPO</button><button class="btn" id="beta-http">TIEMPOS DE LA API</button><button class="btn" id="beta-informe">DESCARGAR INFORME</button></div>
+        <div id="beta-result" class="col"></div>
+        <div class="row"><input class="input" id="beta-opinion" placeholder="Tu opinión o un fallo que hayas visto" style="flex:1"><select class="input" id="beta-nota" style="width:auto"><option value="0">sin nota</option><option value="5">★★★★★</option><option value="4">★★★★</option><option value="3">★★★</option><option value="2">★★</option><option value="1">★</option></select><button class="btn" id="beta-opinar">ENVIAR</button></div>
+      </div>
     </section>
 
     <!-- ================= AJUSTES ================= -->
@@ -418,6 +440,12 @@
         <div class="panel admin-only col" style="grid-column:1/-1" id="router-panel"><h3>Asistente del router <span class="sub">abre el puerto para conectarte desde la app Android fuera de casa</span></h3>
           <div class="muted">Busca tu router, abre su configuración y te dice exactamente qué regla crear. Solo lee: no inicia sesión ni cambia nada en el router.</div>
           <div id="router-box" class="col"><div class="row"><button class="btn primary" id="router-scan">BUSCAR MI ROUTER</button></div></div>
+        </div>
+        <div class="panel col" style="grid-column:1/-1" id="ubi-panel"><h3>Ubicación <span class="sub">los agentes pueden saber dónde estás · todo dentro del equipo, la posición no se envía a ningún servicio</span></h3>
+          <div id="ubi-box" class="col"><span class="muted">Cargando…</span></div>
+        </div>
+        <div class="panel admin-only col" style="grid-column:1/-1" id="mcp-panel"><h3>MCP <span class="sub">ofrece las herramientas de Agente IA a otros programas y usa las de servidores MCP externos</span></h3>
+          <div id="mcp-box" class="col"><span class="muted">Cargando…</span></div>
         </div>
         <div class="panel admin-only col"><h3>Administración</h3>
           <div class="row"><input class="input pin-input" id="pin-change" type="password" placeholder="NUEVO PIN" style="flex:1;font-size:16px"><button class="btn" id="pin-change-btn">CAMBIAR PIN</button></div>
@@ -484,6 +512,21 @@
   <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" id="accel-test">PROBAR</button><button class="btn primary" id="accel-go">ARRANCAR</button></div>
 </dialog>
 
+<dialog id="hilo-dialog" class="accel-dialog">
+  <h2>HILO DE LA CONVERSACIÓN</h2>
+  <p class="muted" id="hilo-info">En las conversaciones largas el agente guarda un resumen de lo ya hablado y lee siempre estas notas.</p>
+  <div class="col">
+    <label class="field">Notas fijas (datos del proyecto que no debe olvidar)<textarea class="input" id="hilo-notas" rows="5" placeholder="Ej.: El cliente es Atlas S.L., el plazo acaba el 30 de junio, responder siempre de usted"></textarea></label>
+    <label class="field">Resumen de lo hablado (se actualiza solo; puedes corregirlo)<textarea class="input" id="hilo-resumen" rows="7"></textarea></label>
+    <div class="row" style="justify-content:flex-end"><button class="btn" id="hilo-resumir" title="Resume ahora todo lo hablado menos los dos últimos mensajes">RESUMIR AHORA</button><button class="btn ghost" id="hilo-cerrar">CERRAR</button><button class="btn primary" id="hilo-guardar">GUARDAR</button></div>
+  </div>
+</dialog>
+<dialog id="lista-dialog" class="accel-dialog">
+  <h2>RASTREAR UNA LISTA DE URLS</h2>
+  <p class="muted">Una dirección por línea (o separadas por comas). Las líneas que empiezan por # se ignoran. Se usan las páginas máximas y el destino elegidos en la Biblioteca.</p>
+  <div class="col"><textarea class="input" id="lista-texto" rows="10" placeholder="https://docs.ejemplo.com/guia&#10;https://otra-web.com/manual"></textarea>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="lista-cerrar">CANCELAR</button><button class="btn primary" id="lista-go">RASTREAR</button></div></div>
+</dialog>
 <dialog id="pin-dialog">
   <h2 id="pin-title">ACCESO ADMINISTRADOR</h2>
   <p class="muted" id="pin-help">Introduce el PIN de administrador.</p>
@@ -501,5 +544,6 @@
 <script src="/static/js/offices.js"></script>
 <script src="/static/js/app.js"></script>
 <script src="/static/js/kgadmin.js"></script>
+<script src="/static/js/extras.js"></script>
 </body>
 </html>

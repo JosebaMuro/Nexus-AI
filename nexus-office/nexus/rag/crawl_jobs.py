@@ -24,9 +24,13 @@ L = log.get("crawl_jobs")
 MAX_DOMAIN_PAGES = 100_000          # tope de un trabajo de seccion (suma de todos sus lotes)
 UNLIMITED = 10 ** 12                # dominio completo: sin tope, hasta agotar todos los enlaces del dominio
 RUNNING, PAUSED, DONE, INTERRUPTED, FAILED = "en curso", "pausado", "completado", "interrumpido", "error"
+QUEUED = "en cola"                  # rastreo de una lista de URLs que espera su turno
 _running: dict[str, threading.Event] = {}
 _threads: dict[str, threading.Thread] = {}
 _lock = threading.Lock()
+_cola: list[str] = []
+_cola_lock = threading.Lock()
+_cola_activos = 0
 
 
 def auto_batch(profile: dict | None = None) -> tuple[int, int]:
@@ -144,7 +148,16 @@ def stop(job_id: str) -> bool:
     ev = _running.get(job_id)
     if ev:
         ev.set()
-    return ev is not None
+        return True
+    with _cola_lock:   # aun en la cola de una lista de URLs: se saca y queda pausado (se puede reanudar)
+        if job_id in _cola:
+            _cola.remove(job_id)
+            job = get(job_id)
+            if job:
+                job.update(status=PAUSED, reason="pausado en la cola")
+                save(job)
+            return True
+    return False
 
 
 def is_running(job_id: str) -> bool:
@@ -253,3 +266,73 @@ def wait(job_id: str, timeout: float | None = None) -> None:
     th = _threads.get(job_id)
     if th:
         th.join(timeout)
+
+
+# ------------------------------------------------------------------ cola: lista de URLs
+
+
+def leer_lista(texto: str) -> list[str]:
+    """URLs de un texto (una por linea, o separadas por espacios, comas o punto y coma). Las lineas que empiezan por
+    # son comentarios. Sin repetidas y solo http(s)."""
+    import re
+    out: list[str] = []
+    for linea in (texto or "").replace("\r", "\n").split("\n"):
+        linea = linea.strip()
+        if not linea or linea.startswith("#"):
+            continue
+        for trozo in re.split(r"[\s,;]+", linea):
+            trozo = trozo.strip("<>\"'()[]")
+            if re.match(r"^https?://[^\s/]+", trozo, re.I) and trozo not in out:
+                out.append(trozo)
+    return out
+
+
+def encolar(services, urls: list[str], max_pages: int, max_depth: int, scope: str, agent: str, batch_pages: int,
+            batch_chars: int, paralelo: int = 2, emit=None, **kw) -> list[dict]:
+    """Crea un rastreo por URL y los lanza de 'paralelo' en 'paralelo' (rag.crawl_parallel): el resto espera en cola."""
+    jobs = []
+    for url in urls:
+        job = create(url, max_pages, max_depth, scope, agent, True, batch_pages, batch_chars)
+        job.update(status=QUEUED, reason="en cola")
+        save(job)
+        jobs.append(job)
+    with _cola_lock:
+        _cola.extend(j["id"] for j in jobs)
+    _despachar(services, max(1, min(int(paralelo or 2), 8)), emit, kw)
+    return jobs
+
+
+def _despachar(services, paralelo: int, emit, kw: dict) -> None:
+    global _cola_activos
+    while True:
+        with _cola_lock:
+            if _cola_activos >= paralelo or not _cola:
+                return
+            job_id = _cola.pop(0)
+            _cola_activos += 1
+
+        def body(jid=job_id):
+            global _cola_activos
+            try:
+                job = get(jid)
+                if job and job["status"] == QUEUED:   # si se pauso o borro en la cola, no se lanza
+                    run(services, jid, emit=emit, **kw)
+            except Exception as e:  # noqa: BLE001
+                L.warning("Rastreo %s de la lista fallido: %s", jid, e)
+                job = get(jid)
+                if job:
+                    job.update(status=FAILED, error=str(e)[:300])
+                    save(job)
+            finally:
+                with _cola_lock:
+                    _cola_activos -= 1
+                if emit:
+                    emit({"type": "crawl_job", "job": jid})
+                    emit({"type": "graph_update"})
+                _despachar(services, paralelo, emit, kw)
+        threading.Thread(target=body, name=f"nexus-crawl-cola-{job_id}", daemon=True).start()
+
+
+def en_cola() -> int:
+    with _cola_lock:
+        return len(_cola)

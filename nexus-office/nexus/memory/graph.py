@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 from collections import Counter
 
@@ -75,6 +76,42 @@ PERSONAL_CATEGORY = {"le_gusta": "preferencia", "no_le_gusta": "preferencia"}   
 AGENT = "agente"            # tipo del nodo ancla de cada subgrafo de agente
 LINK_REL = "subgrafo"       # enlace virtual nucleo -> ancla de agente en la vista completa
 WEAK = ("menciona", "relacionado_con")
+
+
+class Recorrido:
+    """Lo que se lee del grafo mientras se prepara una respuesta: nodos y aristas consultados, en orden. La interfaz
+    lo dibuja como una luz que recorre el grafo del avatar (evento graph_trace). Vale para el hilo que lo abre."""
+    _tl = threading.local()
+
+    def __init__(self) -> None:
+        self.nodos: list[int] = []
+        self.aristas: list[list[int]] = []
+
+    @staticmethod
+    def actual() -> "Recorrido | None":
+        return getattr(Recorrido._tl, "rec", None)
+
+    def __enter__(self) -> "Recorrido":
+        Recorrido._tl.rec = self
+        return self
+
+    def __exit__(self, *exc) -> None:
+        Recorrido._tl.rec = None
+
+    def nodo(self, eid: int) -> None:
+        if eid not in self.nodos and len(self.nodos) < 60:
+            self.nodos.append(int(eid))
+
+    def arista(self, src: int, dst: int) -> None:
+        self.nodo(src)
+        self.nodo(dst)
+        if [src, dst] not in self.aristas and len(self.aristas) < 60:
+            self.aristas.append([int(src), int(dst)])
+
+    def evento(self, agente: str = "") -> dict | None:
+        if not self.nodos:
+            return None
+        return {"type": "graph_trace", "nodes": self.nodos, "links": self.aristas, "agent": agente}
 
 
 class KnowledgeGraph:
@@ -285,9 +322,13 @@ class KnowledgeGraph:
         # ids primero (indice scope+key) y despues relaciones por los indices de src/dst
         rows = self.db.query(
             f"WITH ids AS (SELECT id FROM entities WHERE scope=? AND key IN ({marks})) "
-            f"SELECT a.name AS s, r.rel, b.name AS o, r.weight FROM relations r JOIN entities a ON a.id=r.src "
+            f"SELECT a.name AS s, r.rel, b.name AS o, r.weight, r.src, r.dst FROM relations r JOIN entities a ON a.id=r.src "
             f"JOIN entities b ON b.id=r.dst WHERE (r.src IN ids OR r.dst IN ids) AND r.scope=? AND r.rel NOT IN "
             f"('menciona','relacionado_con','conversa_con','delega_en','pide') ORDER BY r.weight DESC LIMIT ?", (self.scope, *keys, self.scope, limit))
+        rec = Recorrido.actual()
+        if rec is not None:
+            for r in rows:
+                rec.arista(r["src"], r["dst"])
         return [f"{r['s']} {r['rel'].replace('_', ' ')} {r['o']}" for r in rows]
 
     def notes_about(self, names: list[str], limit: int = 6) -> list[str]:
@@ -295,8 +336,12 @@ class KnowledgeGraph:
         keys = list(dict.fromkeys(k for k in (_key(n) for n in names) if k))
         if not keys:
             return []
-        rows = self.db.query(f"SELECT name, note FROM entities WHERE scope=? AND key IN ({','.join('?' * len(keys))}) "
+        rows = self.db.query(f"SELECT id, name, note FROM entities WHERE scope=? AND key IN ({','.join('?' * len(keys))}) "
                              "AND note!='' ORDER BY weight DESC LIMIT ?", (self.scope, *keys, limit))
+        rec = Recorrido.actual()
+        if rec is not None:
+            for r in rows:
+                rec.nodo(r["id"])
         return [f"{r['name']}: {r['note'][:300]}" for r in rows]
 
     def user_facts(self, limit: int = 15) -> list[str]:

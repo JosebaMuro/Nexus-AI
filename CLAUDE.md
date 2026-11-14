@@ -11,7 +11,7 @@ tarea. Detalle de cada módulo en `nexus-office-cpp/docs/ARQUITECTURA.md` y `doc
 
 | Carpeta | Qué es | Estado |
 |---|---|---|
-| `nexus-office/` | **Agente IA, edición Python** (base desde la 4.0.0, 2026-11-10): motores de inferencia por hardware en `nexus/motores/` (ver `docs/MOTORES.md`). | **activa** |
+| `nexus-office/` | **Agente IA, edición Python** (base desde la 4.0.0, 2026-11-10): motores de inferencia por hardware en `nexus/motores/` (ver `docs/MOTORES.md`); desde la 4.1 trae lo de la C++ 3.x (hilo, ubicacion, MCP, beta, laboratorio de bolsa, video: `docs/NOVEDADES-4.1.md`, rutas en `nexus/server/rutas_extra.py`, interfaz en `nexus/web/js/extras.js`). | **activa** |
 | `nexus-office-cpp/` | Edición C++ (3.2.3), se conserva como referencia. | referencia |
 | `firmware/` | NexusLED (ESP8266/ESP32), NexusWatch, NexusPico (Pico W, C++ con Pico SDK), grabador `nexus-flash`. | activa |
 | `.github/workflows/` | Compilación, instaladores y Releases (ver abajo). | |

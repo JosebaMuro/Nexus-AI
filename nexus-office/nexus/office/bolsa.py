@@ -307,10 +307,12 @@ class Bolsa:
 
     # ------------------------------------------------------------ utilidades
     def _q(self, sql: str, args=()) -> list[dict]:
-        return [dict(r) for r in self.con.execute(sql, args).fetchall()]
+        with self._lock:   # la conexion es compartida: dos lecturas a la vez desde hilos distintos la corrompen
+            return [dict(r) for r in self.con.execute(sql, args).fetchall()]
 
     def _one(self, sql: str, args=()) -> dict | None:
-        r = self.con.execute(sql, args).fetchone()
+        with self._lock:
+            r = self.con.execute(sql, args).fetchone()
         return dict(r) if r else None
 
     def now(self) -> dt.datetime:

@@ -135,6 +135,7 @@ DEFAULTS: dict[str, Any] = {
     "performance": {"workers": 0, "crawl_connections": 0},
     # rastreo web por lotes (0 = automatico segun la RAM) y acceso a webs de la red local (intranet, wiki interna)
     "rag": {"crawl_batch_pages": 0, "allow_private_urls": False,
+            "crawl_parallel": 2,        # rastreos a la vez cuando se manda una lista de URLs (el resto, en cola)
             "browser": "auto",          # leer con Chrome/Edge/Chromium sin interfaz: auto (si la web usa JavaScript) | siempre | nunca
             "browser_path": ""},        # navegador concreto (vacio = el que se encuentre)
     # mesa de bolsa: SIEMPRE simulada (sin dinero ni ordenes reales); precios reales con conexion
@@ -155,13 +156,26 @@ DEFAULTS: dict[str, Any] = {
              "clave_groq": "",
              "clave_openrouter": "",
              "clave_compatible": ""},
+    # conversaciones largas: resumen progresivo y notas fijas; parte de n_ctx que se dedica a la conversacion
+    "hilo": {"activo": True, "pct_contexto": 45},
+    # MCP: servidor (POST /mcp y «nexus mcp») y cliente de servidores externos
+    "mcp": {"servidor": True,            # ofrecer las herramientas de Agente IA por MCP
+            "token": "",                 # obligatorio para llamar a /mcp desde otro equipo
+            "ocultas": [],               # herramientas que no se ofrecen por MCP
+            # [{"nombre": "ficheros", "orden": ["npx", "-y", "..."], "env": {}, "riesgo": "medium"} | {"nombre", "url"}]
+            "servidores": []},
+    # ubicacion en tiempo real para los agentes: todo dentro del equipo
+    "ubicacion": {"activa": True, "fuente": "auto", "navegador": False, "manual": "", "serie": "", "baudios": 9600,
+                  "gpsd": "127.0.0.1:2947", "timeout_s": 6, "fresca_s": 120, "lugares": []},
+    # laboratorio beta: tiempos de la API y banco de pruebas
+    "beta": {"tiempos": True},
     "admin": {"pin_hash": "", "pin_salt": ""},
 }
 
 # claves editables en modo usuario (seccion.clave)
 USER_KEYS = {f"user.{k}" for k in DEFAULTS["user"]} | {"avatares.sketchfab_token"}
 SECRET_KEYS = {"admin.pin_hash", "admin.pin_salt", "llm.openai_api_key", "models.huggingface_token",
-               "models.civitai_token", "avatares.sketchfab_token", "models.kaggle_key", "models.modelscope_token", "coop.passphrase", "server.lan_key",
+               "models.civitai_token", "avatares.sketchfab_token", "models.kaggle_key", "models.modelscope_token", "coop.passphrase", "server.lan_key", "mcp.token",
                "nube.clave_gemini", "nube.clave_openai", "nube.clave_perplexity", "nube.clave_claude",
                "nube.clave_mistral", "nube.clave_deepseek", "nube.clave_groq", "nube.clave_openrouter", "nube.clave_compatible"}
 
