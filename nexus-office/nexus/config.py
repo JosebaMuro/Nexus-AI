@@ -142,6 +142,7 @@ DEFAULTS: dict[str, Any] = {
     "avatares": {"sketchfab_token": ""},  # clave de API de Sketchfab para descargar (buscar no la necesita)
     "bolsa": {"datos": "reales",            # reales (con conexion; sin ella, simulados) | simulados
               "refresco_s": 20,             # cada cuanto se piden cotizaciones reales
+              "sec_agente": "",             # como se identifica ante SEC EDGAR (vacio = nombre generico)
               # agente autonomo: gestiona su propia cartera simulada con los datos que recopila
               "agente": {"activo": True, "intervalo_s": 60, "capital": 10000.0, "riesgo_pct": 1.0,
                          "max_posiciones": 8, "max_peso_pct": 20.0, "reserva_pct": 10.0, "universo": []}},
@@ -169,6 +170,16 @@ DEFAULTS: dict[str, Any] = {
                   "gpsd": "127.0.0.1:2947", "timeout_s": 6, "fresca_s": 120, "lugares": []},
     # laboratorio beta: tiempos de la API y banco de pruebas
     "beta": {"tiempos": True},
+    # Mundo: informacion publica al dia por categorias y paises (nexus/mundo). factor multiplica todos los
+    # intervalos (2 = la mitad de peticiones); fuentes = {id: {activa, intervalo_s}}; claves = las de las fuentes
+    # que la piden (firms, aisstream); contexto = anadir un resumen breve al agente cuando la pregunta lo pide
+    "mundo": {"activo": True, "factor": 1.0, "fuentes": {}, "paises": [], "claves": {}, "retencion_h": 48,
+              "contexto": True, "max_por_fuente": 1500, "sismos_magnitud_min": 2.5, "gbfs_sistemas": [],
+              "lugares": [], "satelites_grupos": ["stations", "last-30-days"], "buques_muestra_s": 20,
+              "mercados_simbolos": [], "mercados_noticias": []},
+    # Terminal IA (nexus/terminal): consola, interprete de codigo y ficheros para personas y agentes
+    "terminal": {"activo": True, "carpeta": "", "shell": "", "espera_s": 120, "salida_max": 30000,
+                 "pasos_max": 24, "modo": "construir", "sesiones_max": 8, "ficha": ""},
     "admin": {"pin_hash": "", "pin_salt": ""},
 }
 
@@ -177,7 +188,8 @@ USER_KEYS = {f"user.{k}" for k in DEFAULTS["user"]} | {"avatares.sketchfab_token
 SECRET_KEYS = {"admin.pin_hash", "admin.pin_salt", "llm.openai_api_key", "models.huggingface_token",
                "models.civitai_token", "avatares.sketchfab_token", "models.kaggle_key", "models.modelscope_token", "coop.passphrase", "server.lan_key", "mcp.token",
                "nube.clave_gemini", "nube.clave_openai", "nube.clave_perplexity", "nube.clave_claude",
-               "nube.clave_mistral", "nube.clave_deepseek", "nube.clave_groq", "nube.clave_openrouter", "nube.clave_compatible"}
+               "nube.clave_mistral", "nube.clave_deepseek", "nube.clave_groq", "nube.clave_openrouter", "nube.clave_compatible",
+               "terminal.ficha"}
 
 
 def _deep_merge(base: dict, extra: dict) -> dict:
@@ -257,6 +269,9 @@ class Config:
             if d.get(sec, {}).get(k):
                 d[sec][k] = "********"
         d.pop("admin", None)
+        claves = (d.get("mundo") or {}).get("claves")
+        if isinstance(claves, dict):   # claves de las fuentes de Mundo: nunca en claro
+            d["mundo"]["claves"] = {k: ("********" if v else "") for k, v in claves.items()}
         return d
 
     # ---- PIN de administrador -------------------------------------------------

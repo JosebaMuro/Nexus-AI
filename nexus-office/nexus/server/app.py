@@ -59,6 +59,7 @@ def create_app(services: Services | None = None) -> FastAPI:
         s.coop.listeners.append(hub.broadcast)
         s.lounge.listeners.append(hub.broadcast)
         s.kg_jobs.listeners.append(hub.broadcast)
+        s.mundo.oyentes.append(hub.broadcast)
         from ..agents.activity import ACTIVITY
         if hub.broadcast not in ACTIVITY.listeners:
             ACTIVITY.listeners[:] = [hub.broadcast]   # un solo servidor por proceso
@@ -2053,4 +2054,6 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     from . import rutas_extra
     rutas_extra.registrar(app, S, hub, require_admin, admin_flag, LOCAL)
+    from . import rutas_42
+    rutas_42.registrar(app, S, hub, require_admin, admin_flag)   # Mundo, terminal de bolsa y Terminal IA
     return app

@@ -54,7 +54,8 @@ TV_COLUMNAS = ["name", "description", "close", "change", "volume", "market_cap_b
                "price_52_week_high", "price_52_week_low", "Recommend.All", "RSI", "Perf.W", "Perf.1M", "Perf.3M",
                "Perf.YTD", "Perf.Y", "relative_volume_10d_calc", "return_on_equity", "debt_to_equity",
                "price_book_fq", "gross_margin", "operating_margin", "earnings_release_next_date", "exchange",
-               "currency"]
+               "currency", "Perf.6M", "after_tax_margin", "current_ratio",
+               "earnings_per_share_diluted_yoy_growth_ttm"]
 TV_NOMBRES = {"name": "simbolo", "description": "nombre", "close": "precio", "change": "cambio_pct",
               "volume": "volumen", "market_cap_basic": "capitalizacion", "price_earnings_ttm": "per",
               "earnings_per_share_basic_ttm": "bpa", "dividend_yield_recent": "rentabilidad_dividendo_pct",
@@ -64,7 +65,9 @@ TV_NOMBRES = {"name": "simbolo", "description": "nombre", "close": "precio", "ch
               "Perf.Y": "anio_pct", "relative_volume_10d_calc": "volumen_relativo", "return_on_equity": "roe_pct",
               "debt_to_equity": "deuda_sobre_fondos_propios", "price_book_fq": "precio_valor_contable",
               "gross_margin": "margen_bruto_pct", "operating_margin": "margen_operativo_pct",
-              "earnings_release_next_date": "proximos_resultados", "exchange": "bolsa", "currency": "divisa"}
+              "earnings_release_next_date": "proximos_resultados", "exchange": "bolsa", "currency": "divisa",
+              "Perf.6M": "semestre_pct", "after_tax_margin": "margen_neto_pct", "current_ratio": "ratio_corriente",
+              "earnings_per_share_diluted_yoy_growth_ttm": "crecimiento_bpa_pct"}
 _TV_INV = {v: k for k, v in TV_NOMBRES.items()}
 _OPS = {"mayor": "greater", ">": "greater", "menor": "less", "<": "less", "igual": "equal", "=": "equal",
         "==": "equal", "mayor_igual": "egreater", ">=": "egreater", "menor_igual": "eless", "<=": "eless",
@@ -823,13 +826,20 @@ def receta(nombre: str, params: dict | None = None, m: Mercados | None = None) -
 
 
 def leer_filtros(texto: str) -> list[dict]:
-    """«per < 15, rentabilidad_dividendo_pct > 3; sector = Finance» -> filtros de la criba."""
+    """«per < 15, rentabilidad_dividendo_pct > 3,5; sector = Finance» -> filtros de la criba. Vale dentro de una
+    frase («empresas con per < 15 y roe_pct > 20 en España»)."""
     out = []
-    for trozo in re.split(r"[,;]| y ", texto):
-        m = re.match(r"\s*([\w.]+)\s*(>=|<=|!=|==|=|>|<)\s*(.+?)\s*$", trozo)
+    texto = re.sub(r"(\d),(\d{1,2})(?!\d)", r"\1.\2", texto or "")
+    for trozo in re.split(r";|,\s| y ", texto):
+        m = re.search(r"([A-Za-z_][\w.]*)\s*(>=|<=|!=|==|=|>|<)\s*(-?\d[\d.]*\s?[KMBT]?)(?![\w])", trozo)
         if m:
-            valor = _num(m.group(3))
-            out.append({"campo": m.group(1), "op": m.group(2), "valor": valor if valor is not None else m.group(3)})
+            valor = _num(m.group(3).replace(" ", ""))
+            if valor is not None:
+                out.append({"campo": m.group(1), "op": m.group(2), "valor": valor})
+                continue
+        m = re.search(r"([A-Za-z_][\w.]*)\s*(==|=|!=)\s*([\w .&-]+?)\s*$", trozo)
+        if m:
+            out.append({"campo": m.group(1), "op": m.group(2), "valor": m.group(3)})
     return out
 
 

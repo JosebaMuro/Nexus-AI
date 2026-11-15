@@ -1,6 +1,7 @@
 """Ensamblado de todos los servicios de Nexus-Office."""
 from __future__ import annotations
 
+import os
 import threading
 
 from . import motores, hardware, log
@@ -97,6 +98,10 @@ class Services:
         self.hilo.llm_real = self.llm.has_real_llm
         from .mcp import Gestor
         self.mcp = Gestor(self)     # herramientas de servidores MCP externos (mcp.servidores)
+        from .mundo import Mundo
+        self.mundo = Mundo(cfg)     # informacion publica al dia por categorias y paises (nexus/mundo)
+        from .terminal import Terminal
+        self.terminal = Terminal(self)   # consola, interprete y ficheros para personas y agentes
 
     # ------------------------------------------------------------ embeddings
     def _make_embedder(self):
@@ -142,6 +147,8 @@ class Services:
                              daemon=True).start()
         if self.config.get("mcp.servidores"):
             self.mcp.conectar()
+        if not os.environ.get("NEXUS_SIN_MUNDO"):
+            self.mundo.iniciar()
         if self.config.get("coop.enabled", False):
             try:
                 self.coop.start()
@@ -154,6 +161,11 @@ class Services:
             self.mcp.cerrar()
         except Exception:  # noqa: BLE001
             pass
+        for cierre in (self.mundo.cerrar, self.terminal.cerrar):
+            try:
+                cierre()
+            except Exception:  # noqa: BLE001
+                pass
         try:
             self.coop.stop()
         except Exception:  # noqa: BLE001
