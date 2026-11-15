@@ -429,13 +429,15 @@ def windows_exe(target: str, dest: Path) -> Path | None:
     return out
 
 
-README = """Nexus-Office {version} - instaladores (todos 100 % portables: se instalan sin internet)
-===================================================================================
+README = """Agente IA {version} - instaladores (todos 100 % portables: se instalan sin internet)
+==================================================================================
 
-Todos llevan dentro Python, las dependencias y el motor de IA (llama-server y sd-cli: CPU, Vulkan y, segun la
-plataforma, CUDA o Metal). Al instalar, Nexus-Office evalua el hardware (memoria, grafica, procesador) y elige el modelo
-de IA adecuado; lo descarga si hay internet (sin internet lo recomienda y se descarga despues desde la app).
-Todos pueden dejar Nexus-Office como servicio que arranca solo con el equipo.
+Todos llevan dentro Python, las dependencias y los motores de IA de su plataforma (ONNX Runtime GenAI, OpenVINO
+GenAI, LiteRT-LM, ExecuTorch, Genie en Snapdragon y llama.cpp de respaldo). Al arrancar, Agente IA detecta el hardware
+(procesador, grafica, NPU y memoria), activa los motores que funcionan en ese equipo y elige el modelo de IA adecuado;
+lo descarga si hay internet (sin internet lo recomienda y se descarga despues desde la app).
+Todos pueden dejar Agente IA como servicio que arranca solo con el equipo.
+Los ficheros conservan el nombre anterior del proyecto (Nexus-Office).
 
 windows/  Nexus-Office-Setup-{version}-windows-x64.exe    PC con Windows 10/11 de 64 bits (Intel/AMD; NVIDIA con CUDA)
           Nexus-Office-Setup-{version}-windows-arm64.exe  Windows 11 en ARM (Snapdragon X)
@@ -450,10 +452,13 @@ linux/    sh Nexus-Office-{version}-linux-x86_64.run [carpeta] [--oficina=herrer
           flatpak install --user Nexus-Office-{version}-linux-x86_64.flatpak  (o -aarch64; pide el runtime de Flathub)
 macos/    Nexus-Office-{version}-macos-arm64.tar.gz (Apple Silicon) / macos-x86_64 (Intel): descomprimir y abrir
           "Nexus-Office.command" (o ./install.sh --oficina=herreria --servicio && ./start.sh)
-android/  Nexus-Office-{version}-android-autonomo.apk  Nexus-Office completo dentro del movil (ARM64, Android 9+), sin PC;
-                                                  usa la GPU (Adreno por OpenCL, Mali/Xclipse por Vulkan) si acelera
-          Nexus-Office-{version}-android-vpn.apk       app ligera que conecta con el Nexus-Office de la oficina (VPN o Wi-Fi)
-Nexus-Office-{version}-codigo-fuente.zip               proyecto limpio (codigo, tests, empaquetado y documentacion)
+android/  Nexus-Office-{version}-android-autonomo.apk  Agente IA completo dentro del movil (ARM64, Android 9+), sin PC;
+                                                  usa la NPU (Snapdragon, Tensor, Dimensity) o la GPU si acelera
+          Nexus-Office-{version}-android-vpn.apk       app ligera que conecta con el Agente IA de la oficina (VPN o Wi-Fi)
+ubuntu/   rehacer-ubuntu.sh   rehace la ISO de Ubuntu Server para que la instalacion minima lleve Agente IA (u otro
+          proyecto Python) preinstalado como servicio activo y preconfigurado:
+          sudo ./rehacer-ubuntu.sh --descargar 24.04 --deb nexus-office_{version}_amd64.deb --probar
+Nexus-Office-{version}-codigo-fuente.zip               proyecto limpio (codigo, pruebas, empaquetado y documentacion)
 Manual-de-usuario.pdf / Documentacion-tecnica.pdf
 
 Oficina: 58 perfiles de pyme por gremio; tras instalar, la vista Modelos sugiere modelos especificos del sector.

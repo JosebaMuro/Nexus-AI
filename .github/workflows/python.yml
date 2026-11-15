@@ -51,3 +51,10 @@ jobs:
       - name: Pruebas
         if: always()
         run: python -m pytest -q -p no:cacheprovider tests
+      # 4.2: las fuentes publicas del Mundo en vivo (informativo: la caida de un servicio ajeno no pone nada en rojo)
+      - name: Fuentes del mundo en vivo (internet)
+        if: always() && runner.os == 'Linux'
+        continue-on-error: true
+        env:
+          NEXUS_DATA_DIR: ${{ runner.temp }}/mundo
+        run: python -m nexus mundo probar --todas

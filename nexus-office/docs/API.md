@@ -80,3 +80,27 @@ Puerto remoto: `https://IP:8443` (TLS 1.3). Ahí todas las rutas, salvo `/`, `/a
 | `POST /api/remote/certificate` *(admin)* | Certificado nuevo (cambia la huella anclada). |
 | `GET /api/remote/router` *(admin)* | Asistente del router: puerta de enlace, IP y MAC de este equipo, URLs de configuración, marca y ruta del menú, UPnP‑IGD y la regla exacta. |
 | `POST /api/remote/check` *(admin)* | IP pública, CGNAT y si el puerto responde en la IP pública. |
+
+## Mundo, terminal de bolsa y Terminal IA (4.2)
+
+| Método y ruta | Uso |
+|---|---|
+| `GET /api/mundo` | Estado: fuentes, intervalos, último dato, errores, países y totales |
+| `GET /api/mundo/resumen?pais=&categoria=` | Lo más destacado por categoría y país |
+| `GET /api/mundo/registros?categoria=&pais=&texto=&fuente=&horas=&orden=&limite=` | Registros recibidos |
+| `GET /api/mundo/paises` | Países y territorios con su código ISO |
+| `POST /api/mundo/config` (admin) | `activo`, `factor`, `paises`, `contexto`, `retencion_h`, `fuentes: {id: {activa, intervalo_s}}`, `claves` |
+| `POST /api/mundo/actualizar` (admin) | `{"fuente": "<id>"}` pide una fuente ya; vacío, un ciclo |
+| `GET /api/mercados/recetas` | Recetas del terminal de bolsa |
+| `POST /api/mercados/herramienta/<nombre>` | Ejecuta una herramienta de bolsa (`mercado_*`, `bolsa_*` del terminal) por el supervisor |
+| `GET/POST /api/mercados/escritorio` | Escritorio de valores y paneles |
+| `GET /api/terminal?sesion=` | Sesión del Terminal IA (carpeta, consola, historial, procesos) |
+| `POST /api/terminal/ejecutar` | `{"orden", "sesion", "fondo", "flujo"}`; con `flujo` responde NDJSON (`{"t":"salida"}`, `{"t":"fin"}`) |
+| `POST /api/terminal/interrumpir`, `/codigo`, `/sesion`, `/editar`, `/deshacer`, `/expandir` | Cortar, intérprete, crear sesión, editar, deshacer, órdenes propias |
+| `DELETE /api/terminal/sesion/<id>` | Cerrar una sesión |
+| `GET /api/terminal/ficheros`, `GET/PUT /api/terminal/fichero`, `GET /api/terminal/buscar` | Ficheros |
+| `GET /api/terminal/procesos`, `GET/DELETE /api/terminal/procesos/<pid>`, `POST .../entrada` | Procesos de fondo |
+| `POST /api/terminal/ficha` (admin) | Crea (o quita con `{"quitar": true}`) la ficha para usar el terminal desde otro equipo |
+
+Las rutas del Terminal IA exigen modo administrador o la cabecera `Authorization: Bearer <ficha>`.
+

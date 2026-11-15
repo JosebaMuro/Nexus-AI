@@ -1,5 +1,28 @@
 # Cambios
 
+## Agente IA 4.2.0: mundo, terminal de bolsa y Terminal IA (2026-11-15)
+
+Detalle en [docs/NOVEDADES-4.2.md](docs/NOVEDADES-4.2.md).
+
+- **Mundo**: 26 fuentes públicas (terremotos, desastres, incendios, vuelos, barcos, ciclones, tiempo, satélites,
+  lanzamientos, noticias, radio, fauna y mercados) ordenadas por categoría y país, con intervalos regulables por
+  fuente y un factor global. Vista MUNDO, herramientas `mundo_resumen`, `mundo_consultar` y `mundo_fuentes`, contexto
+  automático para los agentes y `nexus mundo` en la terminal ([MUNDO](docs/MUNDO.md)).
+- **Bolsa con funciones de terminal financiero**: panel por pregunta, verificación de cifras, opciones con griegas y
+  estrategias, VaR y escenarios de estrés, DCF, cribas, informes de la SEC, alertas, expedientes y validación por
+  tramos. El agente autónomo no abre posiciones si el VaR de su cartera supera el límite ni compra valores casi
+  idénticos a los que tiene ([BOLSA](docs/BOLSA.md#terminal-financiero)).
+- **Terminal IA**: consola con sesión, intérprete de Python con memoria, ficheros con deshacer, procesos de fondo,
+  modos plan y construir, `AGENTS.md`, habilidades y órdenes propias; agente `terminal`, vista TERMINAL IA y
+  `nexus terminal` ([TERMINAL](docs/TERMINAL.md)).
+- **Más rápido en Windows y Android**: arranque con el hardware detectado la vez anterior (se revisa en segundo
+  plano), prioridad alta y sin EcoQoS en Windows, un hilo por núcleo de rendimiento en procesadores híbridos,
+  interfaz comprimida con gzip y código precompilado en el instalador de Windows.
+- **Ubuntu mínima**: `packaging/ubuntu/rehacer-ubuntu.sh` rehace la ISO de Ubuntu Server con Agente IA (o cualquier
+  proyecto Python) preinstalado como servicio activo en la instalación mínima ([UBUNTU](docs/UBUNTU.md)).
+- **Limpieza**: la edición C++ de referencia sale del repositorio (tag `v3.2.3-cpp`, commit `59fa50d` y zip en la
+  Release), con sus flujos de trabajo; las pruebas ya no van dentro de los instaladores.
+
 ## Agente IA 4.1.0: lo que faltaba de la edición C++ 3.x (2026-11-13)
 
 Detalle en [docs/NOVEDADES-4.1.md](docs/NOVEDADES-4.1.md).

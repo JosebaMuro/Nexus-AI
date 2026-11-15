@@ -27,7 +27,10 @@ flowchart LR
 |---|---|
 | `nexus/paths.py` | Rutas portables relativas al proyecto (`NEXUS_DATA_DIR` para redirigir los datos). |
 | `nexus/config.py` | Configuración en dos niveles (`user.*` editable en modo Usuario; el resto solo Admin) y PIN PBKDF2. |
-| `nexus/hardware/` | `detect.py` (CPU/RAM/GPU/NPU/runtimes), `android_accel.py` (CPU/GPU/NPU del móvil), `profiles.py` (perfil óptimo), `monitor.py` (muestras, latido, resumen de sesión), `tuner.py` (autoajuste). |
+| `nexus/hardware/` | `__init__.py` (`detectar`: arranque con el hardware guardado si la huella no cambia y revisión en segundo plano), `detect.py` (CPU/RAM/GPU/NPU/runtimes, núcleos de rendimiento), `android_accel.py` (CPU/GPU/NPU del móvil), `profiles.py` (perfil óptimo), `monitor.py` (muestras, latido, resumen de sesión), `tuner.py` (autoajuste). |
+| `nexus/mundo/` | 4.2: `fuentes.py` (26 fuentes públicas con lector, intervalo y mínimo), `servicio.py` (`Mundo`: planificador con reintentos, almacén por categoría y país, contexto para los agentes), `paises.py` + `paises.json` (250 países: por punto, nombre o texto), `probar.py` (`nexus mundo`). |
+| `nexus/terminal/` | 4.2: `nucleo.py` (`Terminal`: sesiones con carpeta y entorno, consola bash/PowerShell/cmd, ficheros con copias para deshacer, procesos de fondo, AGENTS.md, habilidades y órdenes), `interprete.py` (Python con estado), `cli.py` (`nexus terminal`). |
+| `nexus/office/bolsa_analisis.py`, `bolsa_informes.py`, `bolsa_terminal.py` | 4.2: opciones, riesgo, DCF, cribas, alertas y expedientes; informes de la SEC; recetas del terminal de bolsa y escritorio. |
 | `nexus/runtimes.py` | Descarga y localiza binarios oficiales de llama.cpp y stable-diffusion.cpp por variante (cpu, cuda, rocm, vulkan, sycl, openvino, metal). |
 | `nexus/service.py` | Arranque automático como servicio: systemd, cron `@reboot`, launchd, Programador de tareas de Windows y termux-services (`python -m nexus servicio`, ver [SERVICIO.md](SERVICIO.md)). |
 | `nexus/downloads.py` | Instaladores de `<datos>/descargas/` clasificados por plataforma para *Sistema → Descargas*. |

@@ -9,18 +9,19 @@ Todos los instaladores son **100 % portables**: llevan dentro Python, todo lo qu
 (llama-server y sd-cli, para CPU y para la tarjeta gráfica). **Se instalan sin internet.** Lo único que se descarga
 es el modelo de IA, elegido según tu equipo, y solo si hay conexión (ver [más abajo](#modelo-de-ia-elegido-según-tu-equipo)).
 
-Elige el fichero de tu equipo (versión 2.2.0):
+Elige el fichero de tu equipo (versión 4.2.0; los nombres de fichero conservan «Nexus-Office»):
 
 | Equipo | Fichero |
 |---|---|
-| PC con Windows 10/11 de 64 bits (Intel o AMD) | `windows/Nexus-Office-Setup-2.2.0-windows-x64.exe` |
-| PC con Windows 11 en ARM (Snapdragon X) | `windows/Nexus-Office-Setup-2.2.0-windows-arm64.exe` |
-| PC con Linux (Ubuntu, Debian, Fedora, Steam Deck…) | `linux/Nexus-Office-2.2.0-linux-x86_64.run`, `.AppImage` o `.flatpak`; en Debian y Ubuntu también `linux/nexus-office_2.2.0_amd64.deb` |
-| Raspberry Pi 4/5 y otros Linux ARM de 64 bits | `linux/Nexus-Office-2.2.0-linux-aarch64.run`, `.AppImage`, `.flatpak` o `linux/nexus-office_2.2.0_arm64.deb` |
-| Mac con Apple Silicon (M1, M2, M3…) | `macos/Nexus-Office-2.2.0-macos-arm64.tar.gz` |
-| Mac con Intel | `macos/Nexus-Office-2.2.0-macos-x86_64.tar.gz` |
-| Móvil Android: Nexus-Office dentro del móvil y conexión al PC de la oficina | `android/Nexus-Office-2.2.0-android-autonomo.apk` |
-| Móvil Android modesto: solo usar el Nexus-Office del PC | `android/Nexus-Office-2.2.0-android-vpn.apk` |
+| PC con Windows 10/11 de 64 bits (Intel o AMD) | `Nexus-Office-Setup-4.2.0-windows-x64.exe` |
+| PC con Windows 11 en ARM (Snapdragon X) | `Nexus-Office-Setup-4.2.0-windows-arm64.exe` |
+| PC con Linux (Ubuntu, Debian, Fedora, Steam Deck…) | `Nexus-Office-4.2.0-linux-x86_64.run`, `.AppImage` o `.flatpak`; en Debian y Ubuntu también `nexus-office_4.2.0_amd64.deb` |
+| Raspberry Pi 4/5 y otros Linux ARM de 64 bits | `Nexus-Office-4.2.0-linux-aarch64.run`, `.AppImage`, `.flatpak` o `nexus-office_4.2.0_arm64.deb` |
+| Mac con Apple Silicon (M1, M2, M3…) | `Nexus-Office-4.2.0-macos-arm64.tar.gz` |
+| Mac con Intel | `Nexus-Office-4.2.0-macos-x86_64.tar.gz` |
+| Móvil Android: Agente IA dentro del móvil y conexión al PC de la oficina | `Nexus-Office-4.2.0-android-autonomo.apk` |
+| Móvil Android modesto: solo usar el Agente IA del PC | `Nexus-Office-4.2.0-android-vpn.apk` |
+| Servidor con Ubuntu: instalación mínima con Agente IA como servicio | `rehacer-ubuntu.sh` con el `.deb` (ver [Ubuntu mínima](UBUNTU.md)) |
 
 `SHA256SUMS.txt` trae la huella de cada fichero, para comprobar que se ha copiado bien. Si Nexus-Office ya está instalado
 en un PC de la oficina, los demás equipos y móviles pueden descargar su instalador desde él (ver
@@ -208,6 +209,16 @@ USB:
 La lista marca con **anfitrión** el instalador del equipo donde corre Nexus-Office y con **este dispositivo** el que
 corresponde al móvil o PC desde el que miras. Pulsa **DESCARGAR**. En la app Android, eliges dónde guardar el fichero;
 después ábrelo para instalarlo.
+
+## Lo nuevo de la 4.2
+
+- **MUNDO**: lo que pasa en el mundo (terremotos, desastres, aviones, barcos, tiempo, satélites, noticias, mercados...)
+  por categoría y país, con los intervalos que elijas. Los agentes lo consultan solos. Ver [Mundo](MUNDO.md).
+- **TERMINAL DE BOLSA** (dentro de BOLSA): opciones con griegas, riesgo y estrés de carteras, valoración por DCF,
+  cribas, alertas, expedientes e informes oficiales. Ver [Bolsa](BOLSA.md#terminal-financiero).
+- **TERMINAL IA** (administrador): consola, intérprete, ficheros y un agente que programa en tu equipo. Ver
+  [Terminal IA](TERMINAL.md).
+- Arranca antes, sobre todo en Windows. Resumen completo en [Novedades de la 4.2](NOVEDADES-4.2.md).
 
 ## Uso diario (modo sencillo)
 

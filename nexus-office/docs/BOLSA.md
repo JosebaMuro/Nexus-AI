@@ -40,7 +40,39 @@ persona en la mesa, con sus comisiones, horquilla y horarios. En cada ciclo (60 
 Su **diario** explica por qué compra, vende o espera. En la vista Bolsa se ven en vivo su curva de patrimonio y el
 **gráfico de cada orden activa** (precio, límite, stop, ejecución y objetivo). Se ajusta o se para en la vista Bolsa o
 con `POST /api/bolsa/agente` (`activo`, `intervalo_s`, `riesgo_pct`, `max_posiciones`, `max_peso_pct`,
-`reserva_pct`, `universo`, `capital`); `GET /api/bolsa/agente` da su estado. Nunca opera con dinero real.
+`reserva_pct`, `universo`, `capital`, `var_max_pct`, `correlacion_max`); `GET /api/bolsa/agente` da su estado.
+Nunca opera con dinero real.
+
+Desde la 4.2 controla además el riesgo de la cartera entera: no abre posiciones nuevas si el **VaR histórico de un
+día** supera `var_max_pct` (3 % del patrimonio por defecto) y no compra un valor cuyas rentabilidades diarias se
+mueven casi igual (correlación mayor que `correlacion_max`, 0,85) que las de uno que ya tiene. Lo deja escrito en
+su diario.
+
+## Terminal financiero
+
+Desde la 4.2 los agentes de la oficina de bolsa (analista, gestor de carteras, riesgos, operador y fiscalidad) tienen
+las herramientas de un terminal financiero, y en la vista Bolsa el panel **TERMINAL DE BOLSA** las reúne con
+formularios. Funcionan con los datos reales de `mercados.py` (TradingView, Yahoo, Nasdaq, SEC, FRED, CoinGecko...)
+cuando hay conexión; las cifras siempre llevan su fuente y nada de esto es asesoramiento financiero.
+
+| Herramienta | Qué hace |
+|---|---|
+| `mercado_panel` | Responde a una pregunta en lenguaje corriente con las recetas que hagan falta (`bolsa_terminal.ruta`): cotización, velas, indicadores, métricas, perfil, noticias, opciones, resultados, BPA, estimaciones, comparativa, criptomonedas, cribas, sectores, calendario |
+| `mercado_consulta` | Una receta suelta con sus parámetros |
+| `bolsa_verificar` | Comprueba que cada cifra de un texto sale de los datos consultados en la conversación (admite coma decimal, %, millones, billones) |
+| `bolsa_opciones` | Black-Scholes con dividendos, griegas (delta, gamma, theta por día, vega, rho), volatilidad implícita y estrategias: `call_comprada`, `put_comprada`, `call_cubierta`, `put_protectora`, `collar`, `diferencial_alcista`, `diferencial_bajista`, `cono`, `cuna`, `mariposa`, `condor_hierro`; curva de resultado, máximos, equilibrios y probabilidad de beneficio |
+| `bolsa_riesgo` | `cartera`: VaR histórico y paramétrico, CVaR, volatilidad (también EWMA), caída máxima, beta y correlaciones; `estres`: crisis de 2008, covid 2020, subida de tipos de 2022, puntocom 2000, estanflación de los setenta y corrección del 10 %; `posicion`: tamaño por riesgo máximo, stop, objetivo y Kelly fraccionado |
+| `bolsa_valoracion` | `dcf` (valor por acción con tus supuestos) y `dcf_inverso` (qué crecimiento descuenta el precio) |
+| `bolsa_criba` | Cribas `graham`, `lynch`, `greenblatt`, `buffett`, `dividendo`, `impulso`, `pequenas_valor`, o filtros en texto y una fórmula de puntuación propia (evaluada sin `eval`, con un analizador seguro) |
+| `bolsa_alerta` | Alertas con varias condiciones (`precio`, `cambio_pct`, `volumen`, `rsi`, `sma20`, `sma50`, `sma200`, `distancia_maximo_pct`); se revisan cada 5 minutos como la fuente `alertas_bolsa` del Mundo |
+| `bolsa_expediente` | Tesis, supuestos, evidencias con su fuente, riesgos y revisiones de cada valor (`data/bolsa/expedientes.json`) |
+| `bolsa_informe_oficial` | SEC EDGAR: lista de presentaciones, lectura de 10-K/10-Q/8-K con impulsores y frenos en citas literales verificadas, novedades frente al informe anterior y cifras XBRL. La SEC pide un agente de usuario: se usa uno genérico o `bolsa.sec_agente` |
+| `bolsa_validar` | Prueba una estrategia del laboratorio por tramos sucesivos del histórico (walk-forward) |
+
+Código: `nexus/office/bolsa_analisis.py` (cálculos, alertas y expedientes), `bolsa_informes.py` (SEC),
+`bolsa_terminal.py` (recetas y escritorio), herramientas en `nexus/tools/builtin/mercado_tools.py`. API:
+`GET /api/mercados/recetas`, `POST /api/mercados/herramienta/<nombre>` (solo estas herramientas, pasando por el
+supervisor) y `GET|POST /api/mercados/escritorio`.
 
 ## Agentes
 
