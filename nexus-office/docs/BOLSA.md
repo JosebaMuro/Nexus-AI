@@ -143,3 +143,5 @@ En la app Nexus-Office autónomo de Android la mesa está en la sección **BOLSA
 | `POST /api/bolsa/instrumento` | Añadir un valor propio |
 | `POST /api/bolsa/importar` | Importar cierres reales (`simbolo`, `csv`) |
 | `GET /api/bolsa/fiscal?anio=` | Ganancias y pérdidas realizadas del año |
+| `GET /api/bolsa/noticias/<símbolo>` | Titulares RSS del valor con su sentimiento (desde la 4.2) |
+| `GET /api/bolsa/broker` · `POST /api/bolsa/broker/orden` | Bróker manual o Alpaca en papel, con CONFIRMO (requiere admin; ver [Novedades 4.2](NOVEDADES-4.2.md)) |

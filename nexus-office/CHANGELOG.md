@@ -1,5 +1,17 @@
 # Cambios
 
+## Agente IA 4.2.0: noticias, bróker en papel, editor de vídeo y GPS del móvil (2026-11-15)
+
+Detalle en [docs/NOVEDADES-4.2.md](docs/NOVEDADES-4.2.md).
+
+- **Noticias de la mesa**: titulares de Yahoo Finance y Google Noticias por RSS con su sentimiento; la mesa de
+  analistas los usa y se guardan para trabajar sin conexión (`GET /api/bolsa/noticias/<símbolo>`).
+- **Bróker**: órdenes de verdad desde la sección Bolsa (solo administrador y escribiendo CONFIRMO), apuntadas a mano
+  o enviadas a Alpaca en su entorno de papel; el real exige `broker.permitir_real`.
+- **Editor de vídeo** en el navegador (`/static/video.html`); los vídeos rápidos se pueden abrir en él.
+- **GPS del móvil** en la APK autónoma, también con la app cerrada si se da «Permitir siempre».
+- No se porta la capa `hal/` con los pipelines ni la difusión ONNX propia (piezas nativas de la C++).
+
 ## Agente IA 4.1.0: lo que faltaba de la edición C++ 3.x (2026-11-13)
 
 Detalle en [docs/NOVEDADES-4.1.md](docs/NOVEDADES-4.1.md).

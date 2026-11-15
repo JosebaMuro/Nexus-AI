@@ -293,6 +293,52 @@ def registrar(app, S, hub, require_admin, admin_flag, LOCAL) -> None:   # noqa: 
             out.append({"simbolo": d["simbolo"], "puntos": d["puntos"], "real": d.get("real", False)})
         return out
 
+    def _nombre_valor(simbolo: str) -> str:
+        from ..office import bolsa
+        try:
+            return bolsa.get().instrumento(simbolo).get("nombre", "")
+        except ValueError:
+            return ""
+
+    @app.get("/api/bolsa/noticias/{simbolo}")
+    async def bolsa_noticias_valor(simbolo: str, refrescar: bool = False):
+        """Titulares RSS (Yahoo Finance y Google Noticias) de un valor con su sentimiento; sin conexion, los guardados."""
+        from ..office import bolsa_noticias
+        try:
+            return await asyncio.to_thread(bolsa_noticias.noticias, simbolo, _nombre_valor(simbolo), refrescar)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    # broker (Alpaca en papel o manual): solo administradores y siempre con CONFIRMO escrito por una persona
+    def _broker(fn, *a, **kw):
+        try:
+            return fn(*a, **kw)
+        except PermissionError as e:
+            raise HTTPException(403, str(e)) from e
+        except (ValueError, ConnectionError) as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/bolsa/broker", dependencies=admin)
+    async def broker_estado(consultar: bool = False):
+        from ..office import bolsa_broker
+        return await asyncio.to_thread(bolsa_broker.estado, consultar)
+
+    @app.get("/api/bolsa/broker/ordenes", dependencies=admin)
+    async def broker_ordenes(sincronizar: bool = False):
+        from ..office import bolsa_broker
+        return await asyncio.to_thread(bolsa_broker.ordenes, sincronizar)
+
+    @app.post("/api/bolsa/broker/orden", dependencies=admin)
+    async def broker_orden(data: dict = Body(...)):
+        from ..office import bolsa_broker
+        return await asyncio.to_thread(_broker, bolsa_broker.enviar, data.get("orden") or data,
+                                       str(data.get("confirmacion", "")), "administrador")
+
+    @app.delete("/api/bolsa/broker/orden/{broker_id}", dependencies=admin)
+    async def broker_cancelar(broker_id: str):
+        from ..office import bolsa_broker
+        return await asyncio.to_thread(_broker, bolsa_broker.cancelar, broker_id)
+
     def _lab(fn, *a, **kw):
         try:
             return fn(*a, **kw)
@@ -346,7 +392,13 @@ def registrar(app, S, hub, require_admin, admin_flag, LOCAL) -> None:   # noqa: 
         llm = None
         if data.get("ia", True) and s.llm.has_real_llm():
             llm = lambda p: s.llm.complete(p, max_tokens=320, temperature=0.2)   # noqa: E731
-        res = await asyncio.to_thread(bolsa_lab.informe_mesa, series[0]["simbolo"], series[0]["puntos"], data, llm)
+        titulares = None
+        if data.get("noticias", True):
+            from ..office import bolsa_noticias
+            titulares = await asyncio.to_thread(bolsa_noticias.titulares, series[0]["simbolo"],
+                                                _nombre_valor(series[0]["simbolo"]))
+        res = await asyncio.to_thread(bolsa_lab.informe_mesa, series[0]["simbolo"], series[0]["puntos"], data, llm,
+                                      titulares)
         if res.get("error"):
             raise HTTPException(400, res["error"])
         res["datos_reales"] = series[0]["real"]

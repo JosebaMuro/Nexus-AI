@@ -145,6 +145,9 @@ DEFAULTS: dict[str, Any] = {
               # agente autonomo: gestiona su propia cartera simulada con los datos que recopila
               "agente": {"activo": True, "intervalo_s": 60, "capital": 10000.0, "riesgo_pct": 1.0,
                          "max_posiciones": 8, "max_peso_pct": 20.0, "reserva_pct": 10.0, "universo": []}},
+    # broker para pasar de la simulacion a ordenes reales: manual (nada sale del equipo) o Alpaca, que empieza en su
+    # entorno de papel; ninguna orden se envia sin que una persona escriba CONFIRMO (nexus/office/bolsa_broker.py)
+    "broker": {"tipo": "manual", "entorno": "papel", "clave": "", "secreto": "", "permitir_real": False},
     # IA online para el agente Profesor: nada sale a internet hasta que un administrador pone una clave
     "nube": {"proveedor": "", "modelo": "", "base_url": "", "esfuerzo": "medium",
              "clave_gemini": "",
@@ -177,7 +180,8 @@ USER_KEYS = {f"user.{k}" for k in DEFAULTS["user"]} | {"avatares.sketchfab_token
 SECRET_KEYS = {"admin.pin_hash", "admin.pin_salt", "llm.openai_api_key", "models.huggingface_token",
                "models.civitai_token", "avatares.sketchfab_token", "models.kaggle_key", "models.modelscope_token", "coop.passphrase", "server.lan_key", "mcp.token",
                "nube.clave_gemini", "nube.clave_openai", "nube.clave_perplexity", "nube.clave_claude",
-               "nube.clave_mistral", "nube.clave_deepseek", "nube.clave_groq", "nube.clave_openrouter", "nube.clave_compatible"}
+               "nube.clave_mistral", "nube.clave_deepseek", "nube.clave_groq", "nube.clave_openrouter", "nube.clave_compatible",
+               "broker.clave", "broker.secreto"}
 
 
 def _deep_merge(base: dict, extra: dict) -> dict:

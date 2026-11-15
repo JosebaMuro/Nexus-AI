@@ -208,7 +208,8 @@
         <div class="row"><label class="field" style="flex-direction:row;align-items:center;gap:8px">ÚLTIMAS <input class="input" id="vid-n" type="number" value="6" min="2" max="60" style="width:80px"></label>
           <label class="field" style="flex-direction:row;align-items:center;gap:8px">SEG. POR IMAGEN <input class="input" id="vid-seg" type="number" value="3" min="0.5" max="20" step="0.5" style="width:80px"></label>
           <select class="input" id="vid-formato" style="width:auto"><option value="16:9">16:9 (720p)</option><option value="1080p">16:9 (1080p)</option><option value="9:16">9:16 vertical</option><option value="1:1">1:1 cuadrado</option><option value="4:3">4:3</option></select>
-          <input class="input" id="vid-titulo" placeholder="Título (opcional)" style="flex:1"><button class="btn primary" id="vid-go">CREAR VÍDEO</button></div>
+          <input class="input" id="vid-titulo" placeholder="Título (opcional)" style="flex:1"><button class="btn primary" id="vid-go">CREAR VÍDEO</button>
+          <a class="btn" href="/static/video.html" target="_blank" title="Editor en el navegador: ordena las imágenes, transiciones, mejora automática, separa hojas con varias diapositivas y exporta WebM sin conexión">EDITOR DE VÍDEO</a></div>
         <div id="vid-result"></div><div class="list" id="vid-list"></div>
       </div>
     </section>
@@ -280,8 +281,20 @@
         <div class="row"><input class="input" id="lab-syms" list="bo-syms" placeholder="Valores separados por comas (SAN.MC, AAPL…)" style="flex:1 1 220px;min-width:0">
           <select class="input" id="lab-estrategia" style="width:auto"><option value="senales">Cinco señales técnicas</option><option value="cruce_medias">Cruce de medias 20/50</option><option value="comprar_mantener">Comprar y mantener</option></select>
           <select class="input" id="lab-rango" style="width:auto"><option value="1y">1 año</option><option value="6mo">6 meses</option><option value="5y">5 años</option></select></div>
-        <div class="row"><button class="btn primary" id="lab-backtest">BACKTEST</button><button class="btn" id="lab-senales">SEÑALES</button><button class="btn" id="lab-mesa">MESA DE ANALISTAS</button><button class="btn" id="lab-mc">MONTECARLO</button><button class="btn" id="lab-opt" title="Reparto del capital entre los valores indicados (hacen falta dos o más)">REPARTO DE CARTERA</button></div>
+        <div class="row"><button class="btn primary" id="lab-backtest">BACKTEST</button><button class="btn" id="lab-senales">SEÑALES</button><button class="btn" id="lab-mesa">MESA DE ANALISTAS</button><button class="btn" id="lab-noticias" title="Titulares de Yahoo Finance y Google Noticias con su sentimiento (se guardan para usarlos sin conexión)">NOTICIAS</button><button class="btn" id="lab-mc">MONTECARLO</button><button class="btn" id="lab-opt" title="Reparto del capital entre los valores indicados (hacen falta dos o más)">REPARTO DE CARTERA</button></div>
         <div id="lab-result" class="col"></div>
+      </div>
+      <div class="panel col admin-only" style="margin-top:16px" id="broker-panel"><h3>Broker <span class="sub">de la simulación a órdenes de verdad · Alpaca empieza en papel (dinero ficticio) · nada sale sin escribir CONFIRMO</span></h3>
+        <div id="broker-estado" class="muted">Solo administradores.</div>
+        <div class="row"><select class="input" id="bk-tipo" style="width:auto"><option value="manual">Manual (apuntar y ejecutar yo)</option><option value="alpaca">Alpaca</option></select>
+          <select class="input" id="bk-entorno" style="width:auto"><option value="papel">Papel (sin dinero real)</option><option value="real">Real</option></select>
+          <input class="input" id="bk-clave" placeholder="Clave de la API" style="flex:1 1 140px;min-width:0" autocomplete="off"><input class="input" id="bk-secreto" type="password" placeholder="Secreto" style="flex:1 1 140px;min-width:0" autocomplete="off">
+          <button class="btn" id="bk-guardar">GUARDAR</button><button class="btn" id="bk-cuenta">VER CUENTA</button></div>
+        <div class="row"><input class="input" id="bk-sym" placeholder="Valor (AAPL, BTC/USD…)" style="flex:1 1 120px;min-width:0"><select class="input" id="bk-lado" style="width:auto"><option value="compra">Compra</option><option value="venta">Venta</option></select>
+          <input class="input" id="bk-qty" type="number" min="0" step="any" placeholder="Cantidad" style="flex:1 1 90px;min-width:0"><select class="input" id="bk-ordtipo" style="width:auto"><option value="mercado">A mercado</option><option value="limitada">Limitada</option></select>
+          <input class="input" id="bk-lim" type="number" step="any" placeholder="Límite" style="flex:1 1 90px;min-width:0"><input class="input" id="bk-conf" placeholder="Escribe CONFIRMO" style="flex:1 1 130px;min-width:0" autocomplete="off"><button class="btn primary" id="bk-enviar">ENVIAR ORDEN</button></div>
+        <div class="row"><button class="btn sm" id="bk-ordenes">ÓRDENES Y POSICIONES</button></div>
+        <div id="broker-result" class="col"></div>
       </div>
     </section>
 
