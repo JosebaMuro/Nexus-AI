@@ -1,6 +1,6 @@
 # Cambios
 
-## Agente IA 4.2.0: mundo, terminal de bolsa y Terminal IA (2026-11-15)
+## Agente IA 4.2.0: mundo, terminal de bolsa, Terminal IA y lo que faltaba de la C++ (2026-11-15)
 
 Detalle en [docs/NOVEDADES-4.2.md](docs/NOVEDADES-4.2.md).
 
@@ -20,6 +20,11 @@ Detalle en [docs/NOVEDADES-4.2.md](docs/NOVEDADES-4.2.md).
   interfaz comprimida con gzip y código precompilado en el instalador de Windows.
 - **Ubuntu mínima**: `packaging/ubuntu/rehacer-ubuntu.sh` rehace la ISO de Ubuntu Server con Agente IA (o cualquier
   proyecto Python) preinstalado como servicio activo en la instalación mínima ([UBUNTU](docs/UBUNTU.md)).
+- **Lo que faltaba de la C++ 3.x**: noticias de la mesa de analistas por RSS (Yahoo Finance y Google Noticias) con
+  su sentimiento y guardadas para usarlas sin conexión; **bróker** desde la sección Bolsa (solo administrador y
+  escribiendo CONFIRMO), apuntado a mano o con Alpaca en papel (el real exige `broker.permitir_real`); **editor de
+  vídeo** en el navegador (`/static/video.html`); **GPS del móvil** en la APK autónoma, también con la app cerrada.
+  No se porta la capa `hal/` con los pipelines ni la difusión ONNX propia (piezas nativas de la C++).
 - **Limpieza**: la edición C++ de referencia sale del repositorio (tag `v3.2.3-cpp`, commit `59fa50d` y zip en la
   Release), con sus flujos de trabajo; las pruebas ya no van dentro de los instaladores.
 

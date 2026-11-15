@@ -75,6 +75,7 @@ public class NexusServerService extends Service {
     public static final String ACTION_STOP = "ai.nexus.office.autonomo.STOP";
     public static final String ACTION_REPAIR = "ai.nexus.office.autonomo.REPAIR";
     public static final String ACTION_RETRY = "ai.nexus.office.autonomo.RETRY";
+    public static final String ACTION_GPS = "ai.nexus.office.autonomo.GPS";
     private static final String CHANNEL = "nexus";
     static final long BOOT_TIMEOUT_MS = 4 * 60 * 1000L;
 
@@ -86,6 +87,7 @@ public class NexusServerService extends Service {
     private static Thread starter;
     private static volatile boolean cancel;
     private PowerManager.WakeLock wakeLock;
+    private GpsMovil gps;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -97,6 +99,7 @@ public class NexusServerService extends Service {
             return START_NOT_STICKY;
         }
         foreground();
+        gpsFondo();   // ACTION_GPS solo trae esto: el arranque de abajo no hace nada si ya esta en marcha
         if (ACTION_REPAIR.equals(action) || ACTION_RETRY.equals(action)) stopServer();
         startServer(ACTION_REPAIR.equals(action));
         return START_STICKY;
@@ -541,8 +544,16 @@ public class NexusServerService extends Service {
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
     }
 
+    /** GPS en segundo plano: solo si el usuario lo activo y dio «Permitir siempre». */
+    private void gpsFondo() {
+        if (gps == null) gps = new GpsMovil(this);
+        if (GpsMovil.activa(this) && GpsMovil.permisoFondo(this)) gps.iniciar();
+        else gps.parar();
+    }
+
     @Override
     public void onDestroy() {
+        if (gps != null) gps.parar();
         stopServer();
         if (puente != null) puente.parar();
         super.onDestroy();

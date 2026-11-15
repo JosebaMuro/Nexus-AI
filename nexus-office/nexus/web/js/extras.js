@@ -64,9 +64,14 @@
     const box = $("#ubi-box"); if (!box) return;
     const u = await api("/api/ubicacion");
     vigilarNavegador(u.activa && u.navegador);
+    let movil = null;   // app Android autonoma: GPS nativo, tambien en segundo plano con «Permitir siempre»
+    if (window.NexusApp && NexusApp.ubicacionEstado) { try { movil = JSON.parse(NexusApp.ubicacionEstado()); } catch (e) { movil = null; } }
     box.innerHTML = `
       <div class="row"><label><input type="checkbox" id="ubi-activa" ${u.activa ? "checked" : ""}> Los agentes pueden consultar la ubicación</label>
         <label title="El navegador pedirá permiso; la posición solo se manda a tu Agente IA"><input type="checkbox" id="ubi-nav" ${u.navegador ? "checked" : ""}> Usar la ubicación de este navegador</label></div>
+      ${movil ? `<div class="row"><label title="La app escribe la posición del GPS sin internet; solo la lee tu Agente IA"><input type="checkbox" id="ubi-movil" ${movil.activa ? "checked" : ""}> Usar el GPS de este móvil</label>
+        ${movil.activa && !movil.fondo ? `<button class="btn sm" id="ubi-fondo" title="Android pedirá «Permitir siempre»">TAMBIÉN CON LA APP CERRADA</button>` : ""}
+        <span class="muted">${!movil.permiso ? "Android pedirá permiso de ubicación." : movil.fondo ? "Sigue con la app cerrada." : "Solo con la app abierta."}</span></div>` : ""}
       <div class="list">${u.fuentes.map((f) => `<div class="item row"><span class="tag ${f.disponible ? "ok" : "warn"}">${f.disponible ? "disponible" : "no disponible"}</span><b>${esc(f.nombre)}</b><span class="muted">${esc(f.nota || "")}</span></div>`).join("")}</div>
       <div class="row"><input class="input" id="ubi-manual" value="${esc(u.manual || "")}" placeholder="Posición fija: «43.26, -2.93» o una ciudad (Bilbao)" style="flex:1">
         <input class="input" id="ubi-serie" value="${esc(u.serie || "")}" placeholder="Puerto del GPS (COM3, /dev/ttyACM0)" style="width:230px">
@@ -76,6 +81,11 @@
       <div id="ubi-res" class="muted">${u.ultima ? `Última posición: ${esc(u.ultima.descripcion || "")} (${u.ultima.lat}, ${u.ultima.lon})` : esc(u.privacidad)}</div>`;
     const poner = (cambios) => api("/api/ubicacion", { method: "PUT", body: cambios });
     $("#ubi-activa").onchange = guard(async (e) => { await poner({ activa: e.target.checked }); cargarUbicacion(); });
+    if (movil) {
+      window.__nexusUbicacion = (st) => { if (st && !st.permiso) toast("Sin permiso de ubicación: actívalo en los ajustes de Android", true); setTimeout(cargarUbicacion, 1500); };
+      $("#ubi-movil").onchange = (e) => NexusApp.ubicacion(e.target.checked);
+      if ($("#ubi-fondo")) $("#ubi-fondo").onclick = () => NexusApp.ubicacionFondo();
+    }
     $("#ubi-nav").onchange = guard(async (e) => { await poner({ navegador: e.target.checked }); toast(e.target.checked ? "El navegador pedirá permiso de ubicación" : "Ubicación del navegador desactivada"); cargarUbicacion(); });
     on("#ubi-guardar", async () => { await poner({ manual: $("#ubi-manual").value, serie: $("#ubi-serie").value }); toast("Guardado"); cargarUbicacion(); });
     on("#ubi-probar", async () => {
@@ -180,6 +190,15 @@
       <div class="item"><b>Riesgo</b><br>Volatilidad anual ${num(r.riesgo.volatilidad_anual_pct, 1)} % · a ${num(r.riesgo.distancia_maximo_pct, 1)} % del máximo · peso agresivo ${num(r.riesgo.pesos_por_perfil.agresivo, 1)} %, neutral ${num(r.riesgo.pesos_por_perfil.neutral, 1)} %, conservador ${num(r.riesgo.pesos_por_perfil.conservador, 1)} %</div></div>
       <div class="muted">${esc(r.aviso)}</div>`);
   });
+  lab("#lab-noticias", async () => {
+    const sym = labDatos().simbolos.split(/[,; ]+/)[0];
+    labOut(`<span class="muted">Buscando titulares de ${esc(sym)}…</span>`);
+    const r = await api(`/api/bolsa/noticias/${encodeURIComponent(sym)}?refrescar=true`);
+    const tono = (v) => (v > 0.15 ? "ok" : v < -0.15 ? "bad" : "warn");
+    labOut(`<div class="row"><b>${esc(r.simbolo)}</b><span class="tag ${tono(r.sentimiento)}">sentimiento ${num(r.sentimiento)}</span>${r.sin_conexion ? `<span class="tag warn">sin conexión: titulares guardados</span>` : ""}${r.errores.length && !r.sin_conexion ? `<span class="muted">${esc(r.errores.join(" · "))}</span>` : ""}</div>` +
+      (r.noticias.length ? `<div class="list">${r.noticias.map((n) => `<div class="item row"><span class="tag ${tono(n.sentimiento)}">${num(n.sentimiento)}</span>${n.enlace ? `<a href="${esc(n.enlace)}" target="_blank" rel="noopener">${esc(n.titulo)}</a>` : esc(n.titulo)}<span class="muted" style="margin-left:auto">${esc(n.fuente)} · ${new Date(n.ts * 1000).toLocaleDateString("es-ES")}</span></div>`).join("")}</div>` : `<p class="muted">Sin titulares todavía.</p>`) +
+      `<div class="muted">La mesa de analistas usa estos titulares para su analista de noticias.</div>`);
+  });
   lab("#lab-mc", async () => {
     const d = labDatos(), r = await api("/api/bolsa/lab/montecarlo", { body: { simbolo: d.simbolos.split(/[,; ]+/)[0], rango: d.rango, simulaciones: 1000 } });
     labOut(`<div class="row"><b>${esc(r.simbolo)}</b><span class="muted">${r.simulaciones} simulaciones a ${r.horizonte} sesiones</span></div>` + kv([["Resultado mediano", `${num(r.mediana_pct)} %`], ["Entre (5 % – 95 %)", `${num(r.p5_pct)} % … ${num(r.p95_pct)} %`], ["Probabilidad de perder", `${num(r.prob_perder_pct, 1)} %`], ["Caída máxima habitual", `${num(r.caida_maxima_mediana_pct)} %`], ["Caída máxima en el peor 5 %", `${num(r.caida_maxima_p5_pct)} %`]]));
@@ -191,6 +210,41 @@
       html += `<div class="item"><b>${nombre}</b> <span class="mono muted">volatilidad ${num(r.volatilidad_anual_pct, 1)} % · Sharpe ${num(r.sharpe)}</span><br><span class="mono">${Object.entries(r.pesos).map(([s, p]) => `${esc(s)} ${num(p, 1)} %`).join(" · ")}</span></div>`;
     }
     labOut(`<div class="list">${html}</div>`);
+  });
+
+  /* ---------------------------------------------------------------- broker (Alpaca en papel o manual) */
+  const bkOut = (html) => { const el = $("#broker-result"); if (el) el.innerHTML = html; };
+  const bk = (sel, fn) => { const el = $(sel); if (el) el.onclick = async () => { try { await fn(); } catch (e) { bkOut(`<span class="tag bad">no se pudo</span> ${esc(e.message)}`); } }; };
+  async function cargarBroker(consultar = false) {
+    const box = $("#broker-estado");
+    if (!box) return;
+    const e = await api(`/api/bolsa/broker${consultar ? "?consultar=true" : ""}`);
+    $("#bk-tipo").value = e.tipo; $("#bk-entorno").value = e.entorno_pedido;
+    box.innerHTML = `<span class="tag ${e.entorno === "real" ? "bad" : "ok"}">${e.tipo === "alpaca" ? `Alpaca · ${e.entorno === "real" ? "DINERO REAL" : "papel"}` : "manual"}</span> ` +
+      (e.configurado ? "" : `<span class="tag warn">faltan las claves</span> `) + (e.aviso ? esc(e.aviso) + " " : "") +
+      `${e.ordenes} órdenes apuntadas en este equipo.` + (e.cuenta ? kv([["Estado", esc(e.cuenta.status)], ["Efectivo", `${num(e.cuenta.cash)} ${esc(e.cuenta.currency || "")}`], ["Poder de compra", num(e.cuenta.buying_power)], ["Patrimonio", num(e.cuenta.equity)]]) : "") +
+      (e.error ? `<div class="tag bad">${esc(e.error)}</div>` : "");
+  }
+  bk("#bk-guardar", async () => {
+    const cambios = { "broker.tipo": $("#bk-tipo").value, "broker.entorno": $("#bk-entorno").value };
+    if ($("#bk-clave").value) cambios["broker.clave"] = $("#bk-clave").value.trim();
+    if ($("#bk-secreto").value) cambios["broker.secreto"] = $("#bk-secreto").value.trim();
+    await api("/api/config", { method: "PUT", body: cambios });
+    $("#bk-clave").value = $("#bk-secreto").value = ""; toast("Broker guardado"); cargarBroker();
+  });
+  bk("#bk-cuenta", () => cargarBroker(true));
+  bk("#bk-enviar", async () => {
+    const orden = { simbolo: $("#bk-sym").value, lado: $("#bk-lado").value, cantidad: +$("#bk-qty").value, tipo: $("#bk-ordtipo").value, limite: +$("#bk-lim").value || undefined };
+    const r = await api("/api/bolsa/broker/orden", { body: { orden, confirmacion: $("#bk-conf").value } });
+    $("#bk-conf").value = "";
+    bkOut(`<div class="row"><span class="tag ok">${esc(r.estado)}</span><b>${esc(r.lado)} ${num(r.cantidad, 6)} ${esc(r.simbolo)}</b><span class="muted">${esc(r.broker)} · ${esc(r.entorno)}</span></div>${r.nota ? `<div class="muted">${esc(r.nota)}</div>` : ""}`);
+    cargarBroker();
+  });
+  bk("#bk-ordenes", async () => {
+    const r = await api("/api/bolsa/broker/ordenes?sincronizar=true");
+    const filas = (r.broker || r.registro).map((o) => `<div class="item row"><b>${esc(o.symbol || o.simbolo)}</b><span>${esc(o.side || o.lado)} ${num(o.qty || o.cantidad, 6)}</span><span class="tag">${esc(o.status || o.estado)}</span><span class="muted" style="margin-left:auto">${esc(o.submitted_at || new Date(o.ts * 1000).toLocaleString("es-ES"))}</span></div>`).join("");
+    const pos = (r.posiciones || []).map((p) => `<div class="item row"><b>${esc(p.symbol)}</b><span>${num(p.qty, 6)} a ${num(p.avg_entry_price)}</span><span class="mono" style="margin-left:auto">${num(p.market_value)} · ${num(p.unrealized_pl)}</span></div>`).join("");
+    bkOut((r.error ? `<div class="tag bad">${esc(r.error)}</div>` : "") + `<h3>Órdenes</h3><div class="list">${filas || '<p class="muted">Ninguna.</p>'}</div>` + (r.posiciones ? `<h3>Posiciones</h3><div class="list">${pos || '<p class="muted">Ninguna.</p>'}</div>` : ""));
   });
 
   /* ---------------------------------------------------------------- vídeo */
@@ -210,12 +264,12 @@
   on("#vid-go", async () => {
     $("#vid-result").innerHTML = `<span class="muted">Componiendo el vídeo…</span>`;
     const r = await api("/api/video/rapido", { body: { imagenes: [...elegidas], ultimas: +$("#vid-n").value || 6, segundos: +$("#vid-seg").value || 3, formato: $("#vid-formato").value, titulo: $("#vid-titulo").value } });
-    $("#vid-result").innerHTML = `<span class="tag ok">listo</span> ${r.imagenes} imágenes · ${num(r.seconds, 1)} s · ${r.width}×${r.height} · <a href="${esc(r.url)}" download>descargar vídeo</a><br><span class="muted">${esc(r.nota)}</span>`;
+    $("#vid-result").innerHTML = `<span class="tag ok">listo</span> ${r.imagenes} imágenes · ${num(r.seconds, 1)} s · ${r.width}×${r.height} · <a href="${esc(r.url)}" download>descargar vídeo</a>${r.editor ? ` · <a href="${esc(r.editor)}" target="_blank">abrir en el editor de vídeo</a>` : ""}`;
     elegidas.clear(); $$("#gallery img").forEach((i) => (i.style.outline = "")); cargarVideos();
   });
 
   /* ---------------------------------------------------------------- carga al entrar en cada vista */
-  const porVista = { settings: () => { cargarUbicacion().catch(() => {}); cargarMcp().catch(() => {}); }, system: () => cargarBeta().catch(() => {}), studio: () => cargarVideos().catch(() => {}) };
+  const porVista = { settings: () => { cargarUbicacion().catch(() => {}); cargarMcp().catch(() => {}); }, system: () => cargarBeta().catch(() => {}), studio: () => cargarVideos().catch(() => {}), bolsa: () => cargarBroker().catch(() => {}) };
   const mirar = new MutationObserver((ms) => ms.forEach((m) => { const v = m.target; if (v.classList.contains("on")) { const fn = porVista[v.id.replace("view-", "")]; if (fn && UI()) fn(); } }));
   $$("section.view").forEach((v) => mirar.observe(v, { attributes: true, attributeFilter: ["class"] }));
   // la ubicacion del navegador sigue mandandose aunque no se abra Ajustes

@@ -2,11 +2,13 @@
 
 La 4.2 junta en Agente IA las ideas de varios proyectos abiertos (un panel del mundo en tiempo real, terminales
 financieros y terminales de IA para programar), las escribe en Python dentro de la app y las deja al alcance de
-todos los agentes. También acelera el arranque en Windows y Android, quita del repositorio la edición C++ de
+todos los agentes. Además trae lo que aún faltaba de la edición C++ 3.x: noticias de la mesa, bróker en papel, editor
+de vídeo y GPS del móvil. También acelera el arranque en Windows y Android, quita del repositorio la edición C++ de
 referencia y trae un script para hacer una Ubuntu mínima con Agente IA ya instalado como servicio.
 
-Todo lo nuevo funciona sin internet salvo lo que lee fuentes públicas (el mundo y los datos de bolsa reales). Nada
-de lo que pasa en el equipo se envía fuera: las fuentes solo se consultan.
+Todo lo nuevo funciona sin internet salvo lo que lee fuentes públicas (el mundo, los datos de bolsa reales y las
+noticias) y el bróker de Alpaca. Nada de lo que pasa en el equipo se envía fuera: las fuentes solo se consultan, y al
+bróker solo llegan las órdenes que confirmas escribiendo CONFIRMO.
 
 ## Mundo: información del mundo por categorías y países
 
@@ -89,6 +91,58 @@ deshacer y comprueba lo que hace.
 El programador también usa ahora las herramientas `terminal_*` y puede delegar en el agente terminal.
 Detalle en [TERMINAL.md](TERMINAL.md).
 
+## Lo que faltaba de la edición C++ 3.x
+
+### Noticias de la mesa de analistas
+
+- Botón **NOTICIAS** en el laboratorio de bolsa: titulares recientes del valor de Yahoo Finance (por símbolo) y de
+  Google Noticias (por nombre de la empresa), cada uno con su sentimiento según el léxico financiero del laboratorio.
+- La **mesa de analistas** usa esos titulares de los últimos 14 días (se puede desactivar con `"noticias": false`).
+- Se guardan en `data/bolsa/noticias.json`: sin conexión la mesa sigue con lo guardado. Se consultan como mucho cada
+  30 minutos y se olvidan a los 120 días.
+- API: `GET /api/bolsa/noticias/<símbolo>?refrescar=true`.
+
+### Bróker: de la mesa simulada a órdenes de verdad
+
+Panel **Bróker** en la sección Bolsa (solo administrador). Reglas que no cambian:
+
+- El agente autónomo opera siempre en su cartera simulada; nunca envía órdenes al bróker por su cuenta.
+- Ninguna orden sale sin que una persona escriba **CONFIRMO**.
+- Tipo **manual** (por defecto): no conecta con nada; la orden queda apuntada para ejecutarla en tu banco o bróker.
+- Tipo **alpaca**: empieza en el entorno de **papel** de Alpaca (dinero ficticio con precios reales). El entorno real
+  solo se usa con `broker.entorno = real` **y** `broker.permitir_real = true`.
+- La clave y el secreto de la API se guardan enmascarados como el resto de secretos.
+
+| Método y ruta | Uso |
+|---|---|
+| `GET /api/bolsa/broker?consultar=true` | Estado y, con Alpaca, la cuenta |
+| `GET /api/bolsa/broker/ordenes?sincronizar=true` | Órdenes apuntadas y, con Alpaca, las del bróker y las posiciones |
+| `POST /api/bolsa/broker/orden` | `{"orden": {simbolo, lado, cantidad, tipo, limite, validez}, "confirmacion": "CONFIRMO"}` |
+| `DELETE /api/bolsa/broker/orden/<id>` | Cancelar una orden en Alpaca |
+
+### Editor de vídeo en el navegador
+
+- **EDITOR DE VÍDEO** (sección Vídeo) abre `/static/video.html`: línea de tiempo con imágenes, textos, transiciones
+  y música, y grabación a WebM en el propio navegador, sin ffmpeg ni conexión. El resultado se guarda en
+  `outputs/videos/` con `POST /api/video/guardar`.
+- Cada vídeo rápido (`crear_video`) deja junto al AVI un `.proyecto.json`: el enlace **Abrir en el editor** carga esas
+  imágenes en el editor para retocarlo.
+
+### GPS del móvil en segundo plano (APK autónoma)
+
+- En **Ajustes > Ubicación**, la app Android muestra **Usar el GPS de este móvil**. Android pide permiso de ubicación
+  y la app escribe la posición en `ubicacion.json` (fuente «app» de `ubicacion_actual`), sin internet.
+- Con la app abierta funciona con el permiso normal. Con **TAMBIÉN CON LA APP CERRADA** Android pide «Permitir
+  siempre» y el servicio de Agente IA sigue leyendo el GPS en segundo plano.
+- Además del GPS escucha las posiciones que ya piden otras apps (proveedor pasivo), que no gastan batería extra.
+- La posición no sale del móvil.
+
+### Lo que sigue solo en la edición C++
+
+La capa `hal/` (memoria compartida con el acelerador, anillos sin bloqueo) con los pipelines de percepción y pantalla,
+y el motor propio de difusión ONNX, son piezas nativas de la C++ y no se portan: en la edición Python las imágenes se
+generan con los motores de `nexus/motores/` (ver [MOTORES.md](MOTORES.md)).
+
 ## Más rápido en Windows y Android
 
 - **Arranque**: Agente IA arranca con el hardware que detectó la vez anterior si nada ha cambiado (mismo sistema,
@@ -124,5 +178,6 @@ instalación desatendida. Detalle en [UBUNTU.md](UBUNTU.md).
 - Las fuentes del mundo en vivo desde casa (en el entorno de desarrollo solo se probaron con datos de ejemplo; el
   flujo de trabajo de pruebas las comprueba en vivo), y FIRMS y AISStream con tus claves.
 - El terminal IA en un Windows real (PowerShell) y en el móvil.
+- El bróker con una cuenta de Alpaca en papel y el GPS en segundo plano en un móvil real.
 - La prioridad y EcoQoS en un Windows 11 real con procesador híbrido, y GPU y NPU en hardware real.
 - La ISO de Ubuntu en un equipo físico (se prueba instalándola en una máquina virtual).

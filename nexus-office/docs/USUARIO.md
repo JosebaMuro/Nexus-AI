@@ -218,6 +218,9 @@ después ábrelo para instalarlo.
   cribas, alertas, expedientes e informes oficiales. Ver [Bolsa](BOLSA.md#terminal-financiero).
 - **TERMINAL IA** (administrador): consola, intérprete, ficheros y un agente que programa en tu equipo. Ver
   [Terminal IA](TERMINAL.md).
+- En BOLSA, **NOTICIAS** del valor con su sentimiento y el panel **Bróker** (administrador): órdenes apuntadas a mano o
+  enviadas a Alpaca en papel, siempre escribiendo CONFIRMO. En Vídeo, **EDITOR DE VÍDEO** en el navegador. En la app
+  Android, **Usar el GPS de este móvil** (Ajustes > Ubicación).
 - Arranca antes, sobre todo en Windows. Resumen completo en [Novedades de la 4.2](NOVEDADES-4.2.md).
 
 ## Uso diario (modo sencillo)

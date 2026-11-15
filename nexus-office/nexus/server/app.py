@@ -1193,7 +1193,7 @@ def create_app(services: Services | None = None) -> FastAPI:
         out = {}
         for kind in ("images", "music", "docs"):
             files = sorted(paths.sub("outputs", kind).glob("*.*"), key=lambda p: p.stat().st_mtime, reverse=True)
-            out[kind] = [f"/outputs/{kind}/{f.name}" for f in files if f.suffix in (".png", ".jpg", ".wav", ".mid", ".pdf")][:limit]
+            out[kind] = [f"/outputs/{kind}/{f.name}" for f in files if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".wav", ".mid", ".pdf")][:limit]
         return out
 
     @app.post("/api/prompt/enhance")

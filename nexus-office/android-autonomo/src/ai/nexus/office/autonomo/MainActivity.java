@@ -72,6 +72,8 @@ public class MainActivity extends Activity {
     private String liveLang = "";
     private long lastLevel;
     private static final int REQ_MIC = 7;
+    private static final int REQ_UBIC = 8, REQ_UBIC_FONDO = 9;
+    private GpsMovil gps;
     private byte[] pendingSave;
     private String pendingSaveName = "";
     private long bootStarted;
@@ -518,6 +520,12 @@ public class MainActivity extends Activity {
         if (req == REQ_MIC) {
             if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) startLive();
             else js("window.__nexusLiveError && window.__nexusLiveError('permiso de micrófono denegado')");
+        } else if (req == REQ_UBIC || req == REQ_UBIC_FONDO) {
+            if (GpsMovil.permiso(this)) {
+                GpsMovil.recordar(this, true);
+                gpsSegunEstado();
+            }
+            js("window.__nexusUbicacion && window.__nexusUbicacion(" + estadoGps() + ")");
         }
     }
 
@@ -610,9 +618,35 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        gpsSegunEstado();
+    }
+
+    @Override
     protected void onPause() {
         super.onPause();
         CookieManager.getInstance().flush();
+        // con «Permitir siempre» sigue el servicio en segundo plano; la pantalla suelta el suyo
+        if (gps != null) gps.parar();
+    }
+
+    /** GPS de la pantalla mientras esta abierta, y aviso al servicio para el de segundo plano. */
+    private void gpsSegunEstado() {
+        if (gps == null) gps = new GpsMovil(this);
+        if (GpsMovil.activa(this) && GpsMovil.permiso(this)) gps.iniciar();
+        else gps.parar();
+        String st = NexusServerService.state;
+        if (st.startsWith("error:") || "stopped".equals(st)) return;   // no rearrancar un servidor parado o con error
+        try {
+            startService(new Intent(this, NexusServerService.class).setAction(NexusServerService.ACTION_GPS));
+        } catch (RuntimeException ignored) {   // Android puede negar arrancar servicios desde segundo plano
+        }
+    }
+
+    private String estadoGps() {
+        return "{\"activa\":" + GpsMovil.activa(this) + ",\"permiso\":" + GpsMovil.permiso(this)
+                + ",\"fondo\":" + GpsMovil.permisoFondo(this) + "}";
     }
 
     @Override
@@ -632,6 +666,41 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String mode() {
             return "autonomo";
+        }
+
+        /** Ajustes > Ubicacion: estado del GPS del movil ({activa, permiso, fondo}). */
+        @JavascriptInterface
+        public String ubicacionEstado() {
+            return estadoGps();
+        }
+
+        /** Activa o desactiva el GPS del movil; si falta el permiso lo pide (respuesta en window.__nexusUbicacion). */
+        @JavascriptInterface
+        public void ubicacion(final boolean on) {
+            GpsMovil.recordar(MainActivity.this, on && GpsMovil.permiso(MainActivity.this));
+            if (on && !GpsMovil.permiso(MainActivity.this) && Build.VERSION.SDK_INT >= 23) {
+                requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_UBIC);
+                return;
+            }
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    gpsSegunEstado();
+                    js("window.__nexusUbicacion && window.__nexusUbicacion(" + estadoGps() + ")");
+                }
+            });
+        }
+
+        /** Pide «Permitir siempre» (Android 10+) para seguir con el GPS con la app cerrada. */
+        @JavascriptInterface
+        public void ubicacionFondo() {
+            if (Build.VERSION.SDK_INT >= 29 && GpsMovil.permiso(MainActivity.this)
+                    && !GpsMovil.permisoFondo(MainActivity.this)) {
+                requestPermissions(new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION}, REQ_UBIC_FONDO);
+            } else {
+                js("window.__nexusUbicacion && window.__nexusUbicacion(" + estadoGps() + ")");
+            }
         }
 
         /** En la app autonoma "cambiar de servidor" reinicia el Nexus-Office del movil. */
