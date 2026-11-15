@@ -390,7 +390,7 @@ class Terminal:
         for par in crudo.split("\0"):
             k, sep, v = par.strip("\r\n").partition("=")
             if sep and k and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_()]*", k) and k.upper() not in _NO_ENTORNO \
-                    and not k.startswith(("NX_", "__nx", "BASH_FUNC")):
+                    and not k.startswith(("__nx", "BASH_FUNC")) and k not in ("NX_C", "nx_c"):
                 visto[k] = v
         if len(visto) < 3:    # la consola no supo volcar el entorno (sh antiguo): se deja como estaba
             return
