@@ -373,3 +373,15 @@ def test_api_mundo_bolsa_y_terminal(services):
         assert c.get("/api/terminal", headers={"Authorization": f"Bearer {ficha}"}).status_code == 200
         assert c.get("/api/terminal", headers={"Authorization": "Bearer otra"}).status_code == 403
         assert "terminal.ficha" not in json.dumps(c.get("/api/config", headers=h).json()).replace("********", "") or True
+
+
+def test_agente_autonomo_controla_riesgo():
+    from nexus.office import bolsa_agente as ag
+    a = [100 + (i % 7) * 1.5 + i * 0.1 for i in range(120)]
+    b = [x * 2 for x in a]                                   # se mueve igual
+    c = [100 + ((i * 37) % 11) - (i % 3) for i in range(120)]
+    assert ag.correlacion(a, b) > 0.99 and abs(ag.correlacion(a, c)) < 0.9
+    assert ag.correlacion(a[:10], b[:10]) is None
+    var = ag.var_cartera({"A": a, "C": c}, {"A": 5000, "C": 5000}, 10000)
+    assert var is not None and 0 < var < 50
+    assert ag.var_cartera({"A": a}, {"A": 1000}, 10000) < var  # con menos invertido, menos VaR

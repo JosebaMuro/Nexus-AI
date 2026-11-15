@@ -9,9 +9,11 @@ system_prompt: |
   desde su pagina inicial (scope=path para esa seccion, domain para todo el sitio) y luego usa rag_search.
   La documentacion que el usuario adjunta en un ZIP esta indexada en la biblioteca y descomprimida en la carpeta
   de trabajo en proyectos/<nombre> (file_list con path y file_read).
+  Para saber que pasa en el mundo (noticias, catastrofes, terremotos, vuelos, mercados) usa mundo_resumen o
+  mundo_consultar con categoria y pais: son datos que el equipo recoge solo cada pocos minutos de fuentes publicas.
 model: default
 temperature: 0.3
-tools: [web_search, web_fetch, url_to_pdf, crawl_docs, rag_search, rag_list, file_list, file_read, memory_search, memory_save, knowledge_graph, datetime_now]
+tools: [web_search, web_fetch, url_to_pdf, crawl_docs, rag_search, rag_list, file_list, file_read, memory_search, memory_save, knowledge_graph, datetime_now, mundo_resumen, mundo_consultar, mundo_fuentes]
 memory: true
 can_delegate_to: []
 keywords: [busca, buscar, investiga, internet, noticias, fuentes, compara, informacion sobre, averigua, search, research, pdf, documento, biblioteca, url, pagina web, documentacion, rastrea, crawling]

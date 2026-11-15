@@ -16,6 +16,9 @@ En cada ciclo (por defecto cada 60 s):
 5. Abre posiciones nuevas en los mejores valores con la bolsa abierta: arriesga como maximo ``riesgo_pct`` del
    patrimonio por operacion (distancia al stop = 2 ATR), sin pasar de ``max_peso_pct`` por valor ni de
    ``max_posiciones``, y guarda ``reserva_pct`` de liquidez.
+6. Control de riesgo de la cartera (4.2): no abre posiciones nuevas si el VaR historico de un dia supera
+   ``var_max_pct`` del patrimonio, ni compra un valor que se mueva casi igual (correlacion > ``correlacion_max``)
+   que uno que ya tiene, para no concentrar el riesgo en lo mismo con otro nombre.
 
 Todo queda en su diario (por que compra, vende o espera) y en la curva de patrimonio, que la app dibuja en vivo.
 """
@@ -112,6 +115,38 @@ def puntuar(an: dict, pesos: dict) -> float:
     return sum(pesos.get(k, 0) * an["factores"][k] for k in FACTORES)
 
 
+def _rets(x: list[float]) -> list[float]:
+    return [b / a - 1 for a, b in zip(x, x[1:]) if a]
+
+
+def correlacion(x: list[float], y: list[float]) -> float | None:
+    """Correlacion de las rentabilidades diarias de dos series de precios (ultimas sesiones comunes)."""
+    n = min(len(x), len(y))
+    if n < 31:
+        return None
+    a, b = _rets(x[-n:]), _rets(y[-n:])
+    m = min(len(a), len(b))
+    a, b = a[-m:], b[-m:]
+    ma, mb = sum(a) / m, sum(b) / m
+    va = sum((v - ma) ** 2 for v in a)
+    vb = sum((v - mb) ** 2 for v in b)
+    if va <= 0 or vb <= 0:
+        return None
+    return sum((p - ma) * (q - mb) for p, q in zip(a, b)) / math.sqrt(va * vb)
+
+
+def var_cartera(series: dict[str, list[float]], pesos_eur: dict[str, float], total: float) -> float | None:
+    """VaR historico al 95 % de un dia, en % del patrimonio, de las posiciones abiertas."""
+    from . import bolsa_analisis as ba
+    validas = {k: v for k, v in series.items() if len(v) >= 30 and pesos_eur.get(k)}
+    if not validas or total <= 0:
+        return None
+    r = ba.riesgo([{"simbolo": k, "puntos": [{"precio": p} for p in v]} for k, v in validas.items()],
+                  {k: pesos_eur[k] for k in validas}, capital=total)
+    invertido = sum(pesos_eur[k] for k in validas)
+    return float(r["var_historico_pct"]) * invertido / total
+
+
 class AgenteBolsa:
     """Gestor autonomo de una cartera simulada."""
 
@@ -138,7 +173,7 @@ class AgenteBolsa:
 
     def cfg(self) -> dict:
         d = {"activo": True, "intervalo_s": 60, "capital": 10000.0, "riesgo_pct": 1.0, "max_posiciones": 8,
-             "max_peso_pct": 20.0, "reserva_pct": 10.0, "universo": []}
+             "max_peso_pct": 20.0, "reserva_pct": 10.0, "universo": [], "var_max_pct": 3.0, "correlacion_max": 0.85}
         d.update({k: v for k, v in (self.ajustes() or {}).items() if v not in (None, "")})
         return d
 
@@ -180,6 +215,7 @@ class AgenteBolsa:
             pts = self._historia_simulada(sym)
         an = analizar(pts)
         if an:
+            an["serie"] = [float(p["precio"]) for p in pts if p.get("precio")][-130:]
             q = self.b.precio(sym)
             an["precio"], an["real"], an["abierto"] = q["precio"], q.get("real", False), q["abierto"]
             an["fuente"] = q["fuente"]
@@ -355,7 +391,35 @@ class AgenteBolsa:
                         and (a["rsi"] is None or a["rsi"] <= RSI_MAX_COMPRA)),
                        key=lambda kv: -kv[1]["puntuacion"])
         hechos = []
-        for sym, an in cands[:max(0, huecos)]:
+        series = {s: a.get("serie") or [] for s, a in analisis.items()}
+        pesos_eur = {p["simbolo"]: abs(float(p.get("valor_eur") or 0)) for p in res["posiciones"]}
+        if cands and pesos_eur:
+            try:
+                var = var_cartera(series, pesos_eur, total)
+            except Exception as e:   # noqa: BLE001
+                L.debug("VaR de la cartera: %s", e)
+                var = None
+            if var is not None and var > float(c.get("var_max_pct") or 3.0):
+                if time.time() - self._get("ultimo_aviso_var", 0) > 1800:
+                    self.diario("espera", "", f"No abre posiciones: el VaR de un día de la cartera es {var:.2f} % "
+                                              f"(límite {float(c.get('var_max_pct') or 3.0):g} %).", {"var_pct": var})
+                    self._put("ultimo_aviso_var", time.time())
+                return hechos
+        elegidos: list[str] = []
+        for sym, an in cands:
+            if len(elegidos) >= max(0, huecos):
+                break
+            tope_corr = float(c.get("correlacion_max") or 0.85)
+            parecido = None
+            for otro in list(pesos_eur) + elegidos:
+                rho = correlacion(series.get(sym) or [], series.get(otro) or [])
+                if rho is not None and rho > tope_corr:
+                    parecido = (otro, rho)
+                    break
+            if parecido:
+                self.diario("espera", sym, f"No compra {sym}: se mueve casi igual que {parecido[0]} (correlación "
+                                           f"{parecido[1]:.2f}), que ya está en la cartera.")
+                continue
             inst = self.b.instrumento(sym)
             fx = self.b.fx(inst["divisa"])
             px_eur = an["precio"] / fx
@@ -388,6 +452,7 @@ class AgenteBolsa:
                 self.diario("compra", sym, f"Orden de compra #{o['id']} de {qty:g} en espera. {motivo}.",
                             {"orden": o["id"]})
             hechos.append(f"compra {sym}")
+            elegidos.append(sym)
         if not hechos and not cands and analisis:
             mejor = max(analisis.items(), key=lambda kv: kv[1]["puntuacion"])
             ultimo = self._get("ultima_espera", 0)

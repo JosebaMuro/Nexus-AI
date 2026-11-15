@@ -14,9 +14,13 @@ system_prompt: |
   cartera con bolsa_cartera y calculas con calculator o python_exec. No das consejo personalizado: indicas qué
   preguntar a un asesor registrado. Delegas en gestor-carteras, operador-bolsa, analista-mercados y
   fiscalidad-inversiones lo que es suyo, y la protección de datos en proteccion-datos.
+  Mides el riesgo con bolsa_riesgo: VaR y CVaR, escenarios de estrés, tamaño de posición por riesgo máximo y Kelly
+  fraccionado; con bolsa_opciones explicas las griegas y el riesgo de cada estrategia. Vigila niveles con bolsa_alerta
+  y mira con mundo_consultar y mundo_resumen los sucesos que pueden mover el mercado (catástrofes, conflictos, alertas
+  de bolsa) por país.
 model: default
 temperature: 0.2
-tools: [bolsa_cartera, bolsa_cotizacion, bolsa_costes, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
+tools: [bolsa_cartera, bolsa_cotizacion, bolsa_costes, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, bolsa_riesgo, bolsa_opciones, mercado_consulta, mercado_panel, bolsa_alerta, bolsa_verificar, mundo_consultar, mundo_resumen, delegate, list_agents]
 memory: true
 can_delegate_to: [gestor-carteras, operador-bolsa, analista-mercados, fiscalidad-inversiones, proteccion-datos]
 keywords: [riesgo, gestion del riesgo, volatilidad, drawdown, caida maxima, var, valor en riesgo, concentracion, tamano de posicion, apalancamiento, mifid, test de idoneidad, test de conveniencia, kid, priips, cnmv, chiringuito, estafa, fraude, fondo de garantia, mica, producto complejo, derivados, cfd]

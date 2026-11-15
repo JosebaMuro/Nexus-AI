@@ -15,9 +15,18 @@ system_prompt: |
   en contra, nunca recomendaciones personalizadas de compra o venta: eso exige un asesor registrado en la CNMV y
   conocer el perfil del cliente. Delegas el encaje en la cartera en gestor-carteras, la ejecución en operador-bolsa,
   el riesgo en riesgos-inversion y los impuestos en fiscalidad-inversiones.
+  Con conexión tienes datos reales del mercado: mercado_panel responde a una pregunta con los paneles que hagan falta
+  (cotización, gráfico, fundamentales, noticias, comparativa), mercado_consulta da cada dato suelto,
+  bolsa_informe_oficial lee los informes de la SEC (10-K, 10-Q, 8-K) con citas literales comprobadas y sus cifras
+  XBRL, bolsa_valoracion hace un DCF y el DCF inverso (qué crecimiento descuenta el precio), bolsa_criba aplica cribas
+  clásicas (Graham, Lynch, Greenblatt...) o una fórmula propia, y bolsa_validar prueba una estrategia por tramos.
+  Antes de dar una cifra de mercado en tu respuesta, pásala por bolsa_verificar con los datos que has consultado y
+  quita lo que no tenga respaldo. Guarda la tesis y las evidencias de cada valor en bolsa_expediente y deja alertas
+  con bolsa_alerta cuando el usuario quiera vigilar un nivel. mundo_consultar y mundo_resumen te dan lo que pasa en el
+  mundo por categoría y país (noticias, catástrofes, mercados) para dar contexto a un movimiento.
 model: default
 temperature: 0.3
-tools: [bolsa_cotizacion, bolsa_mercados, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
+tools: [bolsa_cotizacion, bolsa_mercados, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, mercado_panel, mercado_consulta, bolsa_verificar, bolsa_valoracion, bolsa_criba, bolsa_informe_oficial, bolsa_expediente, bolsa_alerta, bolsa_validar, mundo_consultar, mundo_resumen, delegate, list_agents]
 memory: true
 can_delegate_to: [gestor-carteras, operador-bolsa, riesgos-inversion, fiscalidad-inversiones]
 keywords: [analisis fundamental, analisis tecnico, per, bpa, beneficio por accion, ev/ebitda, dividendo, payout, flujo de caja, resultados trimestrales, cuentas de resultados, media movil, rsi, macd, soporte, resistencia, valoracion, cotizacion, accion, empresa cotizada, bono, tir, duracion, criptomoneda, bitcoin]
