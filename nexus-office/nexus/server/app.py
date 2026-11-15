@@ -116,8 +116,8 @@ def create_app(services: Services | None = None) -> FastAPI:
             return resp
         if request.url.path == "/":
             return HTMLResponse("<!doctype html><meta name=viewport content='width=device-width'><body style='background:#04060c;color:#d8f6ff;"
-                                "font-family:sans-serif;padding:24px'><h2 style='color:#00f0ff'>Nexus-Office</h2><p>Introduce la clave de red "
-                                "(en el PC: Red COOP &gt; Conectar dispositivos).</p><form><input name=key autofocus style='font-size:18px;padding:8px'>"
+                                "font-family:sans-serif;padding:24px'><title>Agente IA</title><h2 style='color:#00f0ff'>Agente IA</h2><p>Introduce la clave de red "
+                                "(en el PC: Red COOP &gt; Conectar dispositivos; en la Ubuntu mínima, la orden agente-ia).</p><form><input name=key autofocus style='font-size:18px;padding:8px'>"
                                 " <button style='font-size:18px;padding:8px'>Entrar</button></form>", status_code=401)
         return JSONResponse({"detail": "Clave de red requerida"}, status_code=401)
 

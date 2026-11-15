@@ -19,6 +19,7 @@ import io
 import json
 import math
 import re
+import threading
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
@@ -221,7 +222,12 @@ def _leer_gdacs(texto: str) -> list[dict]:
 
 
 def _gdacs(ctx) -> list[dict]:
-    return _leer_gdacs(ctx.texto("https://www.gdacs.org/xml/rss.xml"))
+    texto = ctx.texto("https://www.gdacs.org/xml/rss.xml")
+    out = _leer_gdacs(texto)
+    if not out and "<rss" not in texto[:2000]:
+        # una pagina de error o de bloqueo con codigo 200 no debe pasar por «sin alertas»
+        raise RuntimeError(f"GDACS no ha devuelto su RSS: {_sin_html(texto, 80)!r}")
+    return out
 
 
 def _leer_perimetros(datos: dict) -> list[dict]:
@@ -640,10 +646,30 @@ def _leer_gdelt(datos: dict, tema: str = "") -> list[dict]:
 _TEMA_CONFLICTOS = '(conflict OR airstrike OR "military attack" OR ceasefire OR protest OR coup)'
 
 
+_GDELT_MU = threading.Lock()
+_GDELT_ULTIMA = [0.0]
+_GDELT_PAUSA = 5.5   # GDELT pide como mucho una consulta cada cinco segundos por equipo
+
+
 def _gdelt(ctx, consulta: str, tema: str, n: int = 75, plazo: str = "6h") -> list[dict]:
-    return _leer_gdelt(ctx.json("https://api.gdeltproject.org/api/v2/doc/doc", params={
-        "query": consulta, "mode": "artlist", "format": "json", "maxrecords": str(n), "timespan": plazo,
-        "sort": "datedesc"}), tema)
+    """Consulta a GDELT respetando su ritmo entre todas las fuentes que lo usan; si contesta 429 (demasiadas
+    peticiones) espera y lo intenta una vez mas."""
+    params = {"query": consulta, "mode": "artlist", "format": "json", "maxrecords": str(n), "timespan": plazo,
+              "sort": "datedesc"}
+    for intento in range(2):
+        with _GDELT_MU:
+            espera = _GDELT_ULTIMA[0] + _GDELT_PAUSA * (1 + intento) - time.time()
+            if espera > 0:
+                time.sleep(espera)
+            _GDELT_ULTIMA[0] = time.time()
+            try:
+                return _leer_gdelt(ctx.json("https://api.gdeltproject.org/api/v2/doc/doc", params=params), tema)
+            except Exception as e:  # noqa: BLE001
+                if intento or "429" not in str(e):
+                    raise
+            finally:
+                _GDELT_ULTIMA[0] = time.time()
+    return []
 
 
 def _conflictos(ctx) -> list[dict]:
@@ -653,10 +679,8 @@ def _conflictos(ctx) -> list[dict]:
 def _noticias_pais(ctx) -> list[dict]:
     out, fallos = [], 0
     interes = ctx.paises_interes()[:8]
-    for i, pais in enumerate(interes):
-        if i:
-            time.sleep(5.5)   # GDELT pide una consulta cada cinco segundos
-        try:
+    for pais in interes:
+        try:   # _gdelt ya espera lo que pide GDELT entre consultas
             nombre = paises.nombre(pais, "en").lower().replace(" ", "")
             for r in _gdelt(ctx, f"sourcecountry:{nombre}", "local", n=30, plazo="12h"):
                 r["pais"] = pais

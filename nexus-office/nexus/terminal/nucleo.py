@@ -81,6 +81,21 @@ def _popen(cmd: list[str], cwd: str, env: dict, stdin=subprocess.DEVNULL) -> sub
                             bufsize=0, **kw)
 
 
+_PS_RUTA_ENTRE_COMILLAS = re.compile(r"""^(\s*)(["'])([^"']+)\2(?=\s|$)""")
+
+
+def _ps_invocar(orden: str) -> str:
+    """En PowerShell una linea que empieza por una ruta entre comillas es una cadena, no una orden: le antepone
+    el operador & ("C:\\Program Files\\x.exe" -v -> & "C:\\Program Files\\x.exe" -v), como haria quien la escribe."""
+    m = _PS_RUTA_ENTRE_COMILLAS.match(orden)
+    if not m:
+        return orden
+    ruta = m.group(3)
+    if not ("\\" in ruta or "/" in ruta or re.search(r"\.(exe|cmd|bat|ps1|com)$", ruta, re.I)):
+        return orden
+    return m.group(1) + "& " + orden[len(m.group(1)):]
+
+
 class Sesion:
     def __init__(self, sid: str, carpeta: str, modo: str = "construir") -> None:
         self.id = sid
@@ -264,7 +279,7 @@ class Terminal:
             guion = ("$ProgressPreference='SilentlyContinue'\n"
                      "try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}\n"
                      "try { Set-Location -LiteralPath $env:NX_CWD } catch {}\n"
-                     "$global:LASTEXITCODE = 0\n" + orden + "\n"
+                     "$global:LASTEXITCODE = 0\n" + _ps_invocar(orden) + "\n"
                      "$nx_ok = $?; $nx_c = $LASTEXITCODE\n"
                      "if (-not $nx_ok -and -not $nx_c) { $nx_c = 1 }\n"
                      "if (-not $nx_c) { $nx_c = 0 }\n"
@@ -432,7 +447,7 @@ class Terminal:
         elif clase == "powershell":
             cmd = [exe, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-OutputFormat", "Text",
                    "-EncodedCommand", base64.b64encode(
-                       ("$ProgressPreference='SilentlyContinue'\n" + orden).encode("utf-16-le")).decode("ascii")]
+                       ("$ProgressPreference='SilentlyContinue'\n" + _ps_invocar(orden)).encode("utf-16-le")).decode("ascii")]
         else:
             cmd = [exe, "/d", "/s", "/c", orden]
         vivos = [p for p in self.fondo.values() if p.proc.poll() is None]

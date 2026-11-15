@@ -385,3 +385,54 @@ def test_agente_autonomo_controla_riesgo():
     var = ag.var_cartera({"A": a, "C": c}, {"A": 5000, "C": 5000}, 10000)
     assert var is not None and 0 < var < 50
     assert ag.var_cartera({"A": a}, {"A": 1000}, 10000) < var  # con menos invertido, menos VaR
+
+
+def test_powershell_rutas_entre_comillas():
+    from nexus.terminal.nucleo import _ps_invocar
+    assert _ps_invocar('"C:\\Program Files\\x.exe" -v') == '& "C:\\Program Files\\x.exe" -v'
+    assert _ps_invocar("  'C:/py/python.exe'") == "  & 'C:/py/python.exe'"
+    assert _ps_invocar('"herramienta.cmd" a b') == '& "herramienta.cmd" a b'
+    assert _ps_invocar('"hola mundo"') == '"hola mundo"'          # una cadena sola se deja
+    assert _ps_invocar('git status') == 'git status'
+    assert _ps_invocar('& "C:\\x.exe"') == '& "C:\\x.exe"'
+
+
+def test_gdelt_respeta_su_ritmo_y_reintenta_429(monkeypatch):
+    from nexus.mundo import fuentes as F
+    esperas = []
+    monkeypatch.setattr(F, "_GDELT_PAUSA", 5.5)
+    monkeypatch.setattr(F.time, "sleep", lambda s: esperas.append(round(s, 1)))
+    F._GDELT_ULTIMA[0] = 0.0
+
+    class Ctx:
+        llamadas = 0
+
+        def json(self, url, **kw):
+            Ctx.llamadas += 1
+            if Ctx.llamadas == 1:
+                raise RuntimeError("HTTP 429 de api.gdeltproject.org")
+            return {"articles": [{"title": "Protestas en Francia", "url": "https://x", "seendate": "20261115T100000Z"}]}
+
+    r = F._gdelt(Ctx(), "protest", "conflictos")
+    assert len(r) == 1 and Ctx.llamadas == 2
+    assert esperas and esperas[-1] > 10          # tras un 429 espera el doble antes de repetir
+    with pytest.raises(RuntimeError):            # otro error no se repite
+        class Malo:
+            def json(self, url, **kw):
+                raise RuntimeError("HTTP 500 de api.gdeltproject.org")
+        F._gdelt(Malo(), "x", "y")
+
+
+def test_gdacs_sin_rss_es_un_error_visible():
+    from nexus.mundo import fuentes as F
+
+    class Ctx:
+        def texto(self, url, **kw):
+            return "<html><body>Access denied</body></html>"
+    with pytest.raises(RuntimeError, match="GDACS"):
+        F._gdacs(Ctx())
+
+    class Vacio:
+        def texto(self, url, **kw):
+            return '﻿<?xml version="1.0"?><rss version="2.0"><channel><title>GDACS</title></channel></rss>'
+    assert F._gdacs(Vacio()) == []

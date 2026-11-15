@@ -476,7 +476,7 @@ class Mercados:
             ids = [c[0] for c in CURVA] + ["VIXCLS"]
             desde = (dt.date.today() - dt.timedelta(days=45)).isoformat()
             texto = self._get("https://fred.stlouisfed.org/graph/fredgraph.csv",
-                              params={"id": ",".join(ids), "cosd": desde}).text
+                              params={"id": ",".join(ids), "cosd": desde}, timeout=40).text   # FRED tarda
             return leer_fred(texto)
         return self.con_cache("macro", 3600, pedir)
 
