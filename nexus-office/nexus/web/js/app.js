@@ -1969,7 +1969,8 @@
 
   // utilidades para los modulos de la interfaz que viven en otros ficheros (js/kgadmin.js)
   window.NexusUI = { api, toast, esc, guard, ago, fmtB, saveFile, agents: () => S.agents, admin: () => !!S.token,
-                     agentName: (id) => agentName(id), refreshGraph: () => { loadGraph().catch(() => {}); } };
+                     agentName: (id) => agentName(id), refreshGraph: () => { loadGraph().catch(() => {}); },
+                     loaders, go, md: (t) => md(t), token: () => S.token, view: () => S.view };
 
   /* ================================================================ selector de inicio: motor llama y CPU/GPU/NPU */
   const Accel = {

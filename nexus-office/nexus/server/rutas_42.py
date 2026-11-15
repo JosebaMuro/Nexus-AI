@@ -182,6 +182,8 @@ def registrar(app, S, hub, require_admin, admin_flag) -> None:   # noqa: C901
                         carpeta: str = Body("", embed=True), tareas: list | None = Body(None, embed=True)):
         t = S().terminal
         try:
+            if sesion in ("", "nueva"):   # la misma id vale para la consola y para la conversacion con el agente
+                sesion = S().memory.new_session("Terminal IA")
             s = t.sesion(sesion)
             if modo:
                 t.modo(sesion, modo)
