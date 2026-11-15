@@ -51,6 +51,14 @@ jobs:
           python packaging/build.py --targets --keep --apk ../apk/*.apk --docs ../entrega/*.pdf
           mkdir -p ../release
           find dist -type f ! -name SHA256SUMS.txt -exec mv {} ../release/ \;
+          # codigo fuente de una edicion retirada del repositorio (p. ej. la C++ de referencia en la 4.2): se saca de
+          # su commit con git archive para que siga descargable aunque ya no este en main
+          REF=$(python -c "import json; print(json.load(open('../entrega/entrega.json')).get('cpp_referencia', ''))")
+          if [ -n "$REF" ]; then
+            git -C .. fetch -q --depth=1 origin "$REF"
+            git -C .. archive --format=zip --prefix=nexus-office-cpp/ "$REF:nexus-office-cpp" \
+              -o "$PWD/../release/Agente-IA-cpp-referencia-codigo-fuente.zip"
+          fi
           cd ../release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt && du -sh .
       - name: Publicar
         run: |

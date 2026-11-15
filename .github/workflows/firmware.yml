@@ -12,7 +12,7 @@ on:
       - firmware/**
       - "!firmware/bin/**"
       - .github/workflows/firmware.yml
-      - nexus-office-cpp/third_party/stb/**
+      - firmware/tools/third_party/stb/**
 
 permissions:
   contents: read
@@ -39,7 +39,7 @@ jobs:
       - name: Generador de recursos (fuente y avatar del reloj y del Pico)
         run: |
           sudo apt-get install -y -qq fonts-dejavu-core >/dev/null
-          g++ -std=c++17 -O2 -I nexus-office-cpp/third_party/stb -o gen_assets firmware/tools/gen_assets.cpp
+          g++ -std=c++17 -O2 -I firmware/tools/third_party/stb -o gen_assets firmware/tools/gen_assets.cpp
           ./gen_assets
           git diff --stat -- firmware/nexuswatch/nw_assets.h
       - name: Emuladores (NexusLED y NexusWatch)

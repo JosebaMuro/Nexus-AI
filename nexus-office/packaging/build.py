@@ -40,7 +40,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "packaging"))
 from nexus import __version__ as VERSION  # noqa: E402
 
-COMMON = ["nexus", "vendor", "tests", "requirements.txt", "README.md", "LICENSE", "CHANGELOG.md", "docs"]
+COMMON = ["nexus", "vendor", "requirements.txt", "README.md", "LICENSE", "CHANGELOG.md", "docs"]
 UNIX = ["install.sh", "start.sh"]
 TARGETS = {
     "windows-x64": {"files": ["install.ps1", "install.bat", "start.bat"], "fmt": "zip", "pbs": "x86_64-pc-windows-msvc",
@@ -84,7 +84,7 @@ def stage(target: str) -> Path:
             shutil.copy2(src, dest / name)
     # firmware de las luces, el reloj y el Pico W (Dispositivos > Grabar firmware, firmware/flash.py) y los ejemplos
     # para importar (grafo de la Wikipedia, resumen del proyecto), que viven fuera de esta carpeta en el repositorio
-    for src, name in ((ROOT.parent / "firmware", "firmware"), (ROOT.parent / "nexus-office-cpp" / "ejemplos", "ejemplos")):
+    for src, name in ((ROOT.parent / "firmware", "firmware"), (ROOT / "ejemplos", "ejemplos")):
         if src.is_dir():
             shutil.copytree(src, dest / name, ignore=lambda d, names: [n for n in names if EXCLUDE.search(n)])
     if t.get("mac"):
