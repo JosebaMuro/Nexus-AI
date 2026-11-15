@@ -63,6 +63,7 @@ class HardwareInfo:
     npus: list[NPU] = field(default_factory=list)
     runtimes: dict = field(default_factory=dict)
     python: str = sys.version.split()[0]
+    cores_rapidos: int = 0     # CPU hibrida (Intel 12.a gen. o posterior...): nucleos de rendimiento; 0 = no hibrida
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -436,6 +437,58 @@ def _npu_runtime(vendor: str) -> str:
             "apple": "coreml"}.get(vendor, "")
 
 
+# ---------------------------------------------------------------------------- nucleos de rendimiento
+def _rapidos_windows() -> int:
+    """Nucleos de la clase de eficiencia mas alta (P-cores) con GetLogicalProcessorInformationEx."""
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    tam = ctypes.c_ulong(0)
+    k32.GetLogicalProcessorInformationEx(0, None, ctypes.byref(tam))   # RelationProcessorCore
+    if not tam.value:
+        return 0
+    buf = ctypes.create_string_buffer(tam.value)
+    if not k32.GetLogicalProcessorInformationEx(0, buf, ctypes.byref(tam)):
+        return 0
+    clases: dict[int, int] = {}
+    pos, datos = 0, buf.raw
+    while pos + 10 <= tam.value:
+        size = int.from_bytes(datos[pos + 4:pos + 8], "little")
+        if size <= 0:
+            break
+        clase = datos[pos + 9]          # PROCESSOR_RELATIONSHIP.EfficiencyClass
+        clases[clase] = clases.get(clase, 0) + 1
+        pos += size
+    return clases[max(clases)] if len(clases) > 1 else 0
+
+
+def _rapidos_linux(root: Path = Path("/sys/devices")) -> int:
+    """Intel hibrida en Linux: /sys/devices/cpu_core/cpus lista los hilos de los P-cores."""
+    lista = root / "cpu_core" / "cpus"
+    if not lista.exists() or not (root / "cpu_atom").exists():
+        return 0
+    cpus: set[int] = set()
+    for trozo in lista.read_text().strip().split(","):
+        a, _, b = trozo.partition("-")
+        if a.strip().isdigit():
+            cpus.update(range(int(a), int(b or a) + 1))
+    nucleos = set()
+    for c in cpus:
+        f = root / "system" / "cpu" / f"cpu{c}" / "topology" / "core_id"
+        try:
+            pkg = (root / "system" / "cpu" / f"cpu{c}" / "topology" / "physical_package_id").read_text().strip()
+            nucleos.add((pkg, f.read_text().strip()))
+        except OSError:
+            nucleos.add(("", str(c)))
+    return len(nucleos)
+
+
+def nucleos_rapidos() -> int:
+    if os.name == "nt":
+        return _rapidos_windows()
+    if sys.platform.startswith("linux") and not _is_android():
+        return _rapidos_linux()
+    return 0
+
+
 # ---------------------------------------------------------------------------- runtimes
 def _probe_runtimes(cfg_ollama_url: str = "http://127.0.0.1:11434") -> dict:
     rt: dict = {}
@@ -502,6 +555,7 @@ def detect(ollama_url: str = "http://127.0.0.1:11434", probe_runtimes: bool = Tr
         cores_logical=logical, cpu_flags=safe(_cpu_flags, []),
         ram_gb=round(safe(lambda: psutil.virtual_memory().total, 0) / 1024**3, 2), disk_free_gb=round(disk, 1),
     )
+    info.cores_rapidos = safe(nucleos_rapidos, 0) or 0
     for name, fn in (("windows", _detect_windows if os.name == "nt" else None),
                      ("linux", _detect_linux if sys.platform.startswith("linux") else None),
                      ("macos", _detect_macos if sys.platform == "darwin" else None),

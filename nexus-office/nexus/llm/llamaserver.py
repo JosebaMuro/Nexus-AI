@@ -15,7 +15,7 @@ from pathlib import Path
 import httpx
 
 from .. import log, paths
-from ..proc import popen
+from ..proc import alto_rendimiento, popen
 from .backends import OpenAICompatBackend
 
 L = log.get("llamaserver")
@@ -179,6 +179,7 @@ class LlamaServerBackend(OpenAICompatBackend):
             logf = open(log_path, "ab")
             L.info("Arrancando llama-server [%s]: %s", variant, " ".join(cmd[1:]))
             self.proc = popen(cmd, stdout=logf, stderr=subprocess.STDOUT, cwd=str(exe.parent), env=env)
+            alto_rendimiento(self.proc)
             self.base_url = f"http://127.0.0.1:{self.port}/v1"
             self.key, self.variant = key, variant
             t0 = time.time()
@@ -200,6 +201,7 @@ class LlamaServerBackend(OpenAICompatBackend):
                         i = cmd.index(viejo)
                         del cmd[i:i + (2 if viejo == "--cache-ram" else 1)]
                         self.proc = popen(cmd, stdout=logf, stderr=subprocess.STDOUT, cwd=str(exe.parent), env=env)
+                        alto_rendimiento(self.proc)
                         continue
                     self.proc = None
                     if device:

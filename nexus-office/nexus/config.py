@@ -85,6 +85,8 @@ DEFAULTS: dict[str, Any] = {
         "accel": "auto",                # eleccion del selector de inicio: auto | cpu | gpu | npu
         "llama_variant": "",            # binario de llama.cpp preferido (lo fija el selector: cpu, cuda, vulkan...)
         "adaptive_tuning": True,
+        "deteccion_rapida": True,       # arrancar con el hardware guardado y volver a detectar en segundo plano
+        "prioridad_alta": True,         # Windows: servicio y llama-server sin EcoQoS y con prioridad por encima de normal
         "monitor_interval_s": 2.0,
         "perfil": "auto",               # perfil de hardware activo (hw_profiles: auto, rendimiento, ahorro... o propios)
         "perfiles": [],                 # perfiles de hardware creados por el usuario

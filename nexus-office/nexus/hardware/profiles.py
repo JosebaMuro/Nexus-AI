@@ -149,6 +149,9 @@ def build_profile(hw: HardwareInfo, override: str = "") -> dict:
                          ("VitisAIExecutionProvider", "QNNExecutionProvider", "CoreMLExecutionProvider")))
 
     phys = max(1, hw.cores_physical)
+    # CPU hibrida: llama.cpp va mas rapido con un hilo por nucleo de rendimiento; los de eficiencia lo frenan
+    rapidos = int(getattr(hw, "cores_rapidos", 0) or 0)
+    hilos = rapidos if 0 < rapidos < phys else phys
     return {
         "id": f"{acc}-{(gpu.vendor if gpu else 'cpu')}-{'igpu' if gpu and gpu.integrated else 'dgpu' if gpu else 'only'}",
         "accelerator": acc,
@@ -162,7 +165,7 @@ def build_profile(hw: HardwareInfo, override: str = "") -> dict:
             "quant": "Q4_K_M" if budget < 24 else "Q5_K_M",
             "n_ctx": n_ctx,
             "max_ctx": max_ctx,
-            "n_threads": layout["fast"] if android() else phys,   # movil: los nucleos rapidos; los pequenos frenan
+            "n_threads": layout["fast"] if android() else hilos,   # movil: los nucleos rapidos; los pequenos frenan
             "n_batch": 512 if gpu_offload or ram >= 16 else 256,
             "gpu_layers": -1 if gpu_offload else 0,
             # con varias GPU, llama-server usa solo esta (nexus/hardware/gpu_devices.py)

@@ -29,6 +29,9 @@ class Services:
     def __init__(self, detect_hardware: bool = True) -> None:
         log.setup()
         self.config = cfg = get_config()
+        if cfg.get("hardware.prioridad_alta", True):
+            from .proc import alto_rendimiento
+            alto_rendimiento()   # Windows: el servicio sin ventana no pasa a los nucleos de eficiencia
         self.monitor = hardware.Monitor(cfg.get("hardware.monitor_interval_s", 2.0))
         if self.monitor.previous_unclean:
             L.warning("La sesion anterior no se cerro correctamente; se aplicara un perfil mas conservador")
@@ -37,7 +40,8 @@ class Services:
         if detect_hardware:
             self.hw, self.profile, self.tuning_reasons = hardware.startup(
                 cfg.get("hardware.profile_override", ""), cfg.get("hardware.adaptive_tuning", True),
-                cfg.get("llm.ollama_url"), self.monitor.previous_unclean, self.monitor.previous_info)
+                cfg.get("llm.ollama_url"), self.monitor.previous_unclean, self.monitor.previous_info,
+                rapida=bool(cfg.get("hardware.deteccion_rapida", True)))
         else:  # modo rapido para tests
             self.hw = hardware.load_cached() or hardware.detect(probe_runtimes=False)
             self.profile, self.tuning_reasons = hardware.build_profile(self.hw), []
