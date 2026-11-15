@@ -51,6 +51,8 @@ jobs:
           python packaging/build.py --targets --keep --apk ../apk/*.apk --docs ../entrega/*.pdf
           mkdir -p ../release
           find dist -type f ! -name SHA256SUMS.txt -exec mv {} ../release/ \;
+          # script para rehacer una Ubuntu minima con Agente IA preinstalado como demonio (la ISO pasa de 2 GB)
+          [ -f packaging/ubuntu/rehacer-ubuntu.sh ] && cp packaging/ubuntu/rehacer-ubuntu.sh ../release/
           # codigo fuente de una edicion retirada del repositorio (p. ej. la C++ de referencia en la 4.2): se saca de
           # su commit con git archive para que siga descargable aunque ya no este en main
           REF=$(python -c "import json; print(json.load(open('../entrega/entrega.json')).get('cpp_referencia', ''))")
