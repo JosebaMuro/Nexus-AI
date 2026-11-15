@@ -451,6 +451,16 @@ def cmd_bench(args) -> None:
             print(f"  {p['prueba']:32s} no se pudo medir: {p.get('error', '')}")
 
 
+def cmd_terminal(args) -> None:
+    from .terminal import cli
+    sys.exit(cli.ejecutar(args))
+
+
+def cmd_mundo(args) -> None:
+    from .mundo import probar
+    sys.exit(probar.ejecutar(args))
+
+
 def main(argv=None) -> None:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["wheels"]:                # CLI propia (nexus/wheelhouse.py): no importa nada pesado
@@ -519,12 +529,26 @@ def main(argv=None) -> None:
     be = sub.add_parser("bench", help="banco de pruebas del equipo: base de datos, embeddings, memoria, RAG y LLM")
     be.add_argument("--sin-llm", action="store_true", help="no medir el modelo de lenguaje")
     be.add_argument("--json", action="store_true", help="muestra el resultado en JSON")
+    te = sub.add_parser("terminal", help="Terminal IA: el agente trabaja en la consola y los ficheros de este equipo")
+    te.add_argument("-p", "--pregunta", default="", help="hace la peticion, responde y termina (sin modo interactivo)")
+    te.add_argument("-f", "--formato", default="texto", choices=["texto", "json"], help="formato de la respuesta con -p")
+    te.add_argument("--cwd", default="", help="carpeta de trabajo")
+    te.add_argument("--modo", default="", choices=["", "plan", "construir"], help="plan: solo lee y propone")
+    te.add_argument("--agente", default="terminal", help="agente que atiende (por defecto, terminal)")
+    te.add_argument("--si", action="store_true", help="concede sin preguntar los permisos que pidan las herramientas")
+    mu = sub.add_parser("mundo", help="fuentes de informacion por categorias y paises: estado | probar | resumen")
+    mu.add_argument("accion", nargs="?", default="estado", choices=["estado", "probar", "resumen"])
+    mu.add_argument("--solo", action="append", help="probar solo esta fuente (se puede repetir)")
+    mu.add_argument("--todas", action="store_true", help="probar tambien las fuentes apagadas")
+    mu.add_argument("--pais", default="")
+    mu.add_argument("--categoria", default="")
+    mu.add_argument("--json", action="store_true")
     sub.add_parser("wheels", help="prepara wheelhouse/ para instalar sin internet (ver --help)")
     sub.add_parser("cleanup", help="quita del paquete offline lo que este equipo no usa (ver --help)")
     args = p.parse_args(argv)
     {"run": cmd_run, "detect": cmd_detect, "setup": cmd_setup, "pull": cmd_pull, "chat": cmd_chat,
      "oficina": cmd_office, "bolsa": cmd_bolsa, "grafo": cmd_graph, "modelos": cmd_models, "servicio": cmd_service, "motores": cmd_motores,
-     "mcp": cmd_mcp, "bench": cmd_bench}.get(
+     "mcp": cmd_mcp, "bench": cmd_bench, "terminal": cmd_terminal, "mundo": cmd_mundo}.get(
         args.cmd or "run", cmd_run)(args if args.cmd else p.parse_args(["run"]))
 
 

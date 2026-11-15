@@ -51,6 +51,18 @@ def detect_intent(text: str, tools: set[str]) -> tuple[str, dict] | None:
         return "calculator", {"expression": expr}
     if "datetime_now" in tools and re.search(r"\b(qu[eé] hora es|qu[eé] d[ií]a es hoy|qu[eé] fecha es|what time is it)\b", low):
         return "datetime_now", {}
+    if "terminal_ejecutar" in tools:   # «$ ls -la», «ejecuta: git status», «ejecuta `pytest -q`»
+        m = (re.match(r"^\$\s+(.+)", text.strip(), re.S) or
+             re.match(r"^(?:ejecuta|corre|lanza|run)(?: en (?:la )?(?:terminal|consola))?\s*:\s*(.+)", text.strip(), re.I | re.S) or
+             re.match(r"^(?:ejecuta|corre|lanza|run)\b[^`]*`([^`]+)`\s*$", text.strip(), re.I | re.S))
+        if m:
+            return "terminal_ejecutar", {"orden": m.group(1).strip()}
+    if "mundo_resumen" in tools and re.search(
+            r"\b(qu[eé] (est[aá] pasando|pasa|hay de nuevo)|novedades|resumen|situaci[oó]n) (en el|del) mundo\b", low):
+        return "mundo_resumen", {}
+    if "mercado_panel" in tools and re.search(
+            r"\b(a cu[aá]nto cotiza|cotizaci[oó]n de|precio de la acci[oó]n|c[oó]mo va (el|la) (ibex|bolsa|nasdaq|dax|bitcoin|s&p))\b", low):
+        return "mercado_panel", {"pregunta": text.strip()}
     m = IMG_RE.search(text)
     if "generate_image" in tools and m:
         return "generate_image", {"prompt": m.group(1).strip(" .") or text}
