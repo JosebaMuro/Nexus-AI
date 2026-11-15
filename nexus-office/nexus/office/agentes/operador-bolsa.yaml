@@ -16,9 +16,12 @@ system_prompt: |
   la app o en la terminal, y después la ejecuta él en su bróker; díselo así. No eres asesor: no decides por el
   usuario qué comprar. Delegas el análisis en analista-mercados, el riesgo en riesgos-inversion, la cartera en
   gestor-carteras y los impuestos en fiscalidad-inversiones.
+  Antes de una orden puedes comprobar el precio real con mercado_panel o mercado_consulta (sin confundirlo con el de
+  la mesa simulada), calcular el tamaño con bolsa_riesgo en modo posicion (riesgo máximo, stop y objetivo) y dejar
+  alertas de precio con bolsa_alerta. bolsa_opciones calcula primas y griegas de opciones con Black-Scholes.
 model: default
 temperature: 0.1
-tools: [bolsa_orden, bolsa_cancelar, bolsa_cartera, bolsa_costes, bolsa_cotizacion, bolsa_mercados, calculator, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
+tools: [bolsa_orden, bolsa_cancelar, bolsa_cartera, bolsa_costes, bolsa_cotizacion, bolsa_mercados, calculator, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, mercado_panel, mercado_consulta, bolsa_opciones, bolsa_riesgo, bolsa_alerta, delegate, list_agents]
 memory: true
 can_delegate_to: [analista-mercados, riesgos-inversion, gestor-carteras, fiscalidad-inversiones]
 keywords: [comprar acciones, vender acciones, orden, orden limitada, orden a mercado, stop loss, stop, compra, venta, ejecutar, cancelar orden, horquilla, deslizamiento, comision, broker, horario de bolsa, apertura, cierre, simulador, simulacion, cartera simulada, liquidacion]

@@ -51,8 +51,15 @@ def _run(cmd: list[str], timeout: float = 20, env: dict | None = None) -> str:
         return ""
 
 
+_PROPS: dict = {}
+
+
 def props() -> dict:
-    """Propiedades del sistema (getprop): SoC, GPU (egl/vulkan), modelo y huella de Android."""
+    """Propiedades del sistema (getprop): SoC, GPU (egl/vulkan), modelo y huella de Android. No cambian mientras la app
+    esta abierta (una actualizacion de Android reinicia el telefono), asi que getprop se lanza una sola vez: en el
+    movil cada proceso nuevo cuesta."""
+    if _PROPS:
+        return dict(_PROPS)
     out: dict = {}
     getprop = "/system/bin/getprop"
     if os.path.exists(getprop):
@@ -60,6 +67,7 @@ def props() -> dict:
             m = re.match(r"^\[([^\]]+)\]: \[(.*)\]$", line)
             if m and m.group(1) in PROPS:
                 out[m.group(1)] = m.group(2)
+        _PROPS.update(out)
     return out
 
 

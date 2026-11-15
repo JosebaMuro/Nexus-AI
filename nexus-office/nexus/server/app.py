@@ -59,6 +59,7 @@ def create_app(services: Services | None = None) -> FastAPI:
         s.coop.listeners.append(hub.broadcast)
         s.lounge.listeners.append(hub.broadcast)
         s.kg_jobs.listeners.append(hub.broadcast)
+        s.mundo.oyentes.append(hub.broadcast)
         from ..agents.activity import ACTIVITY
         if hub.broadcast not in ACTIVITY.listeners:
             ACTIVITY.listeners[:] = [hub.broadcast]   # un solo servidor por proceso
@@ -115,8 +116,8 @@ def create_app(services: Services | None = None) -> FastAPI:
             return resp
         if request.url.path == "/":
             return HTMLResponse("<!doctype html><meta name=viewport content='width=device-width'><body style='background:#04060c;color:#d8f6ff;"
-                                "font-family:sans-serif;padding:24px'><h2 style='color:#00f0ff'>Nexus-Office</h2><p>Introduce la clave de red "
-                                "(en el PC: Red COOP &gt; Conectar dispositivos).</p><form><input name=key autofocus style='font-size:18px;padding:8px'>"
+                                "font-family:sans-serif;padding:24px'><title>Agente IA</title><h2 style='color:#00f0ff'>Agente IA</h2><p>Introduce la clave de red "
+                                "(en el PC: Red COOP &gt; Conectar dispositivos; en la Ubuntu mínima, la orden agente-ia).</p><form><input name=key autofocus style='font-size:18px;padding:8px'>"
                                 " <button style='font-size:18px;padding:8px'>Entrar</button></form>", status_code=401)
         return JSONResponse({"detail": "Clave de red requerida"}, status_code=401)
 
@@ -170,11 +171,39 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     # ------------------------------------------------------------------ estaticos
     class RevalidatedStatic(StaticFiles):
-        """Los estaticos se revalidan (ETag) en cada carga: tras actualizar Nexus-Office no quedan versiones viejas."""
+        """Los estaticos se revalidan (ETag) en cada carga: tras actualizar Nexus-Office no quedan versiones viejas.
+        Los de texto (JS, CSS, HTML, SVG) se sirven comprimidos con gzip si el navegador lo acepta: la app cliente y
+        el acceso remoto cargan la interfaz unas cuatro veces mas rapido por wifi o datos moviles."""
+        _gz: dict = {}
+        COMPRIMIBLES = (".js", ".mjs", ".css", ".html", ".svg", ".json", ".webmanifest", ".txt", ".md")
+
         async def get_response(self, path, scope):
             resp = await super().get_response(path, scope)
             resp.headers["Cache-Control"] = "no-cache"
-            return resp
+            if resp.status_code != 200 or not str(path).lower().endswith(self.COMPRIMIBLES) \
+                    or not isinstance(resp, FileResponse):
+                return resp
+            cab = dict(scope.get("headers") or [])
+            if b"gzip" not in cab.get(b"accept-encoding", b"") or b"range" in cab:
+                return resp
+            try:
+                f = Path(resp.path)
+                st = f.stat()
+                if st.st_size < 1024:
+                    return resp
+                clave = (str(f), st.st_mtime_ns, st.st_size)
+                datos = self._gz.get(clave)
+                if datos is None:
+                    import gzip
+                    datos = gzip.compress(f.read_bytes(), 6, mtime=0)
+                    if len(self._gz) > 400:
+                        self._gz.clear()
+                    self._gz[clave] = datos
+            except OSError:
+                return resp
+            cabeceras = {k: v for k, v in resp.headers.items() if k.lower() in ("etag", "last-modified", "cache-control")}
+            cabeceras.update({"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
+            return Response(datos, media_type=resp.media_type, headers=cabeceras)
 
     app.mount("/static", RevalidatedStatic(directory=str(paths.WEB)), name="static")
     app.mount("/outputs", StaticFiles(directory=str(paths.outputs_dir())), name="outputs")
@@ -310,7 +339,7 @@ def create_app(services: Services | None = None) -> FastAPI:
     def hw():
         s = S()
         return {"hardware": s.hw.to_dict(), "profile": s.profile, "tuning": s.tuning_reasons,
-                "tuning_state": hardware.load_state(), "history": hardware.load_history()[-15:]}
+                "deteccion": dict(hardware.ESTADO), "tuning_state": hardware.load_state(), "history": hardware.load_history()[-15:]}
 
     # ------------------------------------------------------------------ motores de inferencia por hardware
     banco_estado: dict = {"en_marcha": False, "paso": "", "error": ""}
@@ -411,8 +440,7 @@ def create_app(services: Services | None = None) -> FastAPI:
     @app.post("/api/hardware/redetect", dependencies=[Depends(require_admin)])
     def redetect():
         s = S()
-        s.hw = hardware.detect(ollama_url=s.config.get("llm.ollama_url"))
-        hardware.save(s.hw)
+        s.hw = hardware.detectar(s.config.get("llm.ollama_url"), rapida=False)
         s.profile.clear()
         s.profile.update(hardware.build_profile(s.hw, s.config.get("hardware.profile_override", "")))
         s.llm.rebuild()
@@ -1165,7 +1193,7 @@ def create_app(services: Services | None = None) -> FastAPI:
         out = {}
         for kind in ("images", "music", "docs"):
             files = sorted(paths.sub("outputs", kind).glob("*.*"), key=lambda p: p.stat().st_mtime, reverse=True)
-            out[kind] = [f"/outputs/{kind}/{f.name}" for f in files if f.suffix in (".png", ".jpg", ".wav", ".mid", ".pdf")][:limit]
+            out[kind] = [f"/outputs/{kind}/{f.name}" for f in files if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".wav", ".mid", ".pdf")][:limit]
         return out
 
     @app.post("/api/prompt/enhance")
@@ -2053,4 +2081,6 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     from . import rutas_extra
     rutas_extra.registrar(app, S, hub, require_admin, admin_flag, LOCAL)
+    from . import rutas_42
+    rutas_42.registrar(app, S, hub, require_admin, admin_flag)   # Mundo, terminal de bolsa y Terminal IA
     return app

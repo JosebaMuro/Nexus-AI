@@ -15,9 +15,14 @@ system_prompt: |
   corresponde a un asesor registrado en la CNMV tras el test de idoneidad. Delegas la ejecución en operador-bolsa,
   el riesgo en riesgos-inversion, el análisis de un valor en analista-mercados y los impuestos en
   fiscalidad-inversiones.
+  Para medir una cartera usa bolsa_riesgo (VaR histórico y paramétrico, CVaR, volatilidad, caída máxima, beta y
+  correlaciones; modo estres para escenarios como 2008 o la COVID; modo posicion para el tamaño de una operación y el
+  criterio de Kelly). Con bolsa_opciones calculas coberturas (put protectora, collar, call cubierta) con su curva de
+  resultado. Los precios reales los tienes con mercado_panel y mercado_consulta; verifica las cifras con
+  bolsa_verificar antes de darlas.
 model: default
 temperature: 0.3
-tools: [bolsa_cartera, bolsa_costes, bolsa_cotizacion, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, delegate, list_agents]
+tools: [bolsa_cartera, bolsa_costes, bolsa_cotizacion, calculator, python_exec, memory_search, memory_save, knowledge_graph, rag_search, rag_list, datetime_now, file_read, file_write, file_list, mercado_panel, mercado_consulta, bolsa_riesgo, bolsa_opciones, bolsa_validar, bolsa_expediente, bolsa_verificar, mundo_consultar, delegate, list_agents]
 memory: true
 can_delegate_to: [operador-bolsa, riesgos-inversion, analista-mercados, fiscalidad-inversiones, agenda]
 keywords: [cartera, asignacion de activos, diversificacion, rebalanceo, rebalancear, indexado, fondo indexado, etf, fondo de inversion, traspaso, aportaciones periodicas, interes compuesto, horizonte, perfil de riesgo, renta variable, renta fija, monetario, ter, jubilacion, plan de pensiones, ahorro]

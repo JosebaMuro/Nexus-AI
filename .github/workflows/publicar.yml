@@ -51,6 +51,18 @@ jobs:
           python packaging/build.py --targets --keep --apk ../apk/*.apk --docs ../entrega/*.pdf
           mkdir -p ../release
           find dist -type f ! -name SHA256SUMS.txt -exec mv {} ../release/ \;
+          # script para rehacer una Ubuntu minima con Agente IA preinstalado como demonio (la ISO pasa de 2 GB)
+          [ -f packaging/ubuntu/rehacer-ubuntu.sh ] && cp packaging/ubuntu/rehacer-ubuntu.sh ../release/
+          # codigo fuente de una edicion retirada del repositorio (p. ej. la C++ de referencia en la 4.2): se saca de
+          # su commit con git archive para que siga descargable aunque ya no este en main
+          REF=$(python -c "import json; print(json.load(open('../entrega/entrega.json')).get('cpp_referencia', ''))")
+          if [ -n "$REF" ]; then
+            git -C .. fetch -q --depth=1 origin "$REF"
+            git -C .. archive --format=zip --prefix=nexus-office-cpp/ "$REF:nexus-office-cpp" \
+              -o "$PWD/../release/Agente-IA-cpp-referencia-codigo-fuente.zip"
+            printf '%s\n' "Agente-IA-cpp-referencia-codigo-fuente.zip   codigo de la edicion C++ 3.x retirada del repositorio (${REF:0:7})" \
+              >> ../release/LEEME.txt
+          fi
           cd ../release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt && du -sh .
       - name: Publicar
         run: |
@@ -58,9 +70,9 @@ jobs:
           TAG=$(python -c "import json; print(json.load(open('entrega/entrega.json'))['tag'])")
           V=${TAG#v}
           awk -v v="## Agente IA $V" -v w="## Nexus-Office $V" '$0 ~ "^## " {p = (index($0, v) == 1 || index($0, w) == 1)} p' nexus-office/CHANGELOG.md > notas.md
-          printf '\nInstaladores 100 %% offline para Windows (x64 y ARM64), Linux (x86_64 y ARM64: .run, .deb, AppImage y Flatpak), macOS (Apple Silicon e Intel) y Android (autónoma y VPN). Instrucciones en LEEME.txt; integridad en SHA256SUMS.txt.\n' >> notas.md
+          printf '\nInstaladores 100 %% offline para Windows (x64 y ARM64), Linux (x86_64 y ARM64: .run, .deb, AppImage y Flatpak), macOS (Apple Silicon e Intel) y Android (autónoma y VPN), y el script para una Ubuntu mínima con Agente IA preinstalado. Instrucciones en LEEME.txt; integridad en SHA256SUMS.txt.\n' >> notas.md
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" -t "Agente IA $V (edición Python)" -F notas.md
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" -t "Agente IA $V" -F notas.md
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber release/*
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets -q '.assets[] | "\(.name) \(.size)"'
       - name: Borrar la rama temporal

@@ -27,7 +27,7 @@ agentes de serie, más el Profesor. Las pruebas automáticas han pasado de 33 a 
 | **Salón** | Mesa con los agentes | Personajes más realistas, reuniones sin solapes, **despachos animados** con lo que hace cada agente y **sexo elegible** de cada personaje, tú incluido ([SALON.md](SALON.md)) |
 | **Dispositivos** | — | Luces NexusLED para cualquier ESP32, reloj NexusWatch (ESP32-2424S012C), avatar NexusPico (Pico W, pantalla del pwnagotchi), modos y grabado sin internet ([DISPOSITIVOS.md](DISPOSITIVOS.md)) |
 | **Android** | Dos apps: autónoma (CPU/GPU, NPU experimental) y VPN | **Una sola app**: la IA en el móvil (NPU, GPU o CPU) y *Conectar a mi ordenador* por red local, internet o VPN WireGuard. La app VPN ligera sigue para móviles modestos |
-| **Edición C++** | — | Nexus-Office 2.1 en C++, un solo ejecutable con las mismas respuestas de la API ([CPP.md](../../nexus-office-cpp/docs/CPP.md)) |
+| **Edición C++** | — | Nexus-Office 2.1 en C++, un solo ejecutable con las mismas respuestas de la API ([CPP.md](https://github.com/JosebaMuro/Nexus-AI/blob/v3.2.3-cpp/nexus-office-cpp/docs/CPP.md)) |
 
 ## Lo nuevo de la 2.2
 - **Perfiles de hardware** y **elección de GPU**, con el arreglo de la aceleración en Linux y de los equipos con dos GPU.

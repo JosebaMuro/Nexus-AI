@@ -43,6 +43,16 @@ Por defecto: riesgo bajo `auto`, medio `ask`, alto `admin`. Las peticiones que l
 ## Herramientas incluidas
 `calculator`, `datetime_now`, `memory_search`, `memory_save`, `knowledge_graph` (hechos y atributos de una entidad), `graph_import` (importa como conocimiento un grafo de cualquier formato desde un fichero (carpeta de trabajo o ruta absoluta) o desde un texto, al grafo general, al del agente o repartido; ver [GRAFOS](GRAFOS.md)), `system_info`, `web_search`, `web_fetch` (bloquea direcciones de red local; pagina el texto largo con `offset`/`next_offset`), `url_to_pdf` y `crawl_docs` (rastreo de un sitio de documentación hacia la biblioteca RAG; los dominios grandes van por lotes reanudables, ver [RAG](RAG.md#rastreo-crawling-de-un-sitio-de-documentación)), `rag_search`, `rag_list`, `file_list/read/write` (rutas de la carpeta de trabajo `data/sandbox` o absolutas, sin confinar; `file_read` lee por tramos con `offset`/`max_chars` y `file_list` pagina de 500 en 500; `file_list` acepta una subcarpeta, p. ej. `proyectos/<nombre>` de un ZIP importado), `python_exec` (alto riesgo, sin aislamiento), `generate_image`, `compose_music`, `delegate`, `list_agents`, `propose_tool`, y las de la mesa de bolsa simulada (`bolsa_mercados`, `bolsa_cotizacion`, `bolsa_cartera`, `bolsa_costes`, `bolsa_orden`, `bolsa_cancelar`, `bolsa_informe_fiscal`; ver [BOLSA](BOLSA.md)), y las de edición de imágenes con GIMP (`imagen_editar`, `imagen_info`, `gimp_estado` y `gimp_script`, esta última de alto riesgo; ver [GIMP](GIMP.md)).
 
+Desde la 4.2:
+
+- **Mundo** (riesgo bajo): `mundo_resumen`, `mundo_consultar`, `mundo_fuentes`; ver [MUNDO](MUNDO.md).
+- **Terminal financiero** (riesgo bajo): `mercado_panel`, `mercado_consulta`, `bolsa_verificar`, `bolsa_opciones`,
+  `bolsa_riesgo`, `bolsa_valoracion`, `bolsa_criba`, `bolsa_alerta`, `bolsa_expediente`, `bolsa_informe_oficial`,
+  `bolsa_validar`; ver [BOLSA](BOLSA.md#terminal-financiero).
+- **Terminal IA**: `terminal_ejecutar`, `terminal_codigo` y `terminal_proceso` (riesgo alto: las aprueba el
+  administrador), `terminal_escribir` y `terminal_editar` (medio), `terminal_leer`, `terminal_buscar` y
+  `terminal_tareas` (bajo); ver [TERMINAL](TERMINAL.md). No se aceptan desde otros nodos de la red.
+
 ## Propuestas de los agentes
 1. Un agente (normalmente el **Forjador**) detecta una carencia y llama a `propose_tool` con el código.
 2. **Análisis estático**: sintaxis, manifiesto, `run(args, ctx)`, importaciones y llamadas peligrosas (`subprocess`, `os`, `socket`, `eval`, `exec`, `open`, `rmtree`…) → riesgo sugerido.

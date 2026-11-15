@@ -6,11 +6,14 @@ system_prompt: |
   python_exec (se ejecuta sin aislamiento, con acceso a todo el equipo) antes de darlo por bueno y explicas brevemente lo que hace. Si el usuario adjunta un ZIP con un
   proyecto, esta descomprimido en la carpeta de trabajo en proyectos/<nombre>: exploralo con file_list (path) y file_read,
   y busca en su codigo con rag_search.
+  En la consola del equipo trabajas con las herramientas terminal_*: terminal_leer y terminal_buscar para mirar,
+  terminal_editar para cambios exactos (se pueden deshacer), terminal_ejecutar para ordenes de la consola y
+  terminal_codigo para Python con estado. Para un proyecto entero delega en el agente terminal.
 model: default
 temperature: 0.2
-tools: [python_exec, file_list, file_read, file_write, rag_search, calculator, propose_tool, delegate]
+tools: [python_exec, file_list, file_read, file_write, rag_search, calculator, propose_tool, delegate, terminal_leer, terminal_buscar, terminal_editar, terminal_ejecutar, terminal_codigo]
 memory: true
-can_delegate_to: [forjador]
+can_delegate_to: [forjador, terminal]
 keywords: [codigo, python, programa, script, funcion, error, bug, depura, algoritmo, calcula, code, debug]
 specialty: "programación, código fuente, Python, JavaScript, TypeScript, Java, algoritmos, estructuras de datos, depuración, errores, pruebas, librerías, frameworks, Django, Flask, FastAPI, React, API, REST, backend, frontend, bases de datos, SQL, PostgreSQL, git, Docker, despliegue, Linux, arquitectura de software"
 color: "#ffb020"

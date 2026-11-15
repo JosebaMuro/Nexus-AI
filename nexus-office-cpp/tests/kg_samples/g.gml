@@ -1,1 +1,0 @@
-graph [ directed 1 node [ id 0 label "Cero" ] node [ id 1 label "Uno" ] edge [ source 0 target 1 label "sigue" value 2 ] ]

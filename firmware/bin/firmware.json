@@ -1,5 +1,5 @@
 {
-  "commit": "d33b4e534aeeb8dff1f158ef975a74bbfcee3755",
+  "commit": "67722a646df8f05c1e487aecf76e2daf36ca8efe",
   "nucleo_esp32": "3.1.1",
   "nucleo_esp32_nuevo": "3.3.0",
   "nucleo_esp8266": "3.1.2",
@@ -7,32 +7,32 @@
   "archivos": {
     "nexusled-esp32.bin": {
       "version": "1.0.0",
-      "sha256": "cbf5101bb1246305185f904e34c5473a061489939839b927dce15c5907cbf28a",
+      "sha256": "3c7faaeec58c5eadafc9a795792f64412ccaf04cdafb76eb831cdc8e0a014965",
       "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32c3.bin": {
       "version": "1.0.0",
-      "sha256": "6cf9b86293c6e4306413dfa2b0abc1312fc4ca00115eba79b14ea24ad5b57a51",
+      "sha256": "e5bcafc662a300f1092ce67b6f9c0db4b8cd3cddc22a2c9d9b0a5a230477055b",
       "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32c5.bin": {
       "version": "1.0.0",
-      "sha256": "0a6a44c8e30cecb7a02c3a70f6ff9ac9f84459010892dfb9930a61cc0577175e",
+      "sha256": "2cfea250ee37e67d026c6755cc7b2ffab29d73bd93290a68de1c25335b12f37a",
       "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32c6.bin": {
       "version": "1.0.0",
-      "sha256": "69a79ba074ace0a401c034dcf1c47eb95ea0423c990d4e56e769d8fb7ff0ff4e",
+      "sha256": "5ca9593477fbe60dc9c056632e2dbde05b7db316a7fdbaa8e76020eca65cc7dd",
       "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32s2.bin": {
       "version": "1.0.0",
-      "sha256": "24598ee498dc02ecea874cc3cd011601386a1f080518a515e951e98f61a906e7",
+      "sha256": "80be6b4fd0ac987135b98b56fd80aa667291ef7165729d185481839510660660",
       "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp32s3.bin": {
       "version": "1.0.0",
-      "sha256": "15e0df8ecbda87b05ce7329f876d8697da023c08bd96a07db4a37823abb3acf7",
+      "sha256": "a66a2329d3874ce8349cd58947ffab28c2f2e94cc52b1534e7e560e5868ae8c6",
       "grabar": "nexus-flash grabar (0x0)"
     },
     "nexusled-esp8266-4m.bin": {
@@ -52,12 +52,12 @@
     },
     "nexuspico-picow.uf2": {
       "version": "2.0.0",
-      "sha256": "88eb4bef462b8b50b119d4e458a16ba46e2206cc522a4643524bc06d1968eecf",
+      "sha256": "a70d68a428948b82aa0cc53719a5b5dbf8cd125a59bd444fe85c6a6c23704619",
       "grabar": "copiar a la unidad RPI-RP2"
     },
     "nexuswatch-esp32c3.bin": {
       "version": "1.0.0",
-      "sha256": "d24aaf468fede972285b1fb26209cdbe0bdbafd43779add9237228c81c9c6e7d",
+      "sha256": "750a1ed949236ee322c9843f726ea2d8ca9cb470caa432f491aee86571ae4f8d",
       "grabar": "nexus-flash grabar (0x0)"
     }
   }

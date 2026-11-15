@@ -11,7 +11,7 @@ system_prompt: |
   Cuando otro agente te consulte, responde con lo esencial que necesita para hacer su trabajo.
 model: "nube:"
 temperature: 0.4
-tools: [web_search, web_fetch, rag_search, rag_list, memory_search, memory_save, knowledge_graph, datetime_now, file_read, file_list]
+tools: [web_search, web_fetch, rag_search, rag_list, memory_search, memory_save, knowledge_graph, datetime_now, file_read, file_list, mundo_resumen, mundo_consultar]
 memory: true
 can_delegate_to: []
 keywords: [profesor, enseñame, enséñame, explicame, explícame, aprender, aprende, clase, lección, leccion, curso, ejercicio, examen, estudiar, duda, teach, explain, tutor]

@@ -158,5 +158,14 @@ def crear_video(services, args: dict) -> dict:
         res = render_avi(rutas, o, out)
     except ValueError as e:
         return {"error": str(e)}
-    return {**res, "url": f"/outputs/videos/{nombre}", "imagenes": len(rutas),
-            "nota": "Vídeo AVI (Motion JPEG): se abre con VLC, el reproductor de Windows o Android."}
+    # proyecto para retocarlo en el editor del navegador (/static/video.html?proyecto=...): orden, duracion, formato
+    urls = [f"/outputs/{p.relative_to(base).as_posix()}" for p in rutas if p.is_relative_to(base)]
+    proyecto = out.with_suffix(".proyecto.json")
+    import json
+    proyecto.write_text(json.dumps({"titulo": str(args.get("titulo") or "video"), "segundos": o.segundos,
+                                    "transicion": o.transicion, "formato": str(args.get("formato") or "16:9"),
+                                    "imagenes": urls}, ensure_ascii=False), encoding="utf-8")
+    editor = f"/static/video.html?proyecto=/outputs/videos/{proyecto.name}"
+    return {**res, "url": f"/outputs/videos/{nombre}", "imagenes": len(rutas), "editor": editor,
+            "nota": "Vídeo AVI (Motion JPEG): se abre con VLC, el reproductor de Windows o Android. Para cambiar el "
+                    f"orden, la duración o las transiciones ábrelo en el editor de vídeo: {editor}"}

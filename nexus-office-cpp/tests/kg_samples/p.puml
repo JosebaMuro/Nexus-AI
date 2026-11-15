@@ -1,5 +1,0 @@
-@startuml
-[Web] --> [API] : llama
-actor Usuario
-Usuario -> Web : usa
-@enduml

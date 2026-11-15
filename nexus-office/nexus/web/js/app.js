@@ -1746,7 +1746,9 @@
     $("#profile-kv").innerHTML = [["Perfil", `${p.id} (${p.tier})`], ["Dispositivo", p.device_name], ["LLM recomendado", `≤ ${L.recommended_model_b}B (máx ${L.max_model_b}B) ${L.quant}`],
       ["Contexto", `${L.n_ctx} (máx ${L.max_ctx})`], ["Hilos / lote", `${L.n_threads} / ${L.n_batch}`], ["Capas GPU", L.gpu_layers === -1 ? "todas" : L.gpu_layers], ["Runtime llama.cpp", L.llamacpp_wheel],
       ["Imagen", `${p.image.device} · ${p.image.resolution}px · ${p.image.neural ? "neural GPU" : "CPU"}`], ["Voz (STT)", `whisper ${p.stt.model} · ${p.stt.compute_type} · ${p.stt.device}`],
-      ["Embeddings", p.embeddings.device], ["NPU", p.npu.present ? `${p.npu.name} · ${p.npu.ready ? "en uso" : "sin runtime"}` : "—"]].map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
+      ["Embeddings", p.embeddings.device], ["NPU", p.npu.present ? `${p.npu.name} · ${p.npu.ready ? "en uso" : "sin runtime"}` : "—"],
+      ["Detección", (d.deteccion && d.deteccion.origen === "cache") ? "guardada (se revisa en segundo plano)" : "hecha al arrancar"]].map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
+    if (d.deteccion && d.deteccion.cambio) toast(d.deteccion.detalle);
     const log = (d.tuning_state.log || []).slice().reverse();
     $("#tune-list").innerHTML = (d.tuning.length ? `<div class="item"><b>Este arranque:</b><ul>${d.tuning.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>` : `<div class="item muted">Este arranque: configuración estable, sin cambios.</div>`) +
       log.slice(0, 6).map((l) => `<div class="item"><span class="muted mono">${new Date(l.ts * 1000).toLocaleString()}</span><ul>${l.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>`).join("") +
@@ -1969,7 +1971,8 @@
 
   // utilidades para los modulos de la interfaz que viven en otros ficheros (js/kgadmin.js)
   window.NexusUI = { api, toast, esc, guard, ago, fmtB, saveFile, agents: () => S.agents, admin: () => !!S.token,
-                     agentName: (id) => agentName(id), refreshGraph: () => { loadGraph().catch(() => {}); } };
+                     agentName: (id) => agentName(id), refreshGraph: () => { loadGraph().catch(() => {}); },
+                     loaders, go, md: (t) => md(t), token: () => S.token, view: () => S.view };
 
   /* ================================================================ selector de inicio: motor llama y CPU/GPU/NPU */
   const Accel = {

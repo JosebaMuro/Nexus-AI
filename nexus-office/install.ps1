@@ -130,6 +130,8 @@ if (-not $installed) {
 
 Push-Location $Root
 try {
+    Say "Precompilando el codigo para que arranque mas rapido..."
+    & $Py -m compileall -q -j 0 (Join-Path $Root "nexus") | Out-Null
     Say "Detectando hardware y generando perfil optimo..."
     & $Py -m nexus detect | Out-File -Encoding utf8 (Join-Path $Cache "hardware-report.json")
     if ($Oficina) {

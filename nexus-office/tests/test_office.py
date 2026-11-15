@@ -104,7 +104,8 @@ def test_clear_restores_default_agents(services):
     o.apply("panaderia")
     o.clear()
     s.agents.reload()
-    assert set(s.agents.ids()) == {"nexus", "artista", "investigador", "forjador", "programador", "profesor"}
+    assert set(s.agents.ids()) == {"nexus", "artista", "investigador", "forjador", "programador", "profesor",
+                                   "terminal"}
     assert s.agents.get("nexus").name == "Nexus-Office" and s.config.get("office.profile") == ""
 
 

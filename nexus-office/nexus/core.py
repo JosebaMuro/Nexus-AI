@@ -1,6 +1,7 @@
 """Ensamblado de todos los servicios de Nexus-Office."""
 from __future__ import annotations
 
+import os
 import threading
 
 from . import motores, hardware, log
@@ -28,6 +29,9 @@ class Services:
     def __init__(self, detect_hardware: bool = True) -> None:
         log.setup()
         self.config = cfg = get_config()
+        if cfg.get("hardware.prioridad_alta", True):
+            from .proc import alto_rendimiento
+            alto_rendimiento()   # Windows: el servicio sin ventana no pasa a los nucleos de eficiencia
         self.monitor = hardware.Monitor(cfg.get("hardware.monitor_interval_s", 2.0))
         if self.monitor.previous_unclean:
             L.warning("La sesion anterior no se cerro correctamente; se aplicara un perfil mas conservador")
@@ -36,7 +40,8 @@ class Services:
         if detect_hardware:
             self.hw, self.profile, self.tuning_reasons = hardware.startup(
                 cfg.get("hardware.profile_override", ""), cfg.get("hardware.adaptive_tuning", True),
-                cfg.get("llm.ollama_url"), self.monitor.previous_unclean, self.monitor.previous_info)
+                cfg.get("llm.ollama_url"), self.monitor.previous_unclean, self.monitor.previous_info,
+                rapida=bool(cfg.get("hardware.deteccion_rapida", True)))
         else:  # modo rapido para tests
             self.hw = hardware.load_cached() or hardware.detect(probe_runtimes=False)
             self.profile, self.tuning_reasons = hardware.build_profile(self.hw), []
@@ -97,6 +102,10 @@ class Services:
         self.hilo.llm_real = self.llm.has_real_llm
         from .mcp import Gestor
         self.mcp = Gestor(self)     # herramientas de servidores MCP externos (mcp.servidores)
+        from .mundo import Mundo
+        self.mundo = Mundo(cfg)     # informacion publica al dia por categorias y paises (nexus/mundo)
+        from .terminal import Terminal
+        self.terminal = Terminal(self)   # consola, interprete y ficheros para personas y agentes
 
     # ------------------------------------------------------------ embeddings
     def _make_embedder(self):
@@ -142,6 +151,8 @@ class Services:
                              daemon=True).start()
         if self.config.get("mcp.servidores"):
             self.mcp.conectar()
+        if not os.environ.get("NEXUS_SIN_MUNDO"):
+            self.mundo.iniciar()
         if self.config.get("coop.enabled", False):
             try:
                 self.coop.start()
@@ -154,6 +165,11 @@ class Services:
             self.mcp.cerrar()
         except Exception:  # noqa: BLE001
             pass
+        for cierre in (self.mundo.cerrar, self.terminal.cerrar):
+            try:
+                cierre()
+            except Exception:  # noqa: BLE001
+                pass
         try:
             self.coop.stop()
         except Exception:  # noqa: BLE001

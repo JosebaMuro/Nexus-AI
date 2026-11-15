@@ -181,3 +181,75 @@ jobs:
           cd "$RUNNER_TEMP" && chmod +x "$GITHUB_WORKSPACE"/inst/*/*.AppImage
           "$GITHUB_WORKSPACE"/inst/*/Nexus-Office-*-linux-x86_64.AppImage --appimage-extract >/dev/null
           python "$GITHUB_WORKSPACE/nexus-office/packaging/smoke_test.py" "$RUNNER_TEMP/squashfs-root/nexus"
+
+  # Ubuntu minima con Agente IA preinstalado como demonio (packaging/ubuntu/rehacer-ubuntu.sh): se rehace la ISO de
+  # Ubuntu Server 24.04 con el .deb de esta ejecucion, se instala sola en una maquina virtual (KVM) y se comprueba que
+  # el servicio responde al arrancar el sistema instalado. La ISO (mas de 2 GB) no va a la Release: va el script.
+  ubuntu:
+    needs: escritorio
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: nexus-office/packaging
+      - name: Liberar espacio
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost \
+            /usr/share/swift /usr/local/.ghcup && df -h /
+      - uses: actions/download-artifact@v4
+        with:
+          name: instalador-linux-x86_64
+          path: inst
+      - name: Herramientas
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xorriso squashfs-tools qemu-system-x86 qemu-utils
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm || true
+          ls -la /dev/kvm || echo "sin KVM"
+      - uses: actions/cache@v4
+        with:
+          path: iso-original
+          key: ubuntu-24.04-live-server-amd64-v1
+      - name: Rehacer la ISO con Agente IA (y probar el demonio dentro de la imagen)
+        run: |
+          mkdir -p iso-original && cd iso-original
+          DEB=$(find "$GITHUB_WORKSPACE/inst" -name 'nexus-office_*_amd64.deb' | head -1)
+          [ -n "$DEB" ] || { echo "no hay .deb"; find "$GITHUB_WORKSPACE/inst"; exit 1; }
+          sudo "$GITHUB_WORKSPACE/nexus-office/packaging/ubuntu/rehacer-ubuntu.sh" --descargar 24.04 --deb "$DEB" \
+            --probar --desatendida --usuario prueba --clave-hash "$(openssl passwd -6 prueba)" --serie \
+            --salida "$RUNNER_TEMP/agente-ia-ubuntu.iso"
+          ls -la "$RUNNER_TEMP" && df -h /
+      - name: Instalar en una maquina virtual y comprobar que Agente IA arranca solo
+        run: |
+          [ -w /dev/kvm ] || { echo "::warning::Sin KVM: no se prueba la instalacion en la maquina virtual"; exit 0; }
+          cd "$RUNNER_TEMP"
+          qemu-img create -f qcow2 disco.qcow2 40G
+          echo "Instalacion desatendida (se apaga al terminar)"
+          timeout 60m qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 6144 -no-reboot \
+            -drive file=disco.qcow2,if=virtio -cdrom agente-ia-ubuntu.iso -boot d \
+            -display none -serial file:instalacion.log || { tail -80 instalacion.log; exit 1; }
+          tail -15 instalacion.log
+          echo "Arranque del sistema instalado"
+          qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 6144 -drive file=disco.qcow2,if=virtio \
+            -nic user,model=virtio-net-pci,hostfwd=tcp::18775-:8775 -display none -serial file:arranque.log \
+            -daemonize -pidfile qemu.pid
+          CODIGO=000
+          for i in $(seq 1 90); do
+            CODIGO=$(curl -s -o respuesta.html -w '%{http_code}' -m 5 http://127.0.0.1:18775/ || true)
+            [ "$CODIGO" != 000 ] && break
+            sleep 10
+          done
+          kill "$(cat qemu.pid)" || true
+          echo "Respuesta HTTP $CODIGO"; head -c 400 respuesta.html; echo
+          grep -a -i "agente-ia\|systemd\[1\]" arranque.log | tail -20 || true
+          [ "$CODIGO" != 000 ] && grep -qi "nexus\|agente" respuesta.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ubuntu-registros
+          path: |
+            ${{ runner.temp }}/*.log
+            ${{ runner.temp }}/agente-ia-ubuntu.iso.sha256
+          if-no-files-found: ignore

@@ -80,6 +80,28 @@ def popen(cmd: list[str], **kw) -> subprocess.Popen:
     return p
 
 
+def alto_rendimiento(p: subprocess.Popen | None = None) -> bool:
+    """Windows: prioridad por encima de lo normal y sin limitacion de energia (EcoQoS) para el proceso p (o este).
+    Sin esto, Windows 11 manda a los nucleos de eficiencia y a menor frecuencia a los procesos sin ventana, como el
+    servicio y llama-server, y la generacion va bastante mas lenta. En otros sistemas no hace nada."""
+    if os.name != "nt":
+        return False
+    try:
+        from ctypes import wintypes
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.GetCurrentProcess.restype = wintypes.HANDLE
+        h = wintypes.HANDLE(int(p._handle)) if p is not None else k32.GetCurrentProcess()
+        k32.SetPriorityClass(h, 0x00008000)   # ABOVE_NORMAL_PRIORITY_CLASS
+
+        class PPT(ctypes.Structure):
+            _fields_ = [("Version", wintypes.ULONG), ("ControlMask", wintypes.ULONG), ("StateMask", wintypes.ULONG)]
+
+        st = PPT(1, 0x1 | 0x4, 0)   # EXECUTION_SPEED | IGNORE_TIMER_RESOLUTION con estado 0: sin limitar
+        return bool(k32.SetProcessInformation(h, 4, ctypes.byref(st), ctypes.sizeof(st)))   # ProcessPowerThrottling
+    except Exception:  # noqa: BLE001
+        return False
+
+
 @atexit.register
 def _cleanup() -> None:
     for p in _children:

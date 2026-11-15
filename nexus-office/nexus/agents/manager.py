@@ -55,6 +55,7 @@ class AgentSpec:
     sexo: str = ""   # aspecto en el salon y los despachos: mujer | hombre | "" (al azar segun su id)
     voz: str = ""    # voz propia al leer sus respuestas (nombre de una voz del equipo; "" = la del usuario)
     voz_ritmo: float = 0.0   # velocidad de su voz (0 = la general)
+    max_steps: int = 0       # pasos de herramienta por respuesta (0 = llm.max_tool_steps)
 
     @staticmethod
     def from_dict(d: dict) -> "AgentSpec":
@@ -223,6 +224,10 @@ class AgentManager:
             dynamic.append("Fragmentos de tu biblioteca de documentos (RAG). Usalos si son relevantes y cita la fuente "
                            "como [n]:\n" + "\n".join(f"[{i + 1}] «{d['title'][:80]}» p.{d['page']}: {d['text'][:450]}"
                                                     for i, d in enumerate(info["documents"])))
+        if info.get("terminal"):
+            dynamic.append(info["terminal"])
+        if info.get("mundo"):
+            dynamic.append(info["mundo"])
         dynamic.append(f"Fecha y hora actuales: {dt.datetime.now():%d/%m/%Y %H:%M}.")
         return "\n\n".join(parts + dynamic)
 
@@ -263,7 +268,20 @@ class AgentManager:
                 info["documents"] = rag.search(text, k=3, min_score=0.3, agent=spec.id)   # general + los suyos
             except Exception as e:  # noqa: BLE001
                 L.warning("Busqueda RAG fallida: %s", e)
+        mundo = getattr(s, "mundo", None)
+        if mundo is not None and not remote:   # lo ultimo recibido de las fuentes publicas, si la pregunta lo pide
+            try:
+                info["mundo"] = mundo.contexto_para(text)
+            except Exception as e:  # noqa: BLE001
+                L.debug("Contexto de Mundo no disponible: %s", e)
         all_tools = tools = s.tools.for_agent(spec.tools)
+        terminal = getattr(s, "terminal", None)
+        if terminal is not None and not remote and spec.tools != ["*"] and any(
+                t.name.startswith("terminal_") for t in all_tools):
+            try:   # carpeta, consola, modo, AGENTS.md y tareas de la sesion del Terminal IA
+                info["terminal"] = terminal.contexto(session_id)
+            except Exception as e:  # noqa: BLE001
+                L.debug("Contexto del terminal no disponible: %s", e)
         assist = getattr(s, "assist", None)
         if assist is not None and tools and not images:
             # IA de apoyo: solo las herramientas que vienen al caso (prompt mas corto y eleccion mas certera)
@@ -298,7 +316,7 @@ class AgentManager:
                 "imagen_editar con esa ruta.]" if stored else "")
         msgs.append({"role": "user", "content": text + note, "images": images or []})
         ctx = ToolContext(services=s, agent=spec.id, session_id=session_id, emit=emit, remote=remote, depth=depth)
-        max_steps = int(s.config.get("llm.max_tool_steps", 5))
+        max_steps = int(spec.max_steps or s.config.get("llm.max_tool_steps", 5))
         answer_parts, media, tool_log = [], [], []
         # via rapida: intenciones inequivocas se ejecutan sin esperar al LLM (fiable y rapido en CPU)
         intent = detect_intent(text, {t.name for t in all_tools}) if all_tools and not images else None

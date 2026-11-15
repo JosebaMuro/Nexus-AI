@@ -1,9 +1,0 @@
-nodes:
-  - id: a
-    name: Contrato
-  - id: b
-    name: Firma
-edges:
-  - source: a
-    target: b
-    rel: requiere
