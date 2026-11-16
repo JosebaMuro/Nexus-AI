@@ -81,6 +81,19 @@ Puerto remoto: `https://IP:8443` (TLS 1.3). Ahí todas las rutas, salvo `/`, `/a
 | `GET /api/remote/router` *(admin)* | Asistente del router: puerta de enlace, IP y MAC de este equipo, URLs de configuración, marca y ruta del menú, UPnP‑IGD y la regla exacta. |
 | `POST /api/remote/check` *(admin)* | IP pública, CGNAT y si el puerto responde en la IP pública. |
 
+## Oficina Herrero (4.3)
+
+| Método y ruta | Uso |
+|---|---|
+| `GET /api/herrero` | Tipos, aceros, acabados, cubiertas, usos, suelos, series de perfiles, si hay motor de imagen y proyectos |
+| `POST /api/herrero/proyecto` | `{"encargo", "parametros": {tipo, largo, ancho, alto, acero, acabado, cubierta, uso, forjado, altitud, zona_viento}, "imagen_ia"}` → proyecto completo con `ficheros` (pdf, plano_svg, isometrica_svg, csv, render, foto_ia) |
+| `GET /api/herrero/proyectos?limite=` | Proyectos guardados |
+| `GET /api/herrero/proyecto/<id>` | Un proyecto (`proyecto.json`) |
+| `DELETE /api/herrero/proyecto/<id>` (admin) | Borra el proyecto y sus ficheros |
+| `POST /api/herrero/herramienta/herrero_perfil` o `/herrero_soldadura` | Las herramientas por el supervisor |
+
+Los ficheros se sirven en `/outputs/herrero/<id>/`.
+
 ## Mundo, terminal de bolsa y Terminal IA (4.2)
 
 | Método y ruta | Uso |
