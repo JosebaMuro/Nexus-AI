@@ -249,8 +249,9 @@ class Lienzo:
                 _, x, y, s, tam, an, neg, c, rot = op
                 a = {"start": "start", "middle": "middle", "end": "end"}[an]
                 tr = f' transform="rotate({rot:g} {x:.2f} {y:.2f})"' if rot else ""
+                negrita = ' font-weight="bold"' if neg else ""
                 o.append(f'<text x="{x:.2f}" y="{y:.2f}" font-size="{tam:g}" text-anchor="{a}" fill="{c}"'
-                         f'{" font-weight=\"bold\"" if neg else ""}{tr}>{_esc(s)}</text>')
+                         f'{negrita}{tr}>{_esc(s)}</text>')
         o.append("</svg>")
         return "\n".join(o)
 
