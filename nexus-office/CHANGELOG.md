@@ -1,5 +1,22 @@
 # Cambios
 
+## Agente IA 4.3.0: oficina Herrero de estructuras metálicas (2026-11-16)
+
+Detalle en [docs/HERRERO.md](docs/HERRERO.md).
+
+- **Pestaña HERRERO y agente Herrero**: una oficina técnica de estructuras metálicas con sus puestos (recepción,
+  calculista, despiece, delineante, soldador, montaje y fotografía). A partir de un encargo en lenguaje corriente
+  («porche de 6 x 4 m galvanizado») calcula cargas (CTE DB-SE-AE) y perfiles (CTE DB-SE-A / Eurocódigo 3: flexión,
+  cortante, flecha, pandeo con las curvas europeas), y entrega despiece con marcas, lista de corte en barras
+  comerciales, chapas y anclajes, uniones soldadas con su símbolo ISO 2553, plano de montaje A3 con cotas,
+  isométrica, PDF de 3 hojas, CSV e imagen realista.
+- Porches y cocheras, pérgolas, naves a dos aguas, entreplantas, escaleras (CTE DB-SUA), barandillas y pasarelas.
+- Todo el cálculo y el dibujo son código determinista (sin dependencias nuevas): funciona igual en el móvil, con un
+  modelo pequeño o sin modelo. La imagen es un render de la geometría calculada y, si hay modelo de imagen, una
+  versión fotográfica a partir de él (stable-diffusion.cpp imagen a imagen).
+- Herramientas `herrero_proyecto`, `herrero_perfil` y `herrero_soldadura`; agentes de oficina *Calculista de
+  estructuras* y *Delineante de estructuras metálicas* en los perfiles *Estructuras metálicas* y *Herrería y forja*.
+
 ## Agente IA 4.2.0: mundo, terminal de bolsa, Terminal IA y lo que faltaba de la C++ (2026-11-15)
 
 Detalle en [docs/NOVEDADES-4.2.md](docs/NOVEDADES-4.2.md).

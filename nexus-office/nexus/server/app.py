@@ -2083,4 +2083,6 @@ def create_app(services: Services | None = None) -> FastAPI:
     rutas_extra.registrar(app, S, hub, require_admin, admin_flag, LOCAL)
     from . import rutas_42
     rutas_42.registrar(app, S, hub, require_admin, admin_flag)   # Mundo, terminal de bolsa y Terminal IA
+    from . import rutas_herrero
+    rutas_herrero.registrar(app, S, require_admin)               # oficina Herrero (estructuras metalicas)
     return app

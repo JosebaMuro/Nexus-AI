@@ -59,8 +59,8 @@ def test_each_agent_gets_its_own_seeded_graph(services):
     o.apply("estructuras-metalicas")
     s.agents.reload()
     seeded = office.ensure(s)
-    assert set(seeded) == {"herrero", "calderero", "soldador", "calidad", "presupuestos", "administracion", "compras",
-                           "prl", "rrhh"}
+    assert set(seeded) == {"herrero", "calculista-estructuras", "delineante-metal", "calderero", "soldador", "calidad",
+                           "presupuestos", "administracion", "compras", "prl", "rrhh"}
     assert office.ensure(s) == {}                                     # idempotente
 
     def names(scope):
@@ -105,7 +105,7 @@ def test_clear_restores_default_agents(services):
     o.clear()
     s.agents.reload()
     assert set(s.agents.ids()) == {"nexus", "artista", "investigador", "forjador", "programador", "profesor",
-                                   "terminal"}
+                                   "terminal", "herrero"}
     assert s.agents.get("nexus").name == "Nexus-Office" and s.config.get("office.profile") == ""
 
 

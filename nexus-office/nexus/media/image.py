@@ -100,14 +100,30 @@ class ImageEngine:
                 L.info("Traduccion con LLM no disponible (%s): se usa el diccionario", e)
         return translate_rules(prompt)
 
-    def _sdcpp(self, sd, model, prompt, negative, size, steps, seed, out: Path) -> dict:
+    def refinar(self, base: Path, prompt: str, fuerza: float = 0.45, negative: str = "", seed: int | None = None,
+                ancho: int | None = None, alto: int | None = None) -> dict | None:
+        """Imagen a imagen con stable-diffusion.cpp: parte de ``base`` (p. ej. un render de la geometria real) y la
+        vuelve fotografica sin cambiar la composicion. None si no hay modelo o motor de imagen."""
+        model, sd = self._model(), self.runtimes.exe("sd", self.profile_getter())
+        if not (model and sd and model["format"] in ("gguf", "safetensors", "ckpt")):
+            return None
+        seed = seed if seed is not None else int(time.time()) % 100000
+        out = paths.sub("outputs", "images") / f"{int(time.time())}_{_slug(prompt)}_ia.png"
+        return self._sdcpp(sd, model, self.english(prompt), negative, None, None, seed, out,
+                           init=(Path(base), max(0.1, min(0.9, fuerza))), wh=(ancho, alto))
+
+    def _sdcpp(self, sd, model, prompt, negative, size, steps, seed, out: Path, init=None, wh=None) -> dict:
         exe, variant = sd
         gen = model.get("gen") or {}
         size = size or gen.get("size") or self.profile_getter()["image"]["resolution"]
         steps = steps or gen.get("steps") or 4
         threads = self.profile_getter()["llm"]["n_threads"] if variant == "cpu" else 0
+        w, h = (wh or (None, None))
+        w, h = (w or size) // 64 * 64, (h or size) // 64 * 64
         cmd = [str(exe), "-m", model["path"], "-p", prompt, "--steps", str(steps), "--cfg-scale", str(gen.get("cfg", 1.0)),
-               "-W", str(size), "-H", str(size), "-s", str(seed), "-o", str(out)]
+               "-W", str(w), "-H", str(h), "-s", str(seed), "-o", str(out)]
+        if init:   # imagen a imagen: conserva la composicion de la imagen de partida
+            cmd += ["-i", str(init[0]), "--strength", f"{init[1]:.2f}"]
         if negative:
             cmd += ["-n", negative]
         if threads:
