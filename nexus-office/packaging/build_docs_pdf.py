@@ -20,14 +20,14 @@ from nexus import __version__ as VERSION  # noqa: E402
 
 BOOKS = {
     "Manual-de-usuario": ("Manual de usuario", "Oficina de IA local para pymes",
-                          ["docs/NOVEDADES-4.2.md", "docs/NOVEDADES-4.1.md", "docs/USUARIO.md", "docs/MUNDO.md", "docs/TERMINAL.md",
+                          ["docs/NOVEDADES-4.2.md", "docs/NOVEDADES-4.1.md", "docs/USUARIO.md", "docs/HERRERO.md", "docs/INSTALADORES.md", "docs/MUNDO.md", "docs/TERMINAL.md",
                            "docs/OFICINA.md", "docs/BOLSA.md", "docs/SERVICIO.md", "docs/UBUNTU.md", "docs/AVATAR.md", "docs/SALON.md",
                            "docs/ACELERADOR.md", "docs/MOTORES.md", "docs/GRAFOS.md", "docs/RAG.md", "docs/DISPOSITIVOS.md",
                            "docs/NOVEDADES-2.2.md"]),
     "Documentacion-tecnica": ("Documentación técnica", "Arquitectura, plataformas, administración y API",
                               ["docs/ARQUITECTURA.md", "docs/PLATAFORMAS.md", "docs/ACELERADOR.md", "docs/MOTORES.md", "android-autonomo/README.md",
                                "docs/ADMINISTRADOR.md", "docs/SERVICIO.md", "docs/UBUNTU.md", "docs/API.md", "docs/NOVEDADES-4.2.md",
-                               "docs/NOVEDADES-4.1.md", "docs/HERRAMIENTAS.md", "docs/MUNDO.md", "docs/TERMINAL.md", "docs/BOLSA.md",
+                               "docs/NOVEDADES-4.1.md", "docs/HERRAMIENTAS.md", "docs/HERRERO.md", "docs/INSTALADORES.md", "docs/MUNDO.md", "docs/TERMINAL.md", "docs/BOLSA.md",
                                "docs/MEMORIA.md", "docs/GRAFOS.md", "docs/RAG.md", "docs/RED_COOPERATIVA.md", "docs/VPN.md",
                                "docs/ACCESO_REMOTO.md", "docs/DISPOSITIVOS.md"]),
 }
