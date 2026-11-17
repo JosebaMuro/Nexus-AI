@@ -49,6 +49,7 @@
     <button data-view="tools"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><span class="tip">HERRAMIENTAS</span><span class="badge hidden" id="badge-tools"></span></button>
     <button data-view="devices"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span class="tip">DISPOSITIVOS</span></button>
     <button data-view="net"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span class="tip">RED COOP</span></button>
+    <button data-view="instaladores"><svg viewBox="0 0 24 24"><path d="M12 3v11M7.5 9.5L12 14l4.5-4.5"/><path d="M4 15v4h16v-4"/></svg><span class="tip">INSTALADORES</span></button>
     <button data-view="system"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/><rect x="9.5" y="9.5" width="5" height="5"/></svg><span class="tip">SISTEMA</span></button>
     <button id="rail-more" class="more" aria-label="Más secciones"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span class="tip">MÁS</span><span class="badge hidden" id="badge-more"></span></button>
     <div class="spacer"></div>
@@ -309,6 +310,30 @@
           <button class="btn sm" data-tb="expedientes">EXPEDIENTES</button><button class="btn sm" data-tb="informe">INFORME OFICIAL</button></div>
         <div id="tb-form" class="col"></div>
         <div id="tb-result" class="col"></div>
+      </div>
+    </section>
+
+    <!-- ================= INSTALADORES ================= -->
+    <section class="view" id="view-instaladores">
+      <div class="view-title">INSTALADORES <span class="sub">los de todas las plataformas, disponibles sin conexión para pasarlos a otros equipos</span></div>
+      <div class="panel col" style="margin-bottom:16px"><h3>Cómo funciona</h3>
+        <p class="muted" style="margin:0">Lo pequeño ya viene <b>dentro de la app</b>: la APK autónoma, la APK cliente, el código fuente y el script de la Ubuntu mínima. Los instaladores de escritorio (Windows, Linux, macOS) pesan entre 0,4 y 1,9 GB cada uno y no caben en una APK: se <b>bajan una sola vez</b> de la Release (o se importan de un USB o una carpeta), se comprueban con su SHA256 y desde entonces se pueden repartir <b>sin internet</b> por la wifi o el punto de acceso del móvil, o guardarse en Descargas.</p>
+        <div class="row" id="in-resumen" style="margin-top:8px"></div>
+      </div>
+      <div class="panel col" style="margin-bottom:16px"><h3>Repartir por la red local <span class="sub">otros equipos abren la dirección en su navegador y descargan, sin internet</span></h3>
+        <div class="row admin-only"><button class="btn primary" id="in-compartir">COMPARTIR POR WIFI</button><span class="muted" id="in-compartir-info"></span></div>
+        <div class="user-only muted">Un administrador puede activar el reparto.</div>
+        <div class="row" id="in-urls" style="align-items:flex-start"></div>
+      </div>
+      <div class="panel col"><h3>Instaladores <span class="sub" id="in-release"></span></h3>
+        <div class="row admin-only">
+          <button class="btn" id="in-todo">BAJAR TODOS LOS QUE FALTAN</button>
+          <button class="btn" id="in-movil">BAJAR LOS DE ARM (MÓVIL, RASPBERRY, SNAPDRAGON)</button>
+          <button class="btn ghost" id="in-cancelar">CANCELAR DESCARGA</button>
+          <button class="btn ghost" id="in-actualizar">CONSULTAR LA RELEASE</button>
+          <button class="btn ghost" id="in-importar">IMPORTAR DE CARPETA O USB</button>
+        </div>
+        <div id="in-lista"></div>
       </div>
     </section>
 
@@ -672,5 +697,7 @@
 <script src="/static/js/extras.js"></script>
 <script src="/static/js/v42.js"></script>
 <script src="/static/js/herrero.js"></script>
+<script src="/static/vendor/qrcode.js"></script>
+<script src="/static/js/instaladores.js"></script>
 </body>
 </html>

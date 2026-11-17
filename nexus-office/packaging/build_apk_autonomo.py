@@ -8,6 +8,9 @@ La APK lo lleva todo menos los modelos de IA:
                        (libllama-server-gpu.so + ggml con Vulkan, OpenCL y CPU por variantes de ARM)
   assets/runtime.zip   Python 3.12 + dependencias (py/) y el codigo de Nexus-Office (app/nexus), con .pyc precompilados
   assets/runtime.json  ficheros y bytes del runtime: la app comprueba con ellos que se ha descomprimido entero
+  app/maletin/         (dentro de runtime.zip) instaladores pequenos para repartir sin conexion: APK cliente, codigo
+                       fuente, script de la Ubuntu minima, LEEME y manuales en PDF si estan en dist/. La propia APK la
+                       sirve Android (NEXUS_APK_PROPIA); los de escritorio se bajan una vez (nexus/instaladores.py).
 La primera vez que se abre, la app descomprime runtime.zip en sus datos (en paralelo) y arranca Nexus-Office en 127.0.0.1:8775.
 Usa las mismas herramientas de Android que packaging/build_apk.py (SDK o paquetes de Ubuntu) y su misma firma.
 """
@@ -97,6 +100,7 @@ def stage(dest: Path) -> int:
         shutil.rmtree(dist, ignore_errors=True)
     shutil.copytree(ROOT / "nexus", dest / "app" / "nexus",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    maletin(dest / "app" / "maletin")
     host = shutil.which("python3.12")
     if host:   # mismo numero magico que el Python de la app: el movil no compila nada al arrancar
         subprocess.run([host, "-m", "compileall", "-q", "-j", "0", "--invalidation-mode", "unchecked-hash",
@@ -105,6 +109,28 @@ def stage(dest: Path) -> int:
         compileall.compile_dir(str(dest), quiet=1, workers=0,
                                invalidation_mode=compileall.py_compile.PycInvalidationMode.UNCHECKED_HASH)
     return sum(f.stat().st_size for f in dest.rglob("*") if f.is_file())
+
+
+def maletin(dest: Path) -> list[str]:
+    """Instaladores pequenos que viajan dentro de la APK (ver nexus/instaladores.py)."""
+    dest.mkdir(parents=True, exist_ok=True)
+    dist = ROOT / "dist"
+    dist.mkdir(exist_ok=True)
+    import build as escritorio   # mismo codigo fuente limpio y mismo LEEME que los instaladores de escritorio
+    fuente = dist / f"Nexus-Office-{VERSION}-codigo-fuente.zip"
+    if not fuente.is_file():
+        fuente = escritorio.source_zip()
+    piezas = [fuente, ROOT / "packaging" / "ubuntu" / "rehacer-ubuntu.sh",
+              dist / f"Nexus-Office-{VERSION}-android-vpn.apk",
+              dist / "Manual-de-usuario.pdf", dist / "Documentacion-tecnica.pdf"]
+    for f in piezas:
+        if f.is_file():
+            shutil.copy2(f, dest / f.name)
+    (dest / "LEEME.txt").write_text(escritorio.README.format(version=VERSION), encoding="utf-8")
+    nombres = sorted(p.name for p in dest.iterdir())
+    print(f"[apk] instaladores dentro de la APK: {', '.join(nombres)} "
+          f"({sum(p.stat().st_size for p in dest.iterdir()) / 1e6:.1f} MB)")
+    return nombres
 
 
 def runtime_zip(staged: Path, dest: Path) -> dict:

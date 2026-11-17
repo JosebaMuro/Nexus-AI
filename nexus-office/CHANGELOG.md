@@ -4,6 +4,12 @@
 
 Detalle en [docs/HERRERO.md](docs/HERRERO.md).
 
+- **Instaladores sin conexión** (pestaña INSTALADORES, detalle en [docs/INSTALADORES.md](docs/INSTALADORES.md)): la APK
+  autónoma lleva dentro la APK cliente, el código fuente, el script de la Ubuntu mínima, el LEEME y los manuales, y
+  ofrece la propia APK instalada. Los de escritorio (Windows, Linux, macOS; unos 14 GB, no caben en una APK) se bajan una
+  vez de la Release con comprobación SHA256 y reanudación, o se importan de un USB o una carpeta, y desde entonces están
+  disponibles sin internet: se guardan en Descargas o se reparten por la wifi o el punto de acceso del móvil con un
+  servidor de solo lectura, página de descarga y código QR. También funciona en el escritorio.
 - **Pestaña HERRERO y agente Herrero**: una oficina técnica de estructuras metálicas con sus puestos (recepción,
   calculista, despiece, delineante, soldador, montaje y fotografía). A partir de un encargo en lenguaje corriente
   («porche de 6 x 4 m galvanizado») calcula cargas (CTE DB-SE-AE) y perfiles (CTE DB-SE-A / Eurocódigo 3: flexión,

@@ -63,6 +63,7 @@ NEXUS_CHROMIUM=/ruta/chromium python packaging/build_docs_pdf.py <carpeta>   # m
 | Mundo (fuentes públicas por categoría y país) | `mundo/` (`fuentes.py`, `servicio.py`, `paises.py`, `probar.py`) |
 | Bolsa | `office/bolsa.py` (mesa simulada), `bolsa_agente.py` (agente autónomo), `mercados.py` (datos reales), `bolsa_analisis.py` (opciones, riesgo, DCF, cribas, alertas, expedientes), `bolsa_informes.py` (SEC), `bolsa_terminal.py` (recetas y escritorio), `bolsa_lab.py` |
 | Terminal IA | `terminal/nucleo.py` (sesiones, consola, ficheros, procesos), `terminal/interprete.py`, `terminal/cli.py`, herramientas en `tools/builtin/terminal_tools.py` |
+| Instaladores sin conexión (pestaña INSTALADORES) | `instaladores.py` (catálogo, descarga única con SHA256, importar, servidor de la red local en el puerto 8776), `server/rutas_instaladores.py`, `web/js/instaladores.js`; lo pequeño entra en la APK por `build_apk_autonomo.maletin()` |
 | Memoria, RAG, media, red, remoto, dispositivos, MCP | `memory/`, `rag/`, `media/`, `coop/`, `remote/`, `devices/`, `mcp.py` |
 | Empaquetado | `packaging/build.py` (instaladores), `build_apk*.py`, `build_linux_bundles.py`, `build_docs_pdf.py` (capítulos de los PDF), `windows/nexus.nsi`, `ubuntu/` (Ubuntu mínima con el demonio) |
 | Android | `android/` (APK cliente), `android-autonomo/` (APK con todo dentro), `android_main.py`, `android_tune.py` |

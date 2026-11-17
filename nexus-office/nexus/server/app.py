@@ -77,6 +77,9 @@ def create_app(services: Services | None = None) -> FastAPI:
         if services is None:
             from ..office import bolsa_agente
             bolsa_agente.reset()
+        from ..instaladores import _MALETIN
+        if _MALETIN is not None:
+            _MALETIN.parar()
         await asyncio.to_thread(s.shutdown)
 
     app = FastAPI(title="Nexus-Office", version=__version__, lifespan=lifespan)
@@ -2085,4 +2088,6 @@ def create_app(services: Services | None = None) -> FastAPI:
     rutas_42.registrar(app, S, hub, require_admin, admin_flag)   # Mundo, terminal de bolsa y Terminal IA
     from . import rutas_herrero
     rutas_herrero.registrar(app, S, require_admin)               # oficina Herrero (estructuras metalicas)
+    from . import rutas_instaladores
+    rutas_instaladores.registrar(app, require_admin)             # instaladores sin conexion y reparto por la red
     return app
