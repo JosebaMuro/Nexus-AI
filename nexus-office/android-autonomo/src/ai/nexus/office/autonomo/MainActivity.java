@@ -11,6 +11,8 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.database.Cursor;
+import android.provider.OpenableColumns;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.Uri;
@@ -45,6 +47,8 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -73,6 +77,8 @@ public class MainActivity extends Activity {
     private long lastLevel;
     private static final int REQ_MIC = 7;
     private static final int REQ_UBIC = 8, REQ_UBIC_FONDO = 9;
+    private static final int REQ_GUARDAR = 10, REQ_IMPORTAR = 11;   // instaladores sin conexion
+    private File pendienteGuardar;
     private GpsMovil gps;
     private byte[] pendingSave;
     private String pendingSaveName = "";
@@ -462,7 +468,108 @@ public class MainActivity extends Activity {
             }
             pendingSave = null;
             js("window.__nexusSaved && window.__nexusSaved(" + ok + "," + JSONObject.quote(pendingSaveName) + ")");
+        } else if (req == REQ_GUARDAR) {
+            final File src = pendienteGuardar;
+            pendienteGuardar = null;
+            if (res == RESULT_OK && data != null && data.getData() != null && src != null) copiarA(src, data.getData());
+            else if (src != null) js("window.__nexusSaved && window.__nexusSaved(false," + JSONObject.quote(src.getName()) + ")");
+        } else if (req == REQ_IMPORTAR) {
+            ArrayList<Uri> uris = new ArrayList<Uri>();
+            if (res == RESULT_OK && data != null) {
+                if (data.getClipData() != null) {
+                    for (int i = 0; i < data.getClipData().getItemCount(); i++) uris.add(data.getClipData().getItemAt(i).getUri());
+                } else if (data.getData() != null) {
+                    uris.add(data.getData());
+                }
+            }
+            if (!uris.isEmpty()) importar(uris);
         }
+    }
+
+    // ------------------------------------------------------------------ instaladores sin conexion
+    /** Carpeta donde Agente IA guarda los instaladores (NEXUS_DATA_DIR/instaladores). */
+    private File carpetaInstaladores() {
+        File d = new File(new File(getFilesDir(), "nexus"), "instaladores");
+        d.mkdirs();
+        return d;
+    }
+
+    /** Solo ficheros de la app: sus datos o la propia APK (nunca otra ruta que mande la pagina). */
+    private boolean rutaPermitida(File f) {
+        try {
+            String c = f.getCanonicalPath();
+            return c.startsWith(getFilesDir().getCanonicalPath() + File.separator)
+                    || c.equals(new File(getApplicationInfo().sourceDir).getCanonicalPath());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Copia por bloques (los instaladores pasan de 1 GB: nada de cargarlos en memoria). */
+    private void copiarA(final File src, final Uri destino) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                boolean ok = false;
+                try {
+                    InputStream in = new FileInputStream(src);
+                    OutputStream out = getContentResolver().openOutputStream(destino);
+                    byte[] b = new byte[1 << 20];
+                    int n;
+                    while ((n = in.read(b)) > 0) out.write(b, 0, n);
+                    out.close();
+                    in.close();
+                    ok = true;
+                } catch (Exception e) {
+                    android.util.Log.w("NexusApp", "guardar instalador", e);
+                }
+                js("window.__nexusSaved && window.__nexusSaved(" + ok + "," + JSONObject.quote(src.getName()) + ")");
+            }
+        }, "nexus-guardar").start();
+    }
+
+    private String nombreDe(Uri uri) {
+        Cursor c = null;
+        try {
+            c = getContentResolver().query(uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null);
+            if (c != null && c.moveToFirst()) return c.getString(0);
+        } catch (Exception ignored) {
+        } finally {
+            if (c != null) c.close();
+        }
+        String s = uri.getLastPathSegment();
+        return s == null ? "fichero" : s.substring(s.lastIndexOf('/') + 1);
+    }
+
+    /** Copia a la carpeta de instaladores los ficheros elegidos (USB, Descargas, tarjeta); Agente IA los comprueba. */
+    private void importar(final ArrayList<Uri> uris) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                int hechos = 0;
+                String error = "";
+                File dir = carpetaInstaladores();
+                for (Uri u : uris) {
+                    String nombre = nombreDe(u).replaceAll("[^A-Za-z0-9._-]", "_");
+                    File part = new File(dir, nombre + ".part"), fin = new File(dir, nombre);
+                    try {
+                        InputStream in = getContentResolver().openInputStream(u);
+                        OutputStream out = new FileOutputStream(part);
+                        byte[] b = new byte[1 << 20];
+                        int n;
+                        while ((n = in.read(b)) > 0) out.write(b, 0, n);
+                        out.close();
+                        in.close();
+                        if (fin.exists()) fin.delete();
+                        if (part.renameTo(fin)) hechos++;
+                    } catch (Exception e) {
+                        part.delete();
+                        error = nombre + ": " + e.getMessage();
+                    }
+                }
+                js("window.__nexusImportados && window.__nexusImportados(" + hechos + "," + JSONObject.quote(error) + ")");
+            }
+        }, "nexus-importar").start();
     }
 
     // ------------------------------------------------------------------ ventana
@@ -861,6 +968,51 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void openUrl(String url) {
             openExternal(url);
+        }
+
+        /** Instaladores: guarda uno (de los datos de la app o la propia APK) donde elija el usuario. */
+        @JavascriptInterface
+        public void guardarInstalador(final String ruta, final String nombre) {
+            final File f = new File(ruta == null ? "" : ruta);
+            if (!f.isFile() || !rutaPermitida(f)) {
+                js("window.__nexusSaved && window.__nexusSaved(false," + JSONObject.quote(String.valueOf(nombre)) + ")");
+                return;
+            }
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    pendienteGuardar = f;
+                    Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType(nombre != null && nombre.endsWith(".apk") ? "application/vnd.android.package-archive" : "application/octet-stream");
+                    i.putExtra(Intent.EXTRA_TITLE, nombre == null || nombre.isEmpty() ? f.getName() : nombre);
+                    try {
+                        startActivityForResult(i, REQ_GUARDAR);
+                    } catch (ActivityNotFoundException e) {
+                        pendienteGuardar = null;
+                        js("window.__nexusSaved && window.__nexusSaved(false," + JSONObject.quote(f.getName()) + ")");
+                    }
+                }
+            });
+        }
+
+        /** Instaladores: elegir ficheros (USB por OTG, Descargas, tarjeta) para copiarlos sin conexion. */
+        @JavascriptInterface
+        public void importarInstaladores() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("*/*");
+                    i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    try {
+                        startActivityForResult(i, REQ_IMPORTAR);
+                    } catch (ActivityNotFoundException e) {
+                        js("window.__nexusImportados && window.__nexusImportados(0," + JSONObject.quote("sin selector de ficheros") + ")");
+                    }
+                }
+            });
         }
     }
 }

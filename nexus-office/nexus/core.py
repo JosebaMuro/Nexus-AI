@@ -76,6 +76,10 @@ class Services:
         self.images = ImageEngine(cfg, self.models.catalog, self.runtimes, lambda: self.profile, self.llm)
         self.music = MusicEngine(cfg, lambda: self.profile)
         self.voice = VoiceEngine(cfg, self.models.catalog, lambda: self.profile)
+        # memoria justa: los modelos se cargan por turnos segun la etapa del flujo (nexus/hardware/turnos.py)
+        from .hardware.turnos import Turnos
+        self.turnos = Turnos(cfg, lambda: self.profile, self.monitor)
+        self._registrar_turnos()
         self.tools = ToolRegistry()
         self.supervisor = Supervisor(self.tools, self.db, cfg)
         # IA de apoyo: el embed multilingue ayuda a todas las herramientas (nexus/memory/assist.py)
@@ -121,6 +125,55 @@ class Services:
                             gguf_entry=entry, threads=threads, dims=int(cfg.get("memory.embed_dims", 0) or 0),
                             exe_getter=lambda: self.runtimes.exe("llama", self.profile, "cpu"))
 
+    # ------------------------------------------------------------ turnos de modelos
+    def _registrar_turnos(self) -> None:
+        t = self.turnos
+        self.llm.turnos = self.images.turnos = self.voice.turnos = t
+        self.embedder.turnos = t
+        t.registrar("llm", "modelo de texto", self.llm.huella_turno, self.llm.llm_cargado, self.llm.liberar_llm)
+        t.registrar("embed", "embeddings", self._huella_embed,
+                    lambda: bool(getattr(self.embedder, "running", lambda: False)()),
+                    lambda: getattr(self.embedder, "close", lambda: None)())
+        t.registrar("stt", "voz a texto (whisper)",
+                    lambda: self.voice.huella_stt() if "faster-whisper" in self.voice.stt_engines() else (0.0, 0.0),
+                    lambda: self.voice._whisper is not None, lambda: self.voice.liberar("stt"))
+        t.registrar("tts", "texto a voz (Piper)", self._huella_tts,
+                    lambda: self.voice._piper is not None, lambda: self.voice.liberar("tts"))
+        t.registrar("imagen", "imagen (stable-diffusion.cpp)", self._huella_imagen)
+
+    def _huella_embed(self) -> tuple[float, float]:
+        path = getattr(self.embedder, "path", "")
+        if not path:
+            return 0.0, 0.0
+        from .motores.selector import peso_mb
+        return peso_mb({"path": path}) * 1.2 + 250, 0.0
+
+    def _huella_tts(self) -> tuple[float, float]:
+        entry = self.voice._piper_model() if hasattr(self.voice, "_piper_model") else None
+        if not entry:
+            return 0.0, 0.0
+        from .motores.selector import peso_mb
+        return peso_mb(entry) * 1.5 + 100, 0.0
+
+    def _huella_imagen(self) -> tuple[float, float]:
+        model = self.images._model()
+        sd = self.runtimes.exe("sd", self.profile) if model else None
+        if not (model and sd):
+            return 0.0, 0.0
+        gen = model.get("gen") or {}
+        return self.images.huella(model, sd[1], int(gen.get("size") or self.profile["image"]["resolution"]))
+
+    def _turnos_al_arrancar(self) -> None:
+        try:
+            motivo = self.turnos.motivo_arranque()
+            if motivo:
+                self.tuning_reasons.append(motivo)
+                L.info("Autoajuste: %s", motivo)
+                if hasattr(self.embedder, "idle_s"):   # el modelo de embeddings no se queda ocupando memoria
+                    self.embedder.idle_s = min(self.embedder.idle_s or 90, 90)
+        except Exception as e:  # noqa: BLE001
+            L.debug("turnos al arrancar: %s", e)
+
     def set_embedder(self, embedder=None):
         """Cambia el modelo de embeddings en caliente: nada se bloquea; lo ya indexado se recalcula en segundo plano."""
         old = self.embedder
@@ -128,6 +181,7 @@ class Services:
         for store in (self.memory, self.rag):
             store.embedder = self.embedder
             store._cache = None
+        self.embedder.turnos = getattr(self, "turnos", None)
         if old is not self.embedder and hasattr(old, "close"):
             old.close()
         L.info("Modelo de embeddings: %s", self.embedder.id)
@@ -140,6 +194,7 @@ class Services:
 
     def start(self) -> None:
         self.monitor.start()
+        threading.Thread(target=self._turnos_al_arrancar, name="nexus-turnos", daemon=True).start()
         self.embed_worker.start()
         self.assist.prewarm(self.tools.for_agent(["*"]), self.agents.list())
         if hardware.profiles.android() and self.config.get("hardware.adaptive_tuning", True):

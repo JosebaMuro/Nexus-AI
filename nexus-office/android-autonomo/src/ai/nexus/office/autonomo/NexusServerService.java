@@ -321,6 +321,8 @@ public class NexusServerService extends Service {
         env.put("NEXUS_PY_LIBRARY_PATH", libPath);
         env.put("NEXUS_PY_PRELOAD", sigsys);
         env.put("NEXUS_DNS", dnsServers());
+        // instaladores sin conexion: la propia APK se puede repartir y guardar sin descargarla
+        env.put("NEXUS_APK_PROPIA", getApplicationInfo().sourceDir);
         // ExecuTorch solo tiene API Java: lo sirve el puente de la app (MotorExecuTorch) a Agente IA
         if (MotorExecuTorch.incluido()) {
             try {

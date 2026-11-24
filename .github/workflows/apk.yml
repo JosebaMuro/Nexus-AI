@@ -105,7 +105,11 @@ jobs:
           python -m pip install -q pillow
           cd nexus-office
           python packaging/build_apk.py
+          # manuales en PDF para el maletin de instaladores de la APK (si falla, la APK sale sin ellos)
+          python -m pip install -q markdown playwright && NEXUS_CHROMIUM="$(command -v google-chrome || command -v chromium)" \
+            python packaging/build_docs_pdf.py dist || echo "::warning::sin manuales en PDF dentro de la APK"
           python packaging/build_apk_autonomo.py
+          rm -f dist/*.pdf dist/*codigo-fuente.zip   # solo van dentro de la APK: la Release los toma de entrega.yml
           ls -la dist
           "$BT/apksigner" verify --print-certs dist/*.apk | head -8
       - name: Dejar las APK en la rama apk-sin-firmar

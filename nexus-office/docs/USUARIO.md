@@ -210,6 +210,13 @@ La lista marca con **anfitrión** el instalador del equipo donde corre Nexus-Off
 corresponde al móvil o PC desde el que miras. Pulsa **DESCARGAR**. En la app Android, eliges dónde guardar el fichero;
 después ábrelo para instalarlo.
 
+## Lo nuevo de la 4.3
+
+- **Turnos de modelos** (Sistema): si la memoria no da para todos los modelos a la vez, se cargan según el paso del
+  trabajo para que cada uno tenga toda la memoria. Ver [Turnos de modelos](TURNOS.md).
+- **HERRERO**: oficina de estructuras metálicas que calcula perfiles con el CTE y el Eurocódigo 3 y entrega
+  despiece, lista de corte, soldaduras ISO 2553, plano de montaje, isométrica, PDF e imagen. Ver [Herrero](HERRERO.md).
+
 ## Lo nuevo de la 4.2
 
 - **MUNDO**: lo que pasa en el mundo (terremotos, desastres, aviones, barcos, tiempo, satélites, noticias, mercados...)
@@ -275,6 +282,9 @@ Genera imágenes y música, analiza imágenes y revisa la galería.
 Mesa de bolsa **simulada** para practicar sin dinero: cartera ficticia de 10.000 €, órdenes a mercado, limitadas y stop, comisiones, impuestos, cambio de divisa y deslizamiento. **Con conexión, los precios son cotizaciones reales** (Yahoo Finance, con el retraso de cada bolsa; CNBC, Google Finance, Stooq, Coinbase y Kraken de respaldo, también para los gráficos) y el cambio de divisa es el real; sin conexión la mesa sigue simulada desde el último precio real, solo con la bolsa abierta (en su hora local y con sus festivos). Nunca se usa dinero ni se envían órdenes reales, y nada de esto es asesoramiento financiero.
 
 El **agente de bolsa autónomo** gestiona su propia cartera simulada con esos datos reales: analiza cada valor (medias de 20 y 50 sesiones, RSI, momento y volatilidad), arriesga como mucho el 1 % del patrimonio por operación, pone un stop de protección y lo sube cuando el precio sube, vende en el objetivo o si se rompe la tendencia, y aprende de sus operaciones cerradas. Su diario explica por qué compra, vende o espera, y la curva de patrimonio y los gráficos de cada orden se ven en vivo. Se ajusta (o se para) en la vista Bolsa o con `POST /api/bolsa/agente`. Con el perfil *Bolsa e inversiones* los agentes de la oficina también usan la mesa. Una cartera **real** solo sirve de seguimiento: ninguna orden se ejecuta sin que escribas `CONFIRMO`, y Nexus-Office no se conecta a ningún bróker. Ver [BOLSA.md](BOLSA.md).
+
+### Herrero
+Oficina técnica de **estructuras metálicas**: escribe el encargo con sus medidas («porche de 6 x 4 m y 2,6 m de altura, galvanizado», «escalera de 3 m de altura», «entreplanta de 6 x 4 m para almacén») y pulsa *CALCULAR PROYECTO*. Obtienes los perfiles recomendados con sus comprobaciones, el despiece con marcas, la lista de corte en barras de 6 o 12 m, las soldaduras con su símbolo, el plano de montaje, la vista isométrica, un PDF de 3 hojas, el CSV del despiece y una imagen realista. Funciona en el móvil y sin conexión. *Preguntar a la oficina* abre una conversación con el agente Herrero sobre el proyecto. Es un predimensionado para presupuestar y preparar el taller: la obra necesita la firma de un técnico competente. Ver [HERRERO.md](HERRERO.md).
 
 ### Modelos
 En modo usuario verás los **recomendados para tu equipo** con una etiqueta: *ideal*, *compatible*, *pesado* o *no cabe*. Si el instalador no pudo descargar el modelo elegido (por ejemplo, sin internet), pulsa **Descargar** en el marcado con ★ y después **Activar**. Descarga también el modelo de **embeddings** (Qwen3-Embedding, 639 MB): mejora la búsqueda en tu biblioteca y en la memoria y se activa solo.

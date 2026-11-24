@@ -2,6 +2,7 @@
 (faster-whisper > navegador). Todo con degradacion: si no hay motor local, la UI usa la Web Speech API."""
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import io
 import os
@@ -20,6 +21,7 @@ class VoiceEngine:
         self._piper = None
         self._piper_key = None
         self._whisper = None
+        self._whisper_key = None
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ estado
@@ -81,7 +83,9 @@ class VoiceEngine:
             return None
         try:
             if engine == "piper":
-                return self._tts_piper(text, rate), "piper"
+                turnos = getattr(self, "turnos", None)
+                with turnos.etapa("texto a voz", ["tts"]) if turnos is not None else contextlib.nullcontext():
+                    return self._tts_piper(text, rate), "piper"
             if engine == "pyttsx3":
                 return self._tts_pyttsx3(text, rate, voice), "pyttsx3"
         except Exception as e:  # noqa: BLE001
@@ -138,14 +142,49 @@ class VoiceEngine:
     def stt(self, audio: bytes, suffix: str = ".webm") -> dict:
         if "faster-whisper" not in self.stt_engines():
             return {"error": "No hay motor de voz local; usa el reconocimiento del navegador", "engine": "browser"}
+        turnos = getattr(self, "turnos", None)
+        etapa = turnos.etapa("voz a texto", ["stt"]) if turnos is not None else contextlib.nullcontext(None)
+        with etapa as turno:
+            return self._stt(audio, suffix, turno)
+
+    def stt_modelo(self, turno=None) -> str:
+        """El whisper del perfil o, con la memoria justa, el mayor que cabe en la etapa."""
+        modelo = self.profile_getter()["stt"]["model"]
+        if turno is not None and turno.alternando:
+            from ..hardware.turnos import whisper_para
+            modelo = whisper_para(turno.ram_mb if self.profile_getter()["stt"]["device"] == "cpu" else
+                                  max(turno.ram_mb, turno.vram_mb), modelo)
+        return modelo
+
+    def huella_stt(self) -> tuple[float, float]:
+        from ..hardware.turnos import WHISPER_MB
+        prof = self.profile_getter()["stt"]
+        mb = float(WHISPER_MB.get(self._whisper_key or prof["model"], 400))
+        turnos = getattr(self, "turnos", None)
+        return (300.0, mb) if prof["device"] == "cuda" and turnos is not None and turnos.gpu_dedicada() else (mb, 0.0)
+
+    def liberar(self, que: str = "todo") -> None:
+        """Descarga whisper y/o la voz de Piper (se vuelven a cargar en el siguiente uso)."""
+        with self._lock:
+            if que in ("todo", "stt"):
+                self._whisper, self._whisper_key = None, None
+            if que in ("todo", "tts"):
+                self._piper, self._piper_key = None, None
+        import gc
+        gc.collect()
+
+    def _stt(self, audio: bytes, suffix: str, turno=None) -> dict:
         from faster_whisper import WhisperModel
         prof = self.profile_getter()["stt"]
+        modelo = self.stt_modelo(turno)
         with self._lock:
-            if self._whisper is None:
-                L.info("Cargando faster-whisper '%s' (%s, %s)", prof["model"], prof["device"], prof["compute_type"])
-                self._whisper = WhisperModel(prof["model"], device=prof["device"], compute_type=prof["compute_type"],
+            if self._whisper is None or self._whisper_key != modelo:
+                L.info("Cargando faster-whisper '%s' (%s, %s)", modelo, prof["device"], prof["compute_type"])
+                self._whisper = None
+                self._whisper = WhisperModel(modelo, device=prof["device"], compute_type=prof["compute_type"],
                                              download_root=str(paths.models_dir() / "whisper"),
                                              cpu_threads=self.profile_getter()["llm"]["n_threads"])
+                self._whisper_key = modelo
         fd, path = tempfile.mkstemp(suffix=suffix, dir=paths.sub("cache"))
         with os.fdopen(fd, "wb") as f:
             f.write(audio)
