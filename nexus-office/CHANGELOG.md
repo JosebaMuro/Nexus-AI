@@ -1,5 +1,23 @@
 # Cambios
 
+## Agente IA 4.3.1: turnos de modelos con la RAM justa (2026-11-24)
+
+Detalle en [docs/TURNOS.md](docs/TURNOS.md). Esta versión junta en `main` todo lo de la 4.3.0 (oficina Herrero e
+instaladores sin conexión, que estaban pendientes de fusionar).
+
+- **Turnos de modelos**: si la RAM (o la VRAM de la GPU dedicada) no da para tener cargados a la vez el modelo de
+  texto, el de imagen, la voz y los embeddings, se cargan y descargan según la etapa del trabajo (texto, visión,
+  imagen, voz a texto, texto a voz, búsqueda semántica). Antes de cada paso se liberan los modelos que no usa, del
+  menos usado al más, y se vuelven a cargar solos cuando hacen falta; un modelo que está trabajando nunca se descarga.
+- **Cada paso hace lo mejor que puede con la memoria que tiene**: el texto ajusta el contexto, la imagen usa el VAE
+  troceado y, si no basta, baja la resolución, y la voz elige el whisper más grande que cabe.
+- La indexación semántica de fondo espera su turno y no echa a ningún modelo.
+- **Convive con el Autoajuste adaptativo**: lo anuncia al arrancar, apunta las recargas de cada sesión y, si el modelo
+  de texto se recarga demasiado, el siguiente arranque reduce el contexto y recomienda un modelo más pequeño.
+- Panel *Sistema > Turnos de modelos* con el estado, los modelos y sus recargas, y el modo `auto` / `siempre` /
+  `nunca` (`hardware.alternar_modelos`); API `GET/POST /api/turnos`.
+- El motor Transformers ya puede descargar su modelo (antes se quedaba siempre en memoria).
+
 ## Agente IA 4.3.0: oficina Herrero de estructuras metálicas (2026-11-16)
 
 Detalle en [docs/HERRERO.md](docs/HERRERO.md).

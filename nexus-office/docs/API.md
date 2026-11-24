@@ -81,6 +81,13 @@ Puerto remoto: `https://IP:8443` (TLS 1.3). Ahí todas las rutas, salvo `/`, `/a
 | `GET /api/remote/router` *(admin)* | Asistente del router: puerta de enlace, IP y MAC de este equipo, URLs de configuración, marca y ruta del menú, UPnP‑IGD y la regla exacta. |
 | `POST /api/remote/check` *(admin)* | IP pública, CGNAT y si el puerto responde en la IP pública. |
 
+## Turnos de modelos (4.3.1)
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/turnos` | Modo, si se está alternando, RAM útil y necesaria, modelos (cargado, tamaño, recargas) y últimas etapas |
+| `POST /api/turnos` (admin) | `{"modo": "auto" \| "siempre" \| "nunca", "reserva_ram_mb": n}` |
+
 ## Oficina Herrero (4.3)
 
 | Método y ruta | Uso |

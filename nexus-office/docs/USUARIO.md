@@ -212,6 +212,8 @@ después ábrelo para instalarlo.
 
 ## Lo nuevo de la 4.3
 
+- **Turnos de modelos** (Sistema): si la memoria no da para todos los modelos a la vez, se cargan según el paso del
+  trabajo para que cada uno tenga toda la memoria. Ver [Turnos de modelos](TURNOS.md).
 - **HERRERO**: oficina de estructuras metálicas que calcula perfiles con el CTE y el Eurocódigo 3 y entrega
   despiece, lista de corte, soldaduras ISO 2553, plano de montaje, isométrica, PDF e imagen. Ver [Herrero](HERRERO.md).
 
