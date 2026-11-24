@@ -74,7 +74,19 @@ class EmbedWorker:
                 self._wake.clear()
                 continue
             try:
-                worked = self._step(emb)
+                turnos = getattr(self.s, "turnos", None)
+                if turnos is None:
+                    worked = self._step(emb)
+                else:   # memoria justa: la indexacion espera a que ninguna etapa necesite la memoria
+                    while self._busy() and not self._stop.is_set():
+                        time.sleep(0.5)   # fuera del turno: mientras espera no retiene el modelo de embeddings
+                    with turnos.fondo("indexacion", ["embed"]) as toca:
+                        worked = self._step(emb) if toca else None
+                    if worked is None:
+                        self.state["phase"] = "esperando memoria libre (turnos de modelos)"
+                        self._wake.wait(5)
+                        self._wake.clear()
+                        continue
                 self.state["error"] = ""
             except Exception as e:  # noqa: BLE001
                 L.warning("Indexacion semantica en pausa: %s", e)

@@ -8,6 +8,7 @@ clasificar por especialidad, agrupar por tema o detectar duplicados. Los demas i
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import re
 import socket
@@ -303,8 +304,10 @@ class GGUFEmbedder(Embedder):
         missing = [k for k in dict.fromkeys(keys) if k not in self._qcache]
         if missing:
             self.waiting += 1
+            turnos = getattr(self, "turnos", None)
             try:
-                vecs = self.embed([instruct(t, k) if self.instructions else t for k, t in missing])
+                with turnos.etapa("busqueda semantica", ["embed"]) if turnos is not None else contextlib.nullcontext():
+                    vecs = self.embed([instruct(t, k) if self.instructions else t for k, t in missing])
             finally:
                 self.waiting -= 1
             for k, v in zip(missing, vecs):

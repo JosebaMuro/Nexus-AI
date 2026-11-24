@@ -6,6 +6,7 @@ Especificacion de modelo por agente: ``"default"`` o ``"backend:modelo"``
 """
 from __future__ import annotations
 
+import contextlib
 import re
 import time
 from typing import Iterator
@@ -48,6 +49,8 @@ class LLMManager:
         self._avail_cache: dict[str, tuple[float, bool]] = {}
         self.backends: dict = {}
         self.inflight = 0    # respuestas en curso: el autoajuste de Android solo cambia hilos entre respuestas
+        self.turnos = None   # nexus.hardware.turnos: carga por etapas si la memoria no da para todos los modelos
+        self._entrada_turno: dict | None = None
         self.rebuild()
 
     def rebuild(self) -> None:
@@ -235,10 +238,22 @@ class LLMManager:
                 # llama-server corta el razonamiento al agotar el presupuesto y obliga a responder
                 full["extra_body"] = {"reasoning_budget_tokens": budget,
                                       "reasoning_budget_message": REASONING_STOP}
-        if backend_name in ("llamaserver", "llamacpp", "ollama") or backend_name in motores.MOTORES:
-            cap = full["n_ctx"] // 2 if thinking else full["n_ctx"] // 3
-            full["max_tokens"] = min(full["max_tokens"] or 1024, max(256, cap))
-            messages = fit_context(messages, full["n_ctx"], full["max_tokens"])
+        locales = {"llamaserver", "llamacpp", "transformers", *motores.MOTORES}
+        if backend_name in locales and self.turnos is not None:
+            etapa = self.turnos.etapa("texto" if not any(m.get("images") for m in messages) else "vision", ["llm"],
+                                      extra=self._extra_turno(backend_name, model, full, messages))
+        else:
+            etapa = contextlib.nullcontext(None)
+        with etapa as turno:
+            if turno is not None and turno.alternando:
+                self._ajustar_a_turno(turno, full)
+            if backend_name in ("llamaserver", "llamacpp", "ollama") or backend_name in motores.MOTORES:
+                cap = full["n_ctx"] // 2 if thinking else full["n_ctx"] // 3
+                full["max_tokens"] = min(full["max_tokens"] or 1024, max(256, cap))
+                messages = fit_context(messages, full["n_ctx"], full["max_tokens"])
+            yield from self._stream_backend(backend, backend_name, model, messages, full)
+
+    def _stream_backend(self, backend, backend_name: str, model: str, messages: list[dict], full: dict):
         self._liberar_anterior(backend_name)
         self.inflight += 1
         try:
@@ -253,6 +268,80 @@ class LLMManager:
             if self.monitor and st.get("tokens"):
                 self.monitor.record_llm(backend_name, model, st["tokens"], st["seconds"], st["ttft"])
         self.last_used = (backend_name, model)
+
+    # ------------------------------------------------------------ turnos de modelos
+    def _entrada(self, backend_name: str, model: str) -> dict | None:
+        fmt = "transformers" if backend_name == "transformers" else (
+            motores.MOTORES[backend_name].formato if backend_name in motores.MOTORES else "gguf")
+        r = self._resolve(fmt)(model)
+        return r[1] if r else None
+
+    def _gpu_llm(self) -> bool:
+        return bool(self.profile["llm"].get("gpu_layers")) and str(self.profile.get("id", "")).endswith("dgpu")
+
+    def _huella(self, entry: dict | None, n_ctx: int, vision: bool = False) -> tuple[float, float]:
+        if not entry:
+            return 0.0, 0.0
+        from ..hardware.turnos import llm_mb
+        mb = llm_mb(motor_selector.peso_mb(entry), n_ctx, vision)
+        return (300.0, mb) if self._gpu_llm() else (mb, 0.0)
+
+    def huella_turno(self) -> tuple[float, float]:
+        """(RAM, VRAM) en MB del modelo de texto en uso o, si aun no se ha usado, del que se usaria."""
+        entry = self._entrada_turno
+        if entry is None:
+            try:
+                b, m = self.select()
+                entry = self._entrada(b, m) if b in {"llamaserver", "llamacpp", "transformers", *motores.MOTORES} else None
+            except Exception:  # noqa: BLE001
+                entry = None
+            self._entrada_turno = entry
+        return self._huella(entry, int(self.profile["llm"].get("n_ctx") or 4096))
+
+    def _extra_turno(self, backend_name: str, model: str, full: dict, messages: list[dict]) -> dict:
+        entry = self._entrada(backend_name, model)
+        if entry is not None:
+            self._entrada_turno = entry
+        vision = any(m.get("images") for m in messages)
+        return {"llm": self._huella(entry, int(full.get("n_ctx") or 4096), vision)} if entry else {}
+
+    def llm_cargado(self) -> bool:
+        for name in ("llamaserver", "llamacpp", "transformers", *motores.MOTORES):
+            b = self.backends.get(name)
+            if b is None:
+                continue
+            proc = getattr(b, "proc", None)
+            if proc is not None and proc.poll() is None:
+                return True
+            if getattr(b, "_m", None) is not None or getattr(b, "_llm", None) is not None \
+                    or getattr(b, "_model", None) is not None:
+                return True
+        return False
+
+    def liberar_llm(self) -> None:
+        """Descarga el modelo de texto de todos los motores locales (se vuelve a cargar solo en el siguiente uso)."""
+        for name in ("llamaserver", "llamacpp", "transformers", *motores.MOTORES):
+            b = self.backends.get(name)
+            fn = getattr(b, "unload", None) or getattr(b, "stop", None)
+            if fn:
+                fn()
+
+    def _ajustar_a_turno(self, turno, full: dict) -> None:
+        """Con la memoria justa, el contexto se ajusta a lo que la etapa tiene libre (sin bajar de 2048)."""
+        entry = self._entrada_turno
+        if not entry:
+            return
+        n_ctx = int(full.get("n_ctx") or 4096)
+        vision = turno.etapa == "vision"
+        while n_ctx > 2048:
+            ram, vram = self._huella(entry, n_ctx, vision)
+            if turno.cabe(ram, vram):
+                break
+            n_ctx = max(2048, n_ctx // 2)
+        if n_ctx != int(full.get("n_ctx") or 4096):
+            L.info("Turnos: contexto %s -> %s para que el modelo quepa en %.0f MB libres", full.get("n_ctx"), n_ctx,
+                   turno.ram_mb)
+            full["n_ctx"] = n_ctx
 
     def _liberar_anterior(self, usar: str) -> None:
         """Al cambiar de motor local (p. ej. de llama.cpp a OpenVINO) descarga el modelo del anterior: dos modelos

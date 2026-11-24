@@ -554,6 +554,7 @@
         <div class="panel"><h3>Autoajuste adaptativo <span class="sub">se aplica en cada arranque</span></h3><div class="list" id="tune-list"></div></div>
         <div class="panel"><h3>Runtimes nativos <span class="sub">llama.cpp · stable-diffusion.cpp</span></h3><div id="runtimes-box"></div></div>
       </div>
+      <div class="panel" style="margin-top:16px"><h3>Turnos de modelos <span class="sub">si la RAM no da para todos los modelos a la vez, se cargan según la etapa del trabajo</span></h3><div id="turnos-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel" style="margin-top:16px"><h3>Motores de inferencia <span class="sub">el motor que mejor acelera este chip: ONNX Runtime, OpenVINO, LiteRT-LM, ExecuTorch, MLC, TensorRT-LLM, Genie o llama.cpp</span></h3><div id="motores-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel" style="margin-top:16px"><h3>Arranque automático <span class="sub">Agente IA como servicio: se inicia solo al encender el equipo</span></h3><div id="service-box"><span class="muted">Comprobando…</span></div></div>
       <div class="panel" style="margin-top:16px"><h3>Comprobación y autorreparación <span class="sub">se revisa todo en cada arranque y se arregla solo</span></h3><div id="salud-box"><span class="muted">Comprobando…</span></div></div>
@@ -699,5 +700,6 @@
 <script src="/static/js/herrero.js"></script>
 <script src="/static/vendor/qrcode.js"></script>
 <script src="/static/js/instaladores.js"></script>
+<script src="/static/js/turnos.js"></script>
 </body>
 </html>

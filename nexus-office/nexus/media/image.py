@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import io
 import os
 import re
@@ -120,8 +121,43 @@ class ImageEngine:
         threads = self.profile_getter()["llm"]["n_threads"] if variant == "cpu" else 0
         w, h = (wh or (None, None))
         w, h = (w or size) // 64 * 64, (h or size) // 64 * 64
+        tiling, ajuste = False, ""
+        turnos = getattr(self, "turnos", None)
+        etapa = turnos.etapa("imagen", ["imagen"], extra={"imagen": self.huella(model, variant, max(w, h))}) \
+            if turnos is not None else contextlib.nullcontext(None)
+        with etapa as turno:
+            if turno is not None and turno.alternando:
+                w, h, tiling, ajuste = self._ajustar_a_turno(turno, model, variant, w, h)
+            return self._sdcpp_run(exe, variant, model, prompt, negative, steps, seed, out, init, gen, threads, w, h,
+                                   size, tiling, ajuste)
+
+    def huella(self, model: dict, variant: str, lado: int, troceado: bool = False) -> tuple[float, float]:
+        """(RAM, VRAM) en MB de una generacion con sd.cpp."""
+        from ..hardware.turnos import imagen_mb
+        from ..motores.selector import peso_mb
+        mb = imagen_mb(peso_mb(model), lado, troceado)
+        turnos = getattr(self, "turnos", None)
+        gpu = variant != "cpu" and turnos is not None and turnos.gpu_dedicada()
+        return (400.0, mb) if gpu else (mb, 0.0)
+
+    def _ajustar_a_turno(self, turno, model, variant, w, h):
+        """Lo mejor que cabe en la memoria de la etapa: primero el VAE troceado y, si no basta, menos resolucion."""
+        if turno.cabe(*self.huella(model, variant, max(w, h))):
+            return w, h, False, ""
+        if turno.cabe(*self.huella(model, variant, max(w, h), True)):
+            return w, h, True, "VAE troceado para caber en memoria"
+        w0, h0 = w, h
+        while max(w, h) > 384 and not turno.cabe(*self.huella(model, variant, max(w, h), True)):
+            w, h = max(256, int(w * 0.75) // 64 * 64), max(256, int(h * 0.75) // 64 * 64)
+        L.info("Turnos: imagen %sx%s -> %sx%s para caber en %.0f MB", w0, h0, w, h, turno.ram_mb)
+        return w, h, True, f"resolucion {w0}x{h0} -> {w}x{h} y VAE troceado para caber en memoria"
+
+    def _sdcpp_run(self, exe, variant, model, prompt, negative, steps, seed, out, init, gen, threads, w, h, size,
+                   tiling=False, ajuste="") -> dict:
         cmd = [str(exe), "-m", model["path"], "-p", prompt, "--steps", str(steps), "--cfg-scale", str(gen.get("cfg", 1.0)),
                "-W", str(w), "-H", str(h), "-s", str(seed), "-o", str(out)]
+        if tiling:
+            cmd.append("--vae-tiling")
         if init:   # imagen a imagen: conserva la composicion de la imagen de partida
             cmd += ["-i", str(init[0]), "--strength", f"{init[1]:.2f}"]
         if negative:
@@ -135,7 +171,7 @@ class ImageEngine:
             raise RuntimeError((r.stderr or r.stdout)[-400:])
         return {"engine": f"sd.cpp ({variant})", "model": model["id"], "url": f"/outputs/images/{out.name}",
                 "path": str(out), "seed": seed, "steps": steps, "size": size, "seconds": round(time.time() - t0, 1),
-                "prompt": prompt}
+                "prompt": prompt, **({"ajuste_memoria": ajuste} if ajuste else {})}
 
     @staticmethod
     def procedural(prompt: str, seed: int, size: int = 512) -> Image.Image:

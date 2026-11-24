@@ -424,6 +424,15 @@ class TransformersBackend(Backend):
     def available(self) -> bool:
         return all(importlib.util.find_spec(m) for m in ("transformers", "torch"))
 
+    def unload(self) -> None:
+        with self._lock:
+            self._model = self._tok = self._key = None
+        try:
+            import gc
+            gc.collect()
+        except Exception:  # noqa: BLE001
+            pass
+
     def stream_chat(self, messages, model="", **opts):
         resolved = self.resolve_path(model)
         if not resolved:

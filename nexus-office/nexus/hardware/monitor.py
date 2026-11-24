@@ -44,6 +44,7 @@ class Monitor:
         self.started = time.time()
         self.llm_calls: list[dict] = []
         self.errors: list[dict] = []
+        self.turnos: list[dict] = []             # recargas de modelos al alternar por etapas (hardware/turnos.py)
         self.peak_ram_pct = 0.0
         self.peak_vram_pct = 0.0
         self._cpu_acc = 0.0
@@ -123,6 +124,10 @@ class Monitor:
         self.llm_calls.append({"backend": backend, "model": model, "tokens": tokens, "seconds": round(seconds, 3),
                                "tps": round(tps, 2), "ttft": round(first_token_s, 3), "t": time.time()})
 
+    def record_turno(self, etapa: str, tipo: str) -> None:
+        self.turnos.append({"etapa": etapa, "tipo": tipo, "t": time.time()})
+        del self.turnos[:-200]
+
     def record_error(self, kind: str, message: str) -> None:
         self.errors.append({"kind": kind, "message": message[:300], "t": time.time()})
         L.warning("Error registrado [%s]: %s", kind, message[:200])
@@ -147,4 +152,6 @@ class Monitor:
             "avg_cpu": round(self._cpu_acc / self._n, 1) if self._n else 0.0,
             "oom_errors": sum(1 for e in self.errors if e["kind"] == "oom"),
             "errors": len(self.errors), "settings": self.settings,
+            "recargas_modelos": len(self.turnos),
+            "recargas_llm": sum(1 for x in self.turnos if x["tipo"] == "llm"),
         }

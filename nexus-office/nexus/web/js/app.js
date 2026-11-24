@@ -1762,6 +1762,7 @@
     $$("[data-rt]").forEach((b) => (b.onclick = guard(async () => { await api("/api/runtimes/install", { body: { runtime: b.dataset.rt, variant: b.dataset.v } }); toast("Instalando runtime…"); setTimeout(loaders.system, 1500); })));
     if (Object.values(rt.progress).some((p) => !["instalado", "error"].includes(p.status))) setTimeout(() => S.view === "system" && loaders.system(), 2000);
     serviceBox(); downloadsBox(); saludBox(); motoresBox();
+    if (window.NexusTurnos) window.NexusTurnos.cargar();
     api("/api/drivers").then((dr) => {
       $("#drivers-box").innerHTML = dr.gpus.map((g) => `<div class="item"><div class="row"><b style="flex:1">${esc(g.name)}</b>
         <span class="tag ${g.status === "ok" ? "ok" : g.status === "actualizar" ? "warn" : ""}">${g.status === "ok" ? "al día" : g.status}</span></div>

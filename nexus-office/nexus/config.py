@@ -91,6 +91,9 @@ DEFAULTS: dict[str, Any] = {
         "perfil": "auto",               # perfil de hardware activo (hw_profiles: auto, rendimiento, ahorro... o propios)
         "perfiles": [],                 # perfiles de hardware creados por el usuario
         "gpu": "",                      # GPU elegida si hay varias (nombre o dispositivo de llama.cpp); vacio = la mejor
+        # turnos de modelos (hardware/turnos.py): auto = solo si no caben todos | siempre | nunca
+        "alternar_modelos": "auto",
+        "reserva_ram_mb": 0,            # RAM que se deja al sistema; 0 = automatico (20 % en PC, 45 % en movil)
     },
     "models": {
         "huggingface_token": "",

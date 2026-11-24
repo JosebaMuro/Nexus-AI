@@ -94,10 +94,18 @@ def tune(profile: dict, history: list[dict], previous_unclean: bool, cores_logic
         elif 0 < vram < 70 and llm["gpu_layers"] > 0:
             llm["gpu_layers"] = int(llm["gpu_layers"] * 1.25) + 1
             reasons.append(f"VRAM con holgura ({vram:.0f}%): mas capas en GPU ({llm['gpu_layers']})")
-        if last.get("llm_calls", 0) >= 3 and 0 < last.get("avg_tps", 0) < 4:
+        # turnos de modelos: si el modelo de texto se recargo muchas veces por falta de memoria, sobra modelo
+        recargas = last.get("recargas_llm", 0)
+        if recargas >= 8 and recargas >= last.get("llm_calls", 0) * 0.4:
+            llm["suggest_smaller_model"] = True
+            if llm["n_ctx"] > MIN_CTX:
+                llm["n_ctx"] = max(MIN_CTX, int(llm["n_ctx"] * 0.75) // 256 * 256)
+            reasons.append(f"El modelo de texto se recargo {recargas} veces al alternar modelos por falta de RAM: "
+                           f"contexto {llm['n_ctx']} y se recomienda un modelo mas pequeno")
+        elif last.get("llm_calls", 0) >= 3 and 0 < last.get("avg_tps", 0) < 4:
             llm["suggest_smaller_model"] = True
             reasons.append(f"Velocidad baja ({last['avg_tps']} tok/s): se recomienda un modelo mas pequeno")
-        elif last.get("avg_tps", 0) >= 4:
+        elif last.get("avg_tps", 0) >= 4 and not recargas:
             llm.pop("suggest_smaller_model", None)
 
     # 3) hilos: explorar candidatos no probados, despues explotar el mejor
