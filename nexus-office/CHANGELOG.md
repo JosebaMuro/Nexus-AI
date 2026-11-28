@@ -1,5 +1,21 @@
 # Cambios
 
+## Agente IA 4.4.0: FreeLLMAPI como endpoint (2026-11-28)
+
+Detalle en [docs/FREELLMAPI.md](docs/FREELLMAPI.md).
+
+- **FreeLLMAPI incluida** (la pasarela del proyecto «9000 tokens», <https://github.com/tashfeenahmed/freellmapi>):
+  cada instalador de escritorio lleva su Node.js y el servidor ya compilado con su panel web, sin descargar nada.
+  Junta los planes gratis de muchos proveedores (Groq, Gemini, Mistral, OpenRouter, Cerebras…) en un endpoint `/v1`
+  compatible con OpenAI y salta al siguiente cuando uno llega a su límite.
+- **Ajustes > FreeLLMAPI**: URL, clave única y modelo (`auto` o uno de la lista), arrancar y parar la incluida,
+  panel web, ver modelos, probar, arrancarla al abrir y hacerla accesible en la red local. La clave única se copia
+  sola desde la incluida. También sirve una FreeLLMAPI que ya esté en marcha (app de escritorio, Docker, otro equipo).
+- **Motor `freellmapi`**: «USAR COMO MODELO PRINCIPAL» o `freellmapi:auto` en el modelo de un agente. Nunca entra en
+  el respaldo automático: los modelos locales siguen siendo los de siempre mientras no se elija.
+- `python -m nexus freellmapi estado | arrancar | probar` y API `/api/freellmapi/*`.
+- La prueba de humo de cada instalador arranca FreeLLMAPI desde el paquete instalado en su propio sistema.
+
 ## Agente IA 4.3.1: turnos de modelos con la RAM justa (2026-11-24)
 
 Detalle en [docs/TURNOS.md](docs/TURNOS.md). Esta versión junta en `main` todo lo de la 4.3.0 (oficina Herrero e

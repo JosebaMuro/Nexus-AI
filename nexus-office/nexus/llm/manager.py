@@ -2,7 +2,8 @@
 
 Especificacion de modelo por agente: ``"default"`` o ``"backend:modelo"``
 (p.ej. ``ollama:qwen2.5:3b``, ``llamacpp:<id-catalogo>``, ``openai:gpt-4o-mini``, ``peer:<nodo>``,
-``nube:claude`` para una IA online; esta solo se usa si un agente la pide, nunca como respaldo automatico).
+``nube:claude`` para una IA online; esta solo se usa si un agente la pide, nunca como respaldo automatico;
+``freellmapi:auto`` para la pasarela FreeLLMAPI, que tampoco entra en el respaldo automatico).
 """
 from __future__ import annotations
 
@@ -69,12 +70,29 @@ class LLMManager:
             "transformers": TransformersBackend(self._resolve("transformers"), self.profile["image"]["device"]),
             "builtin": BuiltinBackend(),
             "nube": CloudBackend(c, timeout),
+            # FreeLLMAPI (nexus/freellmapi.py): pasarela /v1 con los planes gratis de muchos proveedores
+            "freellmapi": OpenAICompatBackend(self._freellmapi_url(), c.get("freellmapi.clave", ""),
+                                              c.get("freellmapi.modelo", "auto") or "auto", timeout),
         }
+        self.backends["freellmapi"].name = "freellmapi"
         # motores por hardware (ONNX Runtime GenAI, OpenVINO, LiteRT-LM, ExecuTorch, MLC, TensorRT-LLM, Genie)
         from ..motores.backend import MotorBackend   # noqa: PLC0415 - importa llm.backends
         for mid, info in motores.MOTORES.items():
             self.backends[mid] = MotorBackend(mid, self._resolve(info.formato), self._orden_aceleradores)
         self._avail_cache.clear()
+
+    def actualizar_freellmapi(self) -> None:
+        """Cambia URL, clave y modelo de FreeLLMAPI sin reconstruir el resto (no para llama-server)."""
+        b, c = self.backends.get("freellmapi"), self.config
+        if b is None:
+            return
+        b.base_url, b.api_key = self._freellmapi_url(), c.get("freellmapi.clave", "") or ""
+        b.default_model = c.get("freellmapi.modelo", "auto") or "auto"
+        self._avail_cache.pop("freellmapi", None)
+
+    def _freellmapi_url(self) -> str:
+        u = (self.config.get("freellmapi.url", "") or "http://127.0.0.1:3001/v1").rstrip("/")
+        return u if u.endswith("/v1") else u + "/v1"
 
     def hw_dict(self) -> dict:
         try:
@@ -159,10 +177,10 @@ class LLMManager:
         if engine in self.backends and engine != "auto":   # motor elegido al arrancar: primero (si no esta, el siguiente)
             order = [engine] + [n for n in order if n != engine]
         for name in self.backends:  # backends nuevos tras actualizar el proyecto
-            if name not in order and name != "nube":
+            if name not in order and name not in ("nube", "freellmapi"):
                 order.insert(0 if name == "llamaserver" else len(order) - 1, name)
         for name in order:
-            if name != "nube" and self.is_available(name):
+            if name not in ("nube", "freellmapi") and self.is_available(name):
                 return name, ""
         return "builtin", ""
 
@@ -201,6 +219,8 @@ class LLMManager:
             return is_reasoning_model(model or (self.backends["ollama"].models() or [""])[0])
         if backend_name == "openai":
             return is_reasoning_model(model or self.config.get("llm.openai_model", ""))
+        if backend_name == "freellmapi":
+            return is_reasoning_model(model or self.config.get("freellmapi.modelo", ""))
         return False
 
     def thinking_only(self, backend_name: str, model: str) -> bool:
@@ -377,7 +397,7 @@ class LLMManager:
     def native_tools(self, spec: str = "default") -> bool:
         """Backends con llamadas a herramientas nativas (API OpenAI 'tools' + plantilla jinja)."""
         backend = self.select(spec)[0]
-        return backend in ("llamaserver", "openai") and backend not in self.native_off
+        return backend in ("llamaserver", "openai", "freellmapi") and backend not in self.native_off
 
     def has_real_llm(self) -> bool:
         return self.select()[0] != "builtin"

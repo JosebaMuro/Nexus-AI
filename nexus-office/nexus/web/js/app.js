@@ -1884,6 +1884,7 @@
     if (window.NexusKG) guard(NexusKG.load)();   // gestor de conocimiento (js/kgadmin.js)
     if (!S.token) return;
     guard(profesorPanel)();
+    if (window.NexusFreeLLMAPI) guard(NexusFreeLLMAPI.cargar)();   // FreeLLMAPI como endpoint (js/freellmapi.js)
     const c = S.fullCfg; const sections = Object.keys(c).filter((k) => k !== "user");
     $("#admin-settings").innerHTML = sections.map((sec) => `<details class="item"><summary style="cursor:pointer;font:700 12px var(--font-hud);letter-spacing:.15em">${sec.toUpperCase()}</summary>${Object.entries(c[sec]).map(([k, v]) => {
       const key = `${sec}.${k}`, t = typeof v;
@@ -1973,7 +1974,7 @@
   // utilidades para los modulos de la interfaz que viven en otros ficheros (js/kgadmin.js)
   window.NexusUI = { api, toast, esc, guard, ago, fmtB, saveFile, agents: () => S.agents, admin: () => !!S.token,
                      agentName: (id) => agentName(id), refreshGraph: () => { loadGraph().catch(() => {}); },
-                     loaders, go, md: (t) => md(t), token: () => S.token, view: () => S.view };
+                     loaders, go, md: (t) => md(t), token: () => S.token, view: () => S.view, loadStatus: () => loadStatus() };
 
   /* ================================================================ selector de inicio: motor llama y CPU/GPU/NPU */
   const Accel = {

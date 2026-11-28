@@ -7,6 +7,7 @@ name: Instaladores de Agente IA, edicion Python (construir y probar)
 # como artefactos de esta ejecucion; publicar.yml los junta con las APK y publica la Release.
 # El .exe de x64 pasa de 3 GB sin comprimir: build.py usa entonces LZMA no solida (la solida de makensis no llega).
 # Junto a llama-cpp-python van Jinja2 y MarkupSafe (se instala con --no-deps).
+# Desde 4.4 cada paquete lleva FreeLLMAPI (Node.js + servidor) en bundled/runtimes/freellmapi.
 # Desde 2.2 cada paquete lleva tambien firmware/ (luces, reloj y Pico W) y los ejemplos para importar.
 on:
   workflow_dispatch:
@@ -107,6 +108,16 @@ jobs:
             macos-arm64) pypi litert-lm-api "$LITERT" 'macosx.*arm64' "$RT/litert/todo" '.*\.dylib' ;;
           esac
           ls -la "$RT"/litert/* "$RT"/genie/* 2>/dev/null || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: FreeLLMAPI (Node.js de la plataforma + servidor y panel ya compilados)
+        run: |
+          # la pasarela de los planes gratis del proyecto «9000 tokens»: va dentro de cada instalador y la prueba
+          # de humo la arranca desde el paquete instalado (packaging/fetch_freellmapi.py)
+          cd nexus-office && python packaging/fetch_freellmapi.py --target ${{ matrix.target }}
+          cat .cache/desktop-runtimes/${{ matrix.target }}/freellmapi/freellmapi.json
+          du -sh .cache/desktop-runtimes/${{ matrix.target }}/freellmapi; rm -rf .cache/freellmapi-src
       - name: Construir
         run: cd nexus-office && python packaging/build.py --targets ${{ matrix.target }}
       - name: Lista (ningun fichero puede pasar de los 2 GB de una Release)

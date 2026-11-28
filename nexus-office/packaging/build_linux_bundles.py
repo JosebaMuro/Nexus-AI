@@ -130,7 +130,7 @@ def installed_tree(dest: Path, arch: str, pip_platforms: list[str], work: Path) 
         subprocess.run([str(tree / "venv" / "bin" / "python3"), "-m", "compileall", "-q", "-j0", str(tree / "nexus"), str(site)],
                        check=False, stdout=subprocess.DEVNULL)
     for exe in (tree / "bundled" / "runtimes").rglob("*"):
-        if exe.name in ("llama-server", "sd-cli"):
+        if exe.name in ("llama-server", "sd-cli") or (exe.name == "node" and exe.is_file()):
             exe.chmod(0o755)
     (tree / "PLATAFORMA.txt").write_text(f"Nexus-Office - Linux {arch} (AppImage/Flatpak)\n", encoding="utf-8")
     return tree

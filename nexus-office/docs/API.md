@@ -87,6 +87,7 @@ Puerto remoto: `https://IP:8443` (TLS 1.3). Ahí todas las rutas, salvo `/`, `/a
 |---|---|
 | `GET /api/turnos` | Modo, si se está alternando, RAM útil y necesaria, modelos (cargado, tamaño, recargas) y últimas etapas |
 | `POST /api/turnos` (admin) | `{"modo": "auto" \| "siempre" \| "nunca", "reserva_ram_mb": n}` |
+| `GET /api/freellmapi` · `POST /api/freellmapi/{ajustes,arrancar,parar,probar,usar}` | FreeLLMAPI como endpoint LLM (ver [FREELLMAPI.md](FREELLMAPI.md)) |
 
 ## Oficina Herrero (4.3)
 

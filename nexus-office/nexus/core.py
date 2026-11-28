@@ -110,6 +110,9 @@ class Services:
         self.mundo = Mundo(cfg)     # informacion publica al dia por categorias y paises (nexus/mundo)
         from .terminal import Terminal
         self.terminal = Terminal(self)   # consola, interprete y ficheros para personas y agentes
+        from .freellmapi import FreeLLMAPI
+        self.freellmapi = FreeLLMAPI(cfg)   # pasarela FreeLLMAPI incluida (endpoint LLM «freellmapi:auto»)
+        self.freellmapi.al_cambiar = self.llm.actualizar_freellmapi
 
     # ------------------------------------------------------------ embeddings
     def _make_embedder(self):
@@ -208,11 +211,15 @@ class Services:
             self.mcp.conectar()
         if not os.environ.get("NEXUS_SIN_MUNDO"):
             self.mundo.iniciar()
+        threading.Thread(target=self._freellmapi_al_iniciar, name="nexus-freellmapi", daemon=True).start()
         if self.config.get("coop.enabled", False):
             try:
                 self.coop.start()
             except Exception as e:  # noqa: BLE001
                 L.warning("No se pudo iniciar el modo cooperativo: %s", e)
+
+    def _freellmapi_al_iniciar(self) -> None:
+        self.freellmapi.al_iniciar()
 
     def shutdown(self) -> None:
         L.info("Apagando Nexus-Office...")
@@ -220,7 +227,7 @@ class Services:
             self.mcp.cerrar()
         except Exception:  # noqa: BLE001
             pass
-        for cierre in (self.mundo.cerrar, self.terminal.cerrar):
+        for cierre in (self.mundo.cerrar, self.terminal.cerrar, self.freellmapi.parar):
             try:
                 cierre()
             except Exception:  # noqa: BLE001
