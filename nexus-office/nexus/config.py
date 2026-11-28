@@ -165,6 +165,16 @@ DEFAULTS: dict[str, Any] = {
              "clave_groq": "",
              "clave_openrouter": "",
              "clave_compatible": ""},
+    # FreeLLMAPI (github.com/tashfeenahmed/freellmapi, el del proyecto «9000 tokens»): pasarela /v1 compatible con
+    # OpenAI que junta los planes gratis de muchos proveedores. Va incluida en los instaladores de escritorio
+    # (bundled/runtimes/freellmapi) y se puede arrancar desde Ajustes, o usar una que ya este en marcha (url).
+    # Se elige como modelo con «freellmapi:<modelo>» (auto = el mejor disponible); nunca es respaldo automatico.
+    "freellmapi": {"url": "http://127.0.0.1:3001/v1",   # endpoint /v1 (la app de escritorio usa el puerto 31415)
+                   "clave": "",                         # clave unica (panel web > Keys); se copia sola si la incluida
+                   "modelo": "auto",
+                   "arrancar": False,                   # arrancar la incluida al abrir Agente IA
+                   "red": False,                        # escuchar en la red local (moviles y otros equipos)
+                   "clave_cifrado": ""},                # ENCRYPTION_KEY de la incluida (se genera sola)
     # conversaciones largas: resumen progresivo y notas fijas; parte de n_ctx que se dedica a la conversacion
     "hilo": {"activo": True, "pct_contexto": 45},
     # MCP: servidor (POST /mcp y «nexus mcp») y cliente de servidores externos
@@ -197,7 +207,7 @@ SECRET_KEYS = {"admin.pin_hash", "admin.pin_salt", "llm.openai_api_key", "models
                "models.civitai_token", "avatares.sketchfab_token", "models.kaggle_key", "models.modelscope_token", "coop.passphrase", "server.lan_key", "mcp.token",
                "nube.clave_gemini", "nube.clave_openai", "nube.clave_perplexity", "nube.clave_claude",
                "nube.clave_mistral", "nube.clave_deepseek", "nube.clave_groq", "nube.clave_openrouter", "nube.clave_compatible",
-               "terminal.ficha", "broker.clave", "broker.secreto"}
+               "terminal.ficha", "broker.clave", "broker.secreto", "freellmapi.clave", "freellmapi.clave_cifrado"}
 
 
 def _deep_merge(base: dict, extra: dict) -> dict:

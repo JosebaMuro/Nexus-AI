@@ -1,6 +1,6 @@
 """Prueba de humo de un Nexus-Office ya instalado desde su instalador: arranca, descarga un modelo pequeno y genera
 texto con cada opcion del selector de inicio (motor llama-server y llama.cpp integrado, en CPU), y comprueba que
-los runtimes incluidos estan y arrancan.
+los runtimes incluidos estan y arrancan (tambien FreeLLMAPI con su Node.js).
 
     python packaging/smoke_test.py <carpeta instalada> [--python <python del venv>] [--modelo qwen3.5-0.8b]
 
@@ -58,6 +58,13 @@ def main() -> int:
     if os.environ.get("NEXUS_CON_OPENVINO"):
         check("openvino" in bundled.get("llama", []) and bool(bundled.get("openvino")),
               f"llama-server OpenVINO incluido y arranca: {bundled.get('openvino')}")
+
+    # FreeLLMAPI dentro del paquete de esta plataforma: arranca con su Node, copia la clave unica y el motor la ve
+    if not os.environ.get("NEXUS_SIN_FREELLMAPI"):
+        r = subprocess.run([py, "-m", "nexus", "freellmapi", "probar", "--puerto", "31998"], cwd=home, env=env,
+                           capture_output=True, text=True, timeout=300)
+        print(r.stdout[-3000:], r.stderr[-1500:])
+        check(r.returncode == 0 and "FreeLLMAPI OK" in r.stdout, "FreeLLMAPI incluida arranca y responde en /v1")
 
     r = subprocess.run([py, "-m", "nexus", "pull", a.modelo], cwd=home, env=env, capture_output=True, text=True)
     print(r.stdout[-1500:], r.stderr[-1500:])

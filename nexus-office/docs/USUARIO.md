@@ -214,6 +214,8 @@ después ábrelo para instalarlo.
 
 - **Turnos de modelos** (Sistema): si la memoria no da para todos los modelos a la vez, se cargan según el paso del
   trabajo para que cada uno tenga toda la memoria. Ver [Turnos de modelos](TURNOS.md).
+- **FreeLLMAPI** (Ajustes): endpoint con los planes gratis de muchos proveedores de IA, incluido en los instaladores
+  de escritorio; se arranca, se prueba y se elige como modelo principal o de un agente. Ver [FreeLLMAPI](FREELLMAPI.md).
 - **HERRERO**: oficina de estructuras metálicas que calcula perfiles con el CTE y el Eurocódigo 3 y entrega
   despiece, lista de corte, soldaduras ISO 2553, plano de montaje, isométrica, PDF e imagen. Ver [Herrero](HERRERO.md).
 

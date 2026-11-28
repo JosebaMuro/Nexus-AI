@@ -461,6 +461,56 @@ def cmd_mundo(args) -> None:
     sys.exit(probar.ejecutar(args))
 
 
+def cmd_freellmapi(args) -> None:
+    """FreeLLMAPI incluida: estado | arrancar (queda en marcha) | probar (arranca, comprueba /v1 y el motor, para)."""
+    import json
+    import time
+
+    from .config import get_config
+    from .freellmapi import FreeLLMAPI
+    from .llm.backends import OpenAICompatBackend
+    cfg = get_config()
+    fl = FreeLLMAPI(cfg)
+    if args.puerto:
+        cfg.set("freellmapi.url", f"http://127.0.0.1:{args.puerto}/v1")
+    if args.accion == "estado":
+        print(json.dumps(fl.estado(), ensure_ascii=False, indent=1))
+        return
+    if not fl.instalada():
+        print(f"FreeLLMAPI no viene en este paquete ({fl.raiz})")
+        sys.exit(1)
+    fl.arrancar()
+    try:
+        for _ in range(int(args.espera)):
+            time.sleep(1)
+            e = fl.estado()
+            if e["responde"] and e["clave_puesta"]:
+                break
+            if not e["en_marcha"]:
+                break
+        e = fl.estado()
+        print(json.dumps({k: e[k] for k in ("instalada", "en_marcha", "responde", "clave_puesta", "url", "version")},
+                         ensure_ascii=False, indent=1))
+        ok = e["responde"] and e["clave_puesta"]
+        if ok:
+            # el motor «freellmapi» de los agentes ve el endpoint con la clave unica copiada
+            b = OpenAICompatBackend(fl.url(), fl.clave(), "auto", 10)
+            ok = b.available()
+            print(f"motor freellmapi disponible: {ok} · modelos: {len(b.models())}")
+        if not ok:
+            print("\n".join(fl.registro(60)))
+            sys.exit(1)
+        print("FreeLLMAPI OK")
+        if args.accion == "arrancar":
+            print(f"En marcha en {fl.url()} (panel {fl.panel()}). Ctrl+C para parar.")
+            while fl.en_marcha():
+                time.sleep(2)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        fl.parar()
+
+
 def main(argv=None) -> None:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["wheels"]:                # CLI propia (nexus/wheelhouse.py): no importa nada pesado
@@ -543,12 +593,17 @@ def main(argv=None) -> None:
     mu.add_argument("--pais", default="")
     mu.add_argument("--categoria", default="")
     mu.add_argument("--json", action="store_true")
+    fr = sub.add_parser("freellmapi", help="FreeLLMAPI incluida (endpoint de los planes gratis): estado | arrancar | probar")
+    fr.add_argument("accion", nargs="?", default="estado", choices=["estado", "arrancar", "probar"])
+    fr.add_argument("--puerto", type=int, default=0, help="puerto (por defecto el de freellmapi.url, 3001)")
+    fr.add_argument("--espera", type=float, default=90, help="segundos maximos hasta que responde")
     sub.add_parser("wheels", help="prepara wheelhouse/ para instalar sin internet (ver --help)")
     sub.add_parser("cleanup", help="quita del paquete offline lo que este equipo no usa (ver --help)")
     args = p.parse_args(argv)
     {"run": cmd_run, "detect": cmd_detect, "setup": cmd_setup, "pull": cmd_pull, "chat": cmd_chat,
      "oficina": cmd_office, "bolsa": cmd_bolsa, "grafo": cmd_graph, "modelos": cmd_models, "servicio": cmd_service, "motores": cmd_motores,
-     "mcp": cmd_mcp, "bench": cmd_bench, "terminal": cmd_terminal, "mundo": cmd_mundo}.get(
+     "mcp": cmd_mcp, "bench": cmd_bench, "terminal": cmd_terminal, "mundo": cmd_mundo,
+     "freellmapi": cmd_freellmapi}.get(
         args.cmd or "run", cmd_run)(args if args.cmd else p.parse_args(["run"]))
 
 

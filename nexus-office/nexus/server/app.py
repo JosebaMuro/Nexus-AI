@@ -302,6 +302,8 @@ def create_app(services: Services | None = None) -> FastAPI:
             raise HTTPException(403, str(e)) from e
         if any(k.startswith(("llm.", "hardware.")) for k in applied):
             s.llm.rebuild()
+        elif any(k.startswith("freellmapi.") for k in applied):
+            s.llm.actualizar_freellmapi()
         if any(k.startswith("tools.") for k in applied):
             s.tools.reload()
         return {"applied": applied}
@@ -2090,6 +2092,8 @@ def create_app(services: Services | None = None) -> FastAPI:
     rutas_herrero.registrar(app, S, require_admin)               # oficina Herrero (estructuras metalicas)
     from . import rutas_instaladores
     rutas_instaladores.registrar(app, require_admin)             # instaladores sin conexion y reparto por la red
+    from . import rutas_freellmapi
+    rutas_freellmapi.registrar(app, S, require_admin)            # FreeLLMAPI como endpoint LLM
     from . import rutas_turnos
     rutas_turnos.registrar(app, S, require_admin)                 # turnos de modelos con la memoria justa
     return app
